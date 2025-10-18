@@ -1,0 +1,420 @@
+{
+  "roles": {
+    "villagers": [
+      {
+        "id": "common",
+        "name": "Common Villager",
+        "type": "villager",
+        "effect": "Has no special powers. Must rely on observation and persuasion to identify the Werewolves and avoid being wrongly executed.",
+        "category": "rol",
+        "assignable": true,
+        "active": true
+      },
+      {
+        "id": "villager",
+        "name": "Villager-Villager",
+        "type": "villager",
+        "effect": "A known, confirmed Villager with no secret powers. Their role is public from the start, making them a trustworthy figure. May be targeted early by Werewolves due to their influence. Can serve as Sheriff or Guard.",
+        "category": "rol",
+        "assignable": true,
+        "active": true
+      },
+      {
+        "id": "seer",
+        "name": "Seer",
+        "type": "villager",
+        "effect": "Each night, she discovers the true nature of a player of her choice. She must help the other Villagers, but with discretion, to avoid being discovered by the Werewolves.",
+        "category": "rol",
+        "assignable": true,
+        "active": true
+      },
+      {
+        "id": "cupid",
+        "name": "Cupid",
+        "type": "villager",
+        "effect": "On the first night, Cupid links two players (possibly including himself) as lovers. If one dies, the other dies of heartbreak. Lovers cannot vote against each other.",
+        "category": "rol",
+        "assignable": true,
+        "active": true
+      },
+      {
+        "id": "witch",
+        "name": "Witch",
+        "type": "villager",
+        "effect": "The Witch has two potions: one heals a player attacked by the Werewolves, the other kills a player during the night. Each potion can be used only once per game, even both on the same night. She can use them on herself.",
+        "category": "rol",
+        "assignable": true,
+        "active": true
+      },
+      {
+        "id": "hunter",
+        "name": "Hunter",
+        "type": "villager",
+        "effect": "If the Hunter dies (devoured or lynched), he must shoot and eliminate a player of his choice before leaving. If he dies of heartbreak as a lover, he still shoots. If no one survives, no one wins.",
+        "category": "rol",
+        "assignable": true,
+        "active": true
+      },
+      {
+        "id": "girl",
+        "name": "Little Girl",
+        "type": "villager",
+        "effect": "May secretly peek during the Werewolves’ night phase. If caught spying, she dies silently instead of the intended victim. She must not open her eyes fully or pretend to be a Werewolf.",
+        "category": "rol",
+        "assignable": false,
+        "active": false
+      },
+      {
+        "id": "protector",
+        "name": "Protector",
+        "type": "villager",
+        "effect": "Each night, the Protector chooses one player to shield from the Werewolves. The chosen player cannot be devoured that night. The Protector may protect themselves but not the same person two nights in a row. Does not block the infection from the Infected Father of All Wolves.",
+        "category": "rol",
+        "assignable": true,
+        "active": true
+      },
+      {
+        "id": "elder",
+        "name": "Elder",
+        "type": "villager",
+        "effect": "The Elder survives the first Werewolf attack. A second attack kills him. Other causes (lynching, poison, bullet) kill him instantly. If he dies, all Villagers lose their special powers. He resists the infection of the Infected Father of All Wolves if it’s the first time he is bitten.",
+        "category": "rol",
+        "assignable": true,
+        "active": true
+      },
+      {
+        "id": "scapegoat",
+        "name": "Scapegoat",
+        "type": "villager",
+        "effect": "If there’s a tie in the vote, the Scapegoat is lynched instead. If lynched, he chooses who can vote in the next lynching. If only one person gets to vote, they’re likely to be devoured that night. If so, there may be no lynching the next day.",
+        "category": "rol",
+        "assignable": true,
+        "active": true
+      },
+      {
+        "id": "fool",
+        "name": "Village Fool",
+        "type": "villager",
+        "effect": "If the Fool is voted out, he reveals his role and is pardoned, but loses his right to vote for the rest of the game. He dies if attacked by Werewolves or shot by the Hunter. If he was the Sheriff, that role is lost.",
+        "category": "rol",
+        "assignable": true,
+        "active": true
+      },
+      {
+        "id": "sisters",
+        "name": "Two Sisters",
+        "type": "villager",
+        "effect": "Know each other from the first night and may briefly consult in silence during the game (e.g., every other night or as the narrator decides). A loyal duo that can help guide the village through uncertain times.",
+        "category": "rol",
+        "assignable": true,
+        "active": true
+      },
+      {
+        "id": "brothers",
+        "name": "Three Brothers",
+        "type": "villager",
+        "effect": "Know each other from the first night and may silently consult during the game (e.g., every other night or as the narrator sees fit).",
+        "category": "rol",
+        "assignable": true,
+        "active": true
+      },
+      {
+        "id": "fox",
+        "name": "Fox",
+        "type": "villager",
+        "effect": "Each night, the Fox can check a group of three neighboring players by pointing to the one in the middle. If at least one is a Werewolf, he keeps his power for the next night. If not, he loses it.",
+        "category": "rol",
+        "assignable": true,
+        "active": true
+      },
+      {
+        "id": "tamer",
+        "name": "Bear Tamer",
+        "type": "villager",
+        "effect": "Each morning, if at least one living Werewolf is seated next to the Bear Tamer, the narrator growls to indicate danger. Eliminated players are not counted. If the Bear Tamer is infected, the narrator growls every morning until they are eliminated.",
+        "category": "rol",
+        "assignable": true,
+        "active": true
+      },
+      {
+        "id": "judge",
+        "name": "Stuttering Judge",
+        "type": "villager",
+        "effect": "Once per game, the Stuttering Judge can trigger two consecutive lynchings by giving a secret signal during a vote. The second vote happens right after the first, with no debate.",
+        "category": "rol",
+        "assignable": true,
+        "active": true
+      },
+      {
+        "id": "knight",
+        "name": "Knight of the Rusty Sword",
+        "type": "villager",
+        "effect": "If the Knight is devoured, the Werewolf to his left (among those who attacked) falls ill and dies the next night. This death is announced the following morning. All players between them are confirmed innocent.",
+        "category": "rol",
+        "assignable": true,
+        "active": true
+      },
+      {
+        "id": "pyromaniac",
+        "name": "Pyromaniac",
+        "type": "villager",
+        "effect": "Once per game, may target a building during the night. The next morning, that building is destroyed, and its occupant becomes a Wanderer (not eliminated). If the building belonged to a Werewolf victim, the nearest Werewolf to their right dies, and the attack is cancelled (no victim that night).",
+        "category": "rol",
+        "assignable": false,
+        "active": false
+      },
+      {
+        "id": "raven",
+        "name": "Raven",
+        "type": "villager",
+        "effect": "Each night, may secretly place a Raven token (anonymous note) on a player’s building. That player receives 2 extra votes against them in the next vote. May target the Tavern, even if the Innkeeper has immunity. Cannot target Wanderers.",
+        "category": "rol",
+        "assignable": false,
+        "active": false
+      },
+      {
+        "id": "gypsy",
+        "name": "Gypsy",
+        "type": "villager",
+        "effect": "Each night, may choose to activate one Spiritism card (chosen by the narrator). Selects 1 of 4 questions silently and assigns a villager to ask it. The next morning, the first eliminated player answers with “Yes” or “No.” That card is then removed from play.",
+        "category": "rol",
+        "assignable": false,
+        "active": false
+      }
+    ],
+    "werewolves": [
+      {
+        "id": "werewolf",
+        "name": "Werewolf",
+        "type": "werewolf",
+        "effect": "Each night, the Werewolves choose one Villager to devour. They must stay hidden during the day. Their number varies by game setup. They can’t devour one of their own.",
+        "category": "rol",
+        "assignable": true,
+        "active": true
+      },
+      {
+        "id": "bad",
+        "name": "Big Bad Wolf",
+        "type": "werewolf",
+        "effect": "He attacks with the Werewolves each night. As long as no Werewolf, Wild Child, or Wolf-Hound has died, he wakes a second time to devour a victim alone. He can’t devour other Werewolves.",
+        "category": "rol",
+        "assignable": true,
+        "active": true
+      },
+      {
+        "id": "father",
+        "name": "Infectious Father of All Wolves",
+        "type": "werewolf",
+        "effect": "Each night, he acts with the Werewolves. Once per game, he may secretly infect a victim instead of devouring them. That player becomes a hidden Werewolf and keeps any special power they had.",
+        "category": "rol",
+        "assignable": true,
+        "active": true
+      }
+    ],
+    "ambiguous": [
+      {
+        "id": "thief",
+        "name": "Thief",
+        "type": "ambiguous",
+        "effect": "On the first night, may look at two extra face-down roles and optionally swap with one. If both are Werewolves, the Thief must become one. Plays with the new role for the rest of the game.",
+        "category": "rol",
+        "assignable": false,
+        "active": false
+      },
+      {
+        "id": "servant",
+        "name": "Devoted Servant",
+        "type": "ambiguous",
+        "effect": "Before a lynched player’s role is revealed, the Servant may show her card and take that player’s role (with full powers), keeping it secret. She cannot do this if in love. Temporary effects on the original player do not transfer.",
+        "category": "rol",
+        "assignable": true,
+        "active": true
+      },
+      {
+        "id": "comedian",
+        "name": "Comedian",
+        "type": "ambiguous",
+        "effect": "At the start, the narrator shows 3 special role cards (non-Werewolf). Each night, the Comedian may use the power of one. Once used, that role is removed.",
+        "category": "rol",
+        "assignable": false,
+        "active": false
+      },
+      {
+        "id": "child",
+        "name": "Wild Child",
+        "type": "ambiguous",
+        "effect": "On the first night, the Wild Child chooses a role model. He is a Villager unless that player dies—then he becomes a Werewolf starting the next night. His win condition depends on his final team. He may help eliminate his role model.",
+        "category": "rol",
+        "assignable": true,
+        "active": true
+      },
+      {
+        "id": "hound",
+        "name": "Wolf-Hound",
+        "type": "ambiguous",
+        "effect": "On the first night, the Wolf-Hound chooses to be either a Villager or a Werewolf. Once chosen, his role cannot be changed.",
+        "category": "rol",
+        "assignable": true,
+        "active": true
+      }
+    ],
+    "outsiders": [
+      {
+        "id": "white",
+        "name": "White Werewolf",
+        "type": "outsider",
+        "effect": "Joins the Werewolves’ attack every night. Starting from Night 2, wakes alone every other night after the wolves and may kill one Werewolf. Wins only if they are the sole survivor.",
+        "category": "rol",
+        "assignable": true,
+        "active": true
+      },
+      {
+        "id": "angel",
+        "name": "Angel",
+        "type": "outsider",
+        "effect": "Before the first night, the game starts with a daytime vote. If the Angel is eliminated by vote or Werewolves during that first round, they win immediately. If not, they become a normal Villager for the rest of the game.",
+        "category": "rol",
+        "assignable": true,
+        "active": true
+      },
+      {
+        "id": "piper",
+        "name": "Pied Piper",
+        "type": "outsider",
+        "effect": "Each night, enchants two players. Wins if all players become enchanted, even through lynching or attacks. If infected, becomes a Regular Werewolf and abandons original goal.",
+        "category": "rol",
+        "assignable": true,
+        "active": true
+      },
+      {
+        "id": "sectarian",
+        "name": "Abominable Sectarian",
+        "type": "outsider",
+        "effect": "Before the game, the village is split into two visible groups (e.g., men vs. women, tall vs. short). Assigned to one group. Wins if all players from the other group are eliminated. Has no powers, just persuasion. If infected, becomes a Werewolf.",
+        "category": "rol",
+        "assignable": true,
+        "active": true
+      }
+    ]
+  },
+  "honorary_positions": [
+    {
+      "id": "sheriff",
+      "name": "Sheriff",
+      "effect": "Elected by vote, the Sheriff’s vote counts double during the village’s decisions. If killed, the Sheriff must appoint a successor with his last breath.",
+      "category": "honorary_position",
+      "assignable": false,
+      "active": true
+    },
+    {
+      "id": "guard",
+      "name": "Guard",
+      "effect": "Chosen by the Sheriff to serve as the village’s herald. Each morning, he may publicly announce one event card chosen from those entrusted to him. The Sheriff may replace the Guard at any time after an announcement.",
+      "category": "honorary_position",
+      "assignable": false,
+      "active": true
+    }
+  ],
+  "professions": [
+    {
+      "id": "farmer",
+      "name": "Farmer",
+      "building": "Farm",
+      "power": "permanent",
+      "effect": "In our beloved community, Farmers are many, and their power is significant.\n• Starting from the second turn, the Farmers vote to appoint the Sheriff among themselves.\n• If the Sheriff is eliminated, he must choose his successor from the surviving Farmers.\n• If all Farmers die, there will be no Sheriff.",
+      "category": "profession",
+      "assignable": false,
+      "active": false
+    },
+    {
+      "id": "confessor",
+      "name": "Confessor",
+      "building": "Church",
+      "power": "one_time",
+      "effect": "After using this ability, the Confessor loses his power and returns his token.\nThis character may hear the confession of another player of his choice, thus discovering their secrets.\n• At any time during the day, even after the village vote, the Confessor may choose a player, who must immediately reveal their role card to him.",
+      "category": "profession",
+      "assignable": false,
+      "active": false
+    },
+    {
+      "id": "apothecary",
+      "name": "Apothecary",
+      "building": "Hut",
+      "power": "one_time",
+      "effect": "After using this ability, the Apothecary loses his power and returns his token.\nWith just a few moments of work, the Apothecary’s talent can restore youth and vitality.\nAt any time during the day, the Apothecary may restore the unique power of a player who has already used it. The narrator returns the player’s building token, allowing it to be used again once.",
+      "category": "profession",
+      "assignable": false,
+      "active": false
+    },
+    {
+      "id": "governess",
+      "name": "Governess",
+      "building": "School",
+      "power": "permanent",
+      "effect": "In the village, the Governess scolds those who, lacking manners, point fingers at others.\nEach day, just before the vote, the Governess may forbid two players from voting for that turn. She never votes herself.\n• Both the Governess and the forbidden players may still take part in the discussion.\n• The Governess may forbid the Innkeeper from voting.\n• The Governess can never forbid a Vagabond.",
+      "category": "profession",
+      "assignable": false,
+      "active": false
+    },
+    {
+      "id": "baker",
+      "name": "Baker",
+      "building": "Bakery",
+      "power": "permanent",
+      "effect": "In Castronegro, the Baker is the first to rise and prepare bread. In fact, he wakes so early that sometimes, through the fog before dawn, he believes he sees the silhouettes of the terrible Werewolves returning to their lairs.\nEach night, immediately after the narrator says “the Werewolves go back to sleep,” the Baker opens his eyes. After a few moments, the narrator tells him to sleep again.",
+      "category": "profession",
+      "assignable": false,
+      "active": false
+    },
+    {
+      "id": "barber",
+      "name": "Barber",
+      "building": "Barbershop",
+      "power": "one_time",
+      "effect": "After using this ability, the Barber loses his power and returns his token.\nThis Barber is a true artist of the razor. Yet sometimes, he uses his sharp tool to deliver justice as he sees fit, slitting the throat of one he deems suspicious.\n• At any time during the day, the Barber may eliminate a player of his choice.\n• If the victim turns out to be a Werewolf*, the Barber will be praised by the villagers, and his crime forgiven. Otherwise, he too will be executed.\n• The Barber may not target a Vagabond.\n* This includes Common Werewolves, the Big Bad Wolf, the Alpha Wolf, and the Albino Werewolf.",
+      "category": "profession",
+      "assignable": false,
+      "active": false
+    },
+    {
+      "id": "innkeeper",
+      "name": "Innkeeper",
+      "building": "Tavern",
+      "power": "permanent_conditional",
+      "effect": "To thrive in his trade, the Innkeeper welcomes all kinds of patrons. His tavern is open from dawn until late at night.\n• Werewolves cannot devour him, and villagers cannot vote against him.\n• If he has voted against a player who is then eliminated (even if later pardoned), he loses his immunity and his token.\nTraditionally, the Innkeeper votes before everyone else (unless he has lost his immunity), which may make survival trickier for him.\nNote: of course, all special powers may still affect him—his immunity is only partial.",
+      "category": "profession",
+      "assignable": false,
+      "active": false
+    },
+    {
+      "id": "mayor",
+      "name": "Mayor",
+      "building": "City Council",
+      "power": "permanent",
+      "effect": "The highest authority in Castronegro, the Mayor is responsible for assigning Vagabonds to any abandoned buildings.\n• Whenever a building becomes vacant, the Mayor may house a Vagabond of his choice there. That player moves behind the building and takes its token, if it had been previously used.\n• If multiple buildings become vacant at once, the same process applies to each.\nNote: if the Mayor dies, the reassignment of buildings ceases. The City Council remains empty. Vagabonds must do everything possible to keep the Mayor alive if they wish to be housed someday!",
+      "category": "profession",
+      "assignable": false,
+      "active": false
+    },
+    {
+      "id": "noble",
+      "name": "Noble",
+      "building": "Palace",
+      "power": "one_time",
+      "effect": "After using this ability, the Noble loses his power and returns his token.\nThough his arrogance may be irritating, he is the only one who, by ancient tradition, may pardon a condemned villager. The Noble is respected, and it is wise to stay in his good graces.\n• After any vote, the Noble may, at the request of the future victim, pardon a villager who has been chosen for elimination. That player is not eliminated and does not reveal their role card.\n• A selfish Noble may reserve the right to pardon himself.",
+      "category": "profession",
+      "assignable": false,
+      "active": false
+    },
+    {
+      "id": "vagabond",
+      "name": "Vagabond",
+      "building": null,
+      "power": "permanent",
+      "effect": "These brave wanderers without a home aspire to become part of the village, eager to be useful to the community.\n• The powers of the Governess, the Barber, the Raven, and the Pyromaniac have no effect on Vagabonds.\n• Whenever a building becomes vacant, the Mayor may relocate a Vagabond of his choice into it. The player moves to that building, gives up their Bundle token, and takes the building’s token, if it had been used before.\n• A Vagabond may refuse to move into a building offered by the Mayor.",
+      "category": "profession",
+      "assignable": false,
+      "active": false
+    }
+  ]
+}

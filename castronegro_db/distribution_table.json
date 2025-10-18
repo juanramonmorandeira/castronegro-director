@@ -1,0 +1,13 @@
+{
+  "5":  { "villagers": 3, "ambiguous": 0, "outsiders": 1, "werewolves": 1 },
+  "6":  { "villagers": 3, "ambiguous": 1, "outsiders": 1, "werewolves": 1 },
+  "7":  { "villagers": 5, "ambiguous": 0, "outsiders": 1, "werewolves": 1 },
+  "8":  { "villagers": 5, "ambiguous": 1, "outsiders": 1, "werewolves": 1 },
+  "9":  { "villagers": 5, "ambiguous": 2, "outsiders": 1, "werewolves": 1 },
+  "10": { "villagers": 7, "ambiguous": 0, "outsiders": 2, "werewolves": 1 },
+  "11": { "villagers": 7, "ambiguous": 1, "outsiders": 2, "werewolves": 1 },
+  "12": { "villagers": 7, "ambiguous": 2, "outsiders": 2, "werewolves": 1 },
+  "13": { "villagers": 9, "ambiguous": 0, "outsiders": 3, "werewolves": 1 },
+  "14": { "villagers": 9, "ambiguous": 1, "outsiders": 3, "werewolves": 1 },
+  "15": { "villagers": 9, "ambiguous": 2, "outsiders": 3, "werewolves": 1 }
+}
