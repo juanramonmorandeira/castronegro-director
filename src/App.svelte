@@ -1,6 +1,6 @@
 <script>
   import "./firebase.js";
-  import Jugadores from "./components/Jugadores.svelte";
+  import Jugadores from "./components/players/playersList.svelte";
 </script>
 
 <main>
