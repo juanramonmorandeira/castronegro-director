@@ -1,0 +1,24 @@
+{
+  "status_values": ["waiting", "paused", "in_progress", "finished"],
+  "set_reglas_values": [
+    "basic",
+    "newmoon",
+    "characters",
+    "village",
+    "thepact"
+  ],
+  "director_values": ["human", "human-AI", "AI"],
+  "language_values": ["en", "es", "hu"],
+  "phase_values": ["Day", "Votes", "Execution", "Night"],
+  "defaults": {
+    "status": "waiting",
+    "set_reglas": "basic",
+    "director": "human",
+    "language": "es",
+    "num_players": 8
+  },
+  "meta": {
+    "version": 1,
+    "schema": "game_schema"
+  }
+}

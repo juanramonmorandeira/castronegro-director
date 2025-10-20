@@ -1,0 +1,24 @@
+{
+  "game_id": "partida_demo",
+  "created_at": { "_firestore": "server_timestamp" },
+  "updated_at": { "_firestore": "server_timestamp" },
+  "status": "waiting",
+  "settings": {
+    "name": "Partida de demostración",
+    "set_reglas": "basic",
+    "director": "human",
+    "num_players": 8,
+    "roles_in_play": {},
+    "language": "es"
+  },
+  "players": {},
+  "phases": {
+    "current": "Day",
+    "history": []
+  },
+  "logs": [],
+  "meta": {
+    "version": 1,
+    "schema": "game_structure"
+  }
+}
