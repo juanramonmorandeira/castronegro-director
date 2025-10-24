@@ -1,51 +1,108 @@
+/* 🌿 VILLAGE STORYTELLER – app.css */
+/* ---------------------------------- */
+/* Este archivo define el estilo global base del proyecto.
+   El fondo visual se maneja en LandingBackgroundLayer.svelte,
+   por lo que aquí solo dejamos estilos estructurales y tipográficos.
+*/
+
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  
+  /* Tokens de estado y cajas tipo glass*/
+  --state-draft:        #d4d4d8; /* gris claro */
+  --state-waiting:      #3b82f6; /* azul 500 */
+  --state-in-progress:  #22c55e; /* verde 500 */
+  --state-paused:       #f59e0b; /* ámbar 500 */
+  --state-finished:     #6b7280; /* gris 500 */
+  --state-cancelled:    #fca5a5; /* rojo claro */
+  --glass-bg: rgba(0,0,0,.35);
+  --glass-brd: rgba(255,255,255,.12);
+
+  /* Paleta base */
+  color: rgba(255, 255, 255, 0.92);
+  background: transparent; /* el fondo se gestiona por componentes */
+}
+.badge{ padding:.25rem .5rem; border-radius:.5rem; font-weight:600; }
+.badge.draft{       background:var(--state-draft);       color:#111;}
+.badge.waiting{     background:var(--state-waiting);     color:#fff;}
+.badge.in_progress{ background:var(--state-in-progress); color:#0b2e18;}
+.badge.paused{      background:var(--state-paused);      color:#111;}
+.badge.finished{    background:var(--state-finished);    color:#fff;}
+.badge.cancelled{   background:var(--state-cancelled);   color:#111;}
+
+.card-glass{
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-brd);
+  border-radius: 16px;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 8px 24px rgba(0,0,0,.35);
 }
 
+/* Enlaces */
 a {
   font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
+  color: #a6b3ff;
+  text-decoration: none;
+  transition: color 0.25s ease;
 }
 a:hover {
-  color: #535bf2;
+  color: #c3cbff;
 }
 
-body {
+/* Estructura base */
+html,
+body,
+#app {
   margin: 0;
-  display: flex;
-  place-items: center;
+  padding: 0;
+  height: 100%;
   min-width: 320px;
-  min-height: 100vh;
+  overflow-x: hidden;
 }
 
+/* Asegura que el contenido se centra correctamente */
+body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+/* Encabezados */
 h1 {
-  font-size: 3.2em;
+  font-size: 3rem;
   line-height: 1.1;
+  margin: 1rem 0;
+}
+h2 {
+  font-size: 2rem;
+  margin: 0.8rem 0;
 }
 
+/* Tarjetas o contenedores */
 .card {
   padding: 2em;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
+/* Contenedor principal */
 #app {
   max-width: 1280px;
   margin: 0 auto;
   padding: 2rem;
   text-align: center;
+  z-index: 1; /* asegura que está sobre el fondo */
 }
 
+/* Botones */
 button {
   border-radius: 8px;
   border: 1px solid transparent;
@@ -53,27 +110,52 @@ button {
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  background-color: #1a1a1a;
+  background-color: rgba(20, 20, 20, 0.75);
+  color: #fff;
   cursor: pointer;
-  transition: border-color 0.25s;
+  transition: all 0.25s ease;
+  backdrop-filter: blur(3px);
 }
 button:hover {
-  border-color: #646cff;
+  border-color: #9ca8ff;
+  background-color: rgba(40, 40, 60, 0.8);
 }
 button:focus,
 button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+  outline: 3px auto #9ca8ff;
 }
 
+/* Tema claro opcional (por si el usuario fuerza esquema de color claro) */
 @media (prefers-color-scheme: light) {
   :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
+    color: #222;
   }
   button {
-    background-color: #f9f9f9;
+    background-color: rgba(255, 255, 255, 0.7);
+    color: #111;
+  }
+  button:hover {
+    background-color: rgba(255, 255, 255, 0.85);
+  }
+}
+
+/* Responsivo general */
+@media (max-width: 768px) {
+  h1 {
+    font-size: 2.4rem;
+  }
+  #app {
+    padding: 1.2rem;
+  }
+  .card {
+    padding: 1.5em;
+  }
+}
+
+/* Accesibilidad: reducir movimiento global si el usuario lo pide */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
   }
 }
