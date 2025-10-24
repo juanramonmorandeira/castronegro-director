@@ -1,17 +1,8 @@
 // src/firebase.js
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import { getAuth, signInAnonymously } from "firebase/auth";
-
-// Tu configuración de Firebase
-const firebaseConfig = {
-  apiKey: "AIzaSyBsxRmMjU9Dqev1siiyDM4ojEywNQ8QAEg",
-  authDomain: "castro-director.firebaseapp.com",
-  projectId: "castro-director",
-  storageBucket: "castro-director.firebasestorage.app",
-  messagingSenderId: "398370105943",
-  appId: "1:398370105943:web:aa7019498f96e2d3e85112"
-};
+import { getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
+import { firebaseConfig } from "../../firebaseapiconfig.js"; // tu config web
 
 // 1️⃣ Inicializa Firebase
 const app = initializeApp(firebaseConfig);
@@ -24,3 +15,10 @@ export const auth = getAuth(app);
 signInAnonymously(auth)
   .then(() => console.log("✅ Conectado a Firebase correctamente"))
   .catch((error) => console.error("❌ Error de autenticación:", error));
+
+  // 4) (Opcional) Log informativo para depurar
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    console.log("Auth:", user.isAnonymous ? "anon" : "registered", user.uid);
+  }
+});

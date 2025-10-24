@@ -1,0 +1,29 @@
+{
+  "status_values": ["draft", "waiting", "in_progress", "paused", "finished", "cancelled"],
+  "status_transitions": {
+    "draft": ["waiting", "cancelled"],
+    "waiting": ["draft", "in_progress", "cancelled"],
+    "in_progress": ["paused", "finished", "cancelled"],
+    "paused": ["in_progress", "finished", "cancelled"],
+    "finished": [],
+    "cancelled": []
+  },
+  "set_reglas_values": ["basic", "newmoon", "characters", "village", "thepact"],
+  "director_values": ["human", "human-AI", "AI"],
+  "language_values": ["en", "es", "hu"],
+  "phase_values": ["Day", "Night", "Votes", "Execution"],
+  "assist_phase_values": ["Day", "Night", "Votes", "Execution"],
+  "defaults": {
+    "status": "draft",
+    "set_reglas": "basic",
+    "director": "human",
+    "assist_enabled": false,
+    "assist_phases": [],
+    "language": "en",
+    "players_expected": 5
+  },
+  "meta": {
+    "version": 1,
+    "schema": "game_schema"
+  }
+}

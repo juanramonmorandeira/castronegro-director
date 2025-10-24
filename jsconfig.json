@@ -1,7 +1,8 @@
 {
   "compilerOptions": {
+    "baseUrl": ".",
     "moduleResolution": "bundler",
-    "target": "ESNext",
+    "target": "ES2020",
     "module": "ESNext",
     /**
      * svelte-preprocess cannot figure out whether you have
@@ -23,11 +24,14 @@
      * Typecheck JS in `.svelte` and `.js` files by default.
      * Disable this if you'd like to use dynamic types.
      */
-    "checkJs": true
+    "checkJs": false,
+    "paths": {
+      "$lib/*": ["src/lib/*"]
+    }
   },
   /**
    * Use global.d.ts instead of compilerOptions.types
    * to avoid limiting type declarations.
    */
-  "include": ["src/**/*.d.ts", "src/**/*.js", "src/**/*.svelte"]
+  "include": ["src/**/*.d.ts", "src/**/*.js", "src/**/*.svelte, src"]
 }

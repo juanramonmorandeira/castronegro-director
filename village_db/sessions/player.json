@@ -1,0 +1,12 @@
+{
+  "sessionIid": "sid_123",
+  "userId": "uid_123",
+  "status": "alive",
+  "alias": "Sofi",
+  "rol": "not assigned",
+  "logs": [],
+  "meta": {
+    "version": 1,
+    "schema": "player"
+  }
+}

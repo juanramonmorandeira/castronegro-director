@@ -1,17 +1,30 @@
 <script>
-  import "./firebase.js";
-  import Jugadores from "./components/players/playersList.svelte";
+  import Landing from "./components/Landing.svelte";
+  let view = "landing";
+  let currentSessionId = null;
+
+  function goConfigure(sessionId) {
+    currentSessionId = sessionId;
+    view = "configure"; // placeholder por ahora
+  }
+  function goSession(sessionId) {
+    currentSessionId = sessionId;
+    view = "session";   // placeholder por ahora
+  }
 </script>
 
-<main>
-  <h1>Castronegro Director 🐺</h1>
-  <Jugadores />
-</main>
-
-<style>
-  main {
-    text-align: center;
-    padding: 2rem;
-    font-family: system-ui, sans-serif;
-  }
-</style>
+{#if view === "landing"}
+  <Landing onCreate={goConfigure} onViewCurrent={goSession}/>
+{:else if view === "configure"}
+  <div class="p-4">
+    <h2 class="text-lg font-semibold">Configure session</h2>
+    <p class="opacity-70">Session ID: {currentSessionId}</p>
+    <!-- Aquí caerá el configurador en el siguiente paso -->
+  </div>
+{:else if view === "session"}
+  <div class="p-4">
+    <h2 class="text-lg font-semibold">Current session</h2>
+    <p class="opacity-70">Session ID: {currentSessionId}</p>
+    <!-- Aquí caerá la vista de sesión -->
+  </div>
+{/if}

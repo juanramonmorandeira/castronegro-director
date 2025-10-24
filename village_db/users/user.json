@@ -1,0 +1,10 @@
+{
+  "userId": "uid_123",
+  "name": "Sofía M",
+  "email": "sofia@example.com",
+  "alias": "Sofi",
+  "avatarUrl": "https://...",
+  "created_at": "<serverTimestamp>",
+  "last_login_at": "<serverTimestamp>",
+  "status": "active"
+}

@@ -1,5 +1,6 @@
 {
-  "name": "castronegro-director",
+  "name": "village-storyteller",
+  "description": "Director’s dashboard for El Narrador de la Aldea",
   "private": true,
   "version": "0.0.0",
   "type": "module",

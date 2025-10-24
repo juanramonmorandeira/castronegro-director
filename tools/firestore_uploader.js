@@ -24,7 +24,7 @@ async function ask(question) {
 
 async function main() {
   try {
-    console.log("\n📦  Firestore Uploader — por Castronegro\n");
+    console.log("\n📦  Firestore Uploader — por Village\n");
 
     const jsonPath = await ask("Ruta del archivo JSON (relativa o absoluta): ");
     const collectionPath = await ask("Ruta en Firestore (ej. definitions/game_schema): ");
