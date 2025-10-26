@@ -1,12 +1,43 @@
 // src/lib/db.js
+// ───────────────────────────────────────────────────────────
+// Capa de acceso a datos (Firestore). Todas las operaciones CRUD
+// se centralizan aquí para mantener los componentes limpios.
+// ───────────────────────────────────────────────────────────
+
 import { db } from "./firebase.js";
 import {
   collection, doc, getDoc, getDocs, query, where, orderBy, limit,
-  addDoc, updateDoc, serverTimestamp
+  addDoc, updateDoc, serverTimestamp, writeBatch
 } from "firebase/firestore";
 
-// ya existentes: getCurrentSession, listSessionHistory, createSessionDraft ...
+/**
+ * clearCurrentFlag()
+ * ───────────────────────────────────────────────────────────
+ * Asegura que SOLO haya una sesión marcada como is_current=true.
+ * - Busca todas las sesiones con is_current==true y las desmarca.
+ * - Usa writeBatch para hacerlo atómico y más eficiente.
+ */
+async function clearCurrentFlag() {
+  const col = collection(db, "sessions");
+  const q = query(col, where("is_current", "==", true));
+  const snap = await getDocs(q);
+  if (snap.empty) return;
 
+  const batch = writeBatch(db);
+  snap.docs.forEach((d) => {
+    batch.update(d.ref, { is_current: false, updated_at: serverTimestamp() });
+  });
+  await batch.commit();
+}
+/**
+ * getCurrentSession()
+ * ───────────────────────────────────────────────────────────
+ * Devuelve la sesión marcada como current (si hay).
+ * Nota: Para evitar requerir índice compuesto, NO usamos orderBy aquí.
+ * Si en el futuro quieres la "más reciente", añade un índice compuesto:
+ *   sessions: where is_current==true + orderBy created_at desc
+ * y entonces reintroduce orderBy("created_at", "desc").
+ */
 export async function getCurrentSession() {
   const col = collection(db, "sessions");
   const q = query(col, where("is_current", "==", true), orderBy("created_at", "desc"), limit(1));
@@ -16,6 +47,12 @@ export async function getCurrentSession() {
   return { id: d.id, ...d.data() };
 }
 
+/**
+ * listSessionHistory(max)
+ * ───────────────────────────────────────────────────────────
+ * Lista las últimas 'max' sesiones ordenadas por fecha de creación (desc).
+ * Esta consulta podría pedir un índice si combinas más filtros.
+ */
 export async function listSessionHistory(max = 20) {
   const col = collection(db, "sessions");
   const q = query(col, orderBy("created_at", "desc"), limit(max));
@@ -23,14 +60,25 @@ export async function listSessionHistory(max = 20) {
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
+/**
+ * getBalanceTable()
+ * ───────────────────────────────────────────────────────────
+ * Devuelve la tabla de balance de roles.
+ * Estructura esperada: { distribution_table: { "5": {...}, ... } }
+ */
 export async function getBalanceTable() {
   const ref = doc(db, "rulesets", "balance_table");
   const snap = await getDoc(ref);
   if (!snap.exists()) throw new Error("rulesets/balance_table not found");
-  return snap.data(); // espera { distribution_table: { "5": {...}, ... } }
+  return snap.data(); 
 }
 
-// Crear sesión borrador y marcarla como current
+/**
+ * createSessionDraft({ title, language })
+ * ───────────────────────────────────────────────────────────
+ * Crea una nueva sesión en estado 'draft', la marca como 'current'
+ * y garantiza que no existan otras 'current'.
+ */
 export async function createSessionDraft({ title = "Untitled session", language = "en" } = {}) {
   // si quieres garantizar 1 sola “current”
   await clearCurrentFlag();
