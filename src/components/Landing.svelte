@@ -14,13 +14,16 @@
     listSessionHistory,
     createSessionDraft
   } from "../lib/db.js";
+  import HistoryCard from './landing/HistoryCard.svelte';
 
   // Estado reactivo del componente
   let loading = true;      // Cargando datos iniciales
   let current = null;      // Sesión actual (si existe)
-  let history = [];        // Últimas sesiones (máx. 20)
   let now = new Date();    // Fecha/hora local en vivo
   let tz = Intl.DateTimeFormat().resolvedOptions().timeZone; // Zona horaria local
+  let loadingHistory = false;
+  let errorHistory = null;
+  let historyItems = [];
 
   // Actualizador de reloj
   let timer;
@@ -53,15 +56,6 @@
   // Callbacks recibidos desde App.svelte
   export let onCreate = () => {};
   export let onViewCurrent = () => {};
-  export let onViewSummary = id => {
-    console.log("View summary for session:", id);
-    alert("Resumen de partida: " + id);
-  };
-
-  // --- Filtros de sesiones terminadas / canceladas ---
-  $: pastSessions = (history || [])
-    .filter(s => ["finished", "cancelled"].includes(s.status))
-    .sort((a, b) => new Date(b.finished_at || b.updated_at || 0) - new Date(a.finished_at || a.updated_at || 0));
 
   /** Crea una nueva sesión y pasa el ID a App.svelte */
   async function createAndGo() {
@@ -115,15 +109,33 @@
     } catch { return "—"; }
   }
 
-  // Solo sesiones terminadas/canceladas, ordenadas de más reciente a más antigua
-  $: finishedHistory =
-    (history || [])
-      .filter(s => s?.status === "finished" || s?.status === "cancelled")
-      .sort((a, b) => {
-        const ad = new Date(a.finished_at || a.updated_at || a.created_at || 0).getTime();
-        const bd = new Date(b.finished_at || b.updated_at || b.created_at || 0).getTime();
-        return bd - ad;
-      });
+  function handleView(e) { const { id } = e.detail; /* navegar / abrir */ }
+  function handleEdit(e) { const { id } = e.detail; /* abrir editor */ }
+  async function handleDelete(e) {
+    const { id } = e.detail;
+  }
+
+  onMount(async () => {
+    loadingHistory = true;
+    errorHistory = null;
+    try {
+      const docs = await listSessionHistory(20);
+      historyItems = (docs || []).map(doc => ({
+        id: doc.id,
+        title: doc.title ?? "—",
+        numPlayers: Number(doc.numPlayers ?? 0),
+        winners: Array.isArray(doc.winners) ? doc.winners : (doc.winners ? [doc.winners] : []),
+        date: doc.date?.toMillis ? doc.date.toMillis() : doc.date,
+        status: (doc.status ?? "borrador").toLowerCase()
+      }));
+      console.debug("[History] items:", historyItems.length);
+    } catch (e) {
+      console.error(e);
+      errorHistory = e?.message ?? "Error al cargar el histórico";
+    } finally {
+      loadingHistory = false;
+    }
+  });
 </script>
 
 <!-- ─────────────────────────────────────────────────────────────
@@ -203,49 +215,16 @@
   <!-- ─────────────────────────────────────────────────────────────
       HISTÓRICO DE SESIONES (solo finalizadas/canceladas)
       Caja unificada con cabecera + tabla responsive simple
+      Movido a  /landing/HistoryCard.svelte
       ───────────────────────────────────────────────────────────── -->
-  <section class="history-card">
-    <!-- Cabecera pegada a la caja -->
-    <div class="history-card__title">History</div>
-
-    <!-- Tabla semántica con grid (permite responsive fácil) -->
-    <div class="history-table">
-
-      <!-- Encabezados -->
-      <div class="history-thead">
-        <div>Title</div>
-        <div>Num Players</div>
-        <div>Winner/s</div>
-        <div>Date</div>
-        <div>Status</div>
-        <div class="col-actions">Actions</div>
-      </div>
-
-      <!-- Contenido dinámico -->
-      {#if pastSessions.length === 0}
-        <div class="history-empty">No hay sesiones finalizadas todavía.</div>
-      {:else}
-        {#each pastSessions as s}
-          <div class="history-row">
-            <div>{s.title || s.id}</div>
-            <div class="center">{s.players_expected ?? "—"}</div>
-            <div class="center">{s.winner_faction ?? "—"}</div>
-            <div>{fmt(s.finished_at || s.updated_at || s.created_at)}</div>
-            <div>
-              <span class={"pill " + (s.status === "finished" ? "ok" : "warn")}>
-                {s.status === "finished" ? "Finalizada" : "Cancelada"}
-              </span>
-            </div>
-            <div class="center">
-              <button class="icon-btn" on:click={() => onViewSummary(s.id)} title="Ver resumen">
-                <svg width="18" height="18" viewBox="0 0 24 24"><path fill="currentColor" d="M12 5c-5 0-9 4.5-10 7 1 2.5 5 7 10 7s9-4.5 10-7c-1-2.5-5-7-10-7Zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10Zm0-2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/></svg>
-              </button>
-            </div>
-          </div>
-        {/each}
-      {/if}
-    </div>
-  </section>
+  <HistoryCard
+    items={historyItems}
+    loading={loadingHistory}
+    error={errorHistory}
+    on:view={handleView}
+    on:edit={handleEdit}
+    on:delete={handleDelete}
+  />
 </main>
 
 <!-- ─────────────────────────────────────────────────────────────
@@ -484,58 +463,7 @@
     cursor: not-allowed;
   }
 
-  /* ─────────────────────────────────────────────────────────────
-     Caja unificada (cabecera + cuerpo) con ligera transparencia
-     ───────────────────────────────────────────────────────────── */
-  .history-card {
-    max-width: 900px;
-    margin: 4rem auto 2rem;
-    border: 1px solid rgba(255,255,255,0.18);
-    border-radius: 10px;
-    overflow: hidden; /* une visualmente cabecera y cuerpo */
-    background: rgba(15, 20, 25, 0.35); /* leve veladura para legibilidad */
-    box-shadow: 0 0 20px rgba(255,180,50,0.08);
-  }
-
-  /* Título superior de la caja */
-  .history-title {
-    padding: .8rem 1rem;
-    font-weight: 600;
-    color: #f5d57c;
-    background: radial-gradient(90% 90% at 40% 0%,
-                rgba(255,210,90,.10), rgba(20,20,24,.35) 70%);
-    border-bottom: 1px solid rgba(255,255,255,0.15);
-  }
-
-  /* Cabecera y filas */
-  .history-header, .history-row {
-    display: grid;
-    grid-template-columns: 1.6fr .7fr 1fr 1.3fr 1fr .8fr;
-    align-items: center;
-    padding: .6rem 1rem;
-  }
-
-  .history-header {
-    background: rgba(255,255,255,0.08);
-    font-size: .85rem;
-    font-weight: 500;
-    color: rgba(255,255,255,0.85);
-    border-bottom: 1px solid rgba(255,255,255,0.15);
-  }
-
-  .history-row {
-    color: #f1f1f1;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-  }
-  .history-row:last-child { border-bottom: none; }
-
   .center { text-align: center; }
-
-  .history-empty {
-    text-align: center;
-    padding: 1rem;
-    color: rgba(255,255,255,0.75);
-  }
 
   /* Píldoras de estado */
   .pill {
