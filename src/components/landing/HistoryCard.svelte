@@ -1,10 +1,8 @@
 <script>
   import { createEventDispatcher } from 'svelte';
 
-  export let items = [];
-  export let loading = false;
-  export let error = null;
-  export let labels = {
+  // Constants
+  const DEFAULT_LABELS = {
     title: 'Title',
     numPlayers: 'Num players',
     winners: 'Winner/s',
@@ -13,63 +11,77 @@
     actions: 'Actions'
   };
 
-  const dispatch = createEventDispatcher();
+  // Props
+  export let items = [];
+  export let loading = false;
+  export let error = null;
+  export let labels = DEFAULT_LABELS;
 
-  // Estado local de UI (orden y búsqueda)
-  let sortKey = 'date'; // 'title' | 'numPlayers' | 'winners' | 'date' | 'status'
-  let sortDir = 'desc'; // 'asc' | 'desc'
+  // Events
+  const dispatch = createEventDispatcher();
+  const emitView = (id) => dispatch('view', { id });
+  const emitEdit = (id) => dispatch('edit', { id });
+  const emitDelete = (id) => dispatch('delete', { id });
+
+  // State
+  let sortKey = 'date';
+  let sortDir = 'desc';
   let query = '';
 
+  // Helpers
+  const normalize = (value) => Array.isArray(value) ? value.join(', ') : (value ?? '');
+  const timeValue = (date) => (date instanceof Date ? date.getTime() : Number(date));
+
+  const formatDate = (value) => {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return '—';
+    const pad = (input) => String(input).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  };
+
+  const matchesQuery = (item, q) => {
+    if (!q) return true;
+    return (
+      normalize(item.title).toLowerCase().includes(q) ||
+      normalize(item.status).toLowerCase().includes(q) ||
+      normalize(item.winners).toLowerCase().includes(q)
+    );
+  };
+
+  // Derived data
+  $: normalizedQuery = query.trim().toLowerCase();
+  $: filtered = items.filter((item) => matchesQuery(item, normalizedQuery));
+  $: sorted = [...filtered].sort((a, b) => {
+    let comparison = 0;
+    if (sortKey === 'date') comparison = (timeValue(a.date) || 0) - (timeValue(b.date) || 0);
+    else if (sortKey === 'numPlayers') comparison = (a.numPlayers ?? 0) - (b.numPlayers ?? 0);
+    else comparison = normalize(a[sortKey]).localeCompare(normalize(b[sortKey]), undefined, { sensitivity: 'base' });
+    return sortDir === 'asc' ? comparison : -comparison;
+  });
+
+  // Behaviour
   function toggleSort(key) {
     if (key === 'actions') return;
     if (sortKey === key) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
-    else { sortKey = key; sortDir = key === 'date' ? 'desc' : 'asc'; }
+    else {
+      sortKey = key;
+      sortDir = key === 'date' ? 'desc' : 'asc';
+    }
   }
-
-  const normalize = (v) => Array.isArray(v) ? v.join(', ') : (v ?? '');
-  const ts = (d) => d instanceof Date ? d.getTime() : Number(d);
-
-  function formatDate(d) {
-    const date = d instanceof Date ? d : new Date(d);
-    if (Number.isNaN(date.getTime())) return '—';
-    const p = (n) => String(n).padStart(2, '0');
-    return `${date.getFullYear()}-${p(date.getMonth()+1)}-${p(date.getDate())} ${p(date.getHours())}:${p(date.getMinutes())}`;
-  }
-
-  $: filtered = items.filter(it => {
-    const q = query.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      normalize(it.title).toLowerCase().includes(q) ||
-      normalize(it.status).toLowerCase().includes(q) ||
-      normalize(it.winners).toLowerCase().includes(q)
-    );
-  });
-
-  $: sorted = [...filtered].sort((a,b) => {
-    let cmp = 0;
-    if (sortKey === 'date') cmp = (ts(a.date) || 0) - (ts(b.date) || 0);
-    else if (sortKey === 'numPlayers') cmp = (a.numPlayers ?? 0) - (b.numPlayers ?? 0);
-    else cmp = normalize(a[sortKey]).localeCompare(normalize(b[sortKey]), undefined, { sensitivity: 'base' });
-    return sortDir === 'asc' ? cmp : -cmp;
-  });
-
-  const onView = (id) => dispatch('view', { id });
-  const onEdit = (id) => dispatch('edit', { id });
-  const onDelete = (id) => dispatch('delete', { id });
 </script>
 
 <section class="history-card">
+  <!-- Header / title arriba (ya lo tienes) -->
   <header class="card-header">
-    <h2>History</h2>
+    <h2 class="history-title">History</h2>
     <div class="toolbar">
-      <input class="search" type="search" placeholder="Buscar por título, estado o ganador…" bind:value={query} aria-label="Buscar sesiones" />
+      <input class="search" type="search" placeholder="Search by title, status or winner…" bind:value={query} aria-label="Session Search" />
       {#if loading}<span class="badge info" aria-live="polite">Cargando…</span>{/if}
       {#if error}<span class="badge error" role="alert">Error: {error}</span>{/if}
     </div>
   </header>
 
-  <div class="table-wrap" role="region" aria-label="Histórico de sesiones">
+  <div class="table-wrap" role="region" aria-label="Sessions History">
     <table class="history-table">
       <thead>
         <tr>
@@ -83,7 +95,7 @@
       </thead>
       <tbody>
         {#if sorted.length === 0}
-          <tr><td class="empty" colspan="6">{query ? `No hay resultados para “${query}”.` : 'Aún no hay sesiones registradas.'}</td></tr>
+          <tr><td class="empty" colspan="6">{query ? `There are not results for “${query}”.` : 'There are no sessions recorded.'}</td></tr>
         {:else}
           {#each sorted as it}
             <tr>
@@ -97,9 +109,9 @@
               </span>
               </td>
               <td class="actions" data-label={labels.actions}>
-              <button class="ghost"  title="Ver"     on:click={() => onView(it.id)}>Ver</button>
-              <button class="ghost"  title="Editar"  on:click={() => onEdit(it.id)}>Editar</button>
-              <button class="danger" title="Eliminar"on:click={() => onDelete(it.id)}>Eliminar</button>
+              <button class="ghost"  title="Ver"     on:click={() => emitView(it.id)}>View</button>
+              <button class="ghost"  title="Editar"  on:click={() => emitEdit(it.id)}>Edit</button>
+              <button class="danger" title="Eliminar"on:click={() => emitDelete(it.id)}>Delete</button>
               </td>
             </tr>
           {/each}
@@ -113,6 +125,15 @@
   .history-card { display: grid; gap: 0.75rem; }
   .card-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
   .card-header h2 { margin: 0; font-size: 1.1rem; }
+  .history-title {
+    font-family: var(--title-font, 'Cinzel', serif);
+    font-size: 1.8rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-shadow: 0 0 10px rgba(255, 230, 140, 0.8), 0 0 20px rgba(255, 200, 80, 0.5);
+    color: #f7d774;
+    margin: 0 0 0.25rem 0;
+  }
   .toolbar { display: flex; align-items: center; gap: 0.5rem; }
   .search { flex: 1; padding: 0.5rem 0.6rem; border: 1px solid #cfcfcf; border-radius: 6px; outline: none; }
   .search:focus { border-color: #888; }
