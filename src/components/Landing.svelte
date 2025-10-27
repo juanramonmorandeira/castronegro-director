@@ -1,11 +1,10 @@
 <script>
   import { onMount } from 'svelte';
-  import BackgroundLayer from './landing/BackgroundLayer.svelte';
   import Topbar from './Topbar.svelte';
-  import Footbar from './Footbar.svelte';
   import CurrentSessionCard from './landing/CurrentSessionCard.svelte';
   import HistoryCard from './landing/HistoryCard.svelte';
   import { getCurrentSession, listSessionHistory, createSessionDraft } from '../lib/db.js';
+  import Footbar from './Footbar.svelte';
 
   // Constants
   const HISTORY_LIMIT = 20;
@@ -126,33 +125,15 @@
 </script>
 
 <!-- ─────────────────────────────────────────────────────────────
-     BACKGROUND
-     ───────────────────────────────────────────────────────────── -->
-<BackgroundLayer />
-
-<!-- ─────────────────────────────────────────────────────────────
      TOPBAR (dashboard tag + idioma + login) 
      ───────────────────────────────────────────────────────────── -->
-<Topbar />
-<div class="topbar">
-  <span class="util-tag">Storyteller Dashboard</span>
-  <!-- Botón idioma (bandera UK). Más adelante lo conectaremos al sistema i18n -->
-  <button
-    class="lang-btn"
-    type="button"
-    aria-label="Change interface language"
-    title="English (change language)"
-  >
-    <!-- Usamos imagen si existe; si falla, se muestra emoji como fallback -->
-    <img
-      src="/icons/flag-uk.png"
-      alt=""
-      class="flag"
-      on:error={(e)=>{ e.target.replaceWith(document.createTextNode('🇬🇧')); }}
-    />
-    <span class="sr-only">English</span>
-  </button>
-</div>
+<Topbar
+  title="Storyteller Dashboard"
+  flagSrc="/flags/en_UK.png"   
+  flagAlt="English"
+  langCode="EN"
+  on:lang={() => { /* aquí harás el toggle de idioma cuando llegue i18n */ }}
+/>
 
 <!-- ─────────────────────────────────────────────────────────────
      ENCABEZADO (Título + Efecto visual)
@@ -184,97 +165,32 @@
   <!-- ─────────────────────────────────────────────────────────────
        HISTÓRICO DE SESIONES (solo finalizadas/canceladas)
        ───────────────────────────────────────────────────────────── -->
-  <HistoryCard
-    items={historyItems}
-    loading={loadingHistory}
-    error={errorHistory}
-    on:view={handleHistoryView}
-    on:edit={handleHistoryEdit}
-    on:delete={handleHistoryDelete}
-  />
+  <div class="history-anchor">
+    <HistoryCard
+      items={historyItems}
+      loading={loadingHistory}
+      error={errorHistory}
+      on:view={handleHistoryView}
+      on:edit={handleHistoryEdit}
+      on:delete={handleHistoryDelete}
+    />
+  </div>
 </main>
 
 <!-- ─────────────────────────────────────────────────────────────
      PIE DE PAGINA (reloj + firma)
      ───────────────────────────────────────────────────────────── -->
-<Footbar />
-<div class="corner-info">
-  <div class="clock">
-    {fmt(now)} ({tz})
-  </div>
-  <div class="signature">@chatgpt-juanramon intellectual property</div>
-</div>
+<Footbar
+  signature="@chatgpt-juarnamon ip"
+  locale="en-GB"
+  timeZone="Europe/Budapest"
+  showSeconds={true}
+/>
 
 <!-- ─────────────────────────────────────────────────────────────
      LANDING (Estilos Locales)
      ───────────────────────────────────────────────────────────── -->
 <style>
-  /* ─────────────────────────────────────────────────────────────
-     BARRA SUPERIOR DERECHA
-     ───────────────────────────────────────────────────────────── */
-  .topbar {
-    position: fixed;
-    top: 1rem;
-    right: 1rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    z-index: 20; /* por encima del resto de contenido */
-  }
-
-    /* Píldora "Storyteller Dashboard" */
-  .util-tag {
-    display: inline-block;
-    padding: 0.25rem 0.55rem;
-    border-radius: 999px;
-    font-size: 0.8rem;
-    line-height: 1;
-    color: #e8eef6;
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    background: rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(3px);
-    white-space: nowrap;
-  }
-
-  /* Botón redondo del idioma */
-  .lang-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    background: rgba(255, 255, 255, 0.08);
-    color: #fff;
-    cursor: pointer;
-    transition: background 0.2s ease, transform 0.1s ease;
-    backdrop-filter: blur(3px);
-  }
-  .lang-btn:hover { background: rgba(255,255,255,0.16); }
-  .lang-btn:active { transform: scale(0.96); }
-
-  /* Imagen de la bandera */
-  .flag {
-    width: 18px;
-    height: 18px;
-    border-radius: 2px;
-    display: block;
-  }
-
-  /* Texto solo para lectores de pantalla */
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 1px, 1px);
-    white-space: nowrap;
-    border: 0;
-  }
-
   /* ─────────────────────────────────────────────────────────────
      TÍTULO PRINCIPAL – “El Narrador de la Aldea”
      ───────────────────────────────────────────────────────────── */
@@ -369,33 +285,24 @@
   /* ─────────────────────────────────────────────────────────────
      CUERPO PRINCIPAL
      ───────────────────────────────────────────────────────────── */
-
-  /* ─────────────────────────────────────────────────────────────
-     BLOQUE INFERIOR DERECHO
-     ───────────────────────────────────────────────────────────── */
-  .corner-info {
-    position: fixed;
-    bottom: 1rem;
-    right: 1rem;
-    text-align: right;
-    z-index: 20;
-    user-select: none;
+  .history-anchor {
+    width: 100%;
+    /* empuja ligeramente el histórico por debajo del farol en 16:9 / desktop */
+    margin-top: 18px;
   }
 
-  /* Reloj — tono claro (casi blanco) */
-  .clock {
-    font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.9);
-    text-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+  /* pantallas anchas: el farol cae un poco más abajo; empujamos un poco más */
+  @media (min-width: 1280px) and (min-height: 720px) {
+    .history-anchor { margin-top: 26px; }
   }
 
-  /* Firma — tono cálido (amarillo/anaranjado) */
-  .signature {
-    font-size: 0.7rem;
-    color: #ffcc66; /* tono ámbar cálido */
-    opacity: 0.9;
-    margin-top: 0.15rem;
-    text-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
-    font-family: 'Courier New', monospace; /* da un toque “sello digital” */
+  /* monitores grandes (1440+ o altura 900+): el farol queda más bajo; compensamos */
+  @media (min-width: 1440px), (min-height: 900px) {
+    .history-anchor { margin-top: 34px; }
+  }
+
+  /* tablet/móvil: mantenemos el bloque pegado a la card, sin desplazamientos bruscos */
+  @media (max-width: 900px) {
+    .history-anchor { margin-top: 12px; }
   }
 </style>

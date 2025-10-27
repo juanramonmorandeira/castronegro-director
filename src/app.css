@@ -1,7 +1,7 @@
 /* 🌿 VILLAGE STORYTELLER – app.css */
 /* ---------------------------------- */
 /* Este archivo define el estilo global base del proyecto.
-   El fondo visual se maneja en LandingBackgroundLayer.svelte,
+   El fondo visual se maneja en components/landing/BackgroundLayer.svelte,
    por lo que aquí solo dejamos estilos estructurales y tipográficos.
 */
 

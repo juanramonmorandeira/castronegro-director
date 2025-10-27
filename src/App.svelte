@@ -5,10 +5,10 @@
   // Este componente raíz actúa como “router” ligero.
   // - Controla qué vista se muestra (landing / configurador / sesión).
   // - Mantiene en memoria el ID de la sesión actual (si la hay).
-  // - Monta la capa de fondo (LandingBackgroundLayer) por debajo.
+  // - Monta la capa de fondo (BackgroundLayer) por debajo.
   // ─────────────────────────────────────────────────────────────
 
-  import LandingBackgroundLayer from './components/LandingBackgroundLayer.svelte';
+  import BackgroundLayer from './components/landing/BackgroundLayer.svelte';
   import Landing from "./components/Landing.svelte";
 
   // Estado de navegación actual:
@@ -43,7 +43,7 @@
      No captura eventos (pointer-events: none en el propio componente).
      Siempre está visible detrás de todas las vistas.
      ───────────────────────────────────────────────────────────── -->
-<LandingBackgroundLayer
+<BackgroundLayer
   backgroundUrl="/images/background-village.png"
   fogUrl="/images/fog-texture.png"
 />
