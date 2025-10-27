@@ -1,5 +1,6 @@
 <script>
   import { createEventDispatcher } from 'svelte';
+  import { statusBadgeClass, statusLabel } from '../../lib/utils.js';
 
   // Props
   export let session = null;
@@ -11,9 +12,9 @@
   const emitCreate = () => dispatch('create');
   const emitView = () => session && dispatch('view', { id: session.id });
 
-  // Helpers
-  const capitalize = (value) => String(value).charAt(0).toUpperCase() + String(value).slice(1);
-  const statusLabel = (status) => (status ? capitalize(status) : 'Unknown');
+  // Derived
+  $: badgeClass = statusBadgeClass(session?.status);
+  $: statusText = statusLabel(session?.status);
 </script>
 
 <section class="current-card" aria-live="polite">
@@ -22,7 +23,10 @@
     {#if loading}
       Checking current game session…
     {:else if session}
-      <strong>Active game:</strong> {session.title ?? 'Untitled'} — {statusLabel(session.status)}
+      <strong>Active game:</strong> {session.title ?? 'Untitled'}
+      <span class="badge {badgeClass}" style="margin-left: .5rem;">
+        {statusText}
+      </span>
     {:else}
       No active game sessions right now.
     {/if}

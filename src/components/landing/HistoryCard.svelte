@@ -1,5 +1,6 @@
 <script>
   import { createEventDispatcher } from 'svelte';
+  import { formatDateTime, statusBadgeClass, statusLabel, toEpochMillis } from '../../lib/utils.js';
 
   // Constants
   const DEFAULT_LABELS = {
@@ -29,22 +30,15 @@
   let query = '';
 
   // Helpers
-  const normalize = (value) => Array.isArray(value) ? value.join(', ') : (value ?? '');
-  const timeValue = (date) => (date instanceof Date ? date.getTime() : Number(date));
-
-  const formatDate = (value) => {
-    const date = value instanceof Date ? value : new Date(value);
-    if (Number.isNaN(date.getTime())) return '—';
-    const pad = (input) => String(input).padStart(2, '0');
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-  };
+  const normalizeText = (value) => Array.isArray(value) ? value.join(', ') : (value ?? '');
+  const epochValue = (value) => toEpochMillis(value) ?? 0;
 
   const matchesQuery = (item, q) => {
     if (!q) return true;
     return (
-      normalize(item.title).toLowerCase().includes(q) ||
-      normalize(item.status).toLowerCase().includes(q) ||
-      normalize(item.winners).toLowerCase().includes(q)
+      normalizeText(item.title).toLowerCase().includes(q) ||
+      normalizeText(item.status).toLowerCase().includes(q) ||
+      normalizeText(item.winners).toLowerCase().includes(q)
     );
   };
 
@@ -53,9 +47,9 @@
   $: filtered = items.filter((item) => matchesQuery(item, normalizedQuery));
   $: sorted = [...filtered].sort((a, b) => {
     let comparison = 0;
-    if (sortKey === 'date') comparison = (timeValue(a.date) || 0) - (timeValue(b.date) || 0);
+    if (sortKey === 'date') comparison = epochValue(a.date) - epochValue(b.date);
     else if (sortKey === 'numPlayers') comparison = (a.numPlayers ?? 0) - (b.numPlayers ?? 0);
-    else comparison = normalize(a[sortKey]).localeCompare(normalize(b[sortKey]), undefined, { sensitivity: 'base' });
+    else comparison = normalizeText(a[sortKey]).localeCompare(normalizeText(b[sortKey]), undefined, { sensitivity: 'base' });
     return sortDir === 'asc' ? comparison : -comparison;
   });
 
@@ -101,12 +95,12 @@
             <tr>
               <td data-label={labels.title}>{it.title ?? '—'}</td>
               <td class="num"   data-label={labels.numPlayers}>{it.numPlayers ?? '—'}</td>
-              <td data-label={labels.winners}>{Array.isArray(it.winners) ? it.winners.join(', ') : (it.winners ?? '—')}</td>
-              <td class="date"  data-label={labels.date}>{formatDate(it.date)}</td>
+              <td data-label={labels.winners}>{normalizeText(it.winners) || '—'}</td>
+              <td class="date" data-label={labels.date}>{formatDateTime(it.date)}</td>
               <td data-label={labels.status}>
-              <span class="status" data-status={it.status ?? 'desconocido'}>
-                  {it.status ?? 'desconocido'}
-              </span>
+                <span class="badge {statusBadgeClass(it.status)}">
+                  {statusLabel(it.status)}
+                </span>
               </td>
               <td class="actions" data-label={labels.actions}>
               <button class="ghost"  title="Ver"     on:click={() => emitView(it.id)}>View</button>
@@ -149,10 +143,6 @@
   tbody tr:hover { background: #fcfcff; }
   td.empty { text-align: center; color: #777; padding: 1.25rem; }
   td.num, td.date { white-space: nowrap; }
-  .status { text-transform: capitalize; font-size: 0.85rem; padding: 0.15rem 0.5rem; border-radius: 999px; border: 1px solid #e6e6e6; background: #f9f9f9; }
-  .status[data-status="completada"] { background: #eefaf0; border-color: #ccf0d3; color: #1f7a39; }
-  .status[data-status="borrador"], .status[data-status="draft"] { background: #fff7e6; border-color: #ffe3ad; color: #8a5a00; }
-  .status[data-status="cancelada"] { background: #ffecec; border-color: #ffc9c9; color: #8a1f1f; }
   .actions { display: flex; gap: 0.4rem; }
   .ghost { background: transparent; border: 1px solid #ddd; padding: 0.25rem 0.5rem; border-radius: 6px; }
   .danger { background: #fff0f0; border: 1px solid #f1c4c4; padding: 0.25rem 0.5rem; border-radius: 6px; color: #a11; }

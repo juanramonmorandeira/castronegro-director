@@ -40,10 +40,11 @@ async function clearCurrentFlag() {
  */
 export async function getCurrentSession() {
   const col = collection(db, "sessions");
-  const q = query(col, where("is_current", "==", true), orderBy("created_at", "desc"), limit(1));
+  // Sin orderBy para no requerir índice compuesto con where(is_current==true)
+  const q = query(col, where("is_current", "==", true));
   const snap = await getDocs(q);
   if (snap.empty) return null;
-  const d = snap.docs[0];
+  const d = snap.docs[0]; // Debe existir solo una por clearCurrentFlag()
   return { id: d.id, ...d.data() };
 }
 

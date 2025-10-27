@@ -29,7 +29,7 @@
         <img src={flagSrc} alt={flagAlt} aria-hidden="true" width="22" height="16"/>
       </button>
     {:else}
-      <button class="lang-btn" on:click={emitLang} aria-label="Change language" title={flagAlt}>
+      <button class="lang-btn" on:click={emitLang} aria-label={`Change language, current: ${langCode}`} title={flagAlt}>
         {langCode}
       </button>
     {/if}
