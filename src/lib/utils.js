@@ -2,20 +2,14 @@
 // ─────────────────────────────────────────────────────────────
 // Utilidades compartidas para formateo y normalización.
 
+import { get } from 'svelte/store';
+import { dictionary, locale as localeStore } from './i18n.js';
+
 // Constants
 const DEFAULT_LOCALE = 'en-GB';
 const DATE_OPTIONS = { year: 'numeric', month: 'short', day: '2-digit' };
 const TIME_OPTIONS = { hour: '2-digit', minute: '2-digit' };
 const DATETIME_SEPARATOR = ' · ';
-
-const STATUS_LABELS = {
-  draft: 'Draft',
-  waiting: 'Waiting',
-  in_progress: 'In progress',
-  paused: 'Paused',
-  finished: 'Finished',
-  cancelled: 'Cancelled'
-};
 
 // Helpers
 const resolveLocale = (locale) => {
@@ -31,6 +25,9 @@ const safeIntlFormat = (options, locale, value) => {
     return null;
   }
 };
+
+const resolvePath = (obj, path) =>
+  path.split('.').reduce((acc, key) => (acc && acc[key] !== undefined ? acc[key] : undefined), obj);
 
 // Date helpers
 export function toDateSafe(value) {
@@ -99,5 +96,12 @@ export function statusBadgeClass(raw) {
 
 export function statusLabel(raw, fallback = 'Unknown') {
   const normalized = normalizeStatus(raw);
-  return STATUS_LABELS[normalized] ?? fallback;
+  try {
+    const dict = get(dictionary);
+    const currentLocale = get(localeStore);
+    const pack = dict[currentLocale] || dict.en;
+    return resolvePath(pack, `status.${normalized}`) ?? fallback;
+  } catch {
+    return fallback;
+  }
 }

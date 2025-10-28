@@ -1,38 +1,53 @@
 <script>
   import { createEventDispatcher } from 'svelte';
+  import { locale, availableLocales, t } from '../lib/i18n.js';
 
-  // Constants
-  const DEFAULT_TITLE = 'Storyteller Dashboard';
   const DEFAULT_FLAG_SRC = '/flags/en_UK.png';
-  const DEFAULT_FLAG_ALT = 'English';
 
-  // Props
-  export let title = DEFAULT_TITLE;
+  export let title = '';
   export let flagSrc = DEFAULT_FLAG_SRC;
-  export let flagAlt = DEFAULT_FLAG_ALT;
-  export let langCode = 'EN';
+  export let flagAlt = '';
+  export let langCode = '';
 
-  // Events
   const dispatch = createEventDispatcher();
-  const emitLang = () => dispatch('lang');
 
-  // https://icon-icons.com/es/buscar/iconos/banderas?page=1
+  const handleLocaleChange = (event) => {
+    const next = event.target.value;
+    if (availableLocales.includes(next)) {
+      locale.set(next);
+      dispatch('lang', { locale: next });
+    }
+  };
+
+  $: normalizedLang = (langCode || $locale || 'en').toLowerCase();
+  $: languageCodeDisplay = (langCode || $locale || 'en').toUpperCase();
+  $: languageName = $t(`common.languages.${normalizedLang}`) || flagAlt || languageCodeDisplay;
+  $: chipTitle = title || $t('topbar.title');
+  $: effectiveFlagAlt = flagAlt || languageName;
+  $: changeLanguageCurrentLabel = $t('topbar.change_language_current', { language: languageName });
+  $: languageLabel = $t('topbar.language_label');
+  $: navigationLabel = $t('topbar.navigation_label');
 </script>
 
-<nav class="topbar" aria-label="Global">
+<nav class="topbar" aria-label={navigationLabel}>
   <div class="right">
-    <span class="chip">{title}</span>
+    <span class="chip">{chipTitle}</span>
 
-    <!-- Si hay bandera, muéstrala; si no, muestra el código de idioma -->
-    {#if flagSrc}
-      <button class="flag-btn" on:click={emitLang} aria-label="Change language" title={flagAlt}>
-        <img src={flagSrc} alt={flagAlt} aria-hidden="true" width="22" height="16"/>
-      </button>
-    {:else}
-      <button class="lang-btn" on:click={emitLang} aria-label={`Change language, current: ${langCode}`} title={flagAlt}>
-        {langCode}
-      </button>
-    {/if}
+    <div class="lang-switch" title={changeLanguageCurrentLabel}>
+      <span class="sr-only">{languageLabel}</span>
+      {#if flagSrc}
+        <img src={flagSrc} alt={effectiveFlagAlt} class="flag" />
+      {:else}
+        <span class="lang-code">{languageCodeDisplay}</span>
+      {/if}
+      <select value={$locale} aria-label={languageLabel} on:change={handleLocaleChange}>
+        {#each availableLocales as code}
+          <option value={code}>
+            {$t(`common.languages.${code}`) || code.toUpperCase()}
+          </option>
+        {/each}
+      </select>
+    </div>
   </div>
 </nav>
 
@@ -71,27 +86,54 @@
     white-space: nowrap;
   }
 
-  .flag-btn,
-  .lang-btn {
+  .lang-switch {
+    position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 34px;
-    height: 28px;
-    border-radius: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
     border: 1px solid rgba(255,255,255,0.25);
     background: rgba(255,255,255,0.08);
     color: #f3f5f7;
+    pointer-events: auto;
+    min-height: 22px;
+    min-width: 24px;
+    box-shadow: 0 0 8px rgba(255, 230, 140, 0.2);
+  }
+
+  .lang-switch select {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
     cursor: pointer;
   }
-  .flag-btn:hover,
-  .lang-btn:hover { background: rgba(255,255,255,0.14); }
-  .flag-btn img {
-    display: block;
+
+  .lang-switch .flag {
     width: 22px;
     height: 16px;
-    object-fit: cover;
     border-radius: 2px;
+    object-fit: cover;
+    pointer-events: none;
+  }
+
+  .lang-switch .lang-code {
+    font-size: 0.75rem;
+    font-weight: 600;
+    pointer-events: none;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    border: 0;
   }
 
   @media (max-width: 760px) {

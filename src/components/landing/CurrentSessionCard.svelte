@@ -1,44 +1,46 @@
 <script>
   import { createEventDispatcher } from 'svelte';
-  import { statusBadgeClass, statusLabel } from '../../lib/utils.js';
+  import { normalizeStatus, statusBadgeClass } from '../../lib/utils.js';
+  import { t } from '../../lib/i18n.js';
 
-  // Props
   export let session = null;
   export let loading = false;
   export let canView = false;
 
-  // Events
   const dispatch = createEventDispatcher();
   const emitCreate = () => dispatch('create');
   const emitView = () => session && dispatch('view', { id: session.id });
 
-  // Derived
   $: badgeClass = statusBadgeClass(session?.status);
-  $: statusText = statusLabel(session?.status);
+  $: statusText = $t(`status.${normalizeStatus(session?.status)}`);
+  $: checkingLabel = $t('landing.current.checking');
+  $: activePrefix = $t('landing.current.active_prefix');
+  $: noSessionLabel = $t('landing.current.no_active');
+  $: createLabel = $t('landing.current.create');
+  $: viewLabel = $t('landing.current.view');
+  $: untitledLabel = $t('common.untitled_session');
 </script>
 
 <section class="current-card" aria-live="polite">
-  <!-- Status box -->
   <div class="status-box" data-has-session={!!session}>
     {#if loading}
-      Checking current game session…
+      {checkingLabel}
     {:else if session}
-      <strong>Active game:</strong> {session.title ?? 'Untitled'}
-      <span class="badge {badgeClass}" style="margin-left: .5rem;">
+      <strong>{activePrefix}</strong> {session.title ?? untitledLabel}
+      <span class="badge {badgeClass}" style="margin-left: 0.5rem;">
         {statusText}
       </span>
     {:else}
-      No active game sessions right now.
+      {noSessionLabel}
     {/if}
   </div>
 
-  <!-- Primary actions -->
   <div class="actions">
-    <button class="primary" on:click={emitCreate} aria-label="Create new game">
-      Create new game
+    <button class="primary" on:click={emitCreate} aria-label={createLabel}>
+      {createLabel}
     </button>
-    <button class="ghost" on:click={emitView} disabled={!session || !canView} aria-label="View current game">
-      View current game
+    <button class="ghost" on:click={emitView} disabled={!session || !canView} aria-label={viewLabel}>
+      {viewLabel}
     </button>
   </div>
 </section>
@@ -46,8 +48,11 @@
 <style>
   .current-card {
     display: grid;
-    gap: 0.75rem;
-    width: 100%;
+    gap: clamp(1rem, 3vw, 2rem);
+    width: min(100%, 720px);
+    margin: 0 auto;
+    padding: 0 clamp(1rem, 4vw, 2rem);
+    box-sizing: border-box;
   }
 
   .status-box {
@@ -67,7 +72,7 @@
   .actions {
     display: flex;
     gap: 0.5rem;
-    justify-content: center;   /* <-- centra los botones */
+    justify-content: center;
     flex-wrap: wrap;
   }
 
@@ -90,6 +95,9 @@
   .ghost:disabled { opacity: 0.5; cursor: not-allowed; }
 
   @media (max-width: 760px) {
-    .current-card { margin-inline: 0.5rem; }
+    .current-card {
+      margin-inline: 0.5rem;
+      padding: 0 0.5rem;
+    }
   }
 </style>

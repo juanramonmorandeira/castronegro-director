@@ -4,30 +4,35 @@
   import Header from './landing/Header.svelte';
   import CurrentSessionCard from './landing/CurrentSessionCard.svelte';
   import HistoryCard from './landing/HistoryCard.svelte';
-  import { getCurrentSession, listSessionHistory, createSessionDraft } from '../lib/db.js';
   import Footbar from './Footbar.svelte';
+  import { getCurrentSession, listSessionHistory, createSessionDraft } from '../lib/db.js';
+  import { normalizeStatus } from '../lib/utils.js';
+  import { locale as localeStore, t } from '../lib/i18n.js';
 
-  // Constants
   const HISTORY_LIMIT = 20;
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const dateOptions = Intl.DateTimeFormat().resolvedOptions();
+  const tz = dateOptions.timeZone || 'UTC';
+  const clockLocale = dateOptions.locale || 'en-GB';
+  const FLAG_BY_LOCALE = {
+    en: '/flags/en_UK.png',
+    es: '/flags/es_ES.png',
+    hu: '/flags/hu_HU.png'
+  };
+  const DEFAULT_FLAG_SRC = FLAG_BY_LOCALE.en;
 
-  // Props
   export let onCreate = () => {};
 
-  // State
-  let now = new Date();
   let current = null;
   let historyItems = [];
   let loadingCurrent = true;
   let loadingHistory = true;
   let errorHistory = null;
-  let timer;
 
-  // Helpers
-  const pad = (value) => String(value).padStart(2, "0");
-  const fmt = (date) =>
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
-    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  const getLocaleKey = (value) => (value || 'en').split(/[-_]/)[0].toLowerCase();
+
+  $: localeKey = getLocaleKey($localeStore);
+  $: topbarFlagSrc = FLAG_BY_LOCALE[localeKey] ?? DEFAULT_FLAG_SRC;
+  $: topbarLangCode = localeKey;
 
   const normalizeHistoryDoc = (doc) => {
     const winners = Array.isArray(doc.winners)
@@ -42,11 +47,10 @@
       numPlayers: Number(doc.numPlayers ?? 0),
       winners,
       date: doc.date?.toMillis ? doc.date.toMillis() : doc.date,
-      status: (doc.status ?? 'waiting').toLowerCase(),
+      status: normalizeStatus(doc.status),
     };
   };
 
-  // Data loading
   async function loadCurrentSession() {
     loadingCurrent = true;
     try {
@@ -67,7 +71,7 @@
       historyItems = (docs ?? []).map(normalizeHistoryDoc);
     } catch (error) {
       console.error('Error loading history', error);
-      errorHistory = error?.message ?? 'Failed to load history';
+      errorHistory = error?.message ?? $t('landing.history.load_failed');
     } finally {
       loadingHistory = false;
     }
@@ -80,8 +84,8 @@
   async function createAndGo() {
     try {
       const id = await createSessionDraft({
-        title: 'Untitled session',
-        language: 'en',
+        title: $t('common.untitled_session'),
+        language: localeKey,
       });
       await refreshAll();
       onCreate(id);
@@ -90,7 +94,6 @@
     }
   }
 
-  // Event handlers
   function handleViewCurrent(event) {
     const { id } = event.detail ?? {};
     if (id) console.debug('View current session', id);
@@ -111,17 +114,10 @@
     if (id) console.debug('Delete history session (not implemented)', id);
   }
 
-  // Lifecycle
   onMount(() => {
-    timer = setInterval(() => {
-      now = new Date();
-    }, 1000);
-
     refreshAll().catch((error) => {
       console.error('Initial load failed', error);
     });
-
-    return () => clearInterval(timer);
   });
 </script>
 
@@ -129,10 +125,8 @@
      TOPBAR (dashboard tag + idioma + login) 
      ───────────────────────────────────────────────────────────── -->
 <Topbar
-  title="Storyteller Dashboard"
-  flagSrc="/flags/en_UK.png"   
-  flagAlt="English"
-  langCode="EN"
+  flagSrc={topbarFlagSrc}
+  langCode={topbarLangCode}
   on:lang={() => { /* aquí harás el toggle de idioma cuando llegue i18n */ }}
 />
 
@@ -141,7 +135,7 @@
      ───────────────────────────────────────────────────────────── -->
 <Header />
 
-<main>
+<main class="main-padding">
   <!-- ─────────────────────────────────────────────────────────────
        ESTADO PARTIDA EN CURSO (Estado actual + Botones de acción)
        ───────────────────────────────────────────────────────────── -->
@@ -161,6 +155,7 @@
       items={historyItems}
       loading={loadingHistory}
       error={errorHistory}
+      dateLocale={clockLocale}
       on:view={handleHistoryView}
       on:edit={handleHistoryEdit}
       on:delete={handleHistoryDelete}
@@ -172,9 +167,8 @@
      PIE DE PAGINA (reloj + firma)
      ───────────────────────────────────────────────────────────── -->
 <Footbar
-  signature="@chatgpt-juarnamon intellectual property"
-  locale="en-GB"
-  timeZone="Europe/Budapest"
+  locale={clockLocale}
+  timeZone={tz}
   showSeconds={true}
 />
 
@@ -185,24 +179,19 @@
   /* ─────────────────────────────────────────────────────────────
      CUERPO PRINCIPAL
      ───────────────────────────────────────────────────────────── */
+  main {
+    display: grid;
+    gap: clamp(2rem, 5vw, 3.5rem);
+    justify-items: center;
+    padding: 0 clamp(1.25rem, 5vw, 3rem) clamp(2rem, 6vw, 3.5rem);
+    box-sizing: border-box;
+  }
+
+  main > * {
+    width: 100%;
+  }
+
   .history-anchor {
     width: 100%;
-    /* empuja ligeramente el histórico por debajo del farol en 16:9 / desktop */
-    margin-top: 18px;
-  }
-
-  /* pantallas anchas: el farol cae un poco más abajo; empujamos un poco más */
-  @media (min-width: 1280px) and (min-height: 720px) {
-    .history-anchor { margin-top: 26px; }
-  }
-
-  /* monitores grandes (1440+ o altura 900+): el farol queda más bajo; compensamos */
-  @media (min-width: 1440px), (min-height: 900px) {
-    .history-anchor { margin-top: 34px; }
-  }
-
-  /* tablet/móvil: mantenemos el bloque pegado a la card, sin desplazamientos bruscos */
-  @media (max-width: 900px) {
-    .history-anchor { margin-top: 12px; }
   }
 </style>

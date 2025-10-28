@@ -10,28 +10,16 @@
 
   import BackgroundLayer from './components/landing/BackgroundLayer.svelte';
   import Landing from "./components/Landing.svelte";
+  import { t } from './lib/i18n.js';
 
-  // Estado de navegación actual:
-  let view = "landing";          // Valores posibles: "landing" | "configure" | "session"
-  let currentSessionId = null;   // ID de la sesión activa (Firestore doc.id)
+  let view = "landing";
+  let currentSessionId = null;
 
-  /**
-   * goConfigure(sessionId)
-   * ─────────────────────────────────────────────────────────────
-   * Callback que se ejecuta al pulsar “Create new game” en Landing.
-   * Guarda el ID de la sesión recién creada y cambia la vista a “configure”.
-   */
   function goConfigure(sessionId) {
     currentSessionId = sessionId;
     view = "configure";
   }
 
-  /**
-   * goSession(sessionId)
-   * ─────────────────────────────────────────────────────────────
-   * Callback que se ejecuta al pulsar “View current game”.
-   * Guarda el ID de la sesión y cambia la vista a “session”.
-   */
   function goSession(sessionId) {
     currentSessionId = sessionId;
     view = "session";
@@ -58,8 +46,8 @@
   <!-- Placeholder del configurador de partida -->
   <div class="page">
     <div class="card">
-      <h2>Configuración de partida</h2>
-      <p>ID de sesión: {currentSessionId}</p>
+      <h2>{$t('app.placeholders.configure_title')}</h2>
+      <p>{$t('app.placeholders.session_id', { id: currentSessionId ?? '—' })}</p>
       <!-- Aquí se montará ConfigureBasics.svelte en el siguiente paso -->
     </div>
   </div>
@@ -68,8 +56,8 @@
   <!-- Placeholder de la vista de sesión activa -->
   <div class="page">
     <div class="card">
-      <h2>Sesión en curso</h2>
-      <p>ID de sesión: {currentSessionId}</p>
+      <h2>{$t('app.placeholders.session_title')}</h2>
+      <p>{$t('app.placeholders.session_id', { id: currentSessionId ?? '—' })}</p>
       <!-- Aquí se montará la interfaz de partida -->
     </div>
   </div>

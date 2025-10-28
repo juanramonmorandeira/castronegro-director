@@ -19,6 +19,7 @@
 
   import { onMount } from "svelte";
   import { getGamesMetadata, getBalanceTable, updateSession } from "$lib/db.js";
+  import { t } from "../../lib/i18n.js";
 
   // Recibe desde App.svelte el ID de la sesión actual
   export let sessionId;
@@ -38,6 +39,14 @@
     assist_rules: false,
     players_expected: 5
   };
+
+  const DIRECTOR_HINT_KEYS = {
+    human: 'configure.basics.director_hint.disabled',
+    'human-AI': 'configure.basics.director_hint.optional',
+    AI: 'configure.basics.director_hint.forced'
+  };
+
+  $: directorHint = $t(DIRECTOR_HINT_KEYS[form.director] || DIRECTOR_HINT_KEYS.human);
 
   // Al montar el componente: cargar datos iniciales
   onMount(async () => {
@@ -97,16 +106,16 @@
      CONTENIDO PRINCIPAL DEL BLOQUE “BÁSICOS”
      ───────────────────────────────────────────────────────────── -->
 {#if loading}
-  <div class="info-box">Loading basics…</div>
+  <div class="info-box">{$t('configure.basics.loading')}</div>
 {:else}
   <div class="basics-container">
-    <h3>Basics</h3>
+    <h3>{$t('configure.basics.title')}</h3>
 
     <!-- Bloque de selección principal -->
     <div class="form-grid">
       <!-- Idioma -->
       <label>
-        <div class="label">Language</div>
+        <div class="label">{$t('configure.basics.language')}</div>
         <select bind:value={form.language} class="input">
           {#each meta.language_values as lang}
             <option value={lang}>{lang}</option>
@@ -116,7 +125,7 @@
 
       <!-- Rule set -->
       <label>
-        <div class="label">Rule set</div>
+        <div class="label">{$t('configure.basics.rule_set')}</div>
         <select bind:value={form.set_reglas} class="input">
           {#each meta.set_reglas_values as v}
             <option value={v}>{v}</option>
@@ -126,37 +135,33 @@
 
       <!-- Director -->
       <label>
-        <div class="label">Director</div>
+        <div class="label">{$t('configure.basics.director')}</div>
         <select bind:value={form.director} class="input">
           {#each meta.director_values as v}
             <option value={v}>{v}</option>
           {/each}
         </select>
         <div class="hint">
-          {form.director === 'human'
-            ? 'Assistance disabled'
-            : form.director === 'human-AI'
-              ? 'Assistance can be enabled'
-              : 'Assistance forced'}
+          {directorHint}
         </div>
       </label>
 
       <!-- Jugadores esperados -->
       <label>
-        <div class="label">Players (expected)</div>
+        <div class="label">{$t('configure.basics.players_expected')}</div>
         <input type="number" class="input" min="5" step="1" bind:value={form.players_expected} />
-        <div class="hint">Min/Max per balance table available.</div>
+        <div class="hint">{$t('configure.basics.players_hint')}</div>
       </label>
     </div>
 
     <!-- Asistencias -->
     <div class="assist-block">
-      <div class="label">Assistance</div>
+      <div class="label">{$t('configure.basics.assistance')}</div>
       <label class="inline">
         <input type="checkbox"
                bind:checked={form.assist_enabled}
                disabled={form.director==='human' || form.director==='AI'} />
-        <span>Enable assistance (human-AI only)</span>
+        <span>{$t('configure.basics.enable_assistance')}</span>
       </label>
 
       <div class="chip-row">
@@ -175,14 +180,14 @@
         <input type="checkbox"
                bind:checked={form.assist_rules}
                disabled={!form.assist_enabled && form.director!=='AI'} />
-        <span>Rules arbitration</span>
+        <span>{$t('configure.basics.rules_arbitration')}</span>
       </label>
     </div>
 
     <!-- Botón de guardado -->
     <div class="button-row">
-      <button class="btn" on:click={saveBasics}>Save basics</button>
-      {#if saved}<span class="saved-msg">Saved ✓</span>{/if}
+      <button class="btn" on:click={saveBasics}>{$t('configure.basics.save')}</button>
+      {#if saved}<span class="saved-msg">{$t('configure.basics.saved')}</span>{/if}
     </div>
   </div>
 {/if}

@@ -1,4 +1,6 @@
 <script>
+  import { t } from '../../lib/i18n.js';
+
   // Constants
   const DEFAULT_TITLE = 'The Village Storyteller';
   const DEFAULT_LOGO_SRC = '/logo.svg';
@@ -14,20 +16,23 @@
   const hideOnError = (event) => {
     event.target.style.display = 'none';
   };
+
+  $: resolvedTitle = title || $t('header.title');
+  $: resolvedAlt = logoAlt || $t('header.logo_alt');
 </script>
 
-<header class="landing-header" aria-label={title}>
+<header class="landing-header" aria-label={resolvedTitle}>
   {#if logoSrc}
     <img
       src={logoSrc}
-      alt={logoAlt}
+      alt={resolvedAlt}
       class="logo"
       on:error={hideOnError}
     />
   {/if}
 
   <div class="title-wrap">
-    <h1 class:glow={flicker}>{title}</h1>
+    <h1 class:glow={flicker}>{resolvedTitle}</h1>
   </div>
 </header>
 
@@ -36,13 +41,16 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 1rem;
-    padding: 1rem 1rem 0.5rem;
+    gap: clamp(0.75rem, 2vw, 1.5rem);
+    max-width: min(100%, 960px);
+    margin: 0 auto;
+    padding: clamp(1rem, 4vw, 2rem) clamp(1.25rem, 5vw, 2.75rem) clamp(0.5rem, 2vw, 1rem);
+    box-sizing: border-box;
   }
 
   .logo {
-    width: 2.5rem;
-    height: 2.5rem;
+    width: clamp(2rem, 5vw, 3rem);
+    height: clamp(2rem, 5vw, 3rem);
     flex: 0 0 auto;
   }
 

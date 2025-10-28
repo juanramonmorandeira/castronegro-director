@@ -1,13 +1,13 @@
 <script>
   import { onDestroy, onMount } from 'svelte';
+  import { t } from '../lib/i18n.js';
 
   // Constants
-  const DEFAULT_SIGNATURE = '@chatgpt-juarnamon ip';
   const DEFAULT_LOCALE = 'en-GB';
   const DEFAULT_TIMEZONE = 'Europe/Budapest';
 
   // Props
-  export let signature = DEFAULT_SIGNATURE;
+  export let signature = '';
   export let locale = DEFAULT_LOCALE;
   export let timeZone = DEFAULT_TIMEZONE;
   export let showSeconds = true;
@@ -46,12 +46,14 @@
   onDestroy(() => {
     clearInterval(timer);
   });
+
+  $: signatureText = signature || $t('landing.footbar.signature');
+  $: footbarLabel = $t('landing.footbar.aria_label');
 </script>
 
-<footer class="footbar" aria-label="Footer">
+<footer class="footbar" aria-label={footbarLabel}>
   <time class="clock" datetime={now.toISOString()}>{fmt(now)}</time>
-  <span class="sep">•</span>
-  <span class="signature">{signature}</span>
+  <span class="signature">{signatureText}</span>
 </footer>
 
 <style>
@@ -62,7 +64,7 @@
   display: flex;
   flex-direction: column;     /* 👉 firma debajo de la hora */
   align-items: flex-end;
-  gap: 0px;
+  gap: 0.2rem;
   padding: 5px 8px;
   border-radius: 8px;
   z-index: 6;
@@ -84,6 +86,11 @@
   color: #ffcc66;             /* 👉 firma en amarillo-naranja */
   font-weight: 500;
   opacity: 0.95;
+}
+
+.clock,
+.signature {
+  pointer-events: auto;
 }
 
 @media (min-width: 1440px) {
