@@ -5,39 +5,73 @@
 ## 1) Flujo de pantallas (alto nivel)
 
 ```mermaid
-flowchart LR
-  AUTH_LOGIN[Login\n- storyteller or player\n- acceso con email verificado] -->|Registrarse| AUTH_REG[Registration\n- nombre obligatorio\n- nickname/alias opcional\n- avatar opcional\n- email obligatorio]
-  AUTH_REG --> AUTH_VERIFY[Email verification\n- envío de correo\n- activar cuenta]
-  AUTH_VERIFY --> AUTH_LOGIN
-  AUTH_LOGIN -->|Narrador| L[Landing\n- session status\n- new session\n- edit session\n- history table]
-  AUTH_LOGIN -->|Jugador| SEL
-
-  subgraph Storyteller
+flowchart TB
+  subgraph Authentication
     direction TB
-    L --> C[Config\n- expected players\n- dataset/roles\n- language\n- stage channel]
-    C --> PROPS[Properties\n- set new roles\n- set audio/text rules\n- session defaults]
-    PROPS --> S[Session panel\n- day/night order\n- right/left order\n- change panel]
-    L --> H[History\n- summary\n- logs]
-    L --> E[Edit session\n- current session]
-    E -->|Volver| L
+    AUTH_LOGIN[Login<br>- storyteller or player<br>- acceso con email verificado]
+    AUTH_LOGIN -->|Register| AUTH_REG[Registration<br>- nombre obligatorio<br>- nickname/alias opcional<br>- avatar opcional<br>- email obligatorio]
+    AUTH_REG --> AUTH_VERIFY[Email verification<br>- envío de correo<br>- activar cuenta]
+    AUTH_VERIFY --> AUTH_LOGIN
   end
 
-  subgraph Players
+  AUTH_LOGIN -->|Storyteller| L
+  AUTH_LOGIN -->|Player| QR_ENTRY
+
+  subgraph Storyteller Journey
     direction TB
-    QR[QR code\n- accede a sesión] --> SEL[Selection\n- scan QR code\n- insert session ID\n- pick from list]
-    SEL --> W[Waiting\n- add users\n- expected players\n- messages]
-    W --> M[Match\n- players ready]
-    M --> R[Ready\n- storyteller checklist]
-    R --> CR[Character roll\n- role name\n- description\n- ability & flavor text]
+    L[Landing<br>- current session status<br>- create new session<br>- open running session<br>- access history]
+    L -->|Create new session| C[Config<br>- players connected/ready counters<br>- dataset y roles<br>- language selector<br>- stage channel]
+    L --> H[History<br>- past sessions list<br>- open summary/log modal]
+    H --> L
+    L --> VIEW[View session<br>- current session]
+    VIEW --> S
+    C --> START[Start session]
+    START --> S
+    C --> CANCEL[Cancel session]
+    CANCEL --> L
+
+    subgraph Config Tools
+      direction LR
+      C --> QR_MODAL[Share session<br>- QR code<br>- session ID]
+      QR_MODAL -.-> C
+      C --> PROPS[Properties<br>- gameplay language<br>- storyteller mode humana, asistida o IA<br>- ruleset preset<br>- players count<br>- roles pool<br>- professions on demand]
+      PROPS -.-> C
+      C --> MATCH_SETUP[Match setup<br>- asignar roles<br>- asignar profesiones]
+      MATCH_SETUP -.-> C
+      C --> DISTRIBUTION[Distribution<br>- fisical map of players]
+      DISTRIBUTION -.-> C
+    end
+  end
+
+  subgraph Session Experience
+    direction LR
+    S[Session panel<br>- day/night order<br>- right/left order<br>- change panel]
+    S --> SESSION_CONTROLS["Session controls (UI panel)<br>- pause/stop<br>- resume<br>- edit config"]
+    SESSION_CONTROLS -.-> S
+    SESSION_CONTROLS -.-> C
+    S --> MAP_PANEL[Map<br>- distribution view<br>- roles order night<br>- tokens/effects]
+    MAP_PANEL --> ROLE_DETAIL[Rol details<br>- Image and name]
+    ROLE_DETAIL -.-> MAP_PANEL
+    S --> LOGBOOK[Bitácora<br>- notas de la sesión]
+    LOGBOOK -.-> S
+    S --> DAY_FLOW["Day phases (UI panel)<br>- narration<br>- debate<br>- candidacy<br>- voting"]
+    DAY_FLOW -.-> S
+    S --> NIGHT_FLOW["Night sequence (UI panel)<br>- dynamic role order"]
+    NIGHT_FLOW -.-> S
+  end
+
+  subgraph Player Entry
+    direction TB
+    QR[QR code<br>- accede a sesión] --> SEL[Selection<br>- scan QR code<br>- insert session ID<br>- pick from list]
+    SEL --> W[Waiting<br>- add users<br>- expected players<br>- messages]
+    W --> M[Match<br>- players ready]
+    M --> R[Ready<br>- storyteller checklist]
+    R --> CR[Character roll<br>- role name<br>- description<br>- ability & flavor text]
     CR --> S
   end
 
-  S --> G[Start Game\n- run session]
-  G --> P[Predict / Finish\n- cierre]
-  P --> H
-
-  LOG[Logs] --> H
-  S <-->|Compartir QR| QR
+  QR_MODAL -->|Share QR| QR
+  QR_ENTRY --> QR
 ```
 
 ```mermaid
