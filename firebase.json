@@ -6,10 +6,6 @@
     "indexes": "firestore.indexes.json"
   },
   "emulators": {
-    "dataconnect": {
-      "dataDir": "dataconnect/.dataconnect/pgliteData",
-      "port": 9399
-    },
     "firestore": {
       "port": 8080
     },
@@ -20,8 +16,5 @@
     "auth": {
       "port": 9099
     }
-  },
-  "dataconnect": {
-    "source": "dataconnect"
   }
 }
