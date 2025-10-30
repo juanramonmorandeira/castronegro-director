@@ -1,5 +1,4 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
   import { formatDateTime, normalizeStatus, statusBadgeClass, toEpochMillis } from '../../lib/utils.js';
   import { t } from '../../lib/i18n.js';
 
@@ -9,10 +8,20 @@
   export let labels = {};
   export let dateLocale;
 
-  const dispatch = createEventDispatcher();
-  const emitView = (id) => dispatch('view', { id });
-  const emitEdit = (id) => dispatch('edit', { id });
-  const emitDelete = (id) => dispatch('delete', { id });
+  let hostElement;
+  const emitEvent = (name, detail) => {
+    hostElement?.dispatchEvent(
+      new CustomEvent(name, {
+        detail,
+        bubbles: true,
+        cancelable: true,
+        composed: true
+      })
+    );
+  };
+  const emitView = (id) => emitEvent('view', { id });
+  const emitEdit = (id) => emitEvent('edit', { id });
+  const emitDelete = (id) => emitEvent('delete', { id });
 
   let sortKey = 'date';
   let sortDir = 'desc';
@@ -77,7 +86,7 @@
   }
 </script>
 
-<section class="history-card">
+<section class="history-card" bind:this={hostElement}>
   <header class="card-header">
     <h2 class="history-title">{headerTitle}</h2>
     <div class="toolbar">

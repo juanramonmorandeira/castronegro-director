@@ -1,35 +1,46 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
   import { locale, availableLocales, t } from '../lib/i18n.js';
 
   const DEFAULT_FLAG_SRC = '/flags/en_UK.png';
 
   export let title = '';
+  export let titleKey = '';
   export let flagSrc = DEFAULT_FLAG_SRC;
   export let flagAlt = '';
   export let langCode = '';
 
-  const dispatch = createEventDispatcher();
+  let hostElement;
+
+  const emitEvent = (name, detail) => {
+    hostElement?.dispatchEvent(
+      new CustomEvent(name, {
+        detail,
+        bubbles: true,
+        cancelable: true,
+        composed: true
+      })
+    );
+  };
 
   const handleLocaleChange = (event) => {
     const next = event.target.value;
     if (availableLocales.includes(next)) {
       locale.set(next);
-      dispatch('lang', { locale: next });
+      emitEvent('lang', { locale: next });
     }
   };
 
   $: normalizedLang = (langCode || $locale || 'en').toLowerCase();
   $: languageCodeDisplay = (langCode || $locale || 'en').toUpperCase();
   $: languageName = $t(`common.languages.${normalizedLang}`) || flagAlt || languageCodeDisplay;
-  $: chipTitle = title || $t('topbar.title');
+  $: chipTitle = title || (titleKey ? $t(titleKey) : $t('topbar.title'));
   $: effectiveFlagAlt = flagAlt || languageName;
   $: changeLanguageCurrentLabel = $t('topbar.change_language_current', { language: languageName });
   $: languageLabel = $t('topbar.language_label');
   $: navigationLabel = $t('topbar.navigation_label');
 </script>
 
-<nav class="topbar" aria-label={navigationLabel}>
+<nav class="topbar" aria-label={navigationLabel} bind:this={hostElement}>
   <div class="right">
     <span class="chip">{chipTitle}</span>
 

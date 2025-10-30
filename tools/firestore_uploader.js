@@ -1,6 +1,6 @@
 // firestore_uploader.js
 import { initializeApp, cert } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import fs from "fs";
 import readline from "readline";
 
@@ -32,7 +32,7 @@ async function main() {
 
     // 🔹 Carga el archivo
     const fileContent = fs.readFileSync(jsonPath.trim(), "utf8");
-    const data = JSON.parse(fileContent);
+    const data = replaceSentinels(JSON.parse(fileContent));
 
     // 🔹 Divide ruta en colección/documento
     const [collection, doc] = collectionPath.trim().split("/");
@@ -52,6 +52,21 @@ async function main() {
   } finally {
     rl.close();
   }
+}
+
+function replaceSentinels(value) {
+  if (Array.isArray(value)) {
+    return value.map(replaceSentinels);
+  }
+  if (value && typeof value === "object" && !(value instanceof Date)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, val]) => [key, replaceSentinels(val)])
+    );
+  }
+  if (value === "__NOW__") {
+    return FieldValue.serverTimestamp();
+  }
+  return value;
 }
 
 main();

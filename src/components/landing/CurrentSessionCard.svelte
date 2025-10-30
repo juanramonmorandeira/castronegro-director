@@ -1,5 +1,4 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
   import { normalizeStatus, statusBadgeClass } from '../../lib/utils.js';
   import { t } from '../../lib/i18n.js';
 
@@ -7,9 +6,19 @@
   export let loading = false;
   export let canView = false;
 
-  const dispatch = createEventDispatcher();
-  const emitCreate = () => dispatch('create');
-  const emitView = () => session && dispatch('view', { id: session.id });
+  let hostElement;
+  const emitEvent = (name, detail) => {
+    hostElement?.dispatchEvent(
+      new CustomEvent(name, {
+        detail,
+        bubbles: true,
+        cancelable: true,
+        composed: true
+      })
+    );
+  };
+  const emitCreate = () => emitEvent('create');
+  const emitView = () => session && emitEvent('view', { id: session.id });
 
   $: badgeClass = statusBadgeClass(session?.status);
   $: statusText = $t(`status.${normalizeStatus(session?.status)}`);
@@ -21,7 +30,7 @@
   $: untitledLabel = $t('common.untitled_session');
 </script>
 
-<section class="current-card" aria-live="polite">
+<section class="current-card" aria-live="polite" bind:this={hostElement}>
   <div class="status-box" data-has-session={!!session}>
     {#if loading}
       {checkingLabel}

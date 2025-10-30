@@ -18,14 +18,14 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 
-// 3) Autenticación anónima para poder usar Firestore sin login manual
-signInAnonymously(auth)
-  .then(() => console.log("✅ Conectado a Firebase (auth anónima)"))
-  .catch((error) => console.error("❌ Error de autenticación anónima:", error));
+if (typeof window !== 'undefined') {
+  // signInAnonymously(auth)
+  //   .then(() => console.log("✅ Conectado a Firebase (auth anónima)"))
+  //   .catch((error) => console.error("❌ Error de autenticación anónima:", error));
 
-// 4) (Opcional) Log de depuración para ver el usuario activo
-onAuthStateChanged(auth, (user) => {
-  if (user) {
-    console.log("Auth:", user.isAnonymous ? "anon" : "registered", user.uid);
-  }
-});
+  onAuthStateChanged(auth, (user) => {
+    if (user) {
+      console.log("Auth:", user.isAnonymous ? "anon" : "registered", user.uid);
+    }
+  });
+}

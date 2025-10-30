@@ -10,10 +10,12 @@
 
   import BackgroundLayer from './components/landing/BackgroundLayer.svelte';
   import Landing from "./components/Landing.svelte";
+  import Login from './components/Login.svelte';
   import { t } from './lib/i18n.js';
 
-  let view = "landing";
+  let view = "login"; // login, landing, configure, session
   let currentSessionId = null;
+  let currentRole = null;
 
   function goConfigure(sessionId) {
     currentSessionId = sessionId;
@@ -23,6 +25,22 @@
   function goSession(sessionId) {
     currentSessionId = sessionId;
     view = "session";
+  }
+  function handleLoginSuccess(payload) {
+    const detail = payload && payload.detail !== undefined ? payload.detail : payload;
+    currentRole = detail?.role ?? null;
+    currentSessionId = null;
+
+    if (currentRole === 'storyteller') {
+      view = 'landing';
+    } else {
+      view = 'session';
+    }
+  }
+
+  function handleLoginForgot(payload) {
+    const detail = payload && payload.detail !== undefined ? payload.detail : payload;
+    console.info('Password reset requested for', detail?.email);
   }
 </script>
 
@@ -40,8 +58,11 @@
      CONTENIDO PRINCIPAL SEGÚN LA VISTA ACTUAL
      Solo se muestra una sección a la vez.
      ───────────────────────────────────────────────────────────── -->
-{#if view === "landing"}
-  <Landing onCreate={goConfigure} onViewCurrent={goSession}/>
+{#if view === "login"}
+  <Login
+    onLoginSuccess={handleLoginSuccess}
+    onLoginForgot={handleLoginForgot}
+  />
 {:else if view === "configure"}
   <!-- Placeholder del configurador de partida -->
   <div class="page">
@@ -61,6 +82,8 @@
       <!-- Aquí se montará la interfaz de partida -->
     </div>
   </div>
+{:else if view === "landing"}
+  <Landing onCreate={goConfigure} onViewCurrent={goSession} />
 {/if}
 
 <style>

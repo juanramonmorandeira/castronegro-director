@@ -31,11 +31,51 @@ const dictionaries = {
       title: 'Storyteller Dashboard',
       language_label: 'Language',
       change_language: 'Change language',
-      change_language_current: 'Change language, current: {language}'
+      change_language_current: 'Change language, current: {language}',
+      navigation_label: 'Top navigation'
     },
     header: {
       title: 'The Village Storyteller',
       logo_alt: 'Village Storyteller logo'
+    },
+    login: {
+      title: 'Login',
+      storytellers: 'Storytellers',
+      players: 'Players',
+      choose_role: 'Choose how you want to enter',
+      registration_cta: 'Registration',
+      form: {
+        section_label: 'Login with email',
+        email_label: 'Email',
+        email_placeholder: 'you@example.com',
+        password_label: 'Password',
+        password_placeholder: 'Enter your password',
+        submit: 'Sign in',
+        forgot: 'Forgot your password?',
+        role_label: 'Sign in as',
+        roles: {
+          storyteller: 'Storyteller',
+          player: 'Player'
+        },
+        register_prompt: "Don't have an account yet?",
+        register_link: 'Create one here',
+        errors: {
+          missing_email: 'Please enter an email address.',
+          invalid_email: 'Please enter a valid email address.',
+          missing_password: 'Please enter your password.',
+          invalid_credentials: 'Incorrect email or password.',
+          account_disabled: 'This account is disabled. Contact support.',
+          too_many_attempts: 'Too many attempts. Try again later.',
+          generic: 'Login failed. Please try again.'
+        },
+        success: {
+          reset_link_sent: 'If that email exists, we have sent you a reset link.'
+        }
+      }
+    },
+    registration: {
+      title: 'Registration',
+      placeholder: 'Registration page placeholder (to be implemented).'
     },
     landing: {
       current: {
@@ -106,11 +146,51 @@ const dictionaries = {
       title: 'Panel del Narrador',
       language_label: 'Idioma',
       change_language: 'Cambiar idioma',
-      change_language_current: 'Cambiar idioma, actual: {language}'
+      change_language_current: 'Cambiar idioma, actual: {language}',
+      navigation_label: 'Barra de navegación'
     },
     header: {
       title: 'El Narrador de la Aldea',
       logo_alt: 'Logotipo de Village Storyteller'
+    },
+    login: {
+      title: 'Login',
+      storytellers: 'Narradores',
+      players: 'Jugadores',
+      choose_role: 'Elige cómo quieres entrar',
+      registration_cta: 'Registro',
+      form: {
+        section_label: 'Accede con tu correo',
+        email_label: 'Correo electrónico',
+        email_placeholder: 'tu@ejemplo.com',
+        password_label: 'Contraseña',
+        password_placeholder: 'Introduce tu contraseña',
+        submit: 'Iniciar sesión',
+        forgot: '¿Olvidaste la contraseña?',
+        role_label: '¿Cómo quieres acceder?',
+        roles: {
+          storyteller: 'Narrador',
+          player: 'Jugador'
+        },
+        register_prompt: '¿Aún no tienes cuenta?',
+        register_link: 'Regístrate aquí',
+        errors: {
+          missing_email: 'Introduce una dirección de correo.',
+          invalid_email: 'Introduce una dirección de correo válida.',
+          missing_password: 'Introduce tu contraseña.',
+          invalid_credentials: 'Correo o contraseña incorrectos.',
+          account_disabled: 'Esta cuenta está deshabilitada. Contacta con soporte.',
+          too_many_attempts: 'Demasiados intentos. Intenta de nuevo más tarde.',
+          generic: 'No se pudo iniciar sesión. Inténtalo de nuevo.'
+        },
+        success: {
+          reset_link_sent: 'Si el correo existe, te hemos enviado un enlace de recuperación.'
+        }
+      }
+    },
+    registration: {
+      title: 'Registro',
+      placeholder: 'Página de registro (pendiente de implementar).'
     },
     landing: {
       current: {
@@ -181,11 +261,51 @@ const dictionaries = {
       title: 'Mesemondó vezérlőpult',
       language_label: 'Nyelv',
       change_language: 'Nyelv módosítása',
-      change_language_current: 'Nyelv módosítása, aktuális: {language}'
+      change_language_current: 'Nyelv módosítása, aktuális: {language}',
+      navigation_label: 'Fő navigáció'
     },
     header: {
       title: 'A falu mesemondója',
       logo_alt: 'Village Storyteller logó'
+    },
+    login: {
+      title: 'Bejelentkezés',
+      storytellers: 'Mesemondók',
+      players: 'Játékosok',
+      choose_role: 'Válaszd ki, hogyan szeretnél belépni',
+      registration_cta: 'Regisztráció',
+      form: {
+        section_label: 'Lépj be e-maillel',
+        email_label: 'E-mail',
+        email_placeholder: 'te@pelda.hu',
+        password_label: 'Jelszó',
+        password_placeholder: 'Írd be a jelszavad',
+        submit: 'Bejelentkezés',
+        forgot: 'Elfelejtetted a jelszavad?',
+        role_label: 'Belépés módja',
+        roles: {
+          storyteller: 'Mesemondó',
+          player: 'Játékos'
+        },
+        register_prompt: 'Még nincs fiókod?',
+        register_link: 'Regisztrálj itt',
+        errors: {
+          missing_email: 'Add meg az e-mail címed.',
+          invalid_email: 'Adj meg érvényes e-mail címet.',
+          missing_password: 'Add meg a jelszavad.',
+          invalid_credentials: 'Hibás e-mail vagy jelszó.',
+          account_disabled: 'Ez a fiók le van tiltva. Vedd fel a kapcsolatot a támogatással.',
+          too_many_attempts: 'Túl sok próbálkozás. Próbáld később.',
+          generic: 'A bejelentkezés nem sikerült. Próbáld újra.'
+        },
+        success: {
+          reset_link_sent: 'Ha létezik a cím, elküldtük a helyreállító e-mailt.'
+        }
+      }
+    },
+    registration: {
+      title: 'Regisztráció',
+      placeholder: 'Regisztrációs oldal (később készül el).'
     },
     landing: {
       current: {
