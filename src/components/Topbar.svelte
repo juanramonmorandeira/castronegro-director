@@ -2,10 +2,15 @@
   import { locale, availableLocales, t } from '../lib/i18n.js';
 
   const DEFAULT_FLAG_SRC = '/flags/en_UK.png';
+  const FLAG_BY_LOCALE = {
+    en: '/flags/en_UK.png',
+    es: '/flags/es_ES.png',
+    hu: '/flags/hu_HU.png'
+  };
 
   export let title = '';
   export let titleKey = '';
-  export let flagSrc = DEFAULT_FLAG_SRC;
+  export let flagSrc = '';
   export let flagAlt = '';
   export let langCode = '';
 
@@ -35,6 +40,7 @@
   $: languageName = $t(`common.languages.${normalizedLang}`) || flagAlt || languageCodeDisplay;
   $: chipTitle = title || (titleKey ? $t(titleKey) : $t('topbar.title'));
   $: effectiveFlagAlt = flagAlt || languageName;
+  $: computedFlagSrc = flagSrc || FLAG_BY_LOCALE[normalizedLang] || DEFAULT_FLAG_SRC;
   $: changeLanguageCurrentLabel = $t('topbar.change_language_current', { language: languageName });
   $: languageLabel = $t('topbar.language_label');
   $: navigationLabel = $t('topbar.navigation_label');
@@ -46,8 +52,8 @@
 
     <div class="lang-switch" title={changeLanguageCurrentLabel}>
       <span class="sr-only">{languageLabel}</span>
-      {#if flagSrc}
-        <img src={flagSrc} alt={effectiveFlagAlt} class="flag" />
+      {#if computedFlagSrc}
+        <img src={computedFlagSrc} alt={effectiveFlagAlt} class="flag" />
       {:else}
         <span class="lang-code">{languageCodeDisplay}</span>
       {/if}

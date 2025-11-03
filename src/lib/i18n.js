@@ -106,6 +106,26 @@ const dictionaries = {
         upload_not_configured: 'Avatar upload is not configured. Please contact the administrator.'
       }
     },
+    player: {
+      choose_title: 'Player Dashboard',
+      join_methods: 'Choose how to join',
+      join_intro: 'Scan a QR code, enter a session ID or pick one from the list.',
+      scan_qr: 'Scan QR code',
+      session_id: 'Session ID',
+      session_id_placeholder: 'Enter the session ID',
+      session_id_hint: 'You will find this code on the storyteller’s screen.',
+      connect: 'Connect',
+      connect_selected: 'Connect to selected session',
+      active_sessions: 'Available sessions',
+      refresh: 'Refresh',
+      loading: 'Loading sessions…',
+      no_sessions: 'No sessions available right now.',
+      load_error: 'Unable to load sessions. Try again.',
+      invalid_id: 'We could not find that session.',
+      connect_error: 'Could not connect to the session. Please try again.',
+      created_at: 'Created',
+      updated_at: 'Updated'
+    },
     landing: {
       current: {
         checking: 'Checking current game session…',
@@ -250,6 +270,26 @@ const dictionaries = {
         upload_not_configured: 'La subida de avatar no está configurada. Contacta con el administrador.'
       }
     },
+    player: {
+      choose_title: 'Panel del Jugador',
+      join_methods: 'Elige cómo unirte',
+      join_intro: 'Escanea un código QR, escribe un ID de sesión o selecciona una partida activa.',
+      scan_qr: 'Escanear código QR',
+      session_id: 'ID de sesión',
+      session_id_placeholder: 'Introduce el ID de sesión',
+      session_id_hint: 'Encontrarás este código en la pantalla del narrador.',
+      connect: 'Conectar',
+      connect_selected: 'Conectar con la partida seleccionada',
+      active_sessions: 'Partidas disponibles',
+      refresh: 'Actualizar',
+      loading: 'Cargando partidas…',
+      no_sessions: 'No hay partidas disponibles ahora mismo.',
+      load_error: 'No se pudo cargar la lista de partidas.',
+      invalid_id: 'No encontramos una partida con ese ID.',
+      connect_error: 'No se pudo conectar a la partida. Inténtalo de nuevo.',
+      created_at: 'Creada',
+      updated_at: 'Actualizada'
+    },
     landing: {
       current: {
         checking: 'Comprobando partida actual…',
@@ -393,6 +433,26 @@ const dictionaries = {
         upload_failed: 'Nem sikerült feltölteni az avatárt. Próbáld újra.',
         upload_not_configured: 'Az avatar feltöltése nincs beállítva. Vedd fel a kapcsolatot az adminnal.'
       }
+    },
+    player: {
+      choose_title: 'Játékos vezérlőpult',
+      join_methods: 'Válaszd ki a csatlakozás módját',
+      join_intro: 'Olvass be egy QR-kódot, írd be a session azonosítót vagy válassz egy aktív játékot.',
+      scan_qr: 'QR-kód beolvasása',
+      session_id: 'Session azonosító',
+      session_id_placeholder: 'Írd be a session azonosítót',
+      session_id_hint: 'A kódot a mesélő képernyőjén találod.',
+      connect: 'Csatlakozás',
+      connect_selected: 'Csatlakozás a kiválasztott játékhoz',
+      active_sessions: 'Elérhető játékok',
+      refresh: 'Frissítés',
+      loading: 'Játékok betöltése…',
+      no_sessions: 'Jelenleg nincs elérhető játék.',
+      load_error: 'Nem sikerült betölteni a játékokat.',
+      invalid_id: 'Nem található ilyen azonosítójú játék.',
+      connect_error: 'Nem sikerült csatlakozni a játékhoz. Próbáld újra.',
+      created_at: 'Létrehozva',
+      updated_at: 'Frissítve'
     },
     landing: {
       current: {

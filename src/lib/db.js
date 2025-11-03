@@ -5,10 +5,13 @@
 // ───────────────────────────────────────────────────────────
 
 import { db } from "./firebase.js";
+import { normalizeStatus } from "./utils.js";
 import {
   collection, doc, getDoc, getDocs, query, where, orderBy, limit,
   addDoc, updateDoc, serverTimestamp, writeBatch
 } from "firebase/firestore";
+
+const PLAYER_JOIN_STATUSES = ['share', 'in_progress', 'paused'];
 
 /**
  * clearCurrentFlag()
@@ -99,4 +102,40 @@ export async function createSessionDraft({ title = "Untitled session", language 
   };
   const ref = await addDoc(collection(db, "sessions"), payload);
   return ref.id;  
+}
+
+/**
+ * getSessionById(sessionId)
+ * ───────────────────────────────────────────────────────────
+ * Devuelve la sesión si existe y su estado permite que un jugador se conecte.
+ */
+export async function getSessionById(sessionId) {
+  if (!sessionId) return null;
+  const ref = doc(db, "sessions", sessionId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  const status = normalizeStatus(data.status);
+  if (!PLAYER_JOIN_STATUSES.includes(status)) {
+    return null;
+  }
+  return { id: snap.id, ...data, status };
+}
+
+/**
+ * listActiveSessions(max = 10)
+ * ───────────────────────────────────────────────────────────
+ * Lista hasta 'max' sesiones con estados en los que un jugador puede conectarse.
+ */
+export async function listActiveSessions(max = 10) {
+  const col = collection(db, "sessions");
+  // Nota: where con "in" (máx 10 valores). Puede requerir un índice compuesto si añades orderBy.
+  const q = query(
+    col,
+    where("status", "in", PLAYER_JOIN_STATUSES),
+    orderBy("updated_at", "desc"),
+    limit(max)
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data(), status: normalizeStatus(d.data().status) }));
 }

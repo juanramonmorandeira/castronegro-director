@@ -12,6 +12,7 @@
   import Landing from "./components/Landing.svelte";
   import Login from './components/Login.svelte';
   import Registration from './components/Registration.svelte';
+  import PlayerSelection from './components/players/Selection.svelte';
   import { t } from './lib/i18n.js';
 
   let view = "login"; // login, landing, configure, session
@@ -35,7 +36,7 @@
     if (currentRole === 'storyteller') {
       view = 'landing';
     } else {
-      view = 'session';
+      view = 'player-selection';
     }
   }
 
@@ -55,6 +56,17 @@
   function handleRegistered(event) {
     const detail = event?.detail ?? event;
     console.info('User registered (inactive until verification):', detail);
+  }
+
+  function handlePlayerConnect(event) {
+    const detail = event?.detail ?? event;
+    if (detail?.sessionId) {
+      goSession(detail.sessionId);
+    }
+  }
+
+  function handlePlayerScan() {
+    console.info('Scan QR requested (not implemented yet)');
   }
 </script>
 
@@ -82,6 +94,11 @@
   <Registration
     on:registered={handleRegistered}
     on:navigate-login={goLogin}
+  />
+{:else if view === 'player-selection'}
+  <PlayerSelection
+    on:connect={handlePlayerConnect}
+    on:scan-qr={handlePlayerScan}
   />
 {:else if view === "configure"}
   <!-- Placeholder del configurador de partida -->
