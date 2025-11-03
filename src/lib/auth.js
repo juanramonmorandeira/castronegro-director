@@ -12,6 +12,18 @@ import {
 
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
+const FALLBACK_APP_URL = 'https://storyteller.morandeira.net';
+
+function resolveAppUrl(path = '') {
+  const base =
+    typeof window !== 'undefined' && window?.location?.origin
+      ? window.location.origin
+      : FALLBACK_APP_URL;
+  const normalizedBase = base.replace(/\/+$/, '');
+  const normalizedPath = path.replace(/^\/+/, '');
+  return normalizedPath ? `${normalizedBase}/${normalizedPath}` : normalizedBase;
+}
+
 export async function loginWithEmail(email, password) {
   const normalizedEmail = email?.trim().toLowerCase();
   if (!normalizedEmail || !password) {
@@ -72,15 +84,16 @@ export async function registerWithEmail(email, password, profile = {}) {
 
 export async function sendPasswordResetIfExists(email) {
   const normalizedEmail = email.trim().toLowerCase();
+  const resetUrl = resolveAppUrl('login');
   try {
     const actionCodeSettings =
       typeof window !== 'undefined'
         ? {
-            url: `${window.location.origin}/login`,
+            url: resetUrl,
             handleCodeInApp: false
           }
         : {
-            url: 'https://village-storyteller.web.app/login',
+            url: resetUrl,
             handleCodeInApp: false
           };
 
@@ -98,6 +111,10 @@ export async function sendPasswordResetIfExists(email) {
 export async function sendVerificationEmail() {
   // auth viene de ./firebase.js (ya exportado en tu proyecto)
   if (!auth.currentUser) throw new Error('no_current_user');
-  await sendEmailVerification(auth.currentUser);
+  const actionCodeSettings = {
+    url: resolveAppUrl('login'),
+    handleCodeInApp: false
+  };
+  await sendEmailVerification(auth.currentUser, actionCodeSettings);
   return true;
 }

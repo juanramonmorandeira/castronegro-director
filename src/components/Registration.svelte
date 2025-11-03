@@ -30,6 +30,12 @@
   let info = '';
   let error = '';
 
+  $: namePlaceholder = $t('registration.name_placeholder');
+  $: aliasPlaceholder = $t('registration.alias_placeholder');
+  $: emailPlaceholder = $t('registration.email_placeholder');
+  $: passwordPlaceholder = $t('registration.password_placeholder');
+  $: confirmPasswordPlaceholder = $t('registration.confirm_password_placeholder');
+
   const passwordRules = {
     minLength: 10,
     uppercase: /[A-Z]/,
@@ -104,8 +110,9 @@
         URL.revokeObjectURL(temporaryPreview);
       }
 
-      avatarPreview = upload.url;
-      avatarURL = upload.url;
+      const resolvedUrl = upload.direct || upload.url;
+      avatarPreview = resolvedUrl;
+      avatarURL = resolvedUrl;
       avatarDriveId = upload.driveId;
     } catch (err) {
       console.error('Avatar upload error', err);
@@ -189,133 +196,150 @@
   <Topbar titleKey="registration.title" />
 
   <main class="center">
-    <form
-      class="card-glass form"
-      on:submit|preventDefault={onSubmit}
-      aria-label={$t('registration.title')}
-    >
-      <h2 class="title">{$t('registration.title')}</h2>
-      <p class="intro">{$t('registration.intro')}</p>
+    <div class="auth-layout">
+      <form
+        class="auth-card card-glass"
+        on:submit|preventDefault={onSubmit}
+        aria-label={$t('registration.title')}
+      >
+        <h2>{$t('registration.title')}</h2>
+        <p class="intro">{$t('registration.intro')}</p>
 
-      <label class="label" for="name">{$t('registration.name_label')}</label>
-      <input
-        id="name"
-        name="name"
-        class="input"
-        type="text"
-        bind:value={name}
-        required
-        autocomplete="name"
-      />
+        <div class="field">
+          <label class="label" for="name">{$t('registration.name_label')}</label>
+          <input
+            id="name"
+            name="name"
+            class="input"
+            type="text"
+            bind:value={name}
+            required
+            autocomplete="name"
+            placeholder={namePlaceholder}
+          />
+        </div>
 
-      <label class="label" for="alias">
-        {$t('registration.alias_label')}
-        <small>({$t('registration.optional')})</small>
-      </label>
-      <input
-        id="alias"
-        name="alias"
-        class="input"
-        type="text"
-        bind:value={alias}
-        autocomplete="nickname"
-      />
+        <div class="field">
+          <label class="label" for="alias">
+            {$t('registration.alias_label')}
+            <small>({$t('registration.optional')})</small>
+          </label>
+          <input
+            id="alias"
+            name="alias"
+            class="input"
+            type="text"
+            bind:value={alias}
+            autocomplete="nickname"
+            placeholder={aliasPlaceholder}
+          />
+        </div>
 
-      <div class="avatar-field">
-        <label class="label" for="avatar">
-          {$t('registration.avatar_label')}
-          <small>({$t('registration.optional')})</small>
-        </label>
-        <input
-          id="avatar"
-          type="file"
-          class="input file-input"
-          accept={ACCEPTED_AVATAR_STRING}
-          on:change={handleAvatarChange}
-          bind:this={avatarInput}
-          aria-describedby="avatar-help"
-        />
-        <small id="avatar-help" class="hint">{$t('registration.avatar_help')}</small>
+        <div class="field avatar-field">
+          <label class="label" for="avatar">
+            {$t('registration.avatar_label')}
+            <small>({$t('registration.optional')})</small>
+            <span class="wip">{$t('registration.avatar_wip')}</span>
+          </label>
+          <input
+            id="avatar"
+            type="file"
+            class="input file-input"
+            accept={ACCEPTED_AVATAR_STRING}
+            on:change={handleAvatarChange}
+            bind:this={avatarInput}
+            aria-describedby="avatar-help"
+          />
+          <small id="avatar-help" class="hint">{$t('registration.avatar_help')}</small>
 
-        {#if avatarUploadError}
-          <p class="error" aria-live="assertive">{avatarUploadError}</p>
+          {#if avatarUploadError}
+            <p class="error" aria-live="assertive">{avatarUploadError}</p>
+          {/if}
+
+          {#if avatarUploading}
+            <p class="info" aria-live="polite">{$t('registration.uploading')}</p>
+          {/if}
+
+          {#if avatarPreview}
+            <div class="avatar-preview">
+              <img src={avatarPreview} alt={$t('registration.avatar_label')} />
+              <button type="button" class="link-button" on:click={handleAvatarRemove}>
+                {$t('common.actions.delete')}
+              </button>
+            </div>
+          {/if}
+
+          {#if avatarURL}
+            <p class="avatar-link">
+              <a href={avatarURL} target="_blank" rel="noopener">
+                {avatarURL}
+              </a>
+            </p>
+          {/if}
+        </div>
+
+        <div class="field">
+          <label class="label" for="email">{$t('registration.email_label')}</label>
+          <input
+            id="email"
+            name="email"
+            class="input"
+            type="email"
+            bind:value={email}
+            required
+            autocomplete="email"
+            placeholder={emailPlaceholder}
+          />
+        </div>
+
+        <div class="field">
+          <label class="label" for="password">{$t('registration.password_label')}</label>
+          <input
+            id="password"
+            name="password"
+            class="input"
+            type="password"
+            bind:value={password}
+            required
+            autocomplete="new-password"
+            minlength={passwordRules.minLength}
+            placeholder={passwordPlaceholder}
+          />
+          <small class="hint">{$t('registration.password_requirements')}</small>
+        </div>
+
+        <div class="field">
+          <label class="label" for="confirm">{$t('registration.confirm_password_label')}</label>
+          <input
+            id="confirm"
+            name="confirm"
+            class="input"
+            type="password"
+            bind:value={confirmPassword}
+            required
+            autocomplete="new-password"
+            minlength={passwordRules.minLength}
+            placeholder={confirmPasswordPlaceholder}
+          />
+        </div>
+
+        <div class="form-actions">
+          <button class="btn primary" type="submit" disabled={loading || avatarUploading}>
+            {loading ? '…' : $t('registration.submit')}
+          </button>
+          <button type="button" class="link-button" on:click={goLogin}>
+            {$t('registration.back_to_login')}
+          </button>
+        </div>
+
+        {#if info}
+          <p class="info" aria-live="polite">{info}</p>
         {/if}
-
-        {#if avatarUploading}
-          <p class="info" aria-live="polite">{$t('registration.uploading')}</p>
+        {#if error}
+          <p class="error" aria-live="assertive">{error}</p>
         {/if}
-
-        {#if avatarPreview}
-          <div class="avatar-preview">
-            <img src={avatarPreview} alt={$t('registration.avatar_label')} />
-            <button type="button" class="link-button" on:click={handleAvatarRemove}>
-              {$t('common.actions.delete')}
-            </button>
-          </div>
-        {/if}
-
-        {#if avatarURL}
-          <p class="avatar-link">
-            <a href={avatarURL} target="_blank" rel="noopener">
-              {avatarURL}
-            </a>
-          </p>
-        {/if}
-      </div>
-
-      <label class="label" for="email">{$t('registration.email_label')}</label>
-      <input
-        id="email"
-        name="email"
-        class="input"
-        type="email"
-        bind:value={email}
-        required
-        autocomplete="email"
-      />
-
-      <label class="label" for="password">{$t('registration.password_label')}</label>
-      <input
-        id="password"
-        name="password"
-        class="input"
-        type="password"
-        bind:value={password}
-        required
-        autocomplete="new-password"
-        minlength={passwordRules.minLength}
-      />
-      <small class="hint">{$t('registration.password_requirements')}</small>
-
-      <label class="label" for="confirm">{$t('registration.confirm_password_label')}</label>
-      <input
-        id="confirm"
-        name="confirm"
-        class="input"
-        type="password"
-        bind:value={confirmPassword}
-        required
-        autocomplete="new-password"
-        minlength={passwordRules.minLength}
-      />
-
-      <button class="btn big" type="submit" disabled={loading || avatarUploading}>
-        {loading ? '…' : $t('registration.submit')}
-      </button>
-
-      {#if info}
-        <p class="info" aria-live="polite">{info}</p>
-      {/if}
-      {#if error}
-        <p class="error" aria-live="assertive">{error}</p>
-      {/if}
-
-      <p class="login-hint">
-        <button type="button" class="link-button" on:click={goLogin}>
-          {$t('registration.back_to_login')}
-        </button>
-      </p>
-    </form>
+      </form>
+    </div>
   </main>
 
   <Footbar />
@@ -334,23 +358,40 @@
     padding: 2rem 1rem;
   }
 
-  .form {
+  .auth-layout {
     display: grid;
-    gap: 0.75rem;
-    padding: 1.75rem;
-    min-width: 280px;
-    width: min(560px, 92vw);
+    gap: 1.5rem;
+    width: min(480px, 90vw);
   }
 
-  .title {
-    margin: 0 0 0.5rem;
+  .auth-card {
+    display: grid;
+    gap: 1rem;
+    padding: clamp(1.5rem, 3vw, 2.25rem);
+  }
+
+  .auth-card h2 {
+    margin: 0;
     text-align: center;
+    font-family: "Merriweather", serif;
+    font-size: clamp(1.8rem, 3vw, 2.2rem);
+    color: #f4d47c;
+    text-shadow:
+      0 0 8px rgba(255, 200, 60, 0.7),
+      0 0 18px rgba(255, 180, 40, 0.4),
+      2px 2px 10px rgba(0, 0, 0, 0.85);
   }
 
   .intro {
-    margin: 0 0 0.5rem;
+    margin: 0;
     text-align: center;
     color: rgba(255, 255, 255, 0.85);
+    font-size: 0.95rem;
+  }
+
+  .field {
+    display: grid;
+    gap: 0.35rem;
   }
 
   .label {
@@ -358,10 +399,23 @@
     color: #f0f3f7;
   }
 
+  .label small {
+    margin-left: 0.35rem;
+    font-weight: 500;
+    color: rgba(240, 244, 249, 0.75);
+  }
+
+  .wip {
+    margin-left: 0.5rem;
+    font-size: 0.8rem;
+    font-style: italic;
+    color: rgba(255, 210, 140, 0.85);
+  }
+
   .input {
-    padding: 0.65rem 0.8rem;
-    border-radius: 10px;
+    border-radius: 8px;
     border: 1px solid rgba(255, 255, 255, 0.25);
+    padding: 0.65rem 0.8rem;
     background: rgba(0, 0, 0, 0.3);
     color: #f5f8fb;
     font-size: 1rem;
@@ -377,14 +431,12 @@
   }
 
   .hint {
-    margin-top: -0.3rem;
     font-size: 0.85rem;
     color: rgba(230, 236, 247, 0.8);
   }
 
   .avatar-field {
-    display: grid;
-    gap: 0.35rem;
+    gap: 0.5rem;
   }
 
   .avatar-preview {
@@ -407,40 +459,35 @@
     overflow-wrap: anywhere;
   }
 
-  .btn.big {
-    font-size: 1.05rem;
-    padding: 0.85rem 1.1rem;
-    margin-top: 0.25rem;
-    border-radius: 999px;
-    border: 1px solid rgba(74, 141, 74, 0.9);
-    background: rgba(74, 141, 74, 0.8);
-    color: #f6fff6;
-    font-weight: 600;
+  .form-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    align-items: center;
   }
 
-  .btn.big[disabled] {
+  .btn.primary {
+    background: rgba(74, 141, 74, 0.8);
+    border: 1px solid rgba(74, 141, 74, 0.9);
+    color: #f6fff6;
+    padding: 0.65rem 1.4rem;
+    border-radius: 999px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .btn.primary[disabled] {
     opacity: 0.6;
     cursor: not-allowed;
-  }
-
-  .info {
-    color: #ffd27f;
-    font-size: 0.95rem;
-    margin-top: 0.25rem;
-  }
-
-  .error {
-    color: #ff9b9b;
-    font-size: 0.95rem;
-    margin-top: 0.25rem;
   }
 
   .link-button {
     display: inline;
     background: none;
     border: none;
-    padding: 0;
+    border-radius: 0;
     color: rgba(255, 230, 150, 0.9);
+    padding: 0;
     text-decoration: underline;
     cursor: pointer;
     font-weight: 500;
@@ -450,8 +497,15 @@
     color: rgba(255, 240, 180, 1);
   }
 
-  .login-hint {
-    margin-top: 0.75rem;
-    text-align: center;
+  .info {
+    color: #ffd27f;
+    font-size: 0.95rem;
+    margin: 0;
+  }
+
+  .error {
+    color: #ff9b9b;
+    font-size: 0.95rem;
+    margin: 0;
   }
 </style>
