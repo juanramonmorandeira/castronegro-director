@@ -5,7 +5,9 @@ import { auth, db } from './firebase.js';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  sendEmailVerification,
+  updateProfile
 } from 'firebase/auth';
 
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -37,15 +39,30 @@ export async function registerWithEmail(email, password, profile = {}) {
   }
   const cred = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
   const uid = cred.user.uid;
+  const trimmedName = profile.name?.trim() ?? '';
+  const trimmedAlias = profile.alias?.trim() ?? '';
+  const avatarUrl = profile.avatarURL?.trim() ?? '';
+
+  // Actualiza el perfil visible en Firebase Auth (displayName + photoURL)
+  try {
+    await updateProfile(cred.user, {
+      displayName: trimmedName || undefined,
+      photoURL: avatarUrl || undefined
+    });
+  } catch (error) {
+    console.warn('Unable to update auth profile:', error);
+  }
+
   // Perfil mínimo (sin password)
   const payload = {
     userId: uid,
     auth_uid: uid,
     email: cred.user.email ?? normalizedEmail,
-    name: profile.name ?? '',
-    alias: profile.alias ?? '',
-    avatarURL: profile.avatarURL ?? '',
-    status: 'active',
+    name: trimmedName,
+    alias: trimmedAlias,
+    avatarURL: avatarUrl,
+    avatarDriveId: profile.avatarDriveId ?? '',
+    status: 'inactive',
     created_at: serverTimestamp(),
     last_login_at: serverTimestamp()
   };
@@ -75,4 +92,12 @@ export async function sendPasswordResetIfExists(email) {
     }
     throw error;
   }
+}
+
+// Enviar verificación al usuario actual
+export async function sendVerificationEmail() {
+  // auth viene de ./firebase.js (ya exportado en tu proyecto)
+  if (!auth.currentUser) throw new Error('no_current_user');
+  await sendEmailVerification(auth.currentUser);
+  return true;
 }

@@ -3,12 +3,13 @@
   import Footbar from './Footbar.svelte';
   import BackgroundLayer from './landing/BackgroundLayer.svelte';
   import { t } from '../lib/i18n.js';
+  import { createEventDispatcher } from 'svelte';
   import { loginWithEmail, sendPasswordResetIfExists } from '../lib/auth.js';
 
   export let onLoginSuccess = null;
   export let onLoginForgot = null;
 
-  let hostElement;
+  const dispatch = createEventDispatcher();
   let email = '';
   let password = '';
   let loginPending = false;
@@ -17,19 +18,8 @@
   let feedbackKind = 'info';
   let role = 'storyteller';
 
-  const emitEvent = (name, detail) => {
-    hostElement?.dispatchEvent(
-      new CustomEvent(name, {
-        detail,
-        bubbles: true,
-        cancelable: true,
-        composed: true
-      })
-    );
-  };
-
   function goRegistration() {
-    emitEvent('navigate:registration');
+    dispatch('navigate-registration');
   }
 
   const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -67,7 +57,7 @@
       if (typeof onLoginSuccess === 'function') {
         onLoginSuccess(detail);
       }
-      emitEvent('loginSuccess', detail);
+      dispatch('loginSuccess', detail);
       password = '';
     } catch (error) {
       console.error('Login error', error);
@@ -112,7 +102,7 @@
       if (typeof onLoginForgot === 'function') {
         onLoginForgot(detail);
       }
-      emitEvent('loginForgot', detail);
+      dispatch('loginForgot', detail);
     } catch (error) {
       console.error('Password reset error', error);
       // No exponemos si el correo existe: respuesta genérica
@@ -143,7 +133,7 @@
 
 <BackgroundLayer />
 
-<div class="page" bind:this={hostElement}>
+  <div class="page">
   <Topbar titleKey="login.title" />
 
   <main class="center">

@@ -11,6 +11,7 @@
   import BackgroundLayer from './components/landing/BackgroundLayer.svelte';
   import Landing from "./components/Landing.svelte";
   import Login from './components/Login.svelte';
+  import Registration from './components/Registration.svelte';
   import { t } from './lib/i18n.js';
 
   let view = "login"; // login, landing, configure, session
@@ -42,6 +43,19 @@
     const detail = payload && payload.detail !== undefined ? payload.detail : payload;
     console.info('Password reset requested for', detail?.email);
   }
+
+  function goLogin() {
+    view = 'login';
+  }
+
+  function goRegistration() {
+    view = 'registration';
+  }
+
+  function handleRegistered(event) {
+    const detail = event?.detail ?? event;
+    console.info('User registered (inactive until verification):', detail);
+  }
 </script>
 
 <!-- ─────────────────────────────────────────────────────────────
@@ -62,6 +76,12 @@
   <Login
     onLoginSuccess={handleLoginSuccess}
     onLoginForgot={handleLoginForgot}
+    on:navigate-registration={goRegistration}
+  />
+{:else if view === 'registration'}
+  <Registration
+    on:registered={handleRegistered}
+    on:navigate-login={goLogin}
   />
 {:else if view === "configure"}
   <!-- Placeholder del configurador de partida -->

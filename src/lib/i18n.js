@@ -75,7 +75,30 @@ const dictionaries = {
     },
     registration: {
       title: 'Registration',
-      placeholder: 'Registration page placeholder (to be implemented).'
+      intro: 'Complete the form to create your account.',
+      name_label: 'Full name',
+      alias_label: 'Nickname / alias',
+      avatar_label: 'Avatar image',
+      avatar_help: 'JPG or PNG up to 5 MB.',
+      optional: 'optional',
+      email_label: 'Email address',
+      password_label: 'Password',
+      password_requirements: 'Use at least 10 characters with uppercase, lowercase, numbers and symbols.',
+      confirm_password_label: 'Confirm password',
+      submit: 'Create account',
+      uploading: 'Uploading…',
+      back_to_login: 'Back to login',
+      success: {
+        verification_sent: 'We have sent a verification email to {email}. Please check your inbox.'
+      },
+      errors: {
+        registration_error: 'Could not complete registration. Please try again.',
+        password_mismatch: 'Passwords do not match.',
+        password_strength: 'Password does not meet the security requirements.',
+        email_in_use: 'There is already an account with this email address.',
+        upload_failed: 'We could not upload the avatar image. Please try again.',
+        upload_not_configured: 'Avatar upload is not configured. Please contact the administrator.'
+      }
     },
     landing: {
       current: {
@@ -190,7 +213,30 @@ const dictionaries = {
     },
     registration: {
       title: 'Registro',
-      placeholder: 'Página de registro (pendiente de implementar).'
+      intro: 'Completa el formulario para crear tu cuenta.',
+      name_label: 'Nombre completo',
+      alias_label: 'Apodo / alias',
+      avatar_label: 'Imagen de avatar',
+      avatar_help: 'JPG o PNG de hasta 5 MB.',
+      optional: 'opcional',
+      email_label: 'Correo electrónico',
+      password_label: 'Contraseña',
+      password_requirements: 'Usa al menos 10 caracteres combinando mayúsculas, minúsculas, números y símbolos.',
+      confirm_password_label: 'Confirmar contraseña',
+      submit: 'Crear cuenta',
+      uploading: 'Subiendo…',
+      back_to_login: 'Volver a iniciar sesión',
+      success: {
+        verification_sent: 'Hemos enviado un correo de verificación a {email}. Revisa tu bandeja.'
+      },
+      errors: {
+        registration_error: 'No se pudo completar el registro. Inténtalo de nuevo.',
+        password_mismatch: 'Las contraseñas no coinciden.',
+        password_strength: 'La contraseña no cumple los requisitos de seguridad.',
+        email_in_use: 'Ya existe una cuenta con este correo electrónico.',
+        upload_failed: 'No se pudo subir la imagen. Inténtalo de nuevo.',
+        upload_not_configured: 'La subida de avatar no está configurada. Contacta con el administrador.'
+      }
     },
     landing: {
       current: {
@@ -305,7 +351,30 @@ const dictionaries = {
     },
     registration: {
       title: 'Regisztráció',
-      placeholder: 'Regisztrációs oldal (később készül el).'
+      intro: 'Töltsd ki az űrlapot a fiók létrehozásához.',
+      name_label: 'Teljes név',
+      alias_label: 'Becenév / alias',
+      avatar_label: 'Avatar kép',
+      avatar_help: 'JPG vagy PNG, legfeljebb 5 MB.',
+      optional: 'opcionális',
+      email_label: 'E-mail cím',
+      password_label: 'Jelszó',
+      password_requirements: 'Használj legalább 10 karaktert nagybetűkkel, kisbetűkkel, számokkal és szimbólumokkal.',
+      confirm_password_label: 'Jelszó megerősítése',
+      submit: 'Fiók létrehozása',
+      uploading: 'Feltöltés…',
+      back_to_login: 'Vissza a bejelentkezéshez',
+      success: {
+        verification_sent: 'Ellenőrző e-mailt küldtünk a következő címre: {email}. Kérjük, nézd meg a postaládádat.'
+      },
+      errors: {
+        registration_error: 'A regisztráció nem sikerült. Próbáld újra.',
+        password_mismatch: 'A jelszavak nem egyeznek.',
+        password_strength: 'A jelszó nem felel meg a biztonsági követelményeknek.',
+        email_in_use: 'Ezzel az e-mail címmel már létezik fiók.',
+        upload_failed: 'Nem sikerült feltölteni az avatárt. Próbáld újra.',
+        upload_not_configured: 'Az avatar feltöltése nincs beállítva. Vedd fel a kapcsolatot az adminnal.'
+      }
     },
     landing: {
       current: {
