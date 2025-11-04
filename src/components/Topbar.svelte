@@ -20,14 +20,8 @@
   const dispatch = createEventDispatcher();
   let menuOpen = false;
   let menuElement;
-
-  const handleLocaleChange = (event) => {
-    const next = event.target.value;
-    if (availableLocales.includes(next)) {
-      locale.set(next);
-      dispatch('lang', { locale: next });
-    }
-  };
+  let langMenuOpen = false;
+  let langMenuElement;
 
   $: normalizedLang = (langCode || $locale || 'en').toLowerCase();
   $: languageCodeDisplay = (langCode || $locale || 'en').toUpperCase();
@@ -38,6 +32,7 @@
   $: changeLanguageCurrentLabel = $t('topbar.change_language_current', { language: languageName });
   $: languageLabel = $t('topbar.language_label');
   $: navigationLabel = $t('topbar.navigation_label');
+  // Expresiones auxiliares para detectar distintos formatos de enlaces de Drive.
   const DRIVE_SHARED_FILE_REGEX = /drive\.google\.com\/file\/d\/([^/]+)/i;
   const DRIVE_OPEN_REGEX = /drive\.google\.com\/open\?(?:[^=]*=)*id=([^&]+)/i;
   const DRIVE_ID_REGEX = /^[a-zA-Z0-9_-]{16,}$/;
@@ -46,6 +41,7 @@
     return `https://drive.google.com/uc?export=view&id=${id}`;
   }
 
+  // Extrae el ID de Drive de enlaces en diferentes formatos.
   function extractDriveId(value) {
     if (typeof value !== 'string') return '';
     const trimmed = value.trim();
@@ -72,6 +68,7 @@
   const HTTP_REGEX = /^https?:\/\//i;
   const PROTOCOL_RELATIVE_REGEX = /^\/\//;
 
+  // Normaliza cualquier variante de avatar hasta obtener una URL utilizable.
   function normalizeAvatarCandidate(value) {
     if (typeof value !== 'string') return '';
     const trimmed = value.trim();
@@ -85,6 +82,7 @@
     return sanitized ? `/${sanitized}` : '';
   }
 
+  // Recorre posibles campos del usuario y devuelve la primera imagen válida.
   function resolveAvatarSource(currentUser) {
     if (!currentUser) return DEFAULT_AVATAR;
     const driveId =
@@ -123,6 +121,21 @@
     menuOpen = false;
   }
 
+  function toggleLangMenu() {
+    langMenuOpen = !langMenuOpen;
+  }
+
+  function closeLangMenu() {
+    langMenuOpen = false;
+  }
+
+  function handleLocaleSelect(code) {
+    if (!availableLocales.includes(code)) return;
+    locale.set(code);
+    dispatch('lang', { locale: code });
+    closeLangMenu();
+  }
+
   function handleProfileClick() {
     closeMenu();
     dispatch('profile', { user });
@@ -133,11 +146,14 @@
     dispatch('logout', { user });
   }
 
+  // Cierra el menú si se hace clic fuera de la cápsula del usuario.
   function handleDocumentClick(event) {
-    if (!menuOpen) return;
     const target = event.target;
-    if (menuElement && !menuElement.contains(target)) {
+    if (menuOpen && menuElement && !menuElement.contains(target)) {
       closeMenu();
+    }
+    if (langMenuOpen && langMenuElement && !langMenuElement.contains(target)) {
+      closeLangMenu();
     }
   }
 
@@ -149,6 +165,7 @@
     document.removeEventListener('click', handleDocumentClick);
   });
 
+  // Fallback cuando la imagen personalizada falla; evita bucles de error.
   function handleAvatarError(event) {
     event.target.onerror = null;
     if (event.target?.src === DEFAULT_AVATAR) return;
@@ -160,20 +177,38 @@
   <div class="right">
     <span class="chip">{chipTitle}</span>
 
-    <div class="lang-switch" title={changeLanguageCurrentLabel}>
-      <span class="sr-only">{languageLabel}</span>
-      {#if computedFlagSrc}
-        <img src={computedFlagSrc} alt={effectiveFlagAlt} class="flag" />
-      {:else}
-        <span class="lang-code">{languageCodeDisplay}</span>
+    <div class="lang-switch" bind:this={langMenuElement}>
+      <button
+        class="lang-button"
+        type="button"
+        aria-haspopup="true"
+        aria-expanded={langMenuOpen}
+        aria-label={changeLanguageCurrentLabel}
+        on:click|stopPropagation={toggleLangMenu}
+      >
+        <span class="sr-only">{languageLabel}</span>
+        {#if computedFlagSrc}
+          <img src={computedFlagSrc} alt={effectiveFlagAlt} class="flag" />
+        {:else}
+          <span class="lang-code">{languageCodeDisplay}</span>
+        {/if}
+      </button>
+      {#if langMenuOpen}
+        <ul class="menu-list" role="menu" aria-label={languageLabel}>
+          {#each availableLocales as code}
+            <li>
+              <button
+                type="button"
+                role="menuitemradio"
+                aria-checked={normalizedLang === code}
+                on:click={() => handleLocaleSelect(code)}
+              >
+                {$t(`common.languages.${code}`) || code.toUpperCase()}
+              </button>
+            </li>
+          {/each}
+        </ul>
       {/if}
-      <select value={$locale} aria-label={languageLabel} on:change={handleLocaleChange}>
-        {#each availableLocales as code}
-          <option value={code}>
-            {$t(`common.languages.${code}`) || code.toUpperCase()}
-          </option>
-        {/each}
-      </select>
     </div>
 
     {#if showUserMenu}
@@ -249,31 +284,40 @@
     white-space: nowrap;
   }
 
-  .lang-switch,
-  .user-switch {
+  /* Cápsulas circulares para idioma y usuario */
+  .lang-switch {
     position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex: 0 0 var(--topbar-item-height);
+    width: var(--topbar-item-height);
     height: var(--topbar-item-height);
-    padding: 0 clamp(12px, 2.6vw, 18px);
-    border-radius: 999px;
+    border-radius: 50%;
     border: 1px solid rgba(255,255,255,0.25);
     background: rgba(255,255,255,0.08);
     color: #f3f5f7;
     pointer-events: auto;
-    min-height: 22px;
-    min-width: 32px;
-    box-shadow: 0 0 8px rgba(255, 230, 140, 0.2);
+    min-height: var(--topbar-item-height);
+    min-width: var(--topbar-item-height);
+    box-shadow: none;
   }
 
-  .lang-switch select {
-    position: absolute;
-    inset: 0;
+  .lang-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     width: 100%;
     height: 100%;
-    opacity: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    padding: 0;
     cursor: pointer;
+  }
+
+  .lang-button:focus-visible {
+    outline: none;
   }
 
   .lang-switch .flag {
@@ -290,38 +334,64 @@
     pointer-events: none;
   }
 
-  .user-menu {
+  /* Cápsula del usuario: réplica en formato circular */
+  .user-switch {
     position: relative;
-  }
-
-  .avatar-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 var(--topbar-item-height);
     width: var(--topbar-item-height);
     height: var(--topbar-item-height);
     border-radius: 50%;
-    border: 1px solid rgba(255, 255, 255, 0.35);
+    border: 1px solid rgba(255,255,255,0.25);
+    background: rgba(255,255,255,0.08);
+    color: #f3f5f7;
+    pointer-events: auto;
+    min-height: var(--topbar-item-height);
+    min-width: var(--topbar-item-height);
+    box-shadow: none;
+  }
+
+  .user-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: none;
+    color: inherit;
     padding: 0;
-    line-height: 0;
-    background: rgba(0, 0, 0, 0.2);
-    box-shadow: 0 0 8px rgba(255, 230, 140, 0.18);
     cursor: pointer;
+  }
+
+  .user-button:focus-visible {
+    outline: none;
+  }
+
+  .user-button .avatar-wrap {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background: rgba(0, 0, 0, 0.2);
+    box-shadow: none;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
   }
 
-  .avatar-button:hover,
-  .avatar-button:focus-visible {
-    border-color: rgba(255, 255, 255, 0.5);
-    box-shadow: 0 0 10px rgba(255, 230, 140, 0.28);
-  }
-
-  .avatar-button img {
+  .user-button img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
+  }
+
+  .user-button:focus-visible .avatar-wrap {
+    box-shadow: 0 0 0 2px rgba(255, 232, 140, 0.8);
   }
 
   .menu-list {
@@ -331,6 +401,8 @@
     display: grid;
     gap: 0.25rem;
     padding: 0.5rem;
+    margin: 0;
+    list-style: none;
     min-width: 160px;
     background: rgba(0, 0, 0, 0.75);
     border: 1px solid rgba(255, 255, 255, 0.25);
