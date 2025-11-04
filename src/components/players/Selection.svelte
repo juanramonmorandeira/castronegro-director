@@ -9,6 +9,8 @@
 
   const dispatch = createEventDispatcher();
 
+  export let user = null;
+
   let loading = false;
   let error = '';
   let info = '';
@@ -70,13 +72,17 @@
     }
   }
 
+  function relay(event) {
+    dispatch(event.type, event.detail);
+  }
+
   onMount(loadActive);
 </script>
 
 <BackgroundLayer />
 
 <div class="page">
-  <Topbar titleKey="player.choose_title" />
+  <Topbar titleKey="player.choose_title" user={user} on:profile={relay} on:logout={relay} />
   <main class="center">
     <div class="layout">
       <section class="auth-card card-glass">

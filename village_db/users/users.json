@@ -1,6 +1,6 @@
 [
   {
-    "userId": "uid_0001",
+    "auth_uid": "uid_0001",
     "name": "Ramón Morandeira Martes",
     "email": "juanramon@morandeira.net",
     "alias": "Smoothy",
@@ -10,7 +10,7 @@
     "last_login_at": null
   },
   {
-    "userId": "uid_0003",
+    "auth_uid": "uid_0003",
     "name": "Andrea Gabriella Szabó",
     "email": "gabandi@gmail.com",
     "alias": "Pelochita",
@@ -20,7 +20,7 @@
     "last_login_at": null
   },
   {
-    "userId": "uid_0002",
+    "auth_uid": "uid_0002",
     "name": "Sofia Pilar Morandeira Bernath",
     "email": "sofiapilar@morandeira.net",
     "alias": "Soficolas",

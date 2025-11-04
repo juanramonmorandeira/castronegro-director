@@ -32,7 +32,11 @@ const dictionaries = {
       language_label: 'Language',
       change_language: 'Change language',
       change_language_current: 'Change language, current: {language}',
-      navigation_label: 'Top navigation'
+      navigation_label: 'Top navigation',
+      menu: {
+        profile: 'User profile',
+        logout: 'Logout'
+      }
     },
     header: {
       title: 'The Village Storyteller',
@@ -104,6 +108,50 @@ const dictionaries = {
         email_in_use: 'There is already an account with this email address.',
         upload_failed: 'We could not upload the avatar image. Please try again.',
         upload_not_configured: 'Avatar upload is not configured. Please contact the administrator.'
+      }
+    },
+    profile: {
+      title: 'Profile',
+      intro: 'Update your account details and security settings.',
+      status: {
+        active: 'Account active',
+        inactive: 'Account inactive'
+      },
+      name_label: 'Full name',
+      name_placeholder: 'John Doe',
+      alias_label: 'Nickname',
+      alias_placeholder: 'Optional nickname',
+      optional: 'optional',
+      email_label: 'Email address',
+      email_placeholder: 'you@example.com',
+      email_hint: 'Changing your email will require verifying the new address.',
+      security_section: 'Security',
+      current_password_label: 'Current password',
+      required_for_sensitive: 'Required for email or password changes',
+      current_password_placeholder: 'Enter your current password',
+      new_password_label: 'New password',
+      new_password_placeholder: 'Create a new secure password',
+      confirm_password_label: 'Confirm new password',
+      confirm_password_placeholder: 'Repeat the new password',
+      password_requirements: 'Use at least 10 characters combining uppercase, lowercase, numbers and symbols.',
+      save: 'Save changes',
+      back: 'Back',
+      success: {
+        profile_updated: 'Your profile has been updated.',
+        password_updated: 'Password updated successfully.',
+        no_changes: 'There were no changes to save.',
+        email_verification_sent: 'We have sent a verification email to {email}. Please check your inbox.'
+      },
+      errors: {
+        password_required: 'Please enter a new password.',
+        password_mismatch: 'Passwords do not match.',
+        password_strength: 'Password does not meet the security requirements.',
+        missing_current_password: 'Enter your current password to continue.',
+        invalid_current_password: 'The current password is incorrect.',
+        too_many_attempts: 'Too many attempts. Try again later.',
+        requires_recent_login: 'For security, please sign in again and retry.',
+        email_in_use: 'There is already an account with this email address.',
+        generic: 'We could not update your profile. Please try again.'
       }
     },
     player: {
@@ -196,7 +244,11 @@ const dictionaries = {
       language_label: 'Idioma',
       change_language: 'Cambiar idioma',
       change_language_current: 'Cambiar idioma, actual: {language}',
-      navigation_label: 'Barra de navegación'
+      navigation_label: 'Barra de navegación',
+      menu: {
+        profile: 'Perfil de usuario',
+        logout: 'Cerrar sesión'
+      }
     },
     header: {
       title: 'El Narrador de la Aldea',
@@ -268,6 +320,50 @@ const dictionaries = {
         email_in_use: 'Ya existe una cuenta con este correo electrónico.',
         upload_failed: 'No se pudo subir la imagen. Inténtalo de nuevo.',
         upload_not_configured: 'La subida de avatar no está configurada. Contacta con el administrador.'
+      }
+    },
+    profile: {
+      title: 'Perfil',
+      intro: 'Actualiza los datos de tu cuenta y la seguridad.',
+      status: {
+        active: 'Cuenta activa',
+        inactive: 'Cuenta inactiva'
+      },
+      name_label: 'Nombre completo',
+      name_placeholder: 'Marina Pérez',
+      alias_label: 'Apodo',
+      alias_placeholder: 'Apodo opcional',
+      optional: 'opcional',
+      email_label: 'Correo electrónico',
+      email_placeholder: 'tu@ejemplo.com',
+      email_hint: 'Cambiar el correo requiere verificar la nueva dirección.',
+      security_section: 'Seguridad',
+      current_password_label: 'Contraseña actual',
+      required_for_sensitive: 'Necesaria para cambiar correo o contraseña',
+      current_password_placeholder: 'Introduce tu contraseña actual',
+      new_password_label: 'Nueva contraseña',
+      new_password_placeholder: 'Crea una contraseña segura',
+      confirm_password_label: 'Confirmar nueva contraseña',
+      confirm_password_placeholder: 'Repite la nueva contraseña',
+      password_requirements: 'Usa al menos 10 caracteres combinando mayúsculas, minúsculas, números y símbolos.',
+      save: 'Guardar cambios',
+      back: 'Volver',
+      success: {
+        profile_updated: 'Tu perfil se ha actualizado correctamente.',
+        password_updated: 'Contraseña actualizada correctamente.',
+        no_changes: 'No hay cambios que guardar.',
+        email_verification_sent: 'Hemos enviado un correo de verificación a {email}. Revisa tu bandeja.'
+      },
+      errors: {
+        password_required: 'Introduce una nueva contraseña.',
+        password_mismatch: 'Las contraseñas no coinciden.',
+        password_strength: 'La contraseña no cumple los requisitos de seguridad.',
+        missing_current_password: 'Introduce tu contraseña actual para continuar.',
+        invalid_current_password: 'La contraseña actual no es correcta.',
+        too_many_attempts: 'Demasiados intentos. Inténtalo de nuevo más tarde.',
+        requires_recent_login: 'Por seguridad, vuelve a iniciar sesión e inténtalo de nuevo.',
+        email_in_use: 'Ya existe una cuenta con este correo electrónico.',
+        generic: 'No se pudo actualizar el perfil. Inténtalo de nuevo.'
       }
     },
     player: {
@@ -360,7 +456,11 @@ const dictionaries = {
       language_label: 'Nyelv',
       change_language: 'Nyelv módosítása',
       change_language_current: 'Nyelv módosítása, aktuális: {language}',
-      navigation_label: 'Fő navigáció'
+      navigation_label: 'Fő navigáció',
+      menu: {
+        profile: 'Felhasználói profil',
+        logout: 'Kijelentkezés'
+      }
     },
     header: {
       title: 'A falu mesemondója',
@@ -432,6 +532,50 @@ const dictionaries = {
         email_in_use: 'Ezzel az e-mail címmel már létezik fiók.',
         upload_failed: 'Nem sikerült feltölteni az avatárt. Próbáld újra.',
         upload_not_configured: 'Az avatar feltöltése nincs beállítva. Vedd fel a kapcsolatot az adminnal.'
+      }
+    },
+    profile: {
+      title: 'Profil',
+      intro: 'Frissítsd a fiókadataidat és a biztonsági beállításokat.',
+      status: {
+        active: 'Fiók aktív',
+        inactive: 'Fiók inaktív'
+      },
+      name_label: 'Teljes név',
+      name_placeholder: 'Kovács Anna',
+      alias_label: 'Becenév',
+      alias_placeholder: 'Választható becenév',
+      optional: 'opcionális',
+      email_label: 'E-mail cím',
+      email_placeholder: 'te@pelda.hu',
+      email_hint: 'Az e-mail módosítása az új cím megerősítését igényli.',
+      security_section: 'Biztonság',
+      current_password_label: 'Jelenlegi jelszó',
+      required_for_sensitive: 'Szükséges az e-mail vagy jelszó módosításához',
+      current_password_placeholder: 'Írd be a jelenlegi jelszavad',
+      new_password_label: 'Új jelszó',
+      new_password_placeholder: 'Adj meg biztonságos új jelszót',
+      confirm_password_label: 'Új jelszó megerősítése',
+      confirm_password_placeholder: 'Ismételd meg az új jelszót',
+      password_requirements: 'Használj legalább 10 karaktert nagybetűkkel, kisbetűkkel, számokkal és szimbólumokkal.',
+      save: 'Változtatások mentése',
+      back: 'Vissza',
+      success: {
+        profile_updated: 'A profilod frissült.',
+        password_updated: 'A jelszót sikeresen frissítettük.',
+        no_changes: 'Nincs menteni való módosítás.',
+        email_verification_sent: 'Ellenőrző e-mailt küldtünk a következő címre: {email}.'
+      },
+      errors: {
+        password_required: 'Adj meg egy új jelszót.',
+        password_mismatch: 'A jelszavak nem egyeznek.',
+        password_strength: 'A jelszó nem felel meg a biztonsági követelményeknek.',
+        missing_current_password: 'Add meg a jelenlegi jelszavad a folytatáshoz.',
+        invalid_current_password: 'A jelenlegi jelszó nem helyes.',
+        too_many_attempts: 'Túl sok próbálkozás. Próbáld később.',
+        requires_recent_login: 'Biztonsági okokból jelentkezz be újra, majd próbáld meg ismét.',
+        email_in_use: 'Ezzel az e-mail címmel már létezik fiók.',
+        generic: 'Nem sikerült frissíteni a profilt. Próbáld újra.'
       }
     },
     player: {

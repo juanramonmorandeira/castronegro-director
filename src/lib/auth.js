@@ -7,10 +7,15 @@ import {
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
   sendEmailVerification,
-  updateProfile
+  updateProfile,
+  updateEmail,
+  updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
+  signOut
 } from 'firebase/auth';
 
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 
 const FALLBACK_APP_URL = 'https://storyteller.morandeira.net';
 
@@ -67,7 +72,6 @@ export async function registerWithEmail(email, password, profile = {}) {
 
   // Perfil mínimo (sin password)
   const payload = {
-    userId: uid,
     auth_uid: uid,
     email: cred.user.email ?? normalizedEmail,
     name: trimmedName,
@@ -117,4 +121,89 @@ export async function sendVerificationEmail() {
   };
   await sendEmailVerification(auth.currentUser, actionCodeSettings);
   return true;
+}
+
+async function reauthenticateIfNeeded(currentPassword) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('no_current_user');
+  if (!currentPassword) {
+    return user;
+  }
+  if (!user.email) throw new Error('missing_email');
+  const credential = EmailAuthProvider.credential(user.email, currentPassword);
+  await reauthenticateWithCredential(user, credential);
+  return user;
+}
+
+export async function fetchCurrentUserProfile() {
+  const user = auth.currentUser;
+  if (!user) return null;
+  const docRef = doc(db, 'users', user.uid);
+  const snap = await getDoc(docRef);
+  const data = snap.exists() ? snap.data() : {};
+  return {
+    uid: user.uid,
+    email: user.email ?? data.email ?? '',
+    name: data.name ?? user.displayName ?? '',
+    alias: data.alias ?? '',
+    avatarURL: data.avatarURL ?? user.photoURL ?? '',
+    avatarDriveId: data.avatarDriveId ?? '',
+    photoURL: user.photoURL ?? '',
+    status: data.status ?? 'inactive'
+  };
+}
+
+export async function updateUserProfile(profile = {}) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('no_current_user');
+  const trimmedName = profile.name?.trim() ?? '';
+  const trimmedAlias = profile.alias?.trim() ?? '';
+  const avatarUrl = profile.avatarURL?.trim() ?? '';
+
+  await updateProfile(user, {
+    displayName: trimmedName || undefined,
+    photoURL: avatarUrl || undefined
+  });
+
+  await setDoc(
+    doc(db, 'users', user.uid),
+    {
+      name: trimmedName,
+      alias: trimmedAlias,
+      avatarURL: avatarUrl,
+      updated_at: serverTimestamp()
+    },
+    { merge: true }
+  );
+
+  return fetchCurrentUserProfile();
+}
+
+export async function changeUserPassword(currentPassword, newPassword) {
+  const user = await reauthenticateIfNeeded(currentPassword);
+  if (!newPassword) throw new Error('missing_new_password');
+  await updatePassword(user, newPassword);
+  return true;
+}
+
+export async function changeUserEmail(currentPassword, newEmail) {
+  const normalized = newEmail?.trim().toLowerCase();
+  if (!normalized) throw new Error('missing_new_email');
+  const user = await reauthenticateIfNeeded(currentPassword);
+  await updateEmail(user, normalized);
+  await setDoc(
+    doc(db, 'users', user.uid),
+    {
+      email: normalized,
+      status: 'inactive',
+      updated_at: serverTimestamp()
+    },
+    { merge: true }
+  );
+  await sendVerificationEmail();
+  return true;
+}
+
+export async function signOutUser() {
+  await signOut(auth);
 }

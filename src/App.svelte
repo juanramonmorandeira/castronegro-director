@@ -8,16 +8,23 @@
   // - Monta la capa de fondo (BackgroundLayer) por debajo.
   // ─────────────────────────────────────────────────────────────
 
+  import { onMount } from 'svelte';
   import BackgroundLayer from './components/landing/BackgroundLayer.svelte';
   import Landing from "./components/Landing.svelte";
   import Login from './components/Login.svelte';
   import Registration from './components/Registration.svelte';
   import PlayerSelection from './components/players/Selection.svelte';
+  import Profile from './components/Profile.svelte';
   import { t } from './lib/i18n.js';
+  import { fetchCurrentUserProfile, signOutUser } from './lib/auth.js';
+  import { auth } from './lib/firebase.js';
+  import { onAuthStateChanged } from 'firebase/auth';
 
   let view = "login"; // login, landing, configure, session
   let currentSessionId = null;
   let currentRole = null;
+  let currentUser = null;
+  let previousView = null;
 
   function goConfigure(sessionId) {
     currentSessionId = sessionId;
@@ -28,10 +35,16 @@
     currentSessionId = sessionId;
     view = "session";
   }
-  function handleLoginSuccess(payload) {
+  async function handleLoginSuccess(payload) {
     const detail = payload && payload.detail !== undefined ? payload.detail : payload;
     currentRole = detail?.role ?? null;
     currentSessionId = null;
+    try {
+      currentUser = await fetchCurrentUserProfile();
+    } catch (error) {
+      console.error('Unable to load user profile', error);
+      currentUser = null;
+    }
 
     if (currentRole === 'storyteller') {
       view = 'landing';
@@ -68,6 +81,66 @@
   function handlePlayerScan() {
     console.info('Scan QR requested (not implemented yet)');
   }
+
+  function openProfile() {
+    if (!currentUser) return;
+    if (view !== 'profile') {
+      previousView = view;
+    }
+    view = 'profile';
+  }
+
+  async function handleLogout() {
+    try {
+      await signOutUser();
+    } catch (error) {
+      console.error('Error during logout', error);
+    } finally {
+      currentUser = null;
+      currentRole = null;
+      currentSessionId = null;
+      previousView = null;
+      view = 'login';
+    }
+  }
+
+  function handleProfileClose() {
+    view = previousView ?? (currentRole === 'storyteller' ? 'landing' : 'player-selection');
+    previousView = null;
+  }
+
+  function handleProfileUpdated(event) {
+    const detail = event?.detail ?? event;
+    if (detail?.user) {
+      currentUser = detail.user;
+    }
+  }
+
+  async function handleProfileEmailChange() {
+    await handleLogout();
+  }
+
+  onMount(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          currentUser = await fetchCurrentUserProfile();
+        } catch (error) {
+          console.error('Unable to fetch profile on auth change', error);
+          currentUser = null;
+        }
+      } else {
+        currentUser = null;
+        currentRole = null;
+        currentSessionId = null;
+        previousView = null;
+        if (view !== 'login' && view !== 'registration') {
+          view = 'login';
+        }
+      }
+    });
+    return () => unsubscribe();
+  });
 </script>
 
 <!-- ─────────────────────────────────────────────────────────────
@@ -97,8 +170,11 @@
   />
 {:else if view === 'player-selection'}
   <PlayerSelection
+    user={currentUser}
     on:connect={handlePlayerConnect}
     on:scan-qr={handlePlayerScan}
+    on:profile={openProfile}
+    on:logout={handleLogout}
   />
 {:else if view === "configure"}
   <!-- Placeholder del configurador de partida -->
@@ -120,7 +196,22 @@
     </div>
   </div>
 {:else if view === "landing"}
-  <Landing onCreate={goConfigure} onViewCurrent={goSession} />
+  <Landing
+    user={currentUser}
+    onCreate={goConfigure}
+    onViewCurrent={goSession}
+    on:profile={openProfile}
+    on:logout={handleLogout}
+  />
+{:else if view === 'profile'}
+  <Profile
+    user={currentUser}
+    on:updated={handleProfileUpdated}
+    on:close={handleProfileClose}
+    on:email-change={handleProfileEmailChange}
+    on:logout={handleLogout}
+    on:profile={openProfile}
+  />
 {/if}
 
 <style>

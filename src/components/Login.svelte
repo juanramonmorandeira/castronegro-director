@@ -134,7 +134,7 @@
 <BackgroundLayer />
 
   <div class="page">
-  <Topbar titleKey="login.title" />
+  <Topbar titleKey="login.title" showUserMenu={false} />
 
   <main class="center">
     <h1 class="sr-only">{$t('login.title')}</h1>

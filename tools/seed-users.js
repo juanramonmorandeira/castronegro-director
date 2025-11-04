@@ -65,14 +65,24 @@ async function seedUsers(users) {
   let total = 0;
 
   for (const entry of users) {
-    const { userId, ...rest } = entry;
-    if (!userId || typeof userId !== 'string') {
-      throw new Error(`Each user needs a string "userId". Offending entry: ${JSON.stringify(entry)}`);
+    const {
+      auth_uid: explicitAuthUid,
+      uid: shortUid,
+      userId: legacyUserId,
+      ...rest
+    } = entry;
+
+    const resolvedUid = (explicitAuthUid || shortUid || legacyUserId || '').trim();
+
+    if (!resolvedUid) {
+      throw new Error(
+        `Each user needs an "auth_uid" (or legacy "userId") string. Offending entry: ${JSON.stringify(entry)}`
+      );
     }
 
-    const docRef = db.collection('users').doc(userId);
+    const docRef = db.collection('users').doc(resolvedUid);
     const payload = {
-      userId,
+      auth_uid: resolvedUid,
       ...rest
     };
 

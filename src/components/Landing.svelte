@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, createEventDispatcher } from 'svelte';
   import Topbar from './Topbar.svelte';
   import Header from './landing/Header.svelte';
   import CurrentSessionCard from './landing/CurrentSessionCard.svelte';
@@ -8,6 +8,8 @@
   import { getCurrentSession, listSessionHistory, createSessionDraft } from '../lib/db.js';
   import { normalizeStatus } from '../lib/utils.js';
   import { locale as localeStore, t } from '../lib/i18n.js';
+
+  const dispatch = createEventDispatcher();
 
   const HISTORY_LIMIT = 20;
   const dateOptions = Intl.DateTimeFormat().resolvedOptions();
@@ -21,6 +23,7 @@
   const DEFAULT_FLAG_SRC = FLAG_BY_LOCALE.en;
 
   export let onCreate = () => {};
+  export let user = null;
 
   let current = null;
   let historyItems = [];
@@ -114,6 +117,10 @@
     if (id) console.debug('Delete history session (not implemented)', id);
   }
 
+  function relay(event) {
+    dispatch(event.type, event.detail);
+  }
+
   onMount(() => {
     refreshAll().catch((error) => {
       console.error('Initial load failed', error);
@@ -127,6 +134,9 @@
 <Topbar
   flagSrc={topbarFlagSrc}
   langCode={topbarLangCode}
+  user={user}
+  on:profile={relay}
+  on:logout={relay}
   on:lang={() => { /* aquí harás el toggle de idioma cuando llegue i18n */ }}
 />
 

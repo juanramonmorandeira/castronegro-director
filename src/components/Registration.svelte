@@ -193,7 +193,7 @@
 <BackgroundLayer />
 
 <div class="page">
-  <Topbar titleKey="registration.title" />
+  <Topbar titleKey="registration.title" showUserMenu={false} />
 
   <main class="center">
     <div class="auth-layout">

@@ -1,6 +1,6 @@
 {
   "sessionIid": "sid_123",
-  "userId": "uid_123",
+  "auth_uid": "uid_123",
   "status": "alive",
   "alias": "Sofi",
   "rol": "not assigned",

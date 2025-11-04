@@ -5,13 +5,38 @@
 // ───────────────────────────────────────────────────────────
 
 import { db } from "./firebase.js";
-import { normalizeStatus } from "./utils.js";
 import {
   collection, doc, getDoc, getDocs, query, where, orderBy, limit,
-  addDoc, updateDoc, serverTimestamp, writeBatch
+  addDoc, updateDoc, serverTimestamp, writeBatch, getFirestore
 } from "firebase/firestore";
 
-const PLAYER_JOIN_STATUSES = ['share', 'in_progress', 'paused'];
+// Estados considerados "activos" para unirse como jugador.
+const ACTIVE_STATES = ['share', 'in_progress', 'paused'];
+
+/** Lista sesiones activas. Devuelve array de { id, ...data } */
+export async function listActiveSessions(limitCount = 10) {
+  const colRef = collection(db, 'sessions');
+  // where "in" no admite más de 10 valores (estamos dentro del límite).
+  // Evitamos orderBy para no requerir índice compuesto.
+  const q = query(colRef, where('status', 'in', ACTIVE_STATES));
+  const snap = await getDocs(q);
+  const out = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  // Ordenación en cliente por updated_at desc (fallback a created_at)
+  out.sort((a, b) => {
+    const ta = (a.updated_at?.seconds ?? a.created_at?.seconds ?? 0);
+    const tb = (b.updated_at?.seconds ?? b.created_at?.seconds ?? 0);
+    return tb - ta;
+  });
+  return out.slice(0, limitCount);
+}
+
+/** Obtiene una sesión por ID. Devuelve null si no existe */
+export async function getSessionById(id) {
+  if (!id) return null;
+  const ref = doc(db, 'sessions', id);
+  const d = await getDoc(ref);
+  return d.exists() ? { id: d.id, ...d.data() } : null;
+}
 
 /**
  * clearCurrentFlag()
@@ -102,40 +127,4 @@ export async function createSessionDraft({ title = "Untitled session", language 
   };
   const ref = await addDoc(collection(db, "sessions"), payload);
   return ref.id;  
-}
-
-/**
- * getSessionById(sessionId)
- * ───────────────────────────────────────────────────────────
- * Devuelve la sesión si existe y su estado permite que un jugador se conecte.
- */
-export async function getSessionById(sessionId) {
-  if (!sessionId) return null;
-  const ref = doc(db, "sessions", sessionId);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return null;
-  const data = snap.data();
-  const status = normalizeStatus(data.status);
-  if (!PLAYER_JOIN_STATUSES.includes(status)) {
-    return null;
-  }
-  return { id: snap.id, ...data, status };
-}
-
-/**
- * listActiveSessions(max = 10)
- * ───────────────────────────────────────────────────────────
- * Lista hasta 'max' sesiones con estados en los que un jugador puede conectarse.
- */
-export async function listActiveSessions(max = 10) {
-  const col = collection(db, "sessions");
-  // Nota: where con "in" (máx 10 valores). Puede requerir un índice compuesto si añades orderBy.
-  const q = query(
-    col,
-    where("status", "in", PLAYER_JOIN_STATUSES),
-    orderBy("updated_at", "desc"),
-    limit(max)
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data(), status: normalizeStatus(d.data().status) }));
 }
