@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { createEventDispatcher } from 'svelte';
   import { get } from 'svelte/store';
   import Topbar from '../Topbar.svelte';
@@ -13,6 +13,7 @@
   let status = 'checking'; // checking | success | error | invalid
   let email = '';
   let errorCode = '';
+  let redirectTimer;
 
   onMount(async () => {
     const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
@@ -29,6 +30,9 @@
       const result = await confirmEmailVerification(code);
       email = result?.email ?? '';
       status = 'success';
+      redirectTimer = setTimeout(() => {
+        goLogin();
+      }, 2500);
 
       if (typeof window !== 'undefined') {
         const url = new URL(window.location.href);
@@ -43,6 +47,12 @@
       console.error('Email verification failed:', error);
       errorCode = error?.code ?? 'unknown';
       status = 'error';
+    }
+  });
+
+  onDestroy(() => {
+    if (redirectTimer) {
+      clearTimeout(redirectTimer);
     }
   });
 
@@ -74,6 +84,7 @@
           {$t('verify.success_message', { email: email || $t('verify.unknown_email') })}
         </p>
         <p class="hint">{$t('verify.success_hint')}</p>
+        <p class="redirect">{$t('verify.success_redirect')}</p>
       {:else if status === 'invalid'}
         <p class="message error">{$t('verify.invalid_message')}</p>
       {:else if status === 'error'}
@@ -89,7 +100,12 @@
         </p>
       {/if}
 
-      <button class="btn primary" type="button" on:click={goLogin} disabled={status === 'checking'}>
+      <button
+        class="btn primary"
+        type="button"
+        on:click={goLogin}
+        disabled={status === 'checking' || status === 'success'}
+      >
         {$t('verify.go_login')}
       </button>
     </div>
@@ -180,5 +196,11 @@
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
+  }
+
+  .redirect {
+    margin: 0;
+    font-size: 0.85rem;
+    color: rgba(245, 245, 245, 0.7);
   }
 </style>

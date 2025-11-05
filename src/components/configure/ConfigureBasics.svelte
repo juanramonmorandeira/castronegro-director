@@ -7,8 +7,8 @@
   // Permite definir:
   //   • Idioma de la partida
   //   • Conjunto de reglas (rule set)
-  //   • Tipo de director (humano / IA)
-  //   • Activación de asistencias y sus fases
+  //   • Tipo de narrador (humano / IA)
+  //   • Activación de asistencias y tareas
   //   • Número de jugadores esperados
   //
   // Se comunica con Firestore usando las funciones del módulo db.js:
@@ -18,7 +18,8 @@
   // ─────────────────────────────────────────────────────────────
 
   import { onMount } from "svelte";
-  import { getGamesMetadata, getBalanceTable, updateSession } from "$lib/db.js";
+  import { updateSession } from "$lib/db.js";
+  import { getGamesMetadata, getBalanceTable } from "$lib/gameMetadata.js";
   import { t } from "../../lib/i18n.js";
 
   // Recibe desde App.svelte el ID de la sesión actual
@@ -31,22 +32,14 @@
 
   // Estructura del formulario
   let form = {
-    language: "en",
-    set_reglas: "basic",
-    director: "human",
+    language: 'en',
+    rulesets: 'basic',
+    storyteller: 'human',
     assist_enabled: false,
-    assist_phases: [],
-    assist_rules: false,
-    players_expected: 5
+    assist_tasks: [],
+    players_expected: 5,
+    game_phase: 'Introduction'
   };
-
-  const DIRECTOR_HINT_KEYS = {
-    human: 'configure.basics.director_hint.disabled',
-    'human-AI': 'configure.basics.director_hint.optional',
-    AI: 'configure.basics.director_hint.forced'
-  };
-
-  $: directorHint = $t(DIRECTOR_HINT_KEYS[form.director] || DIRECTOR_HINT_KEYS.human);
 
   // Al montar el componente: cargar datos iniciales
   onMount(async () => {
@@ -55,12 +48,13 @@
 
     // Cargar valores por defecto desde la metadata
     const d = meta?.defaults || {};
-    form.language = d.language ?? form.language;
-    form.set_reglas = d.set_reglas ?? form.set_reglas;
-    form.director = d.director ?? form.director;
+    const languages = meta?.language_values ?? ['en'];
+    form.language = d.language ?? languages[0] ?? form.language;
+    form.rulesets = d.rulesets ?? meta?.rulesets_values?.[0] ?? form.rulesets;
+    form.storyteller = d.storyteller ?? meta?.storyteller_values?.[0] ?? form.storyteller;
     form.assist_enabled = d.assist_enabled ?? form.assist_enabled;
-    form.assist_phases = d.assist_phases ?? form.assist_phases;
-    form.assist_rules = d.assist_rules ?? form.assist_rules;
+    form.assist_tasks = Array.isArray(d.assist_tasks) ? d.assist_tasks : [];
+    form.game_phase = d.game_phase ?? meta?.game_phase_values?.[0] ?? form.game_phase;
 
     // Calcular mínimo número de jugadores desde la balance table
     const keys = Object.keys(balance?.distribution_table || {}).map(Number).sort((a, b) => a - b);
@@ -71,28 +65,30 @@
   });
 
   // Alternar activación/desactivación de fases de asistencia
-  function togglePhase(p) {
-    if (form.assist_phases.includes(p)) {
-      form.assist_phases = form.assist_phases.filter(x => x !== p);
+  function toggleTask(task) {
+    if (form.assist_tasks.includes(task)) {
+      form.assist_tasks = form.assist_tasks.filter((x) => x !== task);
     } else {
-      form.assist_phases = [...form.assist_phases, p];
+      form.assist_tasks = [...form.assist_tasks, task];
     }
   }
 
   // Guardar cambios en Firestore
   async function saveBasics() {
-    // Si el director es humano → se desactivan asistencias
-    const assist = form.director === "human"
-      ? { enabled: false, phases: [], rules: false }
-      : { enabled: !!form.assist_enabled, phases: form.assist_phases, rules: !!form.assist_rules };
+    const isHuman = form.storyteller === 'human';
+    const language = isHuman ? (meta?.language_values ?? ['en'])[0] ?? 'en' : form.language;
+    const assistEnabled = !isHuman && !!form.assist_enabled;
+    const assistTasks = assistEnabled ? form.assist_tasks : [];
 
     await updateSession(sessionId, {
-      language: form.language,
-      set_reglas: form.set_reglas,
-      director: form.director,
-      assist,
-      players_expected: Number(form.players_expected),
-      status: "draft" // sigue en configuración
+      'settings.language': language,
+      'settings.rulesets': form.rulesets,
+      'settings.storyteller': form.storyteller,
+      'settings.players_expected': Number(form.players_expected),
+      'settings.assist_enabled': assistEnabled,
+      'settings.assist_tasks': assistTasks,
+      'game_phases.current': form.game_phase,
+      status: 'draft'
     });
 
     saved = true;
@@ -116,7 +112,7 @@
       <!-- Idioma -->
       <label>
         <div class="label">{$t('configure.basics.language')}</div>
-        <select bind:value={form.language} class="input">
+        <select bind:value={form.language} class="input" disabled={form.storyteller === 'human'}>
           {#each meta.language_values as lang}
             <option value={lang}>{lang}</option>
           {/each}
@@ -126,24 +122,21 @@
       <!-- Rule set -->
       <label>
         <div class="label">{$t('configure.basics.rule_set')}</div>
-        <select bind:value={form.set_reglas} class="input">
-          {#each meta.set_reglas_values as v}
+        <select bind:value={form.rulesets} class="input">
+          {#each meta.rulesets_values as v}
             <option value={v}>{v}</option>
           {/each}
         </select>
       </label>
 
-      <!-- Director -->
+      <!-- Storyteller -->
       <label>
         <div class="label">{$t('configure.basics.director')}</div>
-        <select bind:value={form.director} class="input">
-          {#each meta.director_values as v}
+        <select bind:value={form.storyteller} class="input">
+          {#each meta.storyteller_values as v}
             <option value={v}>{v}</option>
           {/each}
         </select>
-        <div class="hint">
-          {directorHint}
-        </div>
       </label>
 
       <!-- Jugadores esperados -->
@@ -160,28 +153,21 @@
       <label class="inline">
         <input type="checkbox"
                bind:checked={form.assist_enabled}
-               disabled={form.director==='human' || form.director==='AI'} />
+               disabled={form.storyteller === 'human' || form.storyteller === 'AI'} />
         <span>{$t('configure.basics.enable_assistance')}</span>
       </label>
 
       <div class="chip-row">
-        {#each meta.assist_phase_values as p}
-          <label class={"chip " + (form.assist_phases.includes(p) ? "chip-on" : "")}>
+        {#each meta.assist_tasks_values as task}
+          <label class={"chip " + (form.assist_tasks.includes(task) ? "chip-on" : "")}>
             <input type="checkbox"
-                   checked={form.assist_phases.includes(p)}
-                   on:change={() => togglePhase(p)}
-                   disabled={!form.assist_enabled && form.director!=='AI'} />
-            <span>{p}</span>
+                   checked={form.assist_tasks.includes(task)}
+                   on:change={() => toggleTask(task)}
+                   disabled={!form.assist_enabled && form.storyteller !== 'AI'} />
+            <span>{task.replace(/_/g, ' ')}</span>
           </label>
         {/each}
       </div>
-
-      <label class="inline">
-        <input type="checkbox"
-               bind:checked={form.assist_rules}
-               disabled={!form.assist_enabled && form.director!=='AI'} />
-        <span>{$t('configure.basics.rules_arbitration')}</span>
-      </label>
     </div>
 
     <!-- Botón de guardado -->

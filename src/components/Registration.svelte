@@ -4,11 +4,14 @@
   import BackgroundLayer from './landing/BackgroundLayer.svelte';
   import { t } from '../lib/i18n.js';
   import { registerWithEmail, sendVerificationEmail } from '../lib/auth.js';
+  import {
+    AVAILABLE_AVATARS,
+    MAX_AVATAR_SIZE,
+    ACCEPTED_AVATAR_TYPES,
+    ACCEPTED_AVATAR_STRING,
+    DEFAULT_AVATAR
+  } from '../lib/avatars.js';
   import { createEventDispatcher } from 'svelte';
-
-  const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
-  const ACCEPTED_AVATAR_TYPES = ['image/png', 'image/jpeg'];
-  const ACCEPTED_AVATAR_STRING = ACCEPTED_AVATAR_TYPES.join(',');
 
   const dispatch = createEventDispatcher();
 
@@ -18,22 +21,7 @@
   let password = '';
   let confirmPassword = '';
 
-  const AVAILABLE_AVATARS = [
-    { value: '/avatars/Avatar_Default.png', labelKey: 'registration.avatar_option.default' },
-    { value: '/avatars/Avatar_Andrea.png', labelKey: 'registration.avatar_option.andrea' },
-    { value: '/avatars/Avatar_Attila.png', labelKey: 'registration.avatar_option.attila' },
-    { value: '/avatars/Avatar_Geri.png', labelKey: 'registration.avatar_option.geri' },
-    { value: '/avatars/Avatar_Giuliano.png', labelKey: 'registration.avatar_option.giuliano' },
-    { value: '/avatars/Avatar_Laura.png', labelKey: 'registration.avatar_option.laura' },
-    { value: '/avatars/Avatar_Martin.png', labelKey: 'registration.avatar_option.martin' },
-    { value: '/avatars/Avatar_Matyas.png', labelKey: 'registration.avatar_option.matyas' },
-    { value: '/avatars/Avatar_Natalia.png', labelKey: 'registration.avatar_option.natalia' },
-    { value: '/avatars/Avatar_Ramon.png', labelKey: 'registration.avatar_option.ramon' },
-    { value: '/avatars/Avatar_Sofia.png', labelKey: 'registration.avatar_option.sofia' },
-    { value: '/avatars/Avatar_Timea.png', labelKey: 'registration.avatar_option.timea' }
-  ];
-
-  let avatarURL = AVAILABLE_AVATARS[0].value;
+  let avatarURL = DEFAULT_AVATAR;
   let avatarModalOpen = false;
   let pendingAvatar = avatarURL;
   let customAvatarData = '';

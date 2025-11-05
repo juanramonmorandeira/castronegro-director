@@ -1,20 +1,22 @@
 {
-  "game_id": "partida_demo",
+  "game_id": "123 456 789",
   "created_at": { "_firestore": "server_timestamp" },
   "updated_at": { "_firestore": "server_timestamp" },
-  "status": "waiting",
+  "status": "draft",
   "settings": {
-    "name": "Partida de demostración",
-    "set_reglas": "basic",
-    "director": "human",
-    "num_players": 8,
+    "name": computedTitle,
+    "rulesets": defaults.rulesets ?? 'basic',
+    "storyteller": defaults.storyteller ?? 'human',
+    "players_expected": defaults.players_expected ?? 5,
     "roles_in_play": {},
-    "language": "es"
+    "assist_enabled": defaults.assist_enabled ?? false,
+    "language": {},
+    "assist_tasks": {},
   },
   "players": {},
-  "phases": {
-    "current": "Day",
-    "history": []
+  "game_phases": {
+    "current": "Introduction",
+    "phase_summary": []
   },
   "logs": [],
   "meta": {

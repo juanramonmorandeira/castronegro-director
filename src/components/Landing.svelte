@@ -30,6 +30,8 @@
   let loadingCurrent = true;
   let loadingHistory = true;
   let errorHistory = null;
+  let creating = false;
+  let createError = '';
 
   const getLocaleKey = (value) => (value || 'en').split(/[-_]/)[0].toLowerCase();
 
@@ -44,13 +46,20 @@
       ? [doc.winners]
       : [];
 
+    const actualPlayers =
+      doc.players && typeof doc.players === 'object'
+        ? Object.keys(doc.players).length
+        : Array.isArray(doc.players)
+          ? doc.players.length
+          : null;
+
     return {
       id: doc.id,
-      title: doc.title ?? '—',
-      numPlayers: Number(doc.numPlayers ?? 0),
+      title: doc.title ?? doc.settings?.name ?? '—',
+      numPlayers: actualPlayers ?? Number(doc.settings?.players_expected ?? 0),
       winners,
-      date: doc.date?.toMillis ? doc.date.toMillis() : doc.date,
-      status: normalizeStatus(doc.status),
+      date: doc.updated_at ?? doc.created_at ?? doc.date ?? null,
+      status: normalizeStatus(doc.status)
     };
   };
 
@@ -85,21 +94,30 @@
   }
 
   async function createAndGo() {
+    createError = '';
+    creating = true;
     try {
-      const id = await createSessionDraft({
-        title: $t('common.untitled_session'),
-        language: localeKey,
+      console.log('[landing] create new game request');
+      const session = await createSessionDraft({
+        language: localeKey
       });
+      console.log('[landing] created session', session);
       await refreshAll();
-      onCreate(id);
+      onCreate(session.id);
     } catch (error) {
       console.error('Error creating draft session', error);
+      createError = error?.message ?? $t('landing.current.create_error');
     }
+    creating = false;
   }
 
-  function handleViewCurrent(event) {
-    const { id } = event.detail ?? {};
-    if (id) console.debug('View current session', id);
+  function handleViewCurrent(eventOrId) {
+    const id =
+      typeof eventOrId === 'string'
+        ? eventOrId
+        : eventOrId?.detail?.id;
+    if (!id) return;
+    console.debug('View current session', id);
   }
 
   function handleHistoryView(event) {
@@ -109,7 +127,9 @@
 
   function handleHistoryEdit(event) {
     const { id } = event.detail ?? {};
-    if (id) console.debug('Edit history session', id);
+    if (!id) return;
+    console.debug('Edit history session', id);
+    onCreate(id);
   }
 
   function handleHistoryDelete(event) {
@@ -153,8 +173,10 @@
     session={current}
     loading={loadingCurrent}
     canView={!!current}
-    on:create={createAndGo}
-    on:view={handleViewCurrent}
+    creating={creating}
+    createError={createError}
+    onCreateClick={createAndGo}
+    onViewClick={() => current && handleViewCurrent(current.id)}
   />
 
   <!-- ─────────────────────────────────────────────────────────────

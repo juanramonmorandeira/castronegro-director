@@ -5,13 +5,56 @@
 // ───────────────────────────────────────────────────────────
 
 import { db } from "./firebase.js";
+import gamesMetadata from '../../village_db/definitions/games_metadata.json' assert { type: 'json' };
 import {
-  collection, doc, getDoc, getDocs, query, where, orderBy, limit,
-  addDoc, updateDoc, serverTimestamp, writeBatch, getFirestore
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+  orderBy,
+  limit,
+  addDoc,
+  updateDoc,
+  serverTimestamp,
+  writeBatch
 } from "firebase/firestore";
 
 // Estados considerados "activos" para unirse como jugador.
-const ACTIVE_STATES = ['share', 'in_progress', 'paused'];
+const ACTIVE_STATES = ['shared', 'waiting', 'in_progress', 'paused'];
+
+const MIN_PLAYERS = 5;
+const MAX_PLAYERS = 15;
+
+const clampPlayers = (value = MIN_PLAYERS) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return MIN_PLAYERS;
+  return Math.min(Math.max(numeric, MIN_PLAYERS), MAX_PLAYERS);
+};
+
+function randomGroup() {
+  return String(Math.floor(Math.random() * 1000)).padStart(3, '0');
+}
+
+function formatGameId() {
+  return `${randomGroup()} ${randomGroup()} ${randomGroup()}`;
+}
+
+async function generateUniqueGameId() {
+  const sessionsCol = collection(db, 'sessions');
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const candidate = formatGameId();
+    const q = query(sessionsCol, where('game_id', '==', candidate));
+    const snap = await getDocs(q);
+    if (snap.empty) {
+      return candidate;
+    }
+  }
+  // Fallback: timestamp-based suffix
+  const stamp = Date.now().toString().slice(-9);
+  return `${stamp.slice(0, 3)} ${stamp.slice(3, 6)} ${stamp.slice(6)}`;
+}
 
 /** Lista sesiones activas. Devuelve array de { id, ...data } */
 export async function listActiveSessions(limitCount = 10) {
@@ -108,23 +151,77 @@ export async function getBalanceTable() {
  * Crea una nueva sesión en estado 'draft', la marca como 'current'
  * y garantiza que no existan otras 'current'.
  */
-export async function createSessionDraft({ title = "Untitled session", language = "en" } = {}) {
-  // si quieres garantizar 1 sola “current”
+export async function createSessionDraft({ title, language } = {}) {
   await clearCurrentFlag();
 
+  const defaults = gamesMetadata?.defaults ?? {};
+  const statusDefault = defaults.status ?? 'draft';
+  const rulesetDefault =
+    defaults.rulesets ??
+    gamesMetadata?.rulesets_values?.[0] ??
+    'basic';
+  const storytellerDefault =
+    defaults.storyteller ??
+    gamesMetadata?.storyteller_values?.[0] ??
+    'human';
+  const languageDefault =
+    language ??
+    defaults.language ??
+    gamesMetadata?.language_values?.[0] ??
+    'en';
+  const playersExpectedDefault = clampPlayers(defaults.players_expected);
+  const assistEnabledDefault = defaults.assist_enabled ?? false;
+  const gamePhaseDefault =
+    defaults.game_phase ??
+    gamesMetadata?.game_phase_values?.[0] ??
+    'Introduction';
+
+  const timestampSuffix = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
+  const computedTitle = title?.trim() || `Game session ${timestampSuffix}`;
+  const gameId = await generateUniqueGameId();
+  const assistEnabled =
+    storytellerDefault === 'human'
+      ? false
+      : storytellerDefault === 'AI'
+        ? true
+        : assistEnabledDefault;
+  const assistTasksDefault =
+    assistEnabled && storytellerDefault === 'AI'
+      ? [...(gamesMetadata?.assist_tasks_values ?? [])]
+      : [];
+
   const payload = {
-    title,
-    status: "draft",
+    title: computedTitle,
+    status: statusDefault,
     is_current: true,
-    language,
-    set_reglas: "basic",
-    director: "human",
-    assist: { enabled: false, phases: [], rules: false },
-    players_expected: 5,
-    roles_selected: { villagers: [], ambiguous: [], outsiders: [], werewolves: [] },
+    game_id: gameId,
+    settings: {
+      name: computedTitle,
+      rulesets: rulesetDefault,
+      storyteller: storytellerDefault,
+      players_expected: playersExpectedDefault,
+      roles_in_play: {},
+      assist_enabled: assistEnabled,
+      language: languageDefault,
+      assist_tasks: assistTasksDefault
+    },
+    players: {},
+    game_phases: {
+      current: gamePhaseDefault,
+      phase_summary: []
+    },
+    logs: [],
+    meta: gamesMetadata?.meta ?? { version: 1, schema: 'game_schema' },
     created_at: serverTimestamp(),
     updated_at: serverTimestamp()
   };
+
   const ref = await addDoc(collection(db, "sessions"), payload);
-  return ref.id;  
+  return { id: ref.id, ...payload };
+}
+
+export async function updateSession(sessionId, data = {}) {
+  if (!sessionId || !data) return;
+  const ref = doc(db, 'sessions', sessionId);
+  await updateDoc(ref, { ...data, updated_at: serverTimestamp() });
 }

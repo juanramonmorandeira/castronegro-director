@@ -11,6 +11,13 @@
     changeUserPassword,
     deleteCurrentUser
   } from '../lib/auth.js';
+  import {
+    AVAILABLE_AVATARS,
+    MAX_AVATAR_SIZE,
+    ACCEPTED_AVATAR_TYPES,
+    ACCEPTED_AVATAR_STRING,
+    DEFAULT_AVATAR
+  } from '../lib/avatars.js';
   import { get } from 'svelte/store';
 
   const passwordRules = {
@@ -32,6 +39,11 @@
   let email = '';
   let status = 'inactive';
   let inactiveReason = null;
+  let avatarURL = DEFAULT_AVATAR;
+  let avatarModalOpen = false;
+  let pendingAvatar = DEFAULT_AVATAR;
+  let customAvatarData = '';
+  let customAvatarError = '';
 
   let currentPassword = '';
   let newPassword = '';
@@ -52,6 +64,14 @@
     error = '';
   };
 
+  function setAvatarState(url) {
+    const normalized = url || DEFAULT_AVATAR;
+    avatarURL = normalized;
+    pendingAvatar = normalized;
+    customAvatarData = normalized?.startsWith('data:image') ? normalized : '';
+    customAvatarError = '';
+  }
+
   function meetsPasswordRequirements(value = '') {
     return (
       value.length >= passwordRules.minLength &&
@@ -71,6 +91,7 @@
     email = profile.email ?? '';
     status = profile.status ?? 'inactive';
     inactiveReason = profile.inactiveReason ?? null;
+    setAvatarState(profile.avatarURL);
   }
 
   onMount(() => {
@@ -86,6 +107,9 @@
     const trimmedName = name.trim();
     const trimmedAlias = alias.trim();
     const trimmedEmail = email.trim().toLowerCase();
+    const normalizedAvatar = avatarURL || DEFAULT_AVATAR;
+    const originalAvatar = (user?.avatarURL ?? '') || DEFAULT_AVATAR;
+    const avatarChanged = normalizedAvatar !== originalAvatar;
 
     const originalEmail = (user?.email ?? '').toLowerCase();
     const emailChanged = trimmedEmail && trimmedEmail !== originalEmail;
@@ -93,6 +117,7 @@
     const hasProfileChanges =
       trimmedName !== (user?.name ?? '') ||
       trimmedAlias !== (user?.alias ?? '') ||
+      avatarChanged ||
       emailChanged ||
       passwordChanged;
 
@@ -128,8 +153,19 @@
         await changeUserPassword(currentPassword, newPassword);
       }
 
-      if (trimmedName !== (user?.name ?? '') || trimmedAlias !== (user?.alias ?? '')) {
-        await updateUserProfile({ name: trimmedName, alias: trimmedAlias });
+      const profilePayload = {};
+      if (trimmedName !== (user?.name ?? '')) {
+        profilePayload.name = trimmedName;
+      }
+      if (trimmedAlias !== (user?.alias ?? '')) {
+        profilePayload.alias = trimmedAlias;
+      }
+      if (avatarChanged) {
+        profilePayload.avatarURL = normalizedAvatar;
+      }
+
+      if (Object.keys(profilePayload).length > 0) {
+        await updateUserProfile(profilePayload);
       }
 
       if (!emailChanged) {
@@ -138,6 +174,7 @@
         inactiveReason = refreshed?.inactiveReason ?? inactiveReason;
         if (refreshed) {
           user = refreshed;
+          setAvatarState(refreshed.avatarURL);
         }
         info = passwordChanged
           ? translate('profile.success.password_updated')
@@ -156,7 +193,8 @@
         ...(user ?? {}),
         email: trimmedEmail,
         status,
-        inactiveReason
+        inactiveReason,
+        avatarURL: normalizedAvatar
       };
       info = translate('profile.success.email_verification_sent', { email: trimmedEmail });
       dispatch('email-change');
@@ -185,6 +223,64 @@
 
   function relay(event) {
     dispatch(event.type, event.detail);
+  }
+
+  function openAvatarModal() {
+    pendingAvatar = avatarURL || DEFAULT_AVATAR;
+    customAvatarError = '';
+    if (avatarURL?.startsWith('data:image')) {
+      customAvatarData = avatarURL;
+    }
+    avatarModalOpen = true;
+  }
+
+  function closeAvatarModal() {
+    avatarModalOpen = false;
+    customAvatarError = '';
+    pendingAvatar = avatarURL || DEFAULT_AVATAR;
+  }
+
+  function handleAvatarBackdropKeydown(event) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeAvatarModal();
+    }
+  }
+
+  function selectPendingAvatar(url) {
+    pendingAvatar = url;
+  }
+
+  function handleCustomAvatarChange(event) {
+    customAvatarError = '';
+    const file = event?.currentTarget?.files?.[0];
+    if (!file) return;
+    if (!ACCEPTED_AVATAR_TYPES.includes(file.type) || file.size > MAX_AVATAR_SIZE) {
+      customAvatarError = translate('profile.errors.custom_avatar_invalid');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === 'string') {
+        customAvatarData = result;
+        pendingAvatar = result;
+      }
+    };
+    reader.onerror = () => {
+      customAvatarError = translate('profile.errors.custom_avatar_invalid');
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function confirmAvatarSelection() {
+    avatarURL = pendingAvatar || DEFAULT_AVATAR;
+    avatarModalOpen = false;
+    if (avatarURL?.startsWith('data:image')) {
+      customAvatarData = avatarURL;
+    } else {
+      customAvatarData = '';
+    }
   }
 
   function openDeleteModal() {
@@ -292,6 +388,25 @@
         />
       </div>
 
+      <div class="field avatar-field">
+        <span class="label">
+          {$t('profile.avatar_label')}
+          <small>({$t('profile.optional')})</small>
+        </span>
+        <div class="current-avatar">
+          <img src={avatarURL} alt={$t('profile.avatar_current_alt')} />
+          <div class="current-avatar-actions">
+            <span class="hint">{$t('profile.avatar_hint')}</span>
+            <button type="button" class="btn outline" on:click={openAvatarModal}>
+              {$t('profile.avatar_change_button')}
+            </button>
+          </div>
+        </div>
+        {#if customAvatarError}
+          <p class="error" aria-live="assertive">{customAvatarError}</p>
+        {/if}
+      </div>
+
       <div class="field">
         <label class="label" for="email">{$t('profile.email_label')}</label>
         <input
@@ -387,6 +502,77 @@
 
   <Footbar />
 </div>
+
+{#if avatarModalOpen}
+  <button
+    type="button"
+    class="modal-backdrop"
+    aria-label={$t('common.actions.cancel')}
+    on:click={closeAvatarModal}
+    on:keydown={handleAvatarBackdropKeydown}
+  ></button>
+  <div
+    class="modal avatar-modal"
+    role="dialog"
+    tabindex="-1"
+    aria-modal="true"
+    aria-labelledby="avatarModalTitle"
+    aria-describedby="avatarModalHelp"
+  >
+    <div class="modal-content avatar-modal-content">
+      <h3 id="avatarModalTitle">{$t('profile.avatar_modal_title')}</h3>
+      <p id="avatarModalHelp" class="modal-hint">{$t('profile.avatar_modal_help')}</p>
+
+      <div class="avatar-options modal-grid">
+        {#each AVAILABLE_AVATARS as avatar}
+          <button
+            type="button"
+            class="avatar-option"
+            class:selected={pendingAvatar === avatar.value}
+            on:click={() => selectPendingAvatar(avatar.value)}
+            aria-pressed={pendingAvatar === avatar.value}
+          >
+            <img src={avatar.value} alt={$t(avatar.labelKey)} />
+            <span>{$t(avatar.labelKey)}</span>
+          </button>
+        {/each}
+      </div>
+
+      <div class="custom-upload">
+        <label class="custom-upload-label">
+          {$t('profile.avatar_custom_label')}
+          <input type="file" accept={ACCEPTED_AVATAR_STRING} on:change={handleCustomAvatarChange} />
+        </label>
+        <small class="hint">{$t('profile.avatar_custom_hint')}</small>
+        {#if customAvatarError}
+          <p class="error" aria-live="assertive">{customAvatarError}</p>
+        {/if}
+        {#if customAvatarData}
+          <div class="custom-preview">
+            <img src={customAvatarData} alt={$t('profile.avatar_custom_preview_alt')} />
+            <button
+              type="button"
+              class="btn outline"
+              class:selected={pendingAvatar === customAvatarData}
+              on:click={() => selectPendingAvatar(customAvatarData)}
+            >
+              {$t('profile.avatar_use_custom')}
+            </button>
+          </div>
+        {/if}
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn outline" on:click={closeAvatarModal}>
+          {$t('common.actions.cancel')}
+        </button>
+        <button type="button" class="btn primary" on:click={confirmAvatarSelection}>
+          {$t('profile.avatar_save_selection')}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 {#if deleteModalOpen}
   <button
@@ -679,6 +865,30 @@
     background: rgba(255, 255, 255, 0.08);
   }
 
+  .avatar-field {
+    gap: 0.75rem;
+  }
+
+  .current-avatar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .current-avatar img {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.45);
+    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
+  }
+
+  .current-avatar-actions {
+    display: grid;
+    gap: 0.35rem;
+  }
+
   .modal-backdrop {
     position: fixed;
     inset: 0;
@@ -694,12 +904,20 @@
     outline: 2px solid rgba(255, 232, 140, 0.7);
   }
 
-  .modal.delete-modal {
+  .modal {
     position: fixed;
     inset: 0;
     display: grid;
     place-items: center;
     padding: 2rem 1rem;
+    z-index: 90;
+  }
+
+  .modal.delete-modal {
+    z-index: 95;
+  }
+
+  .avatar-modal {
     z-index: 90;
   }
 
@@ -710,13 +928,25 @@
     padding: 1.75rem;
     border-radius: 1.2rem;
     background: rgba(20, 18, 28, 0.95);
-    border: 1px solid rgba(255, 120, 120, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.18);
     box-shadow: 0 18px 45px rgba(0, 0, 0, 0.55);
+  }
+
+  .avatar-modal .modal-content {
+    border-color: rgba(255, 232, 140, 0.3);
+  }
+
+  .delete-modal .modal-content {
+    border-color: rgba(255, 120, 120, 0.3);
   }
 
   .modal-content h3 {
     margin: 0;
     font-size: 1.3rem;
+    color: #f3f5f7;
+  }
+
+  .delete-modal .modal-content h3 {
     color: rgba(255, 190, 190, 0.95);
   }
 
@@ -724,6 +954,10 @@
   .modal-warning {
     margin: 0;
     font-size: 0.95rem;
+    color: rgba(245, 245, 245, 0.8);
+  }
+
+  .delete-modal .modal-hint {
     color: rgba(255, 230, 230, 0.85);
   }
 
@@ -737,5 +971,81 @@
     justify-content: flex-end;
     gap: 0.75rem;
     flex-wrap: wrap;
+  }
+
+  .avatar-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+    gap: 0.75rem;
+  }
+
+  .avatar-option {
+    display: grid;
+    gap: 0.35rem;
+    justify-items: center;
+    padding: 0.75rem 0.5rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.05);
+    color: #f5f8fb;
+    cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  }
+
+  .avatar-option.selected {
+    border-color: rgba(255, 232, 140, 0.9);
+    box-shadow: 0 4px 16px rgba(255, 232, 140, 0.22);
+    transform: translateY(-2px);
+  }
+
+  .avatar-option img {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
+  }
+
+  .avatar-option span {
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
+  .avatar-option:focus-visible {
+    outline: 2px solid rgba(255, 232, 140, 0.7);
+    outline-offset: 3px;
+  }
+
+  .custom-upload {
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  .custom-upload-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    color: rgba(245, 245, 245, 0.85);
+  }
+
+  .custom-upload-label input {
+    display: none;
+  }
+
+  .custom-preview {
+    display: grid;
+    gap: 0.5rem;
+    justify-items: center;
+  }
+
+  .custom-preview img {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.45);
+    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
   }
 </style>

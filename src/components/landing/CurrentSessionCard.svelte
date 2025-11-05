@@ -5,20 +5,10 @@
   export let session = null;
   export let loading = false;
   export let canView = false;
-
-  let hostElement;
-  const emitEvent = (name, detail) => {
-    hostElement?.dispatchEvent(
-      new CustomEvent(name, {
-        detail,
-        bubbles: true,
-        cancelable: true,
-        composed: true
-      })
-    );
-  };
-  const emitCreate = () => emitEvent('create');
-  const emitView = () => session && emitEvent('view', { id: session.id });
+  export let creating = false;
+  export let createError = '';
+  export let onCreateClick = () => {};
+  export let onViewClick = () => {};
 
   $: badgeClass = statusBadgeClass(session?.status);
   $: statusText = $t(`status.${normalizeStatus(session?.status)}`);
@@ -26,11 +16,12 @@
   $: activePrefix = $t('landing.current.active_prefix');
   $: noSessionLabel = $t('landing.current.no_active');
   $: createLabel = $t('landing.current.create');
+  $: creatingLabel = $t('landing.current.creating');
   $: viewLabel = $t('landing.current.view');
   $: untitledLabel = $t('common.untitled_session');
 </script>
 
-<section class="current-card" aria-live="polite" bind:this={hostElement}>
+<section class="current-card" aria-live="polite">
   <div class="status-box" data-has-session={!!session}>
     {#if loading}
       {checkingLabel}
@@ -45,13 +36,16 @@
   </div>
 
   <div class="actions">
-    <button class="primary" on:click={emitCreate} aria-label={createLabel}>
-      {createLabel}
+    <button class="primary" on:click={onCreateClick} aria-label={createLabel} disabled={creating}>
+      {creating ? creatingLabel : createLabel}
     </button>
-    <button class="ghost" on:click={emitView} disabled={!session || !canView} aria-label={viewLabel}>
+    <button class="ghost" on:click={onViewClick} disabled={!session || !canView} aria-label={viewLabel}>
       {viewLabel}
     </button>
   </div>
+  {#if createError}
+    <p class="error-msg" role="alert">{createError}</p>
+  {/if}
 </section>
 
 <style>
@@ -102,6 +96,13 @@
     cursor: pointer;
   }
   .ghost:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .error-msg {
+    margin: 0.5rem 0 0;
+    text-align: center;
+    color: #ffbdbd;
+    font-size: 0.9rem;
+  }
 
   @media (max-width: 760px) {
     .current-card {

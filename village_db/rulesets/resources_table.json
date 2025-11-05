@@ -1,0 +1,7 @@
+{
+  "basic":  { "villagers": 3, "ambiguous": 0, "outsiders": 1, "werewolves": 1 },
+  "newmoon":  { "villagers": 3, "ambiguous": 1, "outsiders": 1, "werewolves": 1 },
+  "characters":  { "villagers": 5, "ambiguous": 0, "outsiders": 1, "werewolves": 1 },
+  "village":  { "villagers": 5, "ambiguous": 1, "outsiders": 1, "werewolves": 1 },
+  "thepact":  { "villagers": 5, "ambiguous": 2, "outsiders": 1, "werewolves": 1 }
+}

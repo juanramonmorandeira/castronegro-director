@@ -68,8 +68,34 @@ export async function loginWithEmail(email, password) {
     console.warn('Unable to read user profile:', error);
   }
 
-  const status = profileData?.status ?? 'inactive';
+  let status = profileData?.status ?? 'inactive';
   const inactiveReason = profileData?.inactive_reason ?? null;
+  const pendingVerification =
+    status !== 'active' && (!inactiveReason || inactiveReason === 'pending_verification');
+
+  const now = serverTimestamp();
+
+  if (pendingVerification && user.emailVerified) {
+    try {
+      const updates = {
+        status: 'active',
+        inactive_reason: null,
+        last_login_at: now,
+        updated_at: now
+      };
+      if (!profileData?.activated_at) {
+        updates.activated_at = now;
+      }
+      await setDoc(
+        userRef,
+        updates,
+        { merge: true }
+      );
+      status = 'active';
+    } catch (error) {
+      console.warn('Unable to activate user profile during login:', error);
+    }
+  }
 
   if (status !== 'active') {
     await signOut(auth);
@@ -79,17 +105,37 @@ export async function loginWithEmail(email, password) {
     throw error;
   }
 
-  const now = serverTimestamp();
-  try {
-    await setDoc(
-      userRef,
-      {
-        last_login_at: now
-      },
-      { merge: true }
-    );
-  } catch (error) {
-    console.warn('Unable to update last_login_at:', error);
+  if (!profileData) {
+    try {
+      await setDoc(
+        userRef,
+        {
+          auth_uid: user.uid,
+          email: user.email ?? normalizedEmail,
+          status: 'active',
+          inactive_reason: null,
+          created_at: now,
+          activated_at: now,
+          last_login_at: now
+        },
+        { merge: true }
+      );
+    } catch (error) {
+      console.warn('Unable to create user profile during login:', error);
+    }
+  } else {
+    try {
+      await setDoc(
+        userRef,
+        {
+          last_login_at: now,
+          updated_at: now
+        },
+        { merge: true }
+      );
+    } catch (error) {
+      console.warn('Unable to update last_login_at:', error);
+    }
   }
 
   return user;

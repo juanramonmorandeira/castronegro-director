@@ -16,6 +16,7 @@
   import PlayerSelection from './components/players/Selection.svelte';
   import Profile from './components/Profile.svelte';
   import VerifyEmail from './components/auth/VerifyEmail.svelte';
+  import Config from './components/configure/Config.svelte';
   import { t } from './lib/i18n.js';
   import { fetchCurrentUserProfile, signOutUser } from './lib/auth.js';
   import { auth } from './lib/firebase.js';
@@ -220,15 +221,15 @@
     on:logout={handleLogout}
   />
 {:else if view === "configure"}
-  <!-- Placeholder del configurador de partida -->
-  <div class="page">
-    <div class="card">
-      <h2>{$t('app.placeholders.configure_title')}</h2>
-      <p>{$t('app.placeholders.session_id', { id: currentSessionId ?? '—' })}</p>
-      <!-- Aquí se montará ConfigureBasics.svelte en el siguiente paso -->
-    </div>
-  </div>
-
+  <Config
+    sessionId={currentSessionId}
+    user={currentUser}
+    on:back={() => {
+      view = 'landing';
+    }}
+    on:profile={openProfile}
+    on:logout={handleLogout}
+  />
 {:else if view === "session"}
   <!-- Placeholder de la vista de sesión activa -->
   <div class="page">
