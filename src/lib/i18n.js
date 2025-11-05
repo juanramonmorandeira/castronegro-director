@@ -24,7 +24,9 @@ const dictionaries = {
       actions: {
         view: 'View',
         edit: 'Edit',
-        delete: 'Delete'
+        delete: 'Delete',
+        cancel: 'Cancel',
+        save: 'Save'
       }
     },
     topbar: {
@@ -86,6 +88,10 @@ const dictionaries = {
       alias_placeholder: 'Optional nickname',
       avatar_label: 'Choose an avatar',
       avatar_help: 'Select one of the avatars below.',
+      avatar_change_button: 'Change avatar',
+      avatar_selected_alt: 'Selected avatar',
+      avatar_modal_title: 'Choose your avatar',
+      avatar_modal_help: 'Pick one of the preset avatars for your profile.',
       avatar_option: {
         default: 'Default',
         andrea: 'Andrea',
@@ -238,7 +244,9 @@ const dictionaries = {
       actions: {
         view: 'Ver',
         edit: 'Editar',
-        delete: 'Eliminar'
+        delete: 'Eliminar',
+        cancel: 'Cancelar',
+        save: 'Guardar'
       }
     },
     topbar: {
@@ -300,6 +308,10 @@ const dictionaries = {
       alias_placeholder: 'Apodo opcional',
       avatar_label: 'Elige un avatar',
       avatar_help: 'Selecciona uno de los avatares disponibles.',
+      avatar_change_button: 'Cambiar avatar',
+      avatar_selected_alt: 'Avatar seleccionado',
+      avatar_modal_title: 'Elige tu avatar',
+      avatar_modal_help: 'Elige uno de los avatares prediseñados para tu perfil.',
       avatar_option: {
         default: 'Predeterminado',
         andrea: 'Andrea',
@@ -452,7 +464,9 @@ const dictionaries = {
       actions: {
         view: 'Megtekintés',
         edit: 'Szerkesztés',
-        delete: 'Törlés'
+        delete: 'Törlés',
+        cancel: 'Mégse',
+        save: 'Mentés'
       }
     },
     topbar: {
@@ -514,6 +528,10 @@ const dictionaries = {
       alias_placeholder: 'Választható becenév',
       avatar_label: 'Válassz egy avatárt',
       avatar_help: 'Válaszd ki a lenti avatárok egyikét.',
+      avatar_change_button: 'Avatar módosítása',
+      avatar_selected_alt: 'Kiválasztott avatar',
+      avatar_modal_title: 'Válaszd ki az avatarod',
+      avatar_modal_help: 'Válassz a rendelkezésre álló avatarok közül a profilodhoz.',
       avatar_option: {
         default: 'Alapértelmezett',
         andrea: 'Andrea',

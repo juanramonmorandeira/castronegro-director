@@ -22,6 +22,8 @@
   ];
 
   let avatarURL = AVAILABLE_AVATARS[0].value;
+  let avatarModalOpen = false;
+  let pendingAvatar = avatarURL;
 
   let loading = false;
   let info = '';
@@ -56,8 +58,22 @@
     );
   }
 
-  function selectAvatar(url) {
-    avatarURL = url;
+  function openAvatarModal() {
+    pendingAvatar = avatarURL;
+    avatarModalOpen = true;
+  }
+
+  function closeAvatarModal() {
+    avatarModalOpen = false;
+  }
+
+  function selectPendingAvatar(url) {
+    pendingAvatar = url;
+  }
+
+  function confirmAvatarSelection() {
+    avatarURL = pendingAvatar;
+    avatarModalOpen = false;
   }
 
   async function onSubmit() {
@@ -162,22 +178,15 @@
             {$t('registration.avatar_label')}
             <small>({$t('registration.optional')})</small>
           </span>
-          <div class="avatar-options" role="list">
-            {#each AVAILABLE_AVATARS as avatar}
-              <button
-                type="button"
-                class="avatar-option"
-                class:selected={avatarURL === avatar.value}
-                on:click={() => selectAvatar(avatar.value)}
-                aria-pressed={avatarURL === avatar.value}
-                role="listitem"
-              >
-                <img src={avatar.value} alt={$t(avatar.labelKey)} />
-                <span>{$t(avatar.labelKey)}</span>
+          <div class="current-avatar">
+            <img src={avatarURL} alt={$t('registration.avatar_selected_alt')} />
+            <div class="current-avatar-actions">
+              <span class="hint">{$t('registration.avatar_help')}</span>
+              <button type="button" class="btn outline" on:click={openAvatarModal}>
+                {$t('registration.avatar_change_button')}
               </button>
-            {/each}
+            </div>
           </div>
-          <small class="hint">{$t('registration.avatar_help')}</small>
         </div>
 
         <div class="field">
@@ -245,6 +254,48 @@
   </main>
 
   <Footbar />
+
+  {#if avatarModalOpen}
+    <div class="modal-backdrop" on:click={closeAvatarModal} aria-hidden="true"></div>
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="avatarModalTitle"
+      aria-describedby="avatarModalHelp"
+      on:click|stopPropagation
+    >
+      <div class="modal-content">
+        <h3 id="avatarModalTitle">{$t('registration.avatar_modal_title')}</h3>
+        <p id="avatarModalHelp" class="modal-hint">{$t('registration.avatar_modal_help')}</p>
+
+        <div class="avatar-options modal-grid" role="list">
+          {#each AVAILABLE_AVATARS as avatar}
+            <button
+              type="button"
+              class="avatar-option"
+              class:selected={pendingAvatar === avatar.value}
+              on:click={() => selectPendingAvatar(avatar.value)}
+              aria-pressed={pendingAvatar === avatar.value}
+              role="listitem"
+            >
+              <img src={avatar.value} alt={$t(avatar.labelKey)} />
+              <span>{$t(avatar.labelKey)}</span>
+            </button>
+          {/each}
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn outline" on:click={closeAvatarModal}>
+            {$t('common.actions.cancel')}
+          </button>
+          <button type="button" class="btn primary" on:click={confirmAvatarSelection}>
+            {$t('common.actions.save')}
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -329,6 +380,26 @@
     gap: 0.5rem;
   }
 
+  .current-avatar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .current-avatar img {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.45);
+    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
+  }
+
+  .current-avatar-actions {
+    display: grid;
+    gap: 0.35rem;
+  }
+
   .avatar-field .label {
     display: flex;
     align-items: center;
@@ -377,6 +448,73 @@
   .avatar-option:focus-visible {
     outline: 2px solid rgba(255, 232, 140, 0.7);
     outline-offset: 3px;
+  }
+
+  .btn.outline {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    color: #f0f4f9;
+    padding: 0.55rem 1.1rem;
+    border-radius: 999px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease;
+  }
+
+  .btn.outline:hover,
+  .btn.outline:focus-visible {
+    border-color: rgba(255, 232, 140, 0.8);
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(2px);
+    z-index: 40;
+  }
+
+  .modal {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 2rem 1rem;
+    z-index: 50;
+  }
+
+  .modal-content {
+    width: min(480px, 92vw);
+    display: grid;
+    gap: 1.1rem;
+    padding: 1.6rem;
+    border-radius: 1.1rem;
+    background: rgba(12, 18, 28, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  }
+
+  .modal-content h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    color: #f3f5f7;
+  }
+
+  .modal-hint {
+    margin: 0;
+    color: rgba(230, 236, 247, 0.8);
+    font-size: 0.9rem;
+  }
+
+  .modal-grid {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
   }
 
   .form-actions {
