@@ -32,82 +32,11 @@
   $: changeLanguageCurrentLabel = $t('topbar.change_language_current', { language: languageName });
   $: languageLabel = $t('topbar.language_label');
   $: navigationLabel = $t('topbar.navigation_label');
-  // Expresiones auxiliares para detectar distintos formatos de enlaces de Drive.
-  const DRIVE_SHARED_FILE_REGEX = /drive\.google\.com\/file\/d\/([^/]+)/i;
-  const DRIVE_OPEN_REGEX = /drive\.google\.com\/open\?(?:[^=]*=)*id=([^&]+)/i;
-  const DRIVE_ID_REGEX = /^[a-zA-Z0-9_-]{16,}$/;
 
-  function buildDrivePreviewUrl(id) {
-    return `https://drive.google.com/uc?export=view&id=${id}`;
-  }
-
-  // Extrae el ID de Drive de enlaces en diferentes formatos.
-  function extractDriveId(value) {
-    if (typeof value !== 'string') return '';
-    const trimmed = value.trim();
-    if (!trimmed) return '';
-    const shared = trimmed.match(DRIVE_SHARED_FILE_REGEX)?.[1];
-    if (shared) return shared;
-    const open = trimmed.match(DRIVE_OPEN_REGEX)?.[1];
-    if (open) return open;
-    if (trimmed.startsWith('https://drive.google.com/uc?')) {
-      try {
-        const url = new URL(trimmed);
-        const id = url.searchParams.get('id');
-        if (id) return id;
-      } catch {
-        return '';
-      }
-    }
-    if (DRIVE_ID_REGEX.test(trimmed)) return trimmed;
-    return '';
-  }
-
-  const DATA_URI_REGEX = /^data:image\//i;
-  const BLOB_URI_REGEX = /^blob:/i;
-  const HTTP_REGEX = /^https?:\/\//i;
-  const PROTOCOL_RELATIVE_REGEX = /^\/\//;
-
-  // Normaliza cualquier variante de avatar hasta obtener una URL utilizable.
-  function normalizeAvatarCandidate(value) {
-    if (typeof value !== 'string') return '';
-    const trimmed = value.trim();
-    if (!trimmed) return '';
-    const driveId = extractDriveId(trimmed);
-    if (driveId) return buildDrivePreviewUrl(driveId);
-    if (DATA_URI_REGEX.test(trimmed) || BLOB_URI_REGEX.test(trimmed)) return trimmed;
-    if (PROTOCOL_RELATIVE_REGEX.test(trimmed)) return `https:${trimmed}`;
-    if (HTTP_REGEX.test(trimmed) || trimmed.startsWith('/')) return trimmed;
-    const sanitized = trimmed.replace(/^(?:~\/|\.\/)/, '');
-    return sanitized ? `/${sanitized}` : '';
-  }
-
-  // Recorre posibles campos del usuario y devuelve la primera imagen válida.
+  // El avatar de usuario solo depende de avatarURL (string completo o vacío).
   function resolveAvatarSource(currentUser) {
-    if (!currentUser) return DEFAULT_AVATAR;
-    const driveId =
-      currentUser.avatarDriveId ||
-      currentUser.avatar_drive_id ||
-      currentUser.avatar_driveId;
-    const candidates = [
-      driveId ? buildDrivePreviewUrl(driveId) : '',
-      currentUser.avatarURL,
-      currentUser.avatarUrl,
-      currentUser.avatar_url,
-      currentUser.avatar,
-      currentUser.avatarPath,
-      currentUser.avatar_path,
-      currentUser.avatarFile,
-      currentUser.avatar_file,
-      currentUser.photoURL,
-      currentUser.photoUrl,
-      currentUser.picture
-    ];
-    for (const candidate of candidates) {
-      const normalized = normalizeAvatarCandidate(candidate);
-      if (normalized) return normalized;
-    }
-    return DEFAULT_AVATAR;
+    const candidate = currentUser?.avatarURL?.trim();
+    return candidate ? candidate : DEFAULT_AVATAR;
   }
 
   $: avatarSrc = resolveAvatarSource(user);
