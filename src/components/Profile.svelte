@@ -8,7 +8,8 @@
     fetchCurrentUserProfile,
     updateUserProfile,
     changeUserEmail,
-    changeUserPassword
+    changeUserPassword,
+    deleteCurrentUser
   } from '../lib/auth.js';
   import { get } from 'svelte/store';
 
@@ -30,10 +31,17 @@
   let alias = '';
   let email = '';
   let status = 'inactive';
+  let inactiveReason = null;
 
   let currentPassword = '';
   let newPassword = '';
   let confirmPassword = '';
+
+  let deleteModalOpen = false;
+  let deleteConfirmation = '';
+  let deletePassword = '';
+  let deleteError = '';
+  let deleteLoading = false;
 
   let loading = false;
   let info = '';
@@ -62,6 +70,7 @@
     alias = profile.alias ?? '';
     email = profile.email ?? '';
     status = profile.status ?? 'inactive';
+    inactiveReason = profile.inactiveReason ?? null;
   }
 
   onMount(() => {
@@ -126,6 +135,7 @@
       if (!emailChanged) {
         const refreshed = await fetchCurrentUserProfile();
         status = refreshed?.status ?? status;
+        inactiveReason = refreshed?.inactiveReason ?? inactiveReason;
         if (refreshed) {
           user = refreshed;
         }
@@ -140,6 +150,14 @@
       }
 
       await changeUserEmail(currentPassword, trimmedEmail);
+      status = 'inactive';
+      inactiveReason = 'pending_verification';
+      user = {
+        ...(user ?? {}),
+        email: trimmedEmail,
+        status,
+        inactiveReason
+      };
       info = translate('profile.success.email_verification_sent', { email: trimmedEmail });
       dispatch('email-change');
     } catch (err) {
@@ -168,6 +186,63 @@
   function relay(event) {
     dispatch(event.type, event.detail);
   }
+
+  function openDeleteModal() {
+    deleteConfirmation = '';
+    deletePassword = '';
+    deleteError = '';
+    deleteModalOpen = true;
+  }
+
+  function closeDeleteModal() {
+    deleteModalOpen = false;
+    deleteLoading = false;
+  }
+
+  function handleDeleteBackdropKeydown(event) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeDeleteModal();
+    }
+  }
+
+  $: deletionCode = $t('profile.delete.confirm_code');
+  $: deletionMatches =
+    deleteConfirmation.trim().toLowerCase() === deletionCode?.trim().toLowerCase();
+
+  async function confirmDeleteAccount() {
+    deleteError = '';
+    if (!deletionMatches) {
+      deleteError = translate('profile.delete.errors.code_mismatch', {
+        code: deletionCode
+      });
+      return;
+    }
+    if (!deletePassword) {
+      deleteError = translate('profile.delete.errors.missing_password');
+      return;
+    }
+    deleteLoading = true;
+    try {
+      await deleteCurrentUser(deletePassword);
+      info = translate('profile.delete.success');
+      deleteModalOpen = false;
+      dispatch('deleted');
+    } catch (err) {
+      console.error('[profile.delete]', err);
+      const code = err?.code ?? '';
+      if (code === 'auth/wrong-password') {
+        deleteError = translate('profile.errors.invalid_current_password');
+      } else if (code === 'auth/requires-recent-login') {
+        deleteError = translate('profile.delete.errors.requires_recent_login');
+      } else {
+        deleteError = translate('profile.delete.errors.generic');
+      }
+    } finally {
+      deleteLoading = false;
+      deletePassword = '';
+    }
+  }
 </script>
 
 <BackgroundLayer />
@@ -184,6 +259,9 @@
         <span class:inactive={status !== 'active'}>
           {status === 'active' ? $t('profile.status.active') : $t('profile.status.inactive')}
         </span>
+        {#if status !== 'active' && inactiveReason === 'pending_verification'}
+          <small class="status-hint">{$t('profile.status.pending_verification')}</small>
+        {/if}
       </div>
 
       <div class="field">
@@ -289,6 +367,15 @@
         </button>
       </div>
 
+      <div class="danger-zone">
+        <h3>{$t('profile.delete.title')}</h3>
+        <p>{$t('profile.delete.description')}</p>
+        <p class="danger-note">{$t('profile.delete.playful_warning')}</p>
+        <button type="button" class="btn danger" on:click={openDeleteModal}>
+          {$t('profile.delete.button')}
+        </button>
+      </div>
+
       {#if info}
         <p class="info" aria-live="polite">{info}</p>
       {/if}
@@ -300,6 +387,73 @@
 
   <Footbar />
 </div>
+
+{#if deleteModalOpen}
+  <button
+    type="button"
+    class="modal-backdrop"
+    aria-label={$t('common.actions.cancel')}
+    on:click={closeDeleteModal}
+    on:keydown={handleDeleteBackdropKeydown}
+  ></button>
+  <div
+    class="modal delete-modal"
+    role="dialog"
+    tabindex="-1"
+    aria-modal="true"
+    aria-labelledby="deleteModalTitle"
+    aria-describedby="deleteModalDescription"
+  >
+    <div class="modal-content">
+      <h3 id="deleteModalTitle">{$t('profile.delete.modal_title')}</h3>
+      <p id="deleteModalDescription" class="modal-hint">{$t('profile.delete.modal_hint')}</p>
+      <p class="modal-warning">{$t('profile.delete.modal_warning')}</p>
+
+      <div class="field">
+        <label class="label" for="delete-confirm">
+          {$t('profile.delete.confirm_label', { code: deletionCode })}
+        </label>
+        <input
+          id="delete-confirm"
+          class="input"
+          type="text"
+          bind:value={deleteConfirmation}
+          placeholder={$t('profile.delete.confirm_placeholder', { code: deletionCode })}
+        />
+      </div>
+
+      <div class="field">
+        <label class="label" for="delete-password">{$t('profile.delete.password_label')}</label>
+        <input
+          id="delete-password"
+          class="input"
+          type="password"
+          bind:value={deletePassword}
+          autocomplete="current-password"
+          placeholder={$t('profile.delete.password_placeholder')}
+        />
+      </div>
+
+      {#if deleteError}
+        <p class="error" aria-live="assertive">{deleteError}</p>
+      {/if}
+
+      <div class="modal-actions">
+        <button type="button" class="btn outline" on:click={closeDeleteModal} disabled={deleteLoading}>
+          {$t('common.actions.cancel')}
+        </button>
+        <button
+          type="button"
+          class="btn danger"
+          on:click={confirmDeleteAccount}
+          disabled={!deletionMatches || deleteLoading}
+        >
+          {deleteLoading ? '…' : $t('profile.delete.confirm_button')}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .page {
@@ -342,7 +496,9 @@
 
   .status {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
   }
 
   .status span {
@@ -357,6 +513,13 @@
   .status span.inactive {
     background: rgba(180, 75, 75, 0.85);
     border-color: rgba(180, 75, 75, 0.95);
+  }
+
+  .status-hint {
+    margin: 0;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.75);
+    text-align: center;
   }
 
   .field {
@@ -462,5 +625,117 @@
     color: #ff9b9b;
     font-size: 0.95rem;
     margin: 0;
+  }
+
+  .danger-zone {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    border: 1px solid rgba(255, 120, 120, 0.4);
+    border-radius: 1rem;
+    background: rgba(70, 20, 20, 0.35);
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .danger-zone h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: rgba(255, 180, 180, 0.95);
+  }
+
+  .danger-zone p {
+    margin: 0;
+    color: rgba(255, 215, 215, 0.85);
+    font-size: 0.9rem;
+  }
+
+  .danger-note {
+    font-style: italic;
+    color: rgba(255, 200, 200, 0.85);
+  }
+
+  .btn.danger {
+    background: rgba(200, 60, 60, 0.85);
+    border: 1px solid rgba(210, 70, 70, 0.95);
+    color: #fff1f1;
+  }
+
+  .btn.danger[disabled] {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .btn.outline {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    color: #f0f4f9;
+    padding: 0.55rem 1.2rem;
+    transition: border-color 0.2s ease, background 0.2s ease;
+  }
+
+  .btn.outline:hover,
+  .btn.outline:focus-visible {
+    border-color: rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(2px);
+    z-index: 80;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+  }
+
+  .modal-backdrop:focus-visible {
+    outline: 2px solid rgba(255, 232, 140, 0.7);
+  }
+
+  .modal.delete-modal {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 2rem 1rem;
+    z-index: 90;
+  }
+
+  .modal-content {
+    width: min(480px, 95vw);
+    display: grid;
+    gap: 1rem;
+    padding: 1.75rem;
+    border-radius: 1.2rem;
+    background: rgba(20, 18, 28, 0.95);
+    border: 1px solid rgba(255, 120, 120, 0.3);
+    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.55);
+  }
+
+  .modal-content h3 {
+    margin: 0;
+    font-size: 1.3rem;
+    color: rgba(255, 190, 190, 0.95);
+  }
+
+  .modal-hint,
+  .modal-warning {
+    margin: 0;
+    font-size: 0.95rem;
+    color: rgba(255, 230, 230, 0.85);
+  }
+
+  .modal-warning {
+    font-weight: 600;
+    color: rgba(255, 180, 180, 0.95);
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    flex-wrap: wrap;
   }
 </style>

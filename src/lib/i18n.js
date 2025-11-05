@@ -70,6 +70,8 @@ const dictionaries = {
           invalid_email: 'Please enter a valid email address.',
           missing_password: 'Please enter your password.',
           invalid_credentials: 'Incorrect email or password.',
+          email_not_verified: 'Please verify your email address before signing in.',
+          account_inactive: 'Your account is inactive. Check your inbox to verify your email or contact support.',
           account_disabled: 'This account is disabled. Contact support.',
           too_many_attempts: 'Too many attempts. Try again later.',
           generic: 'Login failed. Please try again.'
@@ -95,9 +97,21 @@ const dictionaries = {
       avatar_option: {
         default: 'Default',
         andrea: 'Andrea',
+        attila: 'Attila',
+        geri: 'Geri',
+        giuliano: 'Giuliano',
+        laura: 'Laura',
+        martin: 'Martin',
+        matyas: 'Mátyás',
+        natalia: 'Natalia',
         ramon: 'Ramón',
-        sofia: 'Sofia'
+        sofia: 'Sofia',
+        timea: 'Tímea'
       },
+      avatar_custom_label: 'Upload your own avatar',
+      avatar_custom_hint: 'PNG or JPG up to 5 MB.',
+      avatar_custom_preview_alt: 'Custom avatar preview',
+      avatar_use_custom: 'Use uploaded avatar',
       optional: 'optional',
       email_label: 'Email address',
       email_placeholder: 'you@example.com',
@@ -115,7 +129,8 @@ const dictionaries = {
         registration_error: 'Could not complete registration. Please try again.',
         password_mismatch: 'Passwords do not match.',
         password_strength: 'Password does not meet the security requirements.',
-        email_in_use: 'There is already an account with this email address.'
+        email_in_use: 'There is already an account with this email address.',
+        custom_avatar_invalid: 'Please choose a PNG or JPG file up to 5 MB.'
       }
     },
     profile: {
@@ -123,7 +138,8 @@ const dictionaries = {
       intro: 'Update your account details and security settings.',
       status: {
         active: 'Account active',
-        inactive: 'Account inactive'
+        inactive: 'Account inactive',
+        pending_verification: 'Check your email and click the verification link to activate your account.'
       },
       name_label: 'Full name',
       name_placeholder: 'John Doe',
@@ -160,7 +176,47 @@ const dictionaries = {
         requires_recent_login: 'For security, please sign in again and retry.',
         email_in_use: 'There is already an account with this email address.',
         generic: 'We could not update your profile. Please try again.'
+      },
+      delete: {
+        title: 'Danger zone',
+        description: 'Delete your account and every stored session, avatar, and triumph tied to it.',
+        playful_warning:
+          'If you go through with this, every tale, laugh, and wolf-taming exploit you shared here will vanish into legend forever.',
+        button: 'Delete my account',
+        modal_title: 'Delete account',
+        modal_hint: 'This action permanently removes your user profile and related data.',
+        modal_warning: 'Are you absolutely sure? Once the wolves forget your jokes, they never come back.',
+        confirm_label: 'Type “{code}” to confirm.',
+        confirm_placeholder: 'Enter {code}',
+        confirm_code: 'DELETE',
+        password_label: 'Current password',
+        password_placeholder: 'Enter your current password',
+        confirm_button: 'Yes, delete everything',
+        success: 'Your account has been deleted. Thanks for the stories!',
+        errors: {
+          code_mismatch: 'Please type “{code}” exactly to confirm.',
+          missing_password: 'Enter your current password to delete the account.',
+          requires_recent_login: 'For security, please sign in again and retry.',
+          generic: 'We could not delete your account. Please try again.'
+        }
       }
+    },
+    verify: {
+      title: 'Email verification',
+      checking_title: 'Verifying email…',
+      checking_message: 'Please wait while we confirm your verification link.',
+      success_title: 'Email verified',
+      success_message: 'Thanks! {email} is now confirmed.',
+      success_hint: 'Your account is active. You can sign in now.',
+      unknown_email: 'your email',
+      invalid_title: 'Invalid verification link',
+      invalid_message: 'We could not read the verification link. Request a new email from your profile settings.',
+      error_title: 'We could not verify your email',
+      error_message: 'We could not complete the verification. {reason}',
+      error_invalid_code: 'The verification code is invalid or has already been used.',
+      error_expired_code: 'The verification link has expired.',
+      error_generic_reason: 'Request a new verification email and try again.',
+      go_login: 'Return to login'
     },
     player: {
       choose_title: 'Player Dashboard',
@@ -290,6 +346,8 @@ const dictionaries = {
           invalid_email: 'Introduce una dirección de correo válida.',
           missing_password: 'Introduce tu contraseña.',
           invalid_credentials: 'Correo o contraseña incorrectos.',
+          email_not_verified: 'Debes verificar tu correo electrónico antes de iniciar sesión.',
+          account_inactive: 'Tu cuenta está inactiva. Revisa tu correo para verificarla o contacta con soporte.',
           account_disabled: 'Esta cuenta está deshabilitada. Contacta con soporte.',
           too_many_attempts: 'Demasiados intentos. Intenta de nuevo más tarde.',
           generic: 'No se pudo iniciar sesión. Inténtalo de nuevo.'
@@ -315,9 +373,21 @@ const dictionaries = {
       avatar_option: {
         default: 'Predeterminado',
         andrea: 'Andrea',
+        attila: 'Attila',
+        geri: 'Geri',
+        giuliano: 'Giuliano',
+        laura: 'Laura',
+        martin: 'Martin',
+        matyas: 'Mátyás',
+        natalia: 'Natalia',
         ramon: 'Ramón',
-        sofia: 'Sofía'
+        sofia: 'Sofía',
+        timea: 'Tímea'
       },
+      avatar_custom_label: 'Sube tu propio avatar',
+      avatar_custom_hint: 'PNG o JPG de hasta 5 MB.',
+      avatar_custom_preview_alt: 'Vista previa del avatar personalizado',
+      avatar_use_custom: 'Usar avatar subido',
       optional: 'opcional',
       email_label: 'Correo electrónico',
       email_placeholder: 'tu@ejemplo.com',
@@ -335,7 +405,8 @@ const dictionaries = {
         registration_error: 'No se pudo completar el registro. Inténtalo de nuevo.',
         password_mismatch: 'Las contraseñas no coinciden.',
         password_strength: 'La contraseña no cumple los requisitos de seguridad.',
-        email_in_use: 'Ya existe una cuenta con este correo electrónico.'
+        email_in_use: 'Ya existe una cuenta con este correo electrónico.',
+        custom_avatar_invalid: 'Selecciona un archivo PNG o JPG de hasta 5 MB.'
       }
     },
     profile: {
@@ -343,7 +414,8 @@ const dictionaries = {
       intro: 'Actualiza los datos de tu cuenta y la seguridad.',
       status: {
         active: 'Cuenta activa',
-        inactive: 'Cuenta inactiva'
+        inactive: 'Cuenta inactiva',
+        pending_verification: 'Verifica tu correo electrónico para activar la cuenta.'
       },
       name_label: 'Nombre completo',
       name_placeholder: 'Marina Pérez',
@@ -380,7 +452,47 @@ const dictionaries = {
         requires_recent_login: 'Por seguridad, vuelve a iniciar sesión e inténtalo de nuevo.',
         email_in_use: 'Ya existe una cuenta con este correo electrónico.',
         generic: 'No se pudo actualizar el perfil. Inténtalo de nuevo.'
+      },
+      delete: {
+        title: 'Zona de peligro',
+        description: 'Elimina tu cuenta y todos los datos de partidas, avatares y triunfos asociados.',
+        playful_warning:
+          'Si confirmas, todas las partidas épicas, las risas compartidas y esas noches con lobos domesticados desaparecerán para siempre. Nunca digas que no te avisamos.',
+        button: 'Eliminar mi cuenta',
+        modal_title: 'Eliminar cuenta',
+        modal_hint: 'Esta acción elimina para siempre tu perfil y los datos relacionados.',
+        modal_warning: '¿Seguro que quieres hacerlo? Cuando los lobos olvidan tus chistes, no los recuerdan jamás.',
+        confirm_label: 'Escribe “{code}” para confirmar.',
+        confirm_placeholder: 'Introduce {code}',
+        confirm_code: 'ELIMINAR',
+        password_label: 'Contraseña actual',
+        password_placeholder: 'Introduce tu contraseña actual',
+        confirm_button: 'Sí, eliminarlo todo',
+        success: 'Tu cuenta ha sido eliminada. ¡Gracias por las historias!',
+        errors: {
+          code_mismatch: 'Escribe exactamente “{code}” para confirmar.',
+          missing_password: 'Introduce tu contraseña actual para eliminar la cuenta.',
+          requires_recent_login: 'Por seguridad, vuelve a iniciar sesión e inténtalo de nuevo.',
+          generic: 'No pudimos eliminar tu cuenta. Inténtalo de nuevo.'
+        }
       }
+    },
+    verify: {
+      title: 'Verificación de correo',
+      checking_title: 'Verificando el correo…',
+      checking_message: 'Estamos confirmando tu enlace de verificación. Un momento…',
+      success_title: 'Correo verificado',
+      success_message: '¡Gracias! {email} ha quedado verificado correctamente.',
+      success_hint: 'Tu cuenta ya está activa. Puedes iniciar sesión cuando quieras.',
+      unknown_email: 'tu correo',
+      invalid_title: 'Enlace de verificación inválido',
+      invalid_message: 'No pudimos leer el enlace de verificación. Solicita uno nuevo desde tu perfil.',
+      error_title: 'No pudimos verificar tu correo',
+      error_message: 'No se pudo completar la verificación. {reason}',
+      error_invalid_code: 'El código de verificación no es válido o ya se ha usado.',
+      error_expired_code: 'El enlace de verificación ha caducado.',
+      error_generic_reason: 'Solicita un nuevo correo de verificación y vuelve a intentarlo.',
+      go_login: 'Volver al login'
     },
     player: {
       choose_title: 'Panel del Jugador',
@@ -510,6 +622,8 @@ const dictionaries = {
           invalid_email: 'Adj meg érvényes e-mail címet.',
           missing_password: 'Add meg a jelszavad.',
           invalid_credentials: 'Hibás e-mail vagy jelszó.',
+          email_not_verified: 'Kérjük, erősítsd meg az e-mail címed, mielőtt belépsz.',
+          account_inactive: 'A fiókod inaktív. Ellenőrizd az e-mailjeidet a megerősítő linkért vagy keresd a támogatást.',
           account_disabled: 'Ez a fiók le van tiltva. Vedd fel a kapcsolatot a támogatással.',
           too_many_attempts: 'Túl sok próbálkozás. Próbáld később.',
           generic: 'A bejelentkezés nem sikerült. Próbáld újra.'
@@ -535,9 +649,21 @@ const dictionaries = {
       avatar_option: {
         default: 'Alapértelmezett',
         andrea: 'Andrea',
+        attila: 'Attila',
+        geri: 'Geri',
+        giuliano: 'Giuliano',
+        laura: 'Laura',
+        martin: 'Martin',
+        matyas: 'Mátyás',
+        natalia: 'Natalia',
         ramon: 'Ramón',
-        sofia: 'Sofia'
+        sofia: 'Sofia',
+        timea: 'Tímea'
       },
+      avatar_custom_label: 'Tölts fel saját avatárt',
+      avatar_custom_hint: 'Legfeljebb 5 MB-os PNG vagy JPG fájl.',
+      avatar_custom_preview_alt: 'Egyéni avatar előnézete',
+      avatar_use_custom: 'Saját avatar használata',
       optional: 'opcionális',
       email_label: 'E-mail cím',
       email_placeholder: 'te@pelda.hu',
@@ -555,7 +681,8 @@ const dictionaries = {
         registration_error: 'A regisztráció nem sikerült. Próbáld újra.',
         password_mismatch: 'A jelszavak nem egyeznek.',
         password_strength: 'A jelszó nem felel meg a biztonsági követelményeknek.',
-        email_in_use: 'Ezzel az e-mail címmel már létezik fiók.'
+        email_in_use: 'Ezzel az e-mail címmel már létezik fiók.',
+        custom_avatar_invalid: 'PNG vagy JPG fájlt válassz legfeljebb 5 MB méretig.'
       }
     },
     profile: {
@@ -563,7 +690,8 @@ const dictionaries = {
       intro: 'Frissítsd a fiókadataidat és a biztonsági beállításokat.',
       status: {
         active: 'Fiók aktív',
-        inactive: 'Fiók inaktív'
+        inactive: 'Fiók inaktív',
+        pending_verification: 'Erősítsd meg az e-mail címedet a fiók aktiválásához.'
       },
       name_label: 'Teljes név',
       name_placeholder: 'Kovács Anna',
@@ -600,7 +728,47 @@ const dictionaries = {
         requires_recent_login: 'Biztonsági okokból jelentkezz be újra, majd próbáld meg ismét.',
         email_in_use: 'Ezzel az e-mail címmel már létezik fiók.',
         generic: 'Nem sikerült frissíteni a profilt. Próbáld újra.'
+      },
+      delete: {
+        title: 'Veszélyzóna',
+        description: 'Töröld a fiókodat és az összes hozzá tartozó játékadatot, avatárt és dicsőséget.',
+        playful_warning:
+          'Ha folytatod, minden közös nevetés, farkas-szelídítő kaland és emlék ködbe vész. A horda nem ad vissza semmit.',
+        button: 'Fiók törlése',
+        modal_title: 'Fiók törlése',
+        modal_hint: 'Ez a művelet véglegesen eltávolítja a profilodat és a kapcsolódó adatokat.',
+        modal_warning: 'Biztos vagy benne? Ha a farkasok elfelejtik a poénjaidat, sosem emlékeznek vissza.',
+        confirm_label: 'Írd be a következőt a megerősítéshez: „{code}”.',
+        confirm_placeholder: 'Írd be: {code}',
+        confirm_code: 'TÖRLÉS',
+        password_label: 'Jelenlegi jelszó',
+        password_placeholder: 'Írd be a jelenlegi jelszavad',
+        confirm_button: 'Igen, mindent törlök',
+        success: 'A fiókodat töröltük. Köszönjük a történeteket!',
+        errors: {
+          code_mismatch: 'Pontosan írd be: „{code}”.',
+          missing_password: 'Add meg a jelenlegi jelszavad a törléshez.',
+          requires_recent_login: 'Biztonsági okból jelentkezz be újra, majd próbáld meg ismét.',
+          generic: 'Nem tudtuk törölni a fiókot. Próbáld meg újra.'
+        }
       }
+    },
+    verify: {
+      title: 'E-mail megerősítés',
+      checking_title: 'Ellenőrizzük az e-mailt…',
+      checking_message: 'Ellenőrizzük a megerősítő linket. Kérjük, várj egy pillanatot.',
+      success_title: 'E-mail megerősítve',
+      success_message: 'Köszönjük! {email} mostantól megerősített.',
+      success_hint: 'A fiókod aktív. Most már bejelentkezhetsz.',
+      unknown_email: 'az e-mail címed',
+      invalid_title: 'Érvénytelen megerősítő link',
+      invalid_message: 'Nem sikerült beolvasni a megerősítő linket. Kérj újat a profilodból.',
+      error_title: 'Nem tudtuk megerősíteni az e-mail címedet',
+      error_message: 'Nem sikerült befejezni a megerősítést. {reason}',
+      error_invalid_code: 'A megerősítő kód érvénytelen vagy már felhasználták.',
+      error_expired_code: 'A megerősítő link lejárt.',
+      error_generic_reason: 'Kérj új megerősítő e-mailt, és próbáld újra.',
+      go_login: 'Vissza a bejelentkezéshez'
     },
     player: {
       choose_title: 'Játékos vezérlőpult',

@@ -15,16 +15,29 @@
   import Registration from './components/Registration.svelte';
   import PlayerSelection from './components/players/Selection.svelte';
   import Profile from './components/Profile.svelte';
+  import VerifyEmail from './components/auth/VerifyEmail.svelte';
   import { t } from './lib/i18n.js';
   import { fetchCurrentUserProfile, signOutUser } from './lib/auth.js';
   import { auth } from './lib/firebase.js';
   import { onAuthStateChanged } from 'firebase/auth';
 
-  let view = "login"; // login, landing, configure, session
+  let view = "login"; // login, registration, verify-email, landing, player-selection, configure, session, profile
   let currentSessionId = null;
   let currentRole = null;
   let currentUser = null;
   let previousView = null;
+
+  if (typeof window !== 'undefined') {
+    const initialPath = window.location.pathname;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('mode') === 'verifyEmail' || initialPath === '/verify') {
+      view = 'verify-email';
+    } else if (initialPath === '/registration') {
+      view = 'registration';
+    } else if (initialPath === '/login') {
+      view = 'login';
+    }
+  }
 
   function goConfigure(sessionId) {
     currentSessionId = sessionId;
@@ -59,10 +72,24 @@
   }
 
   function goLogin() {
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.pathname = '/login';
+      url.search = '';
+      url.hash = '';
+      window.history.replaceState({}, '', url);
+    }
     view = 'login';
   }
 
   function goRegistration() {
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.pathname = '/registration';
+      url.search = '';
+      url.hash = '';
+      window.history.replaceState({}, '', url);
+    }
     view = 'registration';
   }
 
@@ -100,7 +127,7 @@
       currentRole = null;
       currentSessionId = null;
       previousView = null;
-      view = 'login';
+      goLogin();
     }
   }
 
@@ -118,6 +145,20 @@
 
   async function handleProfileEmailChange() {
     await handleLogout();
+  }
+
+  async function handleAccountDeleted() {
+    try {
+      await signOutUser();
+    } catch (error) {
+      console.warn('Error signing out after account deletion', error);
+    } finally {
+      currentUser = null;
+      currentRole = null;
+      currentSessionId = null;
+      previousView = null;
+      goLogin();
+    }
   }
 
   onMount(() => {
@@ -149,8 +190,8 @@
      Siempre está visible detrás de todas las vistas.
      ───────────────────────────────────────────────────────────── -->
 <BackgroundLayer
-  backgroundUrl="/images/background-village.png"
-  fogUrl="/images/fog-texture.png"
+  backgroundUrl="/backgrounds/background-village.png"
+  fogUrl="/backgrounds/fog-texture.png"
 />
 
 <!-- ─────────────────────────────────────────────────────────────
@@ -168,6 +209,8 @@
     on:registered={handleRegistered}
     on:navigate-login={goLogin}
   />
+{:else if view === 'verify-email'}
+  <VerifyEmail on:navigate-login={goLogin} />
 {:else if view === 'player-selection'}
   <PlayerSelection
     user={currentUser}
@@ -211,6 +254,7 @@
     on:email-change={handleProfileEmailChange}
     on:logout={handleLogout}
     on:profile={openProfile}
+    on:deleted={handleAccountDeleted}
   />
 {/if}
 

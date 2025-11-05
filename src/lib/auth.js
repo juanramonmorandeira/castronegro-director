@@ -12,10 +12,24 @@ import {
   updatePassword,
   reauthenticateWithCredential,
   EmailAuthProvider,
+  applyActionCode,
+  checkActionCode,
+  deleteUser,
   signOut
 } from 'firebase/auth';
 
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import {
+  doc,
+  setDoc,
+  getDoc,
+  deleteDoc,
+  serverTimestamp,
+  collection,
+  query,
+  where,
+  limit,
+  getDocs
+} from 'firebase/firestore';
 
 const FALLBACK_APP_URL = 'https://storyteller.morandeira.net';
 
@@ -35,18 +49,50 @@ export async function loginWithEmail(email, password) {
     throw new Error('missing_credentials');
   }
   const cred = await signInWithEmailAndPassword(auth, normalizedEmail, password);
+  const { user } = cred;
 
-  // marca el último login (ignora si la colección no existe)
+  if (!user.emailVerified) {
+    await signOut(auth);
+    const error = new Error('email_not_verified');
+    error.code = 'auth/email-not-verified';
+    throw error;
+  }
+
+  const userRef = doc(db, 'users', user.uid);
+  let profileData = null;
+
+  try {
+    const snap = await getDoc(userRef);
+    profileData = snap.exists() ? snap.data() : null;
+  } catch (error) {
+    console.warn('Unable to read user profile:', error);
+  }
+
+  const status = profileData?.status ?? 'inactive';
+  const inactiveReason = profileData?.inactive_reason ?? null;
+
+  if (status !== 'active') {
+    await signOut(auth);
+    const error = new Error('account_inactive');
+    error.code = 'auth/user-inactive';
+    error.details = { inactiveReason: inactiveReason ?? null };
+    throw error;
+  }
+
+  const now = serverTimestamp();
   try {
     await setDoc(
-      doc(db, 'users', cred.user.uid),
-      { last_login_at: serverTimestamp() },
+      userRef,
+      {
+        last_login_at: now
+      },
       { merge: true }
     );
   } catch (error) {
     console.warn('Unable to update last_login_at:', error);
   }
-  return cred.user;
+
+  return user;
 }
 
 export async function registerWithEmail(email, password, profile = {}) {
@@ -78,8 +124,10 @@ export async function registerWithEmail(email, password, profile = {}) {
     alias: trimmedAlias,
     avatarURL: avatarUrl,
     status: 'inactive',
+    inactive_reason: 'pending_verification',
+    activated_at: null,
     created_at: serverTimestamp(),
-    last_login_at: serverTimestamp()
+    last_login_at: null
   };
   await setDoc(doc(db, 'users', uid), payload, { merge: true });
   return cred.user;
@@ -115,8 +163,8 @@ export async function sendVerificationEmail() {
   // auth viene de ./firebase.js (ya exportado en tu proyecto)
   if (!auth.currentUser) throw new Error('no_current_user');
   const actionCodeSettings = {
-    url: resolveAppUrl('login'),
-    handleCodeInApp: false
+    url: resolveAppUrl('verify'),
+    handleCodeInApp: true
   };
   await sendEmailVerification(auth.currentUser, actionCodeSettings);
   return true;
@@ -146,7 +194,11 @@ export async function fetchCurrentUserProfile() {
     name: data.name ?? user.displayName ?? '',
     alias: data.alias ?? '',
     avatarURL: data.avatarURL ?? '',
-    status: data.status ?? 'inactive'
+    status: data.status ?? 'inactive',
+    inactiveReason: data.inactive_reason ?? null,
+    activatedAt: data.activated_at ?? null,
+    createdAt: data.created_at ?? null,
+    lastLoginAt: data.last_login_at ?? null
   };
 }
 
@@ -193,6 +245,8 @@ export async function changeUserEmail(currentPassword, newEmail) {
     {
       email: normalized,
       status: 'inactive',
+      inactive_reason: 'pending_verification',
+      activated_at: null,
       updated_at: serverTimestamp()
     },
     { merge: true }
@@ -201,6 +255,77 @@ export async function changeUserEmail(currentPassword, newEmail) {
   return true;
 }
 
+export async function confirmEmailVerification(oobCode) {
+  if (!oobCode) {
+    const error = new Error('missing_oob_code');
+    error.code = 'auth/missing-oob-code';
+    throw error;
+  }
+
+  let info;
+  try {
+    info = await checkActionCode(auth, oobCode);
+  } catch (error) {
+    throw error;
+  }
+
+  await applyActionCode(auth, oobCode);
+
+  const emailFromCode = info?.data?.email ?? info?.data?.newEmail ?? null;
+  const normalizedEmail = emailFromCode?.trim().toLowerCase() ?? null;
+  let activated = false;
+
+  if (normalizedEmail) {
+    try {
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('email', '==', normalizedEmail), limit(1));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const userDoc = snap.docs[0];
+        const currentData = userDoc.data() ?? {};
+        const updates = {
+          status: 'active',
+          inactive_reason: null,
+          updated_at: serverTimestamp()
+        };
+        if (currentData.status !== 'active' || !currentData.activated_at) {
+          updates.activated_at = serverTimestamp();
+        }
+        await setDoc(
+          userDoc.ref,
+          updates,
+          { merge: true }
+        );
+        activated = true;
+      } else {
+        console.warn('No user profile found for verified email:', normalizedEmail);
+      }
+    } catch (error) {
+      console.warn('Unable to update user profile after email verification:', error);
+    }
+  }
+
+  return {
+    email: normalizedEmail,
+    activated
+  };
+}
+
 export async function signOutUser() {
   await signOut(auth);
+}
+
+export async function deleteCurrentUser(currentPassword) {
+  const user = await reauthenticateIfNeeded(currentPassword);
+  if (!user) throw new Error('no_current_user');
+  const uid = user.uid;
+
+  try {
+    await deleteDoc(doc(db, 'users', uid));
+  } catch (error) {
+    console.warn('Unable to delete user profile document:', error);
+  }
+
+  await deleteUser(user);
+  return true;
 }

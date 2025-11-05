@@ -6,6 +6,10 @@
   import { registerWithEmail, sendVerificationEmail } from '../lib/auth.js';
   import { createEventDispatcher } from 'svelte';
 
+  const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
+  const ACCEPTED_AVATAR_TYPES = ['image/png', 'image/jpeg'];
+  const ACCEPTED_AVATAR_STRING = ACCEPTED_AVATAR_TYPES.join(',');
+
   const dispatch = createEventDispatcher();
 
   let name = '';
@@ -17,13 +21,23 @@
   const AVAILABLE_AVATARS = [
     { value: '/avatars/Avatar_Default.png', labelKey: 'registration.avatar_option.default' },
     { value: '/avatars/Avatar_Andrea.png', labelKey: 'registration.avatar_option.andrea' },
+    { value: '/avatars/Avatar_Attila.png', labelKey: 'registration.avatar_option.attila' },
+    { value: '/avatars/Avatar_Geri.png', labelKey: 'registration.avatar_option.geri' },
+    { value: '/avatars/Avatar_Giuliano.png', labelKey: 'registration.avatar_option.giuliano' },
+    { value: '/avatars/Avatar_Laura.png', labelKey: 'registration.avatar_option.laura' },
+    { value: '/avatars/Avatar_Martin.png', labelKey: 'registration.avatar_option.martin' },
+    { value: '/avatars/Avatar_Matyas.png', labelKey: 'registration.avatar_option.matyas' },
+    { value: '/avatars/Avatar_Natalia.png', labelKey: 'registration.avatar_option.natalia' },
     { value: '/avatars/Avatar_Ramon.png', labelKey: 'registration.avatar_option.ramon' },
-    { value: '/avatars/Avatar_Sofia.png', labelKey: 'registration.avatar_option.sofia' }
+    { value: '/avatars/Avatar_Sofia.png', labelKey: 'registration.avatar_option.sofia' },
+    { value: '/avatars/Avatar_Timea.png', labelKey: 'registration.avatar_option.timea' }
   ];
 
   let avatarURL = AVAILABLE_AVATARS[0].value;
   let avatarModalOpen = false;
   let pendingAvatar = avatarURL;
+  let customAvatarData = '';
+  let customAvatarError = '';
 
   let loading = false;
   let info = '';
@@ -60,20 +74,60 @@
 
   function openAvatarModal() {
     pendingAvatar = avatarURL;
+    customAvatarError = '';
+    if (avatarURL?.startsWith('data:image')) {
+      customAvatarData = avatarURL;
+    }
     avatarModalOpen = true;
   }
 
   function closeAvatarModal() {
     avatarModalOpen = false;
+    pendingAvatar = avatarURL;
+    customAvatarError = '';
+  }
+
+  function handleBackdropKeydown(event) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeAvatarModal();
+    }
   }
 
   function selectPendingAvatar(url) {
     pendingAvatar = url;
   }
 
+  function handleCustomAvatarChange(event) {
+    customAvatarError = '';
+    const file = event?.currentTarget?.files?.[0];
+    if (!file) return;
+    if (!ACCEPTED_AVATAR_TYPES.includes(file.type) || file.size > MAX_AVATAR_SIZE) {
+      customAvatarError = $t('registration.errors.custom_avatar_invalid');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === 'string') {
+        customAvatarData = result;
+        pendingAvatar = result;
+      }
+    };
+    reader.onerror = () => {
+      customAvatarError = $t('registration.errors.custom_avatar_invalid');
+    };
+    reader.readAsDataURL(file);
+  }
+
   function confirmAvatarSelection() {
     avatarURL = pendingAvatar;
     avatarModalOpen = false;
+    if (avatarURL?.startsWith('data:image')) {
+      customAvatarData = avatarURL;
+    } else if (!avatarURL) {
+      customAvatarData = '';
+    }
   }
 
   async function onSubmit() {
@@ -256,20 +310,26 @@
   <Footbar />
 
   {#if avatarModalOpen}
-    <div class="modal-backdrop" on:click={closeAvatarModal} aria-hidden="true"></div>
+    <button
+      type="button"
+      class="modal-backdrop"
+      aria-label={$t('common.actions.cancel')}
+      on:click={closeAvatarModal}
+      on:keydown={handleBackdropKeydown}
+    ></button>
     <div
       class="modal"
       role="dialog"
+      tabindex="-1"
       aria-modal="true"
       aria-labelledby="avatarModalTitle"
       aria-describedby="avatarModalHelp"
-      on:click|stopPropagation
     >
       <div class="modal-content">
         <h3 id="avatarModalTitle">{$t('registration.avatar_modal_title')}</h3>
         <p id="avatarModalHelp" class="modal-hint">{$t('registration.avatar_modal_help')}</p>
 
-        <div class="avatar-options modal-grid" role="list">
+        <div class="avatar-options modal-grid">
           {#each AVAILABLE_AVATARS as avatar}
             <button
               type="button"
@@ -277,12 +337,39 @@
               class:selected={pendingAvatar === avatar.value}
               on:click={() => selectPendingAvatar(avatar.value)}
               aria-pressed={pendingAvatar === avatar.value}
-              role="listitem"
             >
               <img src={avatar.value} alt={$t(avatar.labelKey)} />
               <span>{$t(avatar.labelKey)}</span>
             </button>
           {/each}
+        </div>
+
+        <div class="custom-upload">
+          <label class="custom-upload-label">
+            {$t('registration.avatar_custom_label')}
+            <input
+              type="file"
+              accept={ACCEPTED_AVATAR_STRING}
+              on:change={handleCustomAvatarChange}
+            />
+          </label>
+          <small class="hint">{$t('registration.avatar_custom_hint')}</small>
+          {#if customAvatarError}
+            <p class="error" aria-live="assertive">{customAvatarError}</p>
+          {/if}
+          {#if customAvatarData}
+            <div class="custom-preview">
+              <img src={customAvatarData} alt={$t('registration.avatar_custom_preview_alt')} />
+              <button
+                type="button"
+                class="btn outline"
+                class:selected={pendingAvatar === customAvatarData}
+                on:click={() => selectPendingAvatar(customAvatarData)}
+              >
+                {$t('registration.avatar_use_custom')}
+              </button>
+            </div>
+          {/if}
         </div>
 
         <div class="modal-actions">
@@ -473,6 +560,14 @@
     background: rgba(0, 0, 0, 0.6);
     backdrop-filter: blur(2px);
     z-index: 40;
+    cursor: pointer;
+    border: 0;
+    padding: 0;
+    display: block;
+  }
+
+  .modal-backdrop:focus-visible {
+    outline: 2px solid rgba(255, 232, 140, 0.7);
   }
 
   .modal {
@@ -509,6 +604,45 @@
 
   .modal-grid {
     grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+
+  .custom-upload {
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  .custom-upload-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0.8rem;
+    border-radius: 0.8rem;
+    border: 1px dashed rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .custom-upload-label input {
+    display: none;
+  }
+
+  .custom-preview {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .custom-preview img {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.45);
+    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
   }
 
   .modal-actions {

@@ -65,6 +65,10 @@
       const code = error?.code ?? '';
       if (code === 'auth/invalid-credential' || code === 'auth/wrong-password') {
         feedback = $t('login.form.errors.invalid_credentials');
+      } else if (code === 'auth/email-not-verified') {
+        feedback = $t('login.form.errors.email_not_verified');
+      } else if (code === 'auth/user-inactive') {
+        feedback = $t('login.form.errors.account_inactive');
       } else if (code === 'auth/user-disabled') {
         feedback = $t('login.form.errors.account_disabled');
       } else if (code === 'auth/too-many-requests') {

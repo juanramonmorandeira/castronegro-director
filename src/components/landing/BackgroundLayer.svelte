@@ -1,7 +1,7 @@
 <script>
   // Constants
-  const DEFAULT_BACKGROUND_URL = '/images/background-village.png';
-  const DEFAULT_FOG_URL = '/images/fog-texture.png';
+  const DEFAULT_BACKGROUND_URL = '/backgrounds/background-village.png';
+  const DEFAULT_FOG_URL = '/backgrounds/fog-texture.png';
 
   // Props
   export let backgroundUrl = DEFAULT_BACKGROUND_URL;
