@@ -84,9 +84,14 @@ const dictionaries = {
       name_placeholder: 'John Doe',
       alias_label: 'Nickname',
       alias_placeholder: 'Optional nickname',
-      avatar_label: 'Avatar image',
-      avatar_help: 'JPG or PNG up to 5 MB.',
-      avatar_wip: '- work in progress',
+      avatar_label: 'Choose an avatar',
+      avatar_help: 'Select one of the avatars below.',
+      avatar_option: {
+        default: 'Default',
+        andrea: 'Andrea',
+        ramon: 'Ramón',
+        sofia: 'Sofia'
+      },
       optional: 'optional',
       email_label: 'Email address',
       email_placeholder: 'you@example.com',
@@ -96,7 +101,6 @@ const dictionaries = {
       confirm_password_label: 'Confirm password',
       confirm_password_placeholder: 'Repeat the password',
       submit: 'Create account',
-      uploading: 'Uploading…',
       back_to_login: 'Back to login',
       success: {
         verification_sent: 'We have sent a verification email to {email}. Please check your inbox.'
@@ -105,9 +109,7 @@ const dictionaries = {
         registration_error: 'Could not complete registration. Please try again.',
         password_mismatch: 'Passwords do not match.',
         password_strength: 'Password does not meet the security requirements.',
-        email_in_use: 'There is already an account with this email address.',
-        upload_failed: 'We could not upload the avatar image. Please try again.',
-        upload_not_configured: 'Avatar upload is not configured. Please contact the administrator.'
+        email_in_use: 'There is already an account with this email address.'
       }
     },
     profile: {
@@ -296,9 +298,14 @@ const dictionaries = {
       name_placeholder: 'Marina Pérez',
       alias_label: 'Apodo',
       alias_placeholder: 'Apodo opcional',
-      avatar_label: 'Imagen de avatar',
-      avatar_help: 'JPG o PNG de hasta 5 MB.',
-      avatar_wip: '- en desarrollo',
+      avatar_label: 'Elige un avatar',
+      avatar_help: 'Selecciona uno de los avatares disponibles.',
+      avatar_option: {
+        default: 'Predeterminado',
+        andrea: 'Andrea',
+        ramon: 'Ramón',
+        sofia: 'Sofía'
+      },
       optional: 'opcional',
       email_label: 'Correo electrónico',
       email_placeholder: 'tu@ejemplo.com',
@@ -308,7 +315,6 @@ const dictionaries = {
       confirm_password_label: 'Confirmar contraseña',
       confirm_password_placeholder: 'Repite la contraseña',
       submit: 'Crear cuenta',
-      uploading: 'Subiendo…',
       back_to_login: 'Volver a iniciar sesión',
       success: {
         verification_sent: 'Hemos enviado un correo de verificación a {email}. Revisa tu bandeja.'
@@ -317,9 +323,7 @@ const dictionaries = {
         registration_error: 'No se pudo completar el registro. Inténtalo de nuevo.',
         password_mismatch: 'Las contraseñas no coinciden.',
         password_strength: 'La contraseña no cumple los requisitos de seguridad.',
-        email_in_use: 'Ya existe una cuenta con este correo electrónico.',
-        upload_failed: 'No se pudo subir la imagen. Inténtalo de nuevo.',
-        upload_not_configured: 'La subida de avatar no está configurada. Contacta con el administrador.'
+        email_in_use: 'Ya existe una cuenta con este correo electrónico.'
       }
     },
     profile: {
@@ -508,9 +512,14 @@ const dictionaries = {
       name_placeholder: 'Kovács Anna',
       alias_label: 'Becenév',
       alias_placeholder: 'Választható becenév',
-      avatar_label: 'Avatar kép',
-      avatar_help: 'JPG vagy PNG, legfeljebb 5 MB.',
-      avatar_wip: '- fejlesztés alatt',
+      avatar_label: 'Válassz egy avatárt',
+      avatar_help: 'Válaszd ki a lenti avatárok egyikét.',
+      avatar_option: {
+        default: 'Alapértelmezett',
+        andrea: 'Andrea',
+        ramon: 'Ramón',
+        sofia: 'Sofia'
+      },
       optional: 'opcionális',
       email_label: 'E-mail cím',
       email_placeholder: 'te@pelda.hu',
@@ -520,7 +529,6 @@ const dictionaries = {
       confirm_password_label: 'Jelszó megerősítése',
       confirm_password_placeholder: 'Ismételd meg a jelszót',
       submit: 'Fiók létrehozása',
-      uploading: 'Feltöltés…',
       back_to_login: 'Vissza a bejelentkezéshez',
       success: {
         verification_sent: 'Ellenőrző e-mailt küldtünk a következő címre: {email}. Kérjük, nézd meg a postaládádat.'
@@ -529,9 +537,7 @@ const dictionaries = {
         registration_error: 'A regisztráció nem sikerült. Próbáld újra.',
         password_mismatch: 'A jelszavak nem egyeznek.',
         password_strength: 'A jelszó nem felel meg a biztonsági követelményeknek.',
-        email_in_use: 'Ezzel az e-mail címmel már létezik fiók.',
-        upload_failed: 'Nem sikerült feltölteni az avatárt. Próbáld újra.',
-        upload_not_configured: 'Az avatar feltöltése nincs beállítva. Vedd fel a kapcsolatot az adminnal.'
+        email_in_use: 'Ezzel az e-mail címmel már létezik fiók.'
       }
     },
     profile: {

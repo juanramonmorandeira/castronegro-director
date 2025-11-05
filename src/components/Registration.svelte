@@ -4,12 +4,7 @@
   import BackgroundLayer from './landing/BackgroundLayer.svelte';
   import { t } from '../lib/i18n.js';
   import { registerWithEmail, sendVerificationEmail } from '../lib/auth.js';
-  import { uploadAvatarToDrive } from '../lib/storage.js';
-  import { createEventDispatcher, onDestroy } from 'svelte';
-
-  const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
-  const ACCEPTED_AVATAR_TYPES = ['image/png', 'image/jpeg'];
-  const ACCEPTED_AVATAR_STRING = ACCEPTED_AVATAR_TYPES.join(',');
+  import { createEventDispatcher } from 'svelte';
 
   const dispatch = createEventDispatcher();
 
@@ -19,12 +14,14 @@
   let password = '';
   let confirmPassword = '';
 
-  let avatarURL = '';
-  let avatarDriveId = '';
-  let avatarPreview = '';
-  let avatarUploading = false;
-  let avatarUploadError = '';
-  let avatarInput;
+  const AVAILABLE_AVATARS = [
+    { value: '/avatars/Avatar_Default.png', labelKey: 'registration.avatar_option.default' },
+    { value: '/avatars/Avatar_Andrea.png', labelKey: 'registration.avatar_option.andrea' },
+    { value: '/avatars/Avatar_Ramon.png', labelKey: 'registration.avatar_option.ramon' },
+    { value: '/avatars/Avatar_Sofia.png', labelKey: 'registration.avatar_option.sofia' }
+  ];
+
+  let avatarURL = AVAILABLE_AVATARS[0].value;
 
   let loading = false;
   let info = '';
@@ -49,25 +46,6 @@
     error = '';
   }
 
-  function clearAvatarState() {
-    if (avatarPreview && avatarPreview.startsWith('blob:')) {
-      URL.revokeObjectURL(avatarPreview);
-    }
-    avatarPreview = '';
-    avatarURL = '';
-    avatarDriveId = '';
-    avatarUploadError = '';
-    if (avatarInput) {
-      avatarInput.value = '';
-    }
-  }
-
-  onDestroy(() => {
-    if (avatarPreview && avatarPreview.startsWith('blob:')) {
-      URL.revokeObjectURL(avatarPreview);
-    }
-  });
-
   function meetsPasswordRequirements(value = '') {
     return (
       value.length >= passwordRules.minLength &&
@@ -78,63 +56,8 @@
     );
   }
 
-  async function handleAvatarChange(event) {
-    resetFeedback();
-    avatarUploadError = '';
-
-    const file = event?.currentTarget?.files?.[0];
-    if (!file) {
-      clearAvatarState();
-      return;
-    }
-
-    if (!ACCEPTED_AVATAR_TYPES.includes(file.type) || file.size > MAX_AVATAR_SIZE) {
-      clearAvatarState();
-      avatarUploadError = $t('registration.errors.upload_failed');
-      return;
-    }
-
-    if (avatarPreview && avatarPreview.startsWith('blob:')) {
-      URL.revokeObjectURL(avatarPreview);
-    }
-    const temporaryPreview = URL.createObjectURL(file);
-    avatarPreview = temporaryPreview;
-
-    avatarUploading = true;
-    try {
-      const upload = await uploadAvatarToDrive(file, {
-        fileName: `avatar-${Date.now()}-${file.name}`
-      });
-
-      if (temporaryPreview && temporaryPreview.startsWith('blob:')) {
-        URL.revokeObjectURL(temporaryPreview);
-      }
-
-      const resolvedUrl = upload.direct || upload.url;
-      avatarPreview = resolvedUrl;
-      avatarURL = resolvedUrl;
-      avatarDriveId = upload.driveId;
-    } catch (err) {
-      console.error('Avatar upload error', err);
-      if (temporaryPreview && temporaryPreview.startsWith('blob:')) {
-        URL.revokeObjectURL(temporaryPreview);
-      }
-      avatarPreview = '';
-      avatarURL = '';
-      avatarDriveId = '';
-
-      if (err?.message === 'missing_upload_endpoint') {
-        avatarUploadError = $t('registration.errors.upload_not_configured');
-      } else {
-        avatarUploadError = $t('registration.errors.upload_failed');
-      }
-    } finally {
-      avatarUploading = false;
-    }
-  }
-
-  function handleAvatarRemove() {
-    clearAvatarState();
+  function selectAvatar(url) {
+    avatarURL = url;
   }
 
   async function onSubmit() {
@@ -157,8 +80,7 @@
       const user = await registerWithEmail(normalizedEmail, password, {
         name: name.trim(),
         alias: alias.trim(),
-        avatarURL,
-        avatarDriveId
+        avatarURL
       });
 
       await sendVerificationEmail();
@@ -236,46 +158,26 @@
         </div>
 
         <div class="field avatar-field">
-          <label class="label" for="avatar">
+          <span class="label">
             {$t('registration.avatar_label')}
             <small>({$t('registration.optional')})</small>
-            <span class="wip">{$t('registration.avatar_wip')}</span>
-          </label>
-          <input
-            id="avatar"
-            type="file"
-            class="input file-input"
-            accept={ACCEPTED_AVATAR_STRING}
-            on:change={handleAvatarChange}
-            bind:this={avatarInput}
-            aria-describedby="avatar-help"
-          />
-          <small id="avatar-help" class="hint">{$t('registration.avatar_help')}</small>
-
-          {#if avatarUploadError}
-            <p class="error" aria-live="assertive">{avatarUploadError}</p>
-          {/if}
-
-          {#if avatarUploading}
-            <p class="info" aria-live="polite">{$t('registration.uploading')}</p>
-          {/if}
-
-          {#if avatarPreview}
-            <div class="avatar-preview">
-              <img src={avatarPreview} alt={$t('registration.avatar_label')} />
-              <button type="button" class="link-button" on:click={handleAvatarRemove}>
-                {$t('common.actions.delete')}
+          </span>
+          <div class="avatar-options" role="list">
+            {#each AVAILABLE_AVATARS as avatar}
+              <button
+                type="button"
+                class="avatar-option"
+                class:selected={avatarURL === avatar.value}
+                on:click={() => selectAvatar(avatar.value)}
+                aria-pressed={avatarURL === avatar.value}
+                role="listitem"
+              >
+                <img src={avatar.value} alt={$t(avatar.labelKey)} />
+                <span>{$t(avatar.labelKey)}</span>
               </button>
-            </div>
-          {/if}
-
-          {#if avatarURL}
-            <p class="avatar-link">
-              <a href={avatarURL} target="_blank" rel="noopener">
-                {avatarURL}
-              </a>
-            </p>
-          {/if}
+            {/each}
+          </div>
+          <small class="hint">{$t('registration.avatar_help')}</small>
         </div>
 
         <div class="field">
@@ -324,7 +226,7 @@
         </div>
 
         <div class="form-actions">
-          <button class="btn primary" type="submit" disabled={loading || avatarUploading}>
+          <button class="btn primary" type="submit" disabled={loading}>
             {loading ? '…' : $t('registration.submit')}
           </button>
           <button type="button" class="link-button" on:click={goLogin}>
@@ -405,13 +307,6 @@
     color: rgba(240, 244, 249, 0.75);
   }
 
-  .wip {
-    margin-left: 0.5rem;
-    font-size: 0.8rem;
-    font-style: italic;
-    color: rgba(255, 210, 140, 0.85);
-  }
-
   .input {
     border-radius: 8px;
     border: 1px solid rgba(255, 255, 255, 0.25);
@@ -425,11 +320,6 @@
     outline: 2px solid rgba(255, 232, 140, 0.6);
     outline-offset: 2px;
   }
-
-  .file-input {
-    padding: 0.4rem 0.6rem;
-  }
-
   .hint {
     font-size: 0.85rem;
     color: rgba(230, 236, 247, 0.8);
@@ -439,24 +329,54 @@
     gap: 0.5rem;
   }
 
-  .avatar-preview {
+  .avatar-field .label {
     display: flex;
     align-items: center;
+    gap: 0.35rem;
+  }
+
+  .avatar-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
     gap: 0.75rem;
   }
 
-  .avatar-preview img {
+  .avatar-option {
+    display: grid;
+    gap: 0.35rem;
+    justify-items: center;
+    padding: 0.75rem 0.5rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.05);
+    color: #f5f8fb;
+    cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  }
+
+  .avatar-option img {
     width: 72px;
     height: 72px;
     border-radius: 50%;
     object-fit: cover;
-    border: 2px solid rgba(255, 255, 255, 0.45);
+    border: 2px solid rgba(255, 255, 255, 0.4);
     box-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
   }
 
-  .avatar-link {
+  .avatar-option span {
     font-size: 0.85rem;
-    overflow-wrap: anywhere;
+    font-weight: 600;
+  }
+
+  .avatar-option.selected {
+    border-color: rgba(255, 232, 140, 0.9);
+    box-shadow: 0 4px 16px rgba(255, 232, 140, 0.22);
+    transform: translateY(-2px);
+  }
+
+  .avatar-option:focus-visible {
+    outline: 2px solid rgba(255, 232, 140, 0.7);
+    outline-offset: 3px;
   }
 
   .form-actions {

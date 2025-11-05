@@ -77,7 +77,6 @@ export async function registerWithEmail(email, password, profile = {}) {
     name: trimmedName,
     alias: trimmedAlias,
     avatarURL: avatarUrl,
-    avatarDriveId: profile.avatarDriveId ?? '',
     status: 'inactive',
     created_at: serverTimestamp(),
     last_login_at: serverTimestamp()
@@ -146,9 +145,7 @@ export async function fetchCurrentUserProfile() {
     email: user.email ?? data.email ?? '',
     name: data.name ?? user.displayName ?? '',
     alias: data.alias ?? '',
-    avatarURL: data.avatarURL ?? user.photoURL ?? '',
-    avatarDriveId: data.avatarDriveId ?? '',
-    photoURL: user.photoURL ?? '',
+    avatarURL: data.avatarURL ?? '',
     status: data.status ?? 'inactive'
   };
 }
