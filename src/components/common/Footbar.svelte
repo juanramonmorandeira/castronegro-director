@@ -1,6 +1,6 @@
 <script>
   import { onDestroy, onMount } from 'svelte';
-  import { t } from '../lib/i18n.js';
+  import { t } from '../../lib/i18n.js';
 
   // Constants
   const DEFAULT_LOCALE = 'en-GB';

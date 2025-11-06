@@ -1,11 +1,11 @@
 <script>
   import { onMount, createEventDispatcher } from 'svelte';
-  import Topbar from '../Topbar.svelte';
-  import Footbar from '../Footbar.svelte';
-  import BackgroundLayer from '../landing/BackgroundLayer.svelte';
-  import { t } from '../../lib/i18n.js';
-  import { getSessionById, updateSession } from '../../lib/db.js';
-  import { getGamesMetadata, getAssistTasks } from '../../lib/gameMetadata.js';
+  import Topbar from '../components/common/Topbar.svelte';
+  import Footbar from '../components/common/Footbar.svelte';
+  import BackgroundLayer from '../components/common/BackgroundLayer.svelte';
+  import { t } from '../lib/i18n.js';
+  import { getSessionById, updateSession } from '../lib/db.js';
+  import { getGamesMetadata, getAssistTasks } from '../lib/gameMetadata.js';
 
   export let sessionId;
   export let user = null;

@@ -1,8 +1,8 @@
 <script>
   import { createEventDispatcher, onMount } from 'svelte';
-  import Topbar from './Topbar.svelte';
-  import Footbar from './Footbar.svelte';
-  import BackgroundLayer from './landing/BackgroundLayer.svelte';
+  import Topbar from '../components/common/Topbar.svelte';
+  import Footbar from '../components/common/Footbar.svelte';
+  import BackgroundLayer from '../components/common/BackgroundLayer.svelte';
   import { t } from '../lib/i18n.js';
   import {
     fetchCurrentUserProfile,

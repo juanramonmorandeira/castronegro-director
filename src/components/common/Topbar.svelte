@@ -1,6 +1,6 @@
 <script>
   import { createEventDispatcher, onMount, onDestroy } from 'svelte';
-  import { locale, availableLocales, t } from '../lib/i18n.js';
+  import { locale, availableLocales, t } from '../../lib/i18n.js';
 
   const DEFAULT_FLAG_SRC = '/flags/en_UK.png';
   const FLAG_BY_LOCALE = {

@@ -1,7 +1,7 @@
 <script>
-  import Topbar from './Topbar.svelte';
-  import Footbar from './Footbar.svelte';
-  import BackgroundLayer from './landing/BackgroundLayer.svelte';
+  import Topbar from '../components/common/Topbar.svelte';
+  import Footbar from '../components/common/Footbar.svelte';
+  import BackgroundLayer from '../components/common/BackgroundLayer.svelte';
   import { t } from '../lib/i18n.js';
   import { createEventDispatcher } from 'svelte';
   import { loginWithEmail, sendPasswordResetIfExists } from '../lib/auth.js';

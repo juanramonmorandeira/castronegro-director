@@ -9,14 +9,14 @@
   // ─────────────────────────────────────────────────────────────
 
   import { onMount } from 'svelte';
-  import BackgroundLayer from './components/landing/BackgroundLayer.svelte';
-  import Landing from "./components/Landing.svelte";
-  import Login from './components/Login.svelte';
-  import Registration from './components/Registration.svelte';
-  import PlayerSelection from './components/players/Selection.svelte';
-  import Profile from './components/Profile.svelte';
-  import VerifyEmail from './components/auth/VerifyEmail.svelte';
-  import Config from './components/configure/Config.svelte';
+  import BackgroundLayer from './components/common/BackgroundLayer.svelte';
+  import Storyteller from "./pages/Storyteller.svelte";
+  import Login from './pages/Login.svelte';
+  import Registration from './pages/Registration.svelte';
+  import PlayerSelection from './pages/PlayerSelection.svelte';
+  import Profile from './pages/Profile.svelte';
+  import VerifyEmail from './pages/VerifyEmail.svelte';
+  import Configure from './pages/Configure.svelte';
   import { t } from './lib/i18n.js';
   import { fetchCurrentUserProfile, signOutUser } from './lib/auth.js';
   import { auth } from './lib/firebase.js';
@@ -221,7 +221,7 @@
     on:logout={handleLogout}
   />
 {:else if view === "configure"}
-  <Config
+  <Configure
     sessionId={currentSessionId}
     user={currentUser}
     on:back={() => {
@@ -240,7 +240,7 @@
     </div>
   </div>
 {:else if view === "landing"}
-  <Landing
+  <Storyteller
     user={currentUser}
     onCreate={goConfigure}
     onViewCurrent={goSession}

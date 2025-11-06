@@ -2,10 +2,10 @@
   import { onMount, onDestroy } from 'svelte';
   import { createEventDispatcher } from 'svelte';
   import { get } from 'svelte/store';
-  import Topbar from '../Topbar.svelte';
-  import Footbar from '../Footbar.svelte';
-  import { t } from '../../lib/i18n.js';
-  import { confirmEmailVerification } from '../../lib/auth.js';
+  import Topbar from '../components/common/Topbar.svelte';
+  import Footbar from '../components/common/Footbar.svelte';
+  import { t } from '../lib/i18n.js';
+  import { confirmEmailVerification } from '../lib/auth.js';
 
   const dispatch = createEventDispatcher();
   const translate = (key, vars) => get(t)(key, vars);

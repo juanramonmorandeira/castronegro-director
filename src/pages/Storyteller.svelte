@@ -1,10 +1,10 @@
 <script>
   import { onMount, createEventDispatcher } from 'svelte';
-  import Topbar from './Topbar.svelte';
-  import Header from './landing/Header.svelte';
-  import CurrentSessionCard from './landing/CurrentSessionCard.svelte';
-  import HistoryCard from './landing/HistoryCard.svelte';
-  import Footbar from './Footbar.svelte';
+  import Topbar from '../components/common/Topbar.svelte';
+  import Header from '../components/storytellers/Header.svelte';
+  import CurrentSessionCard from '../components/storytellers/CurrentSessionCard.svelte';
+  import HistoryCard from '../components/storytellers/HistoryCard.svelte';
+  import Footbar from '../components/common/Footbar.svelte';
   import { getCurrentSession, listSessionHistory, createSessionDraft } from '../lib/db.js';
   import { normalizeStatus } from '../lib/utils.js';
   import { locale as localeStore, t } from '../lib/i18n.js';
