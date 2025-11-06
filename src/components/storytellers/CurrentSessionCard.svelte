@@ -13,7 +13,7 @@
   $: badgeClass = statusBadgeClass(session?.status);
   $: statusText = $t(`status.${normalizeStatus(session?.status)}`);
   $: checkingLabel = $t('landing.current.checking');
-  $: activePrefix = $t('landing.current.active_prefix');
+  $: headingLabel = $t('landing.current.heading');
   $: noSessionLabel = $t('landing.current.no_active');
   $: createLabel = $t('landing.current.create');
   $: creatingLabel = $t('landing.current.creating');
@@ -21,15 +21,20 @@
   $: untitledLabel = $t('common.untitled_session');
 </script>
 
-<section class="current-card" aria-live="polite">
+<section class="current-card card-glass" aria-live="polite">
+  <header class="card-header">
+    <h2 class="card-title">{headingLabel}</h2>
+  </header>
   <div class="status-box" data-has-session={!!session}>
     {#if loading}
       {checkingLabel}
     {:else if session}
-      <strong>{activePrefix}</strong> {session.title ?? untitledLabel}
-      <span class="badge {badgeClass}" style="margin-left: 0.5rem;">
-        {statusText}
-      </span>
+      <div class="session-header">
+        <span class="session-title">{session.title ?? untitledLabel}</span>
+        <span class="badge {badgeClass}">
+          {statusText}
+        </span>
+      </div>
     {:else}
       {noSessionLabel}
     {/if}
@@ -52,15 +57,31 @@
   .current-card {
     display: grid;
     gap: clamp(1rem, 3vw, 2rem);
-    width: min(100%, 720px);
+    width: min(100%, 960px);
+    max-width: 960px;
     margin: 0 auto;
-    padding: 0 clamp(1rem, 4vw, 2rem);
+    padding: clamp(1.25rem, 3vw, 2rem);
     box-sizing: border-box;
+  }
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .card-title {
+    font-family: var(--title-font, 'Cinzel', serif);
+    font-size: 1.8rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-shadow: 0 0 10px rgba(255, 230, 140, 0.8), 0 0 20px rgba(255, 200, 80, 0.5);
+    color: #f7d774;
+    margin: 0;
   }
 
   .status-box {
-    text-align: center;
-    padding: 0.6rem 0.8rem;
+    text-align: left;
+    padding: 0.85rem 1rem;
     border: 1px solid rgba(255,255,255,0.35);
     border-radius: 10px;
     background: rgba(20, 24, 28, 0.25);
@@ -70,6 +91,19 @@
   .status-box[data-has-session="true"] {
     border-color: rgba(255, 213, 120, 0.5);
     background: rgba(48, 40, 20, 0.25);
+  }
+
+  .session-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .session-title {
+    font-weight: 600;
+    font-size: 1.05rem;
   }
 
   .actions {
@@ -109,5 +143,6 @@
       margin-inline: 0.5rem;
       padding: 0 0.5rem;
     }
+    .card-title { font-size: 1.4rem; }
   }
 </style>

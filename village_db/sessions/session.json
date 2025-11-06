@@ -3,6 +3,7 @@
   "created_at": { "_firestore": "server_timestamp" },
   "updated_at": { "_firestore": "server_timestamp" },
   "status": "draft",
+  "created_by": "storyteller-uid",
   "settings": {
     "name": computedTitle,
     "rulesets": defaults.rulesets ?? 'basic',

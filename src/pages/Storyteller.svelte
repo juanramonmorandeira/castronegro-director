@@ -1,11 +1,10 @@
 <script>
   import { onMount, createEventDispatcher } from 'svelte';
   import Topbar from '../components/common/Topbar.svelte';
-  import Header from '../components/storytellers/Header.svelte';
   import CurrentSessionCard from '../components/storytellers/CurrentSessionCard.svelte';
   import HistoryCard from '../components/storytellers/HistoryCard.svelte';
   import Footbar from '../components/common/Footbar.svelte';
-  import { getCurrentSession, listSessionHistory, createSessionDraft } from '../lib/db.js';
+  import { getCurrentSession, listSessionHistory, createSessionDraft, deleteSessionIfCreator } from '../lib/db.js';
   import { normalizeStatus } from '../lib/utils.js';
   import { locale as localeStore, t } from '../lib/i18n.js';
 
@@ -21,15 +20,20 @@
     hu: '/flags/hu_HU.png'
   };
   const DEFAULT_FLAG_SRC = FLAG_BY_LOCALE.en;
+  const CONFIG_STATUSES = new Set(['draft', 'shared', 'waiting']);
+  const LIVE_STATUSES = new Set(['in_progress', 'paused']);
 
   export let onCreate = () => {};
+  export let onViewCurrent = () => {};
   export let user = null;
 
   let current = null;
+  let historyDocs = [];
   let historyItems = [];
   let loadingCurrent = true;
   let loadingHistory = true;
-  let errorHistory = null;
+  let historyError = null;
+  let deletingHistoryId = null;
   let creating = false;
   let createError = '';
 
@@ -38,6 +42,34 @@
   $: localeKey = getLocaleKey($localeStore);
   $: topbarFlagSrc = FLAG_BY_LOCALE[localeKey] ?? DEFAULT_FLAG_SRC;
   $: topbarLangCode = localeKey;
+  $: deleteForbiddenMessage = $t('landing.history.delete_forbidden');
+  $: deleteFailedMessage = $t('landing.history.delete_failed');
+  $: currentStatus = current ? normalizeStatus(current.status) : null;
+  $: currentViewTarget = resolveViewTarget(currentStatus);
+  $: canOpenCurrent = !!(current && currentViewTarget);
+
+  function getViewerContext() {
+    if (!user) return null;
+    const uid = user.uid ?? user.auth_uid ?? null;
+    const email = user.email ?? null;
+    if (!uid && !email) return null;
+    return { uid, email };
+  }
+
+  function resolveViewTarget(status) {
+    if (!status) return null;
+    if (CONFIG_STATUSES.has(status)) return 'configure';
+    if (LIVE_STATUSES.has(status)) return 'session';
+    return null;
+  }
+
+  function buildDeleteConfirmMessage(title) {
+    const safeTitle = title && title !== '—' ? title : $t('common.untitled_session');
+    const raw = $t('landing.history.delete_confirm', { title: safeTitle });
+    return raw && typeof raw === 'string'
+      ? raw
+      : `¿Seguro que quieres borrar "${safeTitle}"? Esta acción no se puede deshacer.`;
+  }
 
   const normalizeHistoryDoc = (doc) => {
     const winners = Array.isArray(doc.winners)
@@ -53,15 +85,37 @@
           ? doc.players.length
           : null;
 
+    const creator = doc.created_by;
+    const ownerUid =
+      typeof creator === 'string'
+        ? creator
+        : creator?.uid ?? null;
+    const ownerEmail =
+      typeof creator === 'object'
+        ? (creator?.email ?? '').toLowerCase()
+        : '';
+    const viewerUid = user?.uid ?? user?.auth_uid ?? null;
+    const viewerEmail = (user?.email ?? '').toLowerCase();
+    const canDelete =
+      !!viewerUid && !!ownerUid
+        ? viewerUid === ownerUid
+        : !!ownerEmail && !!viewerEmail
+          ? ownerEmail === viewerEmail
+          : false;
+
     return {
       id: doc.id,
       title: doc.title ?? doc.settings?.name ?? '—',
       numPlayers: actualPlayers ?? Number(doc.settings?.players_expected ?? 0),
       winners,
       date: doc.updated_at ?? doc.created_at ?? doc.date ?? null,
-      status: normalizeStatus(doc.status)
+      status: normalizeStatus(doc.status),
+      createdBy: creator,
+      canDelete
     };
   };
+
+  $: historyItems = (historyDocs ?? []).map((doc) => normalizeHistoryDoc(doc));
 
   async function loadCurrentSession() {
     loadingCurrent = true;
@@ -77,13 +131,13 @@
 
   async function loadHistory() {
     loadingHistory = true;
-    errorHistory = null;
+    historyError = null;
     try {
       const docs = await listSessionHistory(HISTORY_LIMIT);
-      historyItems = (docs ?? []).map(normalizeHistoryDoc);
+      historyDocs = docs ?? [];
     } catch (error) {
       console.error('Error loading history', error);
-      errorHistory = error?.message ?? $t('landing.history.load_failed');
+      historyError = error?.message ?? $t('landing.history.load_failed');
     } finally {
       loadingHistory = false;
     }
@@ -97,9 +151,11 @@
     createError = '';
     creating = true;
     try {
+      const viewer = getViewerContext();
       console.log('[landing] create new game request');
       const session = await createSessionDraft({
-        language: localeKey
+        language: localeKey,
+        creatorUid: viewer?.uid ?? null
       });
       console.log('[landing] created session', session);
       await refreshAll();
@@ -111,13 +167,13 @@
     creating = false;
   }
 
-  function handleViewCurrent(eventOrId) {
-    const id =
-      typeof eventOrId === 'string'
-        ? eventOrId
-        : eventOrId?.detail?.id;
-    if (!id) return;
-    console.debug('View current session', id);
+  function launchCurrentSession() {
+    if (!current || !current.id) return;
+    if (currentViewTarget === 'configure') {
+      onCreate(current.id);
+    } else if (currentViewTarget === 'session') {
+      onViewCurrent(current.id);
+    }
   }
 
   function handleHistoryView(event) {
@@ -125,16 +181,34 @@
     if (id) console.debug('View history session', id);
   }
 
-  function handleHistoryEdit(event) {
+  async function handleHistoryDelete(event) {
     const { id } = event.detail ?? {};
     if (!id) return;
-    console.debug('Edit history session', id);
-    onCreate(id);
-  }
-
-  function handleHistoryDelete(event) {
-    const { id } = event.detail ?? {};
-    if (id) console.debug('Delete history session (not implemented)', id);
+    const target = historyItems.find((item) => item.id === id);
+    if (!target?.canDelete) {
+      historyError = deleteForbiddenMessage;
+      return;
+    }
+    if (typeof window !== 'undefined') {
+      const confirmDelete = window.confirm(buildDeleteConfirmMessage(target.title));
+      if (!confirmDelete) return;
+    }
+    const viewer = getViewerContext();
+    if (!viewer) {
+      historyError = deleteForbiddenMessage;
+      return;
+    }
+    deletingHistoryId = id;
+    historyError = null;
+    try {
+      await deleteSessionIfCreator(id, viewer);
+      await refreshAll();
+    } catch (error) {
+      console.error('Delete session failed', error);
+      historyError = error?.message ?? deleteFailedMessage;
+    } finally {
+      deletingHistoryId = null;
+    }
   }
 
   function relay(event) {
@@ -148,79 +222,67 @@
   });
 </script>
 
-<!-- ─────────────────────────────────────────────────────────────
-     TOPBAR (dashboard tag + idioma + login) 
-     ───────────────────────────────────────────────────────────── -->
-<Topbar
-  flagSrc={topbarFlagSrc}
-  langCode={topbarLangCode}
-  user={user}
-  on:profile={relay}
-  on:logout={relay}
-  on:lang={() => { /* aquí harás el toggle de idioma cuando llegue i18n */ }}
-/>
-
-<!-- ─────────────────────────────────────────────────────────────
-     ENCABEZADO (Título + Efecto visual)
-     ───────────────────────────────────────────────────────────── -->
-<Header />
-
-<main class="main-padding">
-  <!-- ─────────────────────────────────────────────────────────────
-       ESTADO PARTIDA EN CURSO (Estado actual + Botones de acción)
-       ───────────────────────────────────────────────────────────── -->
-  <CurrentSessionCard
-    session={current}
-    loading={loadingCurrent}
-    canView={!!current}
-    creating={creating}
-    createError={createError}
-    onCreateClick={createAndGo}
-    onViewClick={() => current && handleViewCurrent(current.id)}
+<div class="storyteller-page">
+  <Topbar
+    flagSrc={topbarFlagSrc}
+    langCode={topbarLangCode}
+    user={user}
+    on:profile={relay}
+    on:logout={relay}
+    on:lang={() => { /* aquí harás el toggle de idioma cuando llegue i18n */ }}
   />
 
-  <!-- ─────────────────────────────────────────────────────────────
-       HISTÓRICO DE SESIONES (solo finalizadas/canceladas)
-       ───────────────────────────────────────────────────────────── -->
-  <div class="history-anchor">
-    <HistoryCard
-      items={historyItems}
-      loading={loadingHistory}
-      error={errorHistory}
-      dateLocale={clockLocale}
-      on:view={handleHistoryView}
-      on:edit={handleHistoryEdit}
-      on:delete={handleHistoryDelete}
+  <main class="dashboard">
+    <CurrentSessionCard
+      session={current}
+      loading={loadingCurrent}
+      canView={canOpenCurrent}
+      creating={creating}
+      createError={createError}
+      onCreateClick={createAndGo}
+      onViewClick={launchCurrentSession}
     />
-  </div>
-</main>
 
-<!-- ─────────────────────────────────────────────────────────────
-     PIE DE PAGINA (reloj + firma)
-     ───────────────────────────────────────────────────────────── -->
-<Footbar
-  locale={clockLocale}
-  timeZone={tz}
-  showSeconds={true}
-/>
+    <div class="history-anchor">
+      <HistoryCard
+        items={historyItems}
+        loading={loadingHistory || !!deletingHistoryId}
+        error={historyError}
+        dateLocale={clockLocale}
+        on:view={handleHistoryView}
+        on:delete={handleHistoryDelete}
+      />
+    </div>
+  </main>
+
+  <Footbar
+    locale={clockLocale}
+    timeZone={tz}
+    showSeconds={true}
+  />
+</div>
 
 <!-- ─────────────────────────────────────────────────────────────
      LANDING (Estilos Locales)
      ───────────────────────────────────────────────────────────── -->
 <style>
-  /* ─────────────────────────────────────────────────────────────
-     CUERPO PRINCIPAL
-     ───────────────────────────────────────────────────────────── */
-  main {
-    display: grid;
-    gap: clamp(2rem, 5vw, 3.5rem);
-    justify-items: center;
-    padding: 0 clamp(1.25rem, 5vw, 3rem) clamp(2rem, 6vw, 3.5rem);
-    box-sizing: border-box;
+  .storyteller-page {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
   }
 
-  main > * {
+  .dashboard {
+    display: grid;
+    gap: clamp(2rem, 4vw, 3.5rem);
+    justify-items: center;
+    padding: calc(56px + 2rem) clamp(1.25rem, 5vw, 3rem) clamp(3rem, 6vw, 4rem);
+    box-sizing: border-box;
     width: 100%;
+  }
+
+  .dashboard > * {
+    width: min(100%, 960px);
   }
 
   .history-anchor {

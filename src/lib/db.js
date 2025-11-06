@@ -17,6 +17,7 @@ import {
   limit,
   addDoc,
   updateDoc,
+  deleteDoc,
   serverTimestamp,
   writeBatch
 } from "firebase/firestore";
@@ -146,12 +147,12 @@ export async function getBalanceTable() {
 }
 
 /**
- * createSessionDraft({ title, language })
+ * createSessionDraft({ title, language, creatorUid })
  * ───────────────────────────────────────────────────────────
  * Crea una nueva sesión en estado 'draft', la marca como 'current'
  * y garantiza que no existan otras 'current'.
  */
-export async function createSessionDraft({ title, language } = {}) {
+export async function createSessionDraft({ title, language, creatorUid } = {}) {
   await clearCurrentFlag();
 
   const defaults = gamesMetadata?.defaults ?? {};
@@ -189,12 +190,14 @@ export async function createSessionDraft({ title, language } = {}) {
     assistEnabled && storytellerDefault === 'AI'
       ? [...(gamesMetadata?.assist_tasks_values ?? [])]
       : [];
+  const creatorData = creatorUid ?? null;
 
   const payload = {
     title: computedTitle,
     status: statusDefault,
     is_current: true,
     game_id: gameId,
+    created_by: creatorData,
     settings: {
       name: computedTitle,
       rulesets: rulesetDefault,
@@ -224,4 +227,47 @@ export async function updateSession(sessionId, data = {}) {
   if (!sessionId || !data) return;
   const ref = doc(db, 'sessions', sessionId);
   await updateDoc(ref, { ...data, updated_at: serverTimestamp() });
+}
+
+export async function deleteSessionIfCreator(sessionId, viewer = {}) {
+  if (!sessionId) throw new Error('missing_session_id');
+  const viewerUid =
+    typeof viewer === 'string'
+      ? viewer
+      : viewer?.uid ?? viewer?.auth_uid ?? null;
+  const viewerEmail =
+    typeof viewer === 'object' && viewer?.email
+      ? String(viewer.email).toLowerCase()
+      : null;
+  if (!viewerUid && !viewerEmail) throw new Error('missing_user_identity');
+
+  const ref = doc(db, 'sessions', sessionId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    throw new Error('session_not_found');
+  }
+
+  const data = snap.data() ?? {};
+  const rawOwner = data.created_by;
+  let ownerUid = null;
+  let ownerEmail = null;
+  if (typeof rawOwner === 'string') {
+    ownerUid = rawOwner;
+  } else if (rawOwner && typeof rawOwner === 'object') {
+    ownerUid = rawOwner.uid ?? null;
+    ownerEmail = rawOwner.email ? String(rawOwner.email).toLowerCase() : null;
+  }
+
+  const isOwner =
+    (ownerUid && viewerUid && ownerUid === viewerUid) ||
+    (!ownerUid && ownerEmail && viewerEmail && ownerEmail === viewerEmail);
+
+  if (!isOwner) {
+    const error = new Error('not_authorized');
+    error.code = 'sessions/not-owner';
+    throw error;
+  }
+
+  await deleteDoc(ref);
+  return true;
 }

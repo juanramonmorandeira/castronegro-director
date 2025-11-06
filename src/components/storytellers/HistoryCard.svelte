@@ -20,7 +20,6 @@
     );
   };
   const emitView = (id) => emitEvent('view', { id });
-  const emitEdit = (id) => emitEvent('edit', { id });
   const emitDelete = (id) => emitEvent('delete', { id });
 
   let sortKey = 'date';
@@ -73,7 +72,6 @@
     ? $t('landing.history.empty_with_query', { query: trimmedQuery })
     : $t('landing.history.empty');
   $: viewLabel = $t('common.actions.view');
-  $: editLabel = $t('common.actions.edit');
   $: deleteLabel = $t('common.actions.delete');
 
   function toggleSort(key) {
@@ -86,7 +84,7 @@
   }
 </script>
 
-<section class="history-card" bind:this={hostElement}>
+<section class="history-card card-glass" bind:this={hostElement}>
   <header class="card-header">
     <h2 class="history-title">{headerTitle}</h2>
     <div class="toolbar">
@@ -138,11 +136,13 @@
                   <img src="/buttons/view.png" alt={viewLabel} />
                   <span class="sr-only">{viewLabel}</span>
                 </button>
-                <button class="icon-btn" title={editLabel} on:click={() => emitEdit(it.id)}>
-                  <img src="/buttons/edit.png" alt={editLabel} />
-                  <span class="sr-only">{editLabel}</span>
-                </button>
-                <button class="icon-btn danger" title={deleteLabel} on:click={() => emitDelete(it.id)}>
+                <button
+                  class="icon-btn danger"
+                  title={deleteLabel}
+                  disabled={!it.canDelete}
+                  aria-disabled={!it.canDelete}
+                  on:click={() => it.canDelete && emitDelete(it.id)}
+                >
                   <img src="/buttons/delete.png" alt={deleteLabel} />
                   <span class="sr-only">{deleteLabel}</span>
                 </button>
@@ -160,35 +160,64 @@
     display: grid;
     gap: clamp(1rem, 3vw, 1.75rem);
     width: min(100%, 960px);
+    max-width: 960px;
     margin: 0 auto;
-    padding: 0 clamp(1rem, 4vw, 2rem) clamp(1.25rem, 4vw, 2rem);
+    padding: clamp(1.25rem, 3vw, 2rem);
     box-sizing: border-box;
   }
   .card-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-  .card-header h2 { margin: 0; font-size: 1.1rem; }
   .history-title {
     font-family: var(--title-font, 'Cinzel', serif);
-    font-size: 1.8rem;
+    font-size: clamp(1.8rem, 3vw, 2.2rem);
     font-weight: 700;
     letter-spacing: 0.04em;
     text-shadow: 0 0 10px rgba(255, 230, 140, 0.8), 0 0 20px rgba(255, 200, 80, 0.5);
     color: #f7d774;
-    margin: 0 0 0.25rem 0;
+    margin: 0;
   }
   .toolbar { display: flex; align-items: center; gap: 0.5rem; }
-  .search { flex: 1; padding: 0.5rem 0.6rem; border: 1px solid #cfcfcf; border-radius: 6px; outline: none; }
-  .search:focus { border-color: #888; }
+  .search {
+    flex: 1;
+    padding: 0.65rem 0.8rem;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 10px;
+    outline: none;
+    background: rgba(0, 0, 0, 0.35);
+    color: #f5f8fb;
+  }
+  .search:focus { border-color: rgba(255, 232, 140, 0.6); }
   .badge { font-size: 0.85rem; padding: 0.2rem 0.5rem; border-radius: 999px; }
   .badge.info { background: #eef5ff; color: #245; border: 1px solid #cfe1ff; }
   .badge.error { background: #ffecec; color: #712; border: 1px solid #ffc9c9; }
 
-  .table-wrap { overflow: auto; border: 1px solid #e6e6e6; border-radius: 8px; }
+  .table-wrap { overflow: hidden; border-radius: 18px; border: 1px solid rgba(255,255,255,0.08); }
   .history-table { width: 100%; border-collapse: collapse; }
-  thead th { text-align: left; font-weight: 600; font-size: 0.95rem; padding: 0.6rem 0.75rem; background: #fafafa; border-bottom: 1px solid #ececec; white-space: nowrap; user-select: none; }
+  thead th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 0.75rem 0.85rem;
+    background: rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    white-space: nowrap;
+    user-select: none;
+    color: rgba(245, 248, 251, 0.85);
+  }
   .sortable { cursor: pointer; }
-  tbody td { padding: 0.55rem 0.75rem; border-bottom: 1px solid #f1f1f1; vertical-align: middle; }
-  tbody tr:hover { background: #fcfcff; }
-  td.empty { text-align: center; color: #777; padding: 1.25rem; }
+  tbody tr {
+    background: rgba(0, 0, 0, 0.35);
+  }
+  tbody tr + tr {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  tbody td {
+    padding: 0.75rem 0.85rem;
+    vertical-align: middle;
+    color: #f5f8fb;
+    font-size: 0.95rem;
+  }
+  tbody tr:hover { background: rgba(255, 255, 255, 0.05); }
+  td.empty { text-align: center; color: rgba(255,255,255,0.75); padding: 1.25rem; }
   td.num, td.date { white-space: nowrap; }
   .actions { display: flex; gap: 0.4rem; }
   .icon-btn {
@@ -206,6 +235,12 @@
 
   .icon-btn:hover { background: rgba(255,255,255,0.15); }
   .icon-btn:active { transform: scale(0.95); }
+  .icon-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+    background: rgba(255,255,255,0.05);
+  }
 
   .icon-btn img {
     width: 16px;

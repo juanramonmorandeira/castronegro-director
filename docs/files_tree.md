@@ -11,7 +11,6 @@ src/
 │   │   └── Topbar.svelte
 │   └── storytellers/          # Módulos específicos del dashboard storyteller
 │       ├── CurrentSessionCard.svelte
-│       ├── Header.svelte
 │       └── HistoryCard.svelte
 ├── lib/                       # Lógica de dominio (APIs, utilidades, i18n…)
 ├── pages/                     # Pantallas de alto nivel (enrutadas por App.svelte)

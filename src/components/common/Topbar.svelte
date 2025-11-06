@@ -9,6 +9,8 @@
     hu: '/flags/hu_HU.png'
   };
   const DEFAULT_AVATAR = '/avatars/Avatar_Default.png';
+  const DEFAULT_BRAND_LOGO = '/backgrounds/village-storyteller-logo.png';
+  const DEFAULT_BRAND_TITLE = 'The Village Storyteller';
 
   export let title = '';
   export let titleKey = '';
@@ -17,6 +19,12 @@
   export let langCode = '';
   export let user = null;
   export let showUserMenu = true;
+  export let showBrand = true;
+  export let brandTitle = '';
+  export let brandTitleKey = 'header.title';
+  export let brandLogoSrc = DEFAULT_BRAND_LOGO;
+  export let brandLogoAlt = '';
+  export let brandFlicker = true;
   const dispatch = createEventDispatcher();
   let menuOpen = false;
   let menuElement;
@@ -32,6 +40,9 @@
   $: changeLanguageCurrentLabel = $t('topbar.change_language_current', { language: languageName });
   $: languageLabel = $t('topbar.language_label');
   $: navigationLabel = $t('topbar.navigation_label');
+  $: resolvedBrandTitle = brandTitle || (brandTitleKey ? $t(brandTitleKey) : DEFAULT_BRAND_TITLE);
+  $: resolvedBrandLogo = brandLogoSrc || DEFAULT_BRAND_LOGO;
+  $: resolvedBrandAlt = brandLogoAlt || resolvedBrandTitle;
 
   // El avatar de usuario solo depende de avatarURL (string completo o vacío).
   function resolveAvatarSource(currentUser) {
@@ -103,6 +114,16 @@
 </script>
 
 <nav class="topbar" aria-label={navigationLabel}>
+  {#if showBrand}
+    <div class="left">
+      <div class="brand" aria-label={resolvedBrandTitle}>
+        {#if resolvedBrandLogo}
+          <img src={resolvedBrandLogo} alt={resolvedBrandAlt} class="brand-logo" />
+        {/if}
+        <span class="brand-title" class:glow={brandFlicker}>{resolvedBrandTitle}</span>
+      </div>
+    </div>
+  {/if}
   <div class="right">
     <span class="chip">{chipTitle}</span>
 
@@ -176,27 +197,79 @@
     right: 0;
     left: 0;               /* ocupa todo el ancho para captar clics en desktop */
     width: 100%;
-    height: 48px;
+    height: 56px;
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: space-between;
     z-index: 10;
     pointer-events: none;  /* evita tapar el contenido salvo en la zona derecha */
-    background: linear-gradient(to bottom, rgba(0,0,0,0.25), rgba(0,0,0,0.05) 70%, transparent);
-    -webkit-backdrop-filter: blur(2px);
-    backdrop-filter: blur(2px);
+    background: linear-gradient(to bottom, rgba(0,0,0,0.35), rgba(0,0,0,0.05) 70%, transparent);
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+    padding: 0 clamp(12px, 3vw, 32px);
+    box-sizing: border-box;
   }
 
+  .left,
   .right {
     --topbar-item-height: 32px;
     height: 100%;
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-    padding: 0 clamp(12px, 3vw, 28px);
-    margin-left: auto;
+    gap: 10px;
     pointer-events: auto;
+  }
+
+  .left { justify-content: flex-start; }
+  .right { justify-content: flex-end; }
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    pointer-events: none;
+    padding: 0.2rem 0;
+  }
+
+  .brand-logo {
+    width: clamp(28px, 3vw, 34px);
+    height: clamp(28px, 3vw, 34px);
+    object-fit: contain;
+    filter: drop-shadow(0 0 8px rgba(0, 0, 0, 0.6));
+  }
+
+  .brand-title {
+    font-family: "Merriweather", serif;
+    font-size: clamp(1rem, 2vw, 1.4rem);
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: #f4d47c;
+    text-shadow:
+      0 0 6px rgba(255, 200, 60, 0.65),
+      0 0 14px rgba(255, 180, 40, 0.4);
+    white-space: nowrap;
+  }
+
+  .glow {
+    animation: brandGlow 6s ease-in-out infinite;
+  }
+
+  @keyframes brandGlow {
+    0%, 100% {
+      text-shadow:
+        0 0 6px rgba(255, 200, 60, 0.65),
+        0 0 14px rgba(255, 180, 40, 0.4);
+    }
+    40% {
+      text-shadow:
+        0 0 3px rgba(255, 180, 40, 0.45),
+        0 0 8px rgba(255, 160, 30, 0.3);
+    }
+    60% {
+      text-shadow:
+        0 0 8px rgba(255, 220, 90, 0.75),
+        0 0 18px rgba(255, 200, 70, 0.45);
+    }
   }
 
   .chip {
@@ -370,7 +443,8 @@
   }
 
   @media (max-width: 760px) {
-    .topbar { height: 44px; }
+    .topbar { height: 48px; padding-inline: 12px; }
+    .brand-title { font-size: 1rem; }
     .chip { font-size: 0.85rem; }
   }
 </style>

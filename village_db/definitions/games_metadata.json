@@ -19,7 +19,8 @@
     "storyteller": "human",
     "assist_enabled": false,
     "players_expected": 5,
-    "game_phase": "Introduction"
+    "game_phase": "Introduction",
+    "created_by": null
   },
   
   "meta": {

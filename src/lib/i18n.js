@@ -285,6 +285,7 @@ const dictionaries = {
     },
     landing: {
       current: {
+        heading: 'Current Session',
         checking: 'Checking current game session…',
         active_prefix: 'Active game:',
         no_active: 'No active game sessions right now.',
@@ -299,7 +300,10 @@ const dictionaries = {
         loading: 'Loading…',
         error_prefix: 'Error',
         empty: 'There are no sessions recorded.',
-        empty_with_query: 'There are no results for “{query}”.'
+        empty_with_query: 'There are no results for “{query}”.',
+        delete_forbidden: 'You can only delete sessions you created.',
+        delete_failed: 'We could not delete this session. Try again later.',
+        delete_confirm: 'Are you sure you want to delete “{title}”? This action cannot be undone.'
       },
       footbar: {
         signature: '@chatgpt-juarnamon intellectual property',
@@ -608,6 +612,7 @@ const dictionaries = {
     },
     landing: {
       current: {
+        heading: 'Partida actual',
         checking: 'Comprobando partida actual…',
         active_prefix: 'Partida activa:',
         no_active: 'No hay partidas activas ahora mismo.',
@@ -622,7 +627,10 @@ const dictionaries = {
         loading: 'Cargando…',
         error_prefix: 'Error',
         empty: 'No hay sesiones registradas.',
-        empty_with_query: 'No hay resultados para “{query}”.'
+        empty_with_query: 'No hay resultados para “{query}”.',
+        delete_forbidden: 'Solo puedes eliminar partidas que hayas creado tú.',
+        delete_failed: 'No pudimos borrar la partida. Inténtalo de nuevo.',
+        delete_confirm: '¿Seguro que quieres borrar “{title}”? Esta acción no se puede deshacer.'
       },
       footbar: {
         signature: '@chatgpt-juarnamon propiedad intelectual',
@@ -931,6 +939,7 @@ const dictionaries = {
     },
     landing: {
       current: {
+        heading: 'Aktív játék',
         checking: 'Aktuális játék ellenőrzése…',
         active_prefix: 'Aktív játék:',
         no_active: 'Jelenleg nincs aktív játék.',
@@ -945,7 +954,10 @@ const dictionaries = {
         loading: 'Betöltés…',
         error_prefix: 'Hiba',
         empty: 'Nincsenek mentett játékok.',
-        empty_with_query: 'Nincs találat erre: “{query}”.'
+        empty_with_query: 'Nincs találat erre: “{query}”.',
+        delete_forbidden: 'Csak az általad létrehozott játékokat törölheted.',
+        delete_failed: 'Nem sikerült törölni a játékot. Próbáld újra.',
+        delete_confirm: 'Biztosan törlöd ezt a játékot („{title}”)? A művelet nem visszavonható.'
       },
       footbar: {
         signature: '@chatgpt-juarnamon szellemi tulajdona',
