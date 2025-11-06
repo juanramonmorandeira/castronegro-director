@@ -13,7 +13,7 @@
   import Storyteller from "./pages/Storyteller.svelte";
   import Login from './pages/Login.svelte';
   import Registration from './pages/Registration.svelte';
-  import PlayerSelection from './pages/PlayerSelection.svelte';
+  import Selection from './pages/Selection.svelte';
   import Profile from './pages/Profile.svelte';
   import VerifyEmail from './pages/VerifyEmail.svelte';
   import Configure from './pages/Configure.svelte';
@@ -213,7 +213,7 @@
 {:else if view === 'verify-email'}
   <VerifyEmail on:navigate-login={goLogin} />
 {:else if view === 'player-selection'}
-  <PlayerSelection
+  <Selection
     user={currentUser}
     on:connect={handlePlayerConnect}
     on:scan-qr={handlePlayerScan}

@@ -17,7 +17,7 @@ src/
 ├── pages/                     # Pantallas de alto nivel (enrutadas por App.svelte)
 │   ├── Configure.svelte
 │   ├── Login.svelte
-│   ├── PlayerSelection.svelte
+│   ├── Selection.svelte
 │   ├── Profile.svelte
 │   ├── Registration.svelte
 │   ├── Storyteller.svelte
