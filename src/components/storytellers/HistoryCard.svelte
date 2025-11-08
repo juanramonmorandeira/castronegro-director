@@ -1,4 +1,5 @@
 <script>
+  import { createEventDispatcher, tick } from 'svelte';
   import { formatDateTime, normalizeStatus, statusBadgeClass, toEpochMillis } from '../../lib/utils.js';
   import { t } from '../../lib/i18n.js';
 
@@ -8,19 +9,14 @@
   export let labels = {};
   export let dateLocale;
 
-  let hostElement;
-  const emitEvent = (name, detail) => {
-    hostElement?.dispatchEvent(
-      new CustomEvent(name, {
-        detail,
-        bubbles: true,
-        cancelable: true,
-        composed: true
-      })
-    );
-  };
-  const emitView = (id) => emitEvent('view', { id });
-  const emitDelete = (id) => emitEvent('delete', { id });
+  const dispatch = createEventDispatcher();
+  const emitView = (id) => dispatch('view', { id });
+  const emitDelete = (id) => dispatch('delete', { id });
+
+  let pendingDelete = null;
+  let deleteConfirmInput = '';
+  let deleteInputEl;
+  let lastFocusedDeleteBtn = null;
 
   let sortKey = 'date';
   let sortDir = 'desc';
@@ -73,6 +69,16 @@
     : $t('landing.history.empty');
   $: viewLabel = $t('common.actions.view');
   $: deleteLabel = $t('common.actions.delete');
+  $: deleteModalTitle = $t('landing.history.delete_modal_title');
+  $: deleteModalMessage = $t('landing.history.delete_modal_message');
+  $: deleteConfirmWordRaw = $t('landing.history.delete_modal_word') ?? 'delete';
+  $: deleteModalPrompt = $t('landing.history.delete_modal_prompt', { word: deleteConfirmWordRaw });
+  $: deleteModalPlaceholder = $t('landing.history.delete_modal_placeholder', { word: deleteConfirmWordRaw });
+  $: deleteModalConfirmLabel = $t('landing.history.delete_modal_confirm');
+  $: deleteModalCancelLabel = $t('landing.history.delete_modal_cancel');
+  $: deleteConfirmWord = deleteConfirmWordRaw.trim().toLowerCase();
+  $: deleteInputValid = deleteConfirmInput.trim().toLowerCase() === deleteConfirmWord;
+  $: deleteModalVisible = !!pendingDelete;
 
   function toggleSort(key) {
     if (key === 'actions') return;
@@ -82,9 +88,59 @@
       sortDir = key === 'date' ? 'desc' : 'asc';
     }
   }
+
+  async function openDeleteModal(item, event) {
+    if (!item?.canDelete) return;
+    pendingDelete = item;
+    deleteConfirmInput = '';
+    lastFocusedDeleteBtn = event?.currentTarget ?? null;
+    await tick();
+    deleteInputEl?.focus();
+  }
+
+  function closeDeleteModal() {
+    pendingDelete = null;
+    deleteConfirmInput = '';
+    if (lastFocusedDeleteBtn && typeof lastFocusedDeleteBtn.focus === 'function') {
+      lastFocusedDeleteBtn.focus();
+    }
+    lastFocusedDeleteBtn = null;
+  }
+
+  function confirmDeleteModal() {
+    if (!pendingDelete || !deleteInputValid) return;
+    const id = pendingDelete.id;
+    closeDeleteModal();
+    emitDelete(id);
+  }
+
+  function handleModalKeydown(event) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeDeleteModal();
+    } else if (event.key === 'Enter' && deleteInputValid) {
+      event.preventDefault();
+      confirmDeleteModal();
+    }
+  }
+
+  function handleBackdropClick(event) {
+    if (event.currentTarget === event.target) closeDeleteModal();
+  }
+
+  function handleBackdropKeydown(event) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeDeleteModal();
+    }
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      closeDeleteModal();
+    }
+  }
 </script>
 
-<section class="history-card card-glass" bind:this={hostElement}>
+<section class="history-card card-glass">
   <header class="card-header">
     <h2 class="history-title">{headerTitle}</h2>
     <div class="toolbar">
@@ -141,7 +197,7 @@
                   title={deleteLabel}
                   disabled={!it.canDelete}
                   aria-disabled={!it.canDelete}
-                  on:click={() => it.canDelete && emitDelete(it.id)}
+                  on:click={(event) => openDeleteModal(it, event)}
                 >
                   <img src="/buttons/delete.png" alt={deleteLabel} />
                   <span class="sr-only">{deleteLabel}</span>
@@ -153,6 +209,51 @@
       </tbody>
     </table>
   </div>
+
+  {#if deleteModalVisible}
+    <div
+      class="delete-modal-backdrop"
+      role="button"
+      aria-label={deleteModalCancelLabel}
+      tabindex="-1"
+      on:click={handleBackdropClick}
+      on:keydown={handleBackdropKeydown}
+    >
+      <div
+        class="delete-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-modal-title"
+        aria-describedby="delete-modal-message"
+        tabindex="-1"
+        on:keydown={handleModalKeydown}
+      >
+        <h3 id="delete-modal-title">{deleteModalTitle}</h3>
+        <p id="delete-modal-message">{deleteModalMessage}</p>
+        <label class="delete-modal-label" for="delete-confirm-input">{deleteModalPrompt}</label>
+        <input
+          id="delete-confirm-input"
+          class="delete-modal-input"
+          type="text"
+          placeholder={deleteModalPlaceholder}
+          bind:value={deleteConfirmInput}
+          bind:this={deleteInputEl}
+          autocomplete="off"
+        />
+        <div class="delete-modal-actions">
+          <button class="btn ghost" type="button" on:click={closeDeleteModal}>{deleteModalCancelLabel}</button>
+          <button
+            class="btn danger"
+            type="button"
+            disabled={!deleteInputValid}
+            on:click={confirmDeleteModal}
+          >
+            {deleteModalConfirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
 </section>
 
 <style>
@@ -264,6 +365,80 @@
     overflow: hidden;
     clip: rect(0, 0, 0, 0);
     border: 0;
+  }
+
+  .delete-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(8, 12, 22, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    z-index: 999;
+  }
+  .delete-modal {
+    width: min(90vw, 420px);
+    background: #081426;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    padding: 1.5rem;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    color: #f5f8fb;
+  }
+  .delete-modal h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    color: #ffe68c;
+  }
+  .delete-modal p {
+    margin: 0;
+    line-height: 1.4;
+  }
+  .delete-modal-label {
+    font-size: 0.9rem;
+    color: rgba(245, 248, 251, 0.85);
+  }
+  .delete-modal-input {
+    width: 100%;
+    padding: 0.65rem 0.85rem;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: rgba(0, 0, 0, 0.35);
+    color: #f5f8fb;
+  }
+  .delete-modal-input:focus {
+    outline: none;
+    border-color: rgba(255, 232, 140, 0.6);
+  }
+  .delete-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+  }
+  .btn {
+    padding: 0.55rem 1.2rem;
+    border-radius: 999px;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s ease, opacity 0.2s ease;
+  }
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .btn.ghost {
+    background: transparent;
+    color: #f5f8fb;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+  }
+  .btn.danger {
+    background: linear-gradient(120deg, #ff4747, #f57c00);
+    color: #fff;
   }
 
   @media (max-width: 760px) {

@@ -5,7 +5,7 @@
 // ───────────────────────────────────────────────────────────
 
 import { db } from "./firebase.js";
-import gamesMetadata from '../../village_db/definitions/games_metadata.json' assert { type: 'json' };
+import gamesMetadata from '../../reference-data/metadata/games.json' assert { type: 'json' };
 import {
   collection,
   doc,

@@ -1,6 +1,6 @@
-import gamesMetadata from '../../village_db/definitions/games_metadata.json' assert { type: 'json' };
-import balanceTable from '../../village_db/rulesets/balance_table.json' assert { type: 'json' };
-import resourcesTable from '../../village_db/rulesets/resources_table.json' assert { type: 'json' };
+import gamesMetadata from '../../reference-data/metadata/games.json' assert { type: 'json' };
+import balanceTable from '../../reference-data/rulesets/balance_table.json' assert { type: 'json' };
+import resourcesTable from '../../reference-data/rulesets/resources_table.json' assert { type: 'json' };
 
 export function getGamesMetadata() {
   return gamesMetadata;

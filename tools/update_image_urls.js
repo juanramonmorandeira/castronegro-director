@@ -14,7 +14,7 @@ admin.initializeApp({
 const db = admin.firestore();
 
 // 📁 Cargar el fichero de imágenes real
-const imagesPath = path.resolve("../village_db/images/images.json");
+const imagesPath = path.resolve("../reference-data/images/images.json");
 const images = JSON.parse(fs.readFileSync(imagesPath, "utf8"));
 
 async function updateFirestore() {

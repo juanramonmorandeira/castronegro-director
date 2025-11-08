@@ -63,14 +63,6 @@
     return null;
   }
 
-  function buildDeleteConfirmMessage(title) {
-    const safeTitle = title && title !== '—' ? title : $t('common.untitled_session');
-    const raw = $t('landing.history.delete_confirm', { title: safeTitle });
-    return raw && typeof raw === 'string'
-      ? raw
-      : `¿Seguro que quieres borrar "${safeTitle}"? Esta acción no se puede deshacer.`;
-  }
-
   const normalizeHistoryDoc = (doc) => {
     const winners = Array.isArray(doc.winners)
       ? doc.winners
@@ -189,10 +181,6 @@
       historyError = deleteForbiddenMessage;
       return;
     }
-    if (typeof window !== 'undefined') {
-      const confirmDelete = window.confirm(buildDeleteConfirmMessage(target.title));
-      if (!confirmDelete) return;
-    }
     const viewer = getViewerContext();
     if (!viewer) {
       historyError = deleteForbiddenMessage;
@@ -200,13 +188,18 @@
     }
     deletingHistoryId = id;
     historyError = null;
+    let deleted = false;
     try {
       await deleteSessionIfCreator(id, viewer);
-      await refreshAll();
+      historyDocs = historyDocs.filter((doc) => doc.id !== id);
+      deleted = true;
     } catch (error) {
       console.error('Delete session failed', error);
       historyError = error?.message ?? deleteFailedMessage;
     } finally {
+      if (deleted) {
+        await refreshAll();
+      }
       deletingHistoryId = null;
     }
   }

@@ -27,7 +27,7 @@ admin.initializeApp({
 const db = admin.firestore();
 
 // 📦 Cargar el fichero fuente
-const filePath = path.resolve("../village_db/datasets/data.json");
+const filePath = path.resolve("../reference-data/datasets/data.json");
 const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
 
 // ⚙️ Función para subir documentos

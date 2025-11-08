@@ -1,0 +1,37 @@
+{
+  "basic":  { 
+    "roles": { "ambiguous": [ "thief" ],
+               "outsiders": [],  
+               "villagers": [ "common", "cupid", "girl", "hunter", "seer", "witch" ],
+               "werewolves": [ "werewolf" ] },
+    "professions": [],
+    "honorary_positions": [ "sheriff" ] },
+  "newmoon":  { 
+    "roles": { "ambiguous": [ "thief" ],
+               "outsiders": [ "piper" ],  
+               "villagers": [ "common", "cupid", "elder", "fool", "girl", "hunter", "protector", "scapegoat", "seer", "witch" ],
+               "werewolves": [ "werewolf" ] },
+    "professions": [],
+    "honorary_positions": [ "sheriff" ] },
+  "characters":  { 
+    "roles": { "ambiguous": [ "child", "comedian", "hound", "servant", "thief" ],
+               "outsiders": [ "angel", "piper", "sectarian", "white" ],  
+               "villagers": [ "brothers", "common", "cupid", "elder", "fool", "fox", "girl", "gypsy", "hunter", "judge", "knight", "protector", "scapegoat", "seer", "sisters", "tamer", "villager", "witch" ],
+               "werewolves": [ "bad", "father", "werewolf" ] },
+    "professions": [],
+    "honorary_positions": [ "guard", "sheriff" ] },
+  "village":  { 
+    "roles": { "ambiguous": [ "child", "comedian", "hound", "servant", "thief" ],
+               "outsiders": [ "angel", "piper", "sectarian", "white" ],  
+               "villagers": [ "brothers", "common", "cupid", "elder", "fool", "fox", "girl", "gypsy", "hunter", "judge", "knight", "protector", "pyromaniac", "raven", "scapegoat", "seer", "sisters", "tamer", "villager", "witch" ],
+               "werewolves": [ "bad", "father", "werewolf" ] },
+    "professions": ["apothecary", "baker", "barber", "confessor", "farmer", "governess", "innkeeper", "mayor", "noble", "vagabond"],
+    "honorary_positions": [ "guard", "sheriff" ] },
+  "thepact":  { 
+    "roles": { "ambiguous": [ "child", "comedian", "hound", "servant", "thief" ],
+               "outsiders": [ "angel", "piper", "sectarian", "white" ],  
+               "villagers": [ "brothers", "common", "cupid", "elder", "fool", "fox", "girl", "gypsy", "hunter", "judge", "knight", "protector", "pyromaniac", "raven", "scapegoat", "seer", "sisters", "tamer", "villager", "witch" ],
+               "werewolves": [ "bad", "father", "werewolf" ] },
+    "professions": ["apothecary", "baker", "barber", "confessor", "farmer", "governess", "innkeeper", "mayor", "noble", "vagabond"],
+    "honorary_positions": [ "guard", "sheriff" ] }
+}

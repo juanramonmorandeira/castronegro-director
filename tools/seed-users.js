@@ -1,5 +1,5 @@
 // tools/seed-users.js
-// Populates Firestore with seed users defined in village_db/users/users.json.
+// Populates Firestore with seed users defined in reference-data/users/users.json.
 // Uses Firebase Admin SDK so we can rely on serverTimestamp sentinels.
 
 import fs from 'fs';
@@ -16,7 +16,7 @@ const SERVICE_KEY_PATH =
   process.env.FIREBASE_SERVICE_KEY ??
   path.join(process.env.HOME ?? '', 'proyectos/keys/serviceAccountKey.json');
 
-const DEFAULT_JSON_PATH = path.resolve(__dirname, '../village_db/users/users.json');
+const DEFAULT_JSON_PATH = path.resolve(__dirname, '../reference-data/users/users.json');
 
 function loadServiceAccount() {
   try {

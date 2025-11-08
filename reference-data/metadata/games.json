@@ -12,7 +12,7 @@
   "storyteller_values": ["human", "human-AI", "AI"],
   "language_values": ["en", "es", "hu"],
   "game_phase_values": ["Introduction", "Night", "Day", "Votes", "Execution"],
-  "assist_tasks_values": ["Roles_Selection", "Roles_Matching", "Introduction", "Night", "Day", "Votes", "Execution", "Summary"],
+  "assist_tasks_values": ["Roles_Selection", "Roles_Matching", "Introduction", "Night", "Day", "Votes", "Execution", "Summary", "Logbook"],
   "defaults": {
     "status": "draft",
     "rulesets": "basic",

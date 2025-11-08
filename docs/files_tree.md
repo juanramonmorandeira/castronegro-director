@@ -1,6 +1,16 @@
 ## Village Storyteller – estructura de archivos
 
 ```text
+reference-data/
+├── metadata/
+│   └── games.json            # Configuración base de partidas y defaults
+├── rulesets/
+│   ├── balance_table.json    # Distribuciones sugeridas de roles/fases
+│   └── resources_table.json  # Otros recursos auxiliares para el storyteller
+├── datasets/                 # (Opcional) datasets analíticos o investigación
+├── images/                   # Referencias para scripts de utilidades
+└── users/                    # Plantillas/seeds para scripts externos
+
 src/
 ├── App.svelte                 # Router ligero entre pantallas
 ├── assets/                    # Recursos estáticos empaquetados con Vite
@@ -30,3 +40,4 @@ Notas:
 - Los componentes dentro de `src/components/common/` se consideran “lego blocks” compartidos; si una nueva pantalla necesita cabecera, fondo o pie, debe importar desde allí.
 - Los elementos de `src/components/storytellers/` son piezas específicas del panel Storyteller y pueden migrarse a otras carpetas de `components/` si surgen más dominios.
 - `src/lib/` mantiene dependencias puras de la UI (Firebase, Firestore, helpers de i18n…); cualquier lógica que no dependa de Svelte debería residir aquí.
+- `reference-data/` concentra el material JSON estático (metadata y tablas de reglas) junto con carpetas opcionales para datasets, imágenes o seeds que puedas añadir cuando hagan falta.

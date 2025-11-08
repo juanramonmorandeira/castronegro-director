@@ -3,9 +3,14 @@
   import Topbar from '../components/common/Topbar.svelte';
   import Footbar from '../components/common/Footbar.svelte';
   import BackgroundLayer from '../components/common/BackgroundLayer.svelte';
+  import PropertiesModal from '../components/config/Properties.svelte';
+  import SelectionModal from '../components/config/Selection.svelte';
+  import MatchModal from '../components/config/Match.svelte';
+  import DistributionModal from '../components/config/Distribution.svelte';
+  import ShareModal from '../components/config/Share.svelte';
   import { t } from '../lib/i18n.js';
   import { getSessionById, updateSession } from '../lib/db.js';
-  import { getGamesMetadata, getAssistTasks } from '../lib/gameMetadata.js';
+  import { getGamesMetadata, getAssistTasks, getBalanceTable, getResourcesTable } from '../lib/gameMetadata.js';
 
   export let sessionId;
   export let user = null;
@@ -17,7 +22,9 @@
   const clockLocale = dateOptions.locale || 'en-GB';
 
   const metadata = getGamesMetadata();
-  const assistTaskOptions = getAssistTasks();
+  const balanceTable = getBalanceTable();
+  const resourcesTable = getResourcesTable();
+  const rawAssistTasks = getAssistTasks();
 
   const minPlayers = 5;
   const maxPlayers = 15;
@@ -32,9 +39,39 @@
     ? metadata.language_values
     : ['en'];
   const defaultLanguage = availableLanguages[0] ?? 'en';
-  const gamePhaseOptions = metadata?.game_phase_values?.length
-    ? metadata.game_phase_values
-    : ['Introduction'];
+
+  const DEFAULT_ASSIST_TASKS = [
+    'Roles_Selection',
+    'Roles_Matching',
+    'Introduction',
+    'Night',
+    'Day',
+    'Votes',
+    'Execution',
+    'Summary',
+    'Logbook'
+  ];
+
+  const assistTaskOptions = rawAssistTasks?.length
+    ? [
+        ...DEFAULT_ASSIST_TASKS.filter((task) => rawAssistTasks.includes(task)),
+        ...rawAssistTasks.filter((task) => !DEFAULT_ASSIST_TASKS.includes(task))
+      ]
+    : DEFAULT_ASSIST_TASKS;
+
+  const ASSIST_TASK_TRANSLATIONS = {
+    Roles_Selection: 'roles_selection',
+    Roles_Matching: 'roles_matching',
+    Introduction: 'introduction',
+    Night: 'night',
+    Day: 'day',
+    Votes: 'votes',
+    Execution: 'execution',
+    Summary: 'summary',
+    Logbook: 'logbook'
+  };
+
+  const ROLE_BREAKDOWN_ORDER = ['villagers', 'ambiguous', 'outsiders', 'werewolves'];
 
   const clampPlayers = (value) => {
     const numeric = Number(value);
@@ -47,6 +84,11 @@
   let loading = true;
   let saving = false;
   let saved = false;
+  let overrideRoleLimits = false;
+  let activeModal = null;
+  let connectedCount = 0;
+  let readyCount = 0;
+  let sessionStatus = 'draft';
   let form = {
     name: '',
     game_id: '',
@@ -55,8 +97,23 @@
     storyteller: metadata?.defaults?.storyteller ?? availableStorytellers[0],
     language: metadata?.defaults?.language ?? defaultLanguage,
     assistEnabled: metadata?.defaults?.assist_enabled ?? false,
-    assistTasks: [],
-    gamePhase: metadata?.defaults?.game_phase ?? gamePhaseOptions[0]
+    assistTasks: []
+  };
+
+  if (form.storyteller === 'AI' || form.storyteller === 'human-AI') {
+    form.assistEnabled = true;
+  } else {
+    form.assistEnabled = false;
+  }
+
+  let roleSelections = ROLE_BREAKDOWN_ORDER.reduce((acc, key) => ({ ...acc, [key]: 0 }), {});
+  let roleSeedKey = '';
+
+  const countEntries = (value) => {
+    if (Array.isArray(value)) return value.length;
+    if (value && typeof value === 'object') return Object.keys(value).length;
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    return 0;
   };
 
   $: derivedAssistEnabled =
@@ -66,15 +123,67 @@
         ? false
         : form.assistEnabled;
 
-  $: directorHintKey =
-    form.storyteller === 'AI'
-      ? 'configure.director_hint.ai'
-      : form.storyteller === 'human-AI'
-        ? 'configure.director_hint.assisted'
-        : 'configure.director_hint.human';
-
   $: if (!derivedAssistEnabled && form.assistTasks.length) {
     form.assistTasks = [];
+  }
+
+  $: showLanguageSelector = form.storyteller !== 'human';
+  $: showAssistControls = form.storyteller === 'human-AI';
+
+  $: playerBreakdown = balanceTable?.[String(form.players_expected)] ?? null;
+  $: rulesetResources = resourcesTable?.[form.rulesets] ?? null;
+  $: roleLimits = ROLE_BREAKDOWN_ORDER.reduce((acc, role) => {
+    const mixLimit = playerBreakdown?.[role];
+    const resourceLimit = rulesetResources?.[role];
+    if (mixLimit == null && resourceLimit == null) {
+      acc[role] = null;
+    } else if (mixLimit == null) {
+      acc[role] = resourceLimit;
+    } else if (resourceLimit == null) {
+      acc[role] = mixLimit;
+    } else {
+      acc[role] = Math.min(mixLimit, resourceLimit);
+    }
+    return acc;
+  }, {});
+
+  $: if (!overrideRoleLimits) {
+    const next = { ...roleSelections };
+    let changed = false;
+    for (const role of ROLE_BREAKDOWN_ORDER) {
+      const limit = roleLimits?.[role];
+      if (limit != null && next[role] > limit) {
+        next[role] = limit;
+        changed = true;
+      }
+    }
+    if (changed) {
+      roleSelections = next;
+    }
+  }
+
+  $: {
+    const seedKey = `${form.players_expected}|${form.rulesets}`;
+    if (!overrideRoleLimits && seedKey !== roleSeedKey) {
+      roleSeedKey = seedKey;
+      roleSelections = ROLE_BREAKDOWN_ORDER.reduce((acc, role) => ({
+        ...acc,
+        [role]: roleLimits?.[role] ?? playerBreakdown?.[role] ?? 0
+      }), {});
+    }
+  }
+
+  $: totalSelectedRoles = ROLE_BREAKDOWN_ORDER.reduce(
+    (sum, role) => sum + (Number(roleSelections[role]) || 0),
+    0
+  );
+  $: canShareSession = totalSelectedRoles >= clampPlayers(form.players_expected);
+
+  function getAssistTaskLabel(task) {
+    const key = ASSIST_TASK_TRANSLATIONS[task];
+    if (!key) return readableTask(task);
+    const lookup = $t(`configure.assist_tasks.${key}`);
+    return typeof lookup === 'string' ? lookup : readableTask(task);
   }
 
   onMount(async () => {
@@ -87,6 +196,14 @@
       const session = await getSessionById(sessionId);
       if (session) {
         const settings = session.settings ?? {};
+        sessionStatus = session.status ?? 'draft';
+        connectedCount = countEntries(session.players);
+        readyCount = countEntries(
+          session.players_ready ??
+          session.ready_players ??
+          session.ready ??
+          session.playersReady ?? null
+        );
         form = {
           name: session.title ?? settings.name ?? '',
           game_id: session.game_id ?? '',
@@ -95,8 +212,9 @@
           storyteller: settings.storyteller ?? form.storyteller,
           language: settings.language ?? form.language,
           assistEnabled: !!settings.assist_enabled,
-          assistTasks: Array.isArray(settings.assist_tasks) ? settings.assist_tasks : [],
-          gamePhase: session.game_phases?.current ?? form.gamePhase
+          assistTasks: Array.isArray(settings.assist_tasks)
+            ? settings.assist_tasks.filter((task) => assistTaskOptions.includes(task))
+            : []
         };
         if (form.storyteller === 'human') {
           form.assistEnabled = false;
@@ -112,40 +230,6 @@
       loading = false;
     }
   });
-
-  function setPlayers(value) {
-    form.players_expected = clampPlayers(value);
-  }
-
-  function onStorytellerChange(option) {
-    form.storyteller = option;
-    if (option === 'human') {
-      form.language = defaultLanguage;
-      form.assistEnabled = false;
-      form.assistTasks = [];
-    } else if (option === 'AI') {
-      form.assistEnabled = true;
-      if (!form.assistTasks.length && assistTaskOptions.length) {
-        form.assistTasks = [...assistTaskOptions];
-      }
-    }
-  }
-
-  function toggleAssistTask(task) {
-    if (form.assistTasks.includes(task)) {
-      form.assistTasks = form.assistTasks.filter((t) => t !== task);
-    } else {
-      form.assistTasks = [...form.assistTasks, task];
-    }
-  }
-
-  function toggleAssistEnabled() {
-    if (form.storyteller !== 'human-AI') return;
-    form.assistEnabled = !form.assistEnabled;
-    if (!form.assistEnabled) {
-      form.assistTasks = [];
-    }
-  }
 
   async function saveConfig() {
     if (!sessionId) return;
@@ -165,7 +249,6 @@
         'settings.language': languageValue,
         'settings.assist_enabled': assistEnabled,
         'settings.assist_tasks': assistEnabled ? form.assistTasks : [],
-        'game_phases.current': form.gamePhase,
         status: 'draft'
       };
 
@@ -181,6 +264,65 @@
 
   function goBack() {
     dispatch('back');
+  }
+
+  function openModal(name) {
+    activeModal = name;
+  }
+
+  function closeModal() {
+    activeModal = null;
+  }
+
+  function handlePropertiesSave(event) {
+    const detail = event?.detail ?? {};
+    if (!detail.value) {
+      closeModal();
+      return;
+    }
+    form = { ...form, ...detail.value };
+    closeModal();
+  }
+
+  function handleSelectionSave(event) {
+    const detail = event?.detail ?? {};
+    if (detail.selections) {
+      roleSelections = { ...detail.selections };
+    }
+    if (typeof detail.override === 'boolean') {
+      overrideRoleLimits = detail.override;
+    }
+    closeModal();
+  }
+
+  function handleMatchAuto() {
+    console.info('[configure] auto-assign roles requested');
+  }
+
+  function handleMatchSave() {
+    closeModal();
+  }
+
+  function handleDistributionClose() {
+    closeModal();
+  }
+
+  function handleShareClose() {
+    closeModal();
+  }
+
+  async function handleStartOrContinue() {
+    if (!sessionId) return;
+    const nextStatus = sessionStatus === 'paused' ? 'in_progress' : 'waiting';
+    try {
+      await updateSession(sessionId, { status: nextStatus });
+      sessionStatus = nextStatus;
+      if (nextStatus === 'in_progress') {
+        dispatch('start', { sessionId });
+      }
+    } catch (error) {
+      console.error('[configure] unable to update session status', error);
+    }
   }
 </script>
 
@@ -205,151 +347,100 @@
         <header class="config-header">
           <div>
             <h2>{$t('configure.heading')}</h2>
-            <p>{$t('configure.subheading')}</p>
+            <label class="field title-field">
+              <span class="label">{$t('configure.title_label')}</span>
+              <input
+                class="input"
+                type="text"
+                bind:value={form.name}
+                placeholder={$t('configure.title_placeholder')}
+                maxlength="80"
+              />
+            </label>
           </div>
-          <div class="session-meta">
-            <span class="meta-item">
-              <strong>{$t('configure.session_id')}:</strong>
-              <code>{sessionId}</code>
-            </span>
-            {#if form.game_id}
-              <span class="meta-item">
-                <strong>{$t('configure.game_code')}:</strong>
-                <code>{form.game_id}</code>
-              </span>
-            {/if}
+          <div class="status-strip">
+            <div>
+              <span>{$t('configure.connected_label')}</span>
+              <strong>{connectedCount}</strong>
+            </div>
+            <div>
+              <span>{$t('configure.ready_label')}</span>
+              <strong>{readyCount}</strong>
+            </div>
           </div>
         </header>
 
-        <div class="form-grid">
-          <label class="field">
-            <span class="label">{$t('configure.title_label')}</span>
-            <input
-              class="input"
-              type="text"
-              bind:value={form.name}
-              placeholder={$t('configure.title_placeholder')}
-              maxlength="80"
-            />
-            <span class="hint">{$t('configure.title_hint')}</span>
-          </label>
-
-          <label class="field">
-            <span class="label">{$t('configure.ruleset_label')}</span>
-            <select bind:value={form.rulesets} class="input">
-              {#each availableRulesets as r}
-                <option value={r}>{r}</option>
-              {/each}
-            </select>
-            <span class="hint">{$t('configure.ruleset_hint')}</span>
-          </label>
-
-          <label class="field">
-            <span class="label">{$t('configure.players_label')}</span>
-            <input
-              type="number"
-              min={minPlayers}
-              max={maxPlayers}
-              class="input"
-              bind:value={form.players_expected}
-              on:change={(event) => setPlayers(event.currentTarget.value)}
-            />
-            <input
-              type="range"
-              min={minPlayers}
-              max={maxPlayers}
-              step="1"
-              bind:value={form.players_expected}
-              on:input={(event) => setPlayers(event.currentTarget.value)}
-            />
-            <span class="hint">{$t('configure.players_hint', { range: `${minPlayers}–${maxPlayers}` })}</span>
-          </label>
-
-          <label class="field">
-            <span class="label">{$t('configure.phase_label')}</span>
-            <select bind:value={form.gamePhase} class="input">
-              {#each gamePhaseOptions as phase}
-                <option value={phase}>{phase}</option>
-              {/each}
-            </select>
-            <span class="hint">{$t('configure.phase_hint')}</span>
-          </label>
-
-          <fieldset class="field">
-            <legend class="label">{$t('configure.director_label')}</legend>
-            <div class="director-options">
-              {#each availableStorytellers as option}
-                <label class="radio-option">
-                  <input
-                    type="radio"
-                    name="director"
-                    value={option}
-                    checked={form.storyteller === option}
-                    on:change={() => onStorytellerChange(option)}
-                  />
-                  <span>{option}</span>
-                </label>
-              {/each}
-            </div>
-            <span class="hint">{$t(directorHintKey)}</span>
-          </fieldset>
-
-          <label class="field">
-            <span class="label">{$t('configure.language_label')}</span>
-            <select
-              bind:value={form.language}
-              class="input"
-              disabled={form.storyteller === 'human'}
-            >
-              {#each availableLanguages as lang}
-                <option value={lang}>{lang}</option>
-              {/each}
-            </select>
-            <span class="hint">{$t('configure.language_hint')}</span>
-          </label>
-
-          <div class="field assist-field">
-            <span class="label">{$t('configure.assist_label')}</span>
-            <label class="assist-toggle">
-              <input
-                type="checkbox"
-                checked={derivedAssistEnabled}
-                disabled={form.storyteller !== 'human-AI'}
-                on:change={toggleAssistEnabled}
-              />
-              <span>{$t('configure.assist_toggle')}</span>
-            </label>
-
-            {#if form.storyteller !== 'human'}
-              <div class="assist-tasks">
-                {#if assistTaskOptions.length === 0}
-                  <p class="hint">{$t('configure.assist_no_tasks')}</p>
-                {:else}
-                  <p class="hint assist-hint">{$t('configure.assist_tasks_hint')}</p>
-                  {#each assistTaskOptions as task}
-                    <label class="task-chip {form.assistTasks.includes(task) ? 'task-chip-on' : ''}">
-                      <input
-                        type="checkbox"
-                        checked={form.assistTasks.includes(task)}
-                        disabled={!derivedAssistEnabled}
-                        on:change={() => toggleAssistTask(task)}
-                      />
-                      <span>{readableTask(task)}</span>
-                    </label>
-                  {/each}
-                {/if}
-              </div>
-            {/if}
-          </div>
+        <div class="actions-grid">
+          <button class="pill-btn" type="button" on:click={() => openModal('properties')}>
+            {$t('configure.btn_properties')}
+          </button>
+          <button class="pill-btn" type="button" on:click={() => openModal('selection')}>
+            {$t('configure.btn_selection')}
+          </button>
+          <button class="pill-btn" type="button" on:click={() => openModal('match')}>
+            {$t('configure.btn_match')}
+          </button>
+          <button class="pill-btn" type="button" on:click={() => openModal('distribution')}>
+            {$t('configure.btn_distribution')}
+          </button>
+          <button class="pill-btn" type="button" on:click={() => openModal('share')} disabled={!form.game_id || !canShareSession}>
+            {$t('configure.btn_share')}
+          </button>
         </div>
 
+        {#if playerBreakdown}
+          <section class="role-balance">
+            <div class="role-balance-title-row">
+              <span class="role-balance-title">{$t('configure.balance_label')}</span>
+              <span class="role-balance-hint">{$t('configure.role_constraints.mix', { value: form.players_expected })}</span>
+            </div>
+            <div class="role-balance-grid">
+              {#each ROLE_BREAKDOWN_ORDER as roleKey}
+                <div class="balance-chip">
+                  <span class="balance-count">{playerBreakdown[roleKey] ?? 0}</span>
+                  <span class="balance-label">{$t(`configure.balance_roles.${roleKey}`)}</span>
+                </div>
+              {/each}
+            </div>
+          </section>
+        {/if}
+
+        <section class="role-selection-preview">
+          <div class="preview-header">
+            <h3>{$t('configure.role_selector_label')}</h3>
+            <button class="link-btn" type="button" on:click={() => openModal('selection')}>
+              {$t('configure.btn_edit_selection')}
+            </button>
+          </div>
+          <div class="role-preview-grid">
+            {#each ROLE_BREAKDOWN_ORDER as roleKey}
+              <div class="role-preview-card">
+                <span class="label">{$t(`configure.balance_roles.${roleKey}`)}</span>
+                <strong>{roleSelections[roleKey] ?? 0}</strong>
+              </div>
+            {/each}
+          </div>
+        </section>
+
         <footer class="actions">
-          <button class="btn secondary" type="button" on:click={goBack}>
-            {$t('configure.back')}
-          </button>
-          <button class="btn primary" type="button" on:click={saveConfig} disabled={saving}>
-            {saving ? '…' : $t('configure.save')}
-          </button>
+          <div class="left-actions">
+            <button class="btn secondary" type="button" on:click={goBack}>
+              {$t('configure.back')}
+            </button>
+            <button class="btn secondary" type="button" on:click={() => openModal('share')} disabled={!form.game_id || !canShareSession}>
+              {$t('configure.btn_share')}
+            </button>
+          </div>
+          <div class="right-actions">
+            <button class="btn secondary" type="button" on:click={saveConfig} disabled={saving}>
+              {saving ? '…' : $t('configure.save')}
+            </button>
+            <button class="btn primary" type="button" on:click={handleStartOrContinue}>
+              {sessionStatus === 'paused'
+                ? $t('configure.continue_button')
+                : $t('configure.start_button')}
+            </button>
+          </div>
           {#if saved}
             <span class="hint saved-hint">{$t('configure.saved')}</span>
           {/if}
@@ -365,6 +456,56 @@
   />
 </div>
 
+<PropertiesModal
+  open={activeModal === 'properties'}
+  value={{
+    rulesets: form.rulesets,
+    players_expected: form.players_expected,
+    storyteller: form.storyteller,
+    language: form.language,
+    assistEnabled: form.assistEnabled,
+    assistTasks: form.assistTasks
+  }}
+  options={{
+    minPlayers,
+    maxPlayers,
+    availableRulesets,
+    availableStorytellers,
+    availableLanguages,
+    assistTaskOptions
+  }}
+  on:save={handlePropertiesSave}
+  on:cancel={closeModal}
+/>
+
+<SelectionModal
+  open={activeModal === 'selection'}
+  categories={ROLE_BREAKDOWN_ORDER}
+  selections={roleSelections}
+  limits={roleLimits}
+  override={overrideRoleLimits}
+  on:save={handleSelectionSave}
+  on:cancel={closeModal}
+/>
+
+<MatchModal
+  open={activeModal === 'match'}
+  on:auto={handleMatchAuto}
+  on:save={handleMatchSave}
+  on:cancel={closeModal}
+/>
+
+<DistributionModal
+  open={activeModal === 'distribution'}
+  on:cancel={handleDistributionClose}
+/>
+
+<ShareModal
+  open={activeModal === 'share'}
+  gameId={form.game_id}
+  on:cancel={handleShareClose}
+/>
+
 <style>
   .page {
     min-height: 100vh;
@@ -379,7 +520,7 @@
   }
 
   .config-card {
-    width: min(920px, 95vw);
+    width: min(840px, 92vw);
     padding: clamp(1.75rem, 4vw, 2.5rem);
     display: grid;
     gap: 2rem;
@@ -393,7 +534,6 @@
 
   .config-header {
     display: flex;
-    flex-wrap: wrap;
     justify-content: space-between;
     gap: 1.5rem;
   }
@@ -408,30 +548,46 @@
       0 0 32px rgba(255, 200, 80, 0.3);
   }
 
-  .config-header p {
-    margin: 0.25rem 0 0;
-    color: rgba(240, 240, 245, 0.75);
+  .title-field {
+    margin-top: 1rem;
   }
 
-  .session-meta {
-    display: grid;
-    gap: 0.35rem;
-    align-content: flex-start;
+  .status-strip {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.75rem;
   }
 
-  .meta-item {
-    color: rgba(240, 240, 245, 0.8);
-    font-size: 0.9rem;
-  }
-
-  .meta-item code {
-    font-family: "Fira Code", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  .status-strip span {
     font-size: 0.85rem;
+    color: rgba(245, 245, 245, 0.65);
   }
 
-  .form-grid {
+  .status-strip strong {
+    font-size: 1.6rem;
+    color: #f7f3d7;
+  }
+
+  .actions-grid {
     display: grid;
-    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.8rem;
+  }
+
+  .pill-btn {
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.05);
+    color: #f5f8fb;
+    padding: 0.65rem 1rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .pill-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
 
   .field {
@@ -447,6 +603,93 @@
   .hint {
     color: rgba(225, 230, 240, 0.65);
     font-size: 0.85rem;
+  }
+
+  .role-balance {
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  .role-balance-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9rem;
+    color: rgba(245, 245, 245, 0.7);
+  }
+
+  .role-balance-title {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(248, 248, 250, 0.65);
+  }
+
+  .role-balance-hint {
+    font-size: 0.85rem;
+    color: rgba(245, 245, 245, 0.55);
+  }
+
+  .role-balance-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.5rem;
+  }
+
+  .balance-chip {
+    background: rgba(8, 14, 22, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0.75rem;
+    padding: 0.6rem 0.9rem;
+    display: grid;
+    justify-items: center;
+    gap: 0.1rem;
+  }
+
+  .balance-count {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #f7f3d7;
+  }
+
+  .balance-label {
+    font-size: 0.85rem;
+    text-transform: capitalize;
+    color: rgba(245, 245, 245, 0.78);
+  }
+
+  .role-selection-preview {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .link-btn {
+    background: none;
+    border: none;
+    color: #f7d774;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .role-preview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.75rem;
+  }
+
+  .role-preview-card {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 1rem;
+    padding: 0.85rem;
+    display: grid;
+    gap: 0.35rem;
+    text-align: center;
   }
 
   .input {
@@ -466,97 +709,19 @@
     background: rgba(15, 22, 30, 0.7);
   }
 
-  input[type='range'] {
-    width: 100%;
-    accent-color: rgba(255, 220, 140, 0.85);
-    margin-top: 0.25rem;
-  }
-
-  .director-options {
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-  }
-
-  .radio-option {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
-    padding: 0.45rem 0.9rem;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    color: rgba(245, 245, 245, 0.9);
-    transition: border-color 0.2s ease, background 0.2s ease;
-  }
-
-  .radio-option input {
-    accent-color: rgba(255, 232, 160, 0.85);
-  }
-
-  .radio-option:hover {
-    border-color: rgba(255, 232, 160, 0.6);
-    background: rgba(255, 255, 255, 0.08);
-  }
-
-  .assist-field {
-    gap: 0.75rem;
-  }
-
-  .assist-toggle {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    font-size: 0.95rem;
-    color: rgba(240, 240, 245, 0.85);
-  }
-
-  .assist-toggle input {
-    accent-color: rgba(255, 232, 160, 0.85);
-  }
-
-  .assist-tasks {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
-
-  .assist-hint {
-    width: 100%;
-  }
-
-  .task-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
-    padding: 0.4rem 0.75rem;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    transition: all 0.2s ease;
-  }
-
-  .task-chip-on {
-    background: rgba(255, 232, 140, 0.2);
-    border-color: rgba(255, 232, 160, 0.6);
-    box-shadow: 0 6px 18px rgba(255, 232, 160, 0.22);
-  }
-
-  .task-chip input {
-    display: none;
-  }
-
-  .task-chip span {
-    color: rgba(248, 248, 250, 0.9);
-    font-size: 0.9rem;
-    text-transform: capitalize;
-  }
 
   .actions {
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
     align-items: center;
     gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .left-actions,
+  .right-actions {
+    display: flex;
+    gap: 0.75rem;
   }
 
   .btn {
@@ -580,11 +745,6 @@
     background: rgba(255, 255, 255, 0.08);
     color: rgba(248, 248, 250, 0.9);
     border: 1px solid rgba(255, 255, 255, 0.18);
-  }
-
-  .btn.primary[disabled] {
-    opacity: 0.6;
-    cursor: not-allowed;
   }
 
   .saved-hint {
