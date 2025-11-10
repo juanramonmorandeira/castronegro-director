@@ -1,0 +1,63 @@
+:root {
+  /* Typography */
+  --font-display: "Merriweather", "Times New Roman", serif;
+  --font-body: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Text colors */
+  --color-text-primary: #f5f7fb;
+  --color-text-secondary: rgba(245, 247, 251, 0.72);
+  --color-text-muted: rgba(229, 234, 244, 0.55);
+  --color-text-invert: #05070a;
+
+  /* Brand palette */
+  --color-gold-500: #f4d47c;
+  --color-gold-400: #f9e593;
+  --color-jade-500: #4a8d4a;
+  --color-jade-600: #3a6f3a;
+  --color-amber-500: #f59e0b;
+  --color-rose-500: #ef4444;
+  --color-slate-900: #04070d;
+  --color-slate-800: #0c141f;
+  --color-slate-700: #111827;
+
+  /* Surface system */
+  --surface-1: rgba(5, 8, 13, 0.85);
+  --surface-2: rgba(10, 16, 24, 0.85);
+  --surface-3: rgba(17, 24, 39, 0.75);
+  --surface-border: rgba(255, 255, 255, 0.14);
+  --surface-border-strong: rgba(255, 255, 255, 0.22);
+  --surface-glow: 0 25px 60px rgba(0, 0, 0, 0.55);
+
+  /* State colors */
+  --state-draft: #d4d4d8;
+  --state-shared: #f4d47c;
+  --state-waiting: #3b82f6;
+  --state-in-progress: #22c55e;
+  --state-paused: #f59e0b;
+  --state-finished: #6b7280;
+  --state-cancelled: #fca5a5;
+
+  /* Radii */
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-pill: 999px;
+
+  /* Spacing scale */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+
+  /* Shadows */
+  --shadow-soft: 0 15px 35px rgba(0, 0, 0, 0.45);
+  --shadow-hard: 0 25px 60px rgba(0, 0, 0, 0.65);
+
+  /* Glass */
+  --glass-bg: rgba(6, 9, 15, 0.78);
+  --glass-border: rgba(255, 255, 255, 0.12);
+}

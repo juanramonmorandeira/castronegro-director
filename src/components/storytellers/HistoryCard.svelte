@@ -36,6 +36,7 @@
   $: resolvedLabels = { ...baseLabels, ...labels };
 
   $: headerTitle = $t('landing.history.title');
+  $: subtitle = $t('landing.history.subtitle');
   $: searchPlaceholder = $t('landing.history.search_placeholder');
   $: loadingLabel = $t('landing.history.loading');
   $: errorPrefix = $t('landing.history.error_prefix');
@@ -142,15 +143,20 @@
 
 <section class="history-card card-glass">
   <header class="card-header">
-    <h2 class="history-title">{headerTitle}</h2>
-    <div class="toolbar">
-      <input
-        class="search"
-        type="search"
-        placeholder={searchPlaceholder}
-        bind:value={query}
-        aria-label={searchPlaceholder}
-      />
+    <div class="form-header">
+      <h2 class="panel-title">{headerTitle}</h2>
+      <p class="panel-subtitle">{subtitle}</p>
+    </div>
+    <div class="header-actions">
+      <div class="toolbar">
+        <input
+          class="search"
+          type="search"
+          placeholder={searchPlaceholder}
+          bind:value={query}
+          aria-label={searchPlaceholder}
+        />
+      </div>
       {#if loading}
         <span class="badge info" aria-live="polite">{loadingLabel}</span>
       {/if}
@@ -160,8 +166,8 @@
     </div>
   </header>
 
-  <div class="table-wrap" role="region" aria-label={headerTitle}>
-    <table class="history-table">
+  <div class="table-panel" role="region" aria-label={headerTitle}>
+    <table class="app-table history-table">
       <thead>
         <tr>
           <th class="sortable" on:click={() => toggleSort('title')} aria-sort={sortKey==='title'?(sortDir==='asc'?'ascending':'descending'):'none'}>{resolvedLabels.title}</th>
@@ -266,17 +272,26 @@
     padding: clamp(1.25rem, 3vw, 2rem);
     box-sizing: border-box;
   }
-  .card-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-  .history-title {
-    font-family: var(--title-font, 'Cinzel', serif);
-    font-size: clamp(1.8rem, 3vw, 2.2rem);
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-shadow: 0 0 10px rgba(255, 230, 140, 0.8), 0 0 20px rgba(255, 200, 80, 0.5);
-    color: #f7d774;
-    margin: 0;
+  .card-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
   }
-  .toolbar { display: flex; align-items: center; gap: 0.5rem; }
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .toolbar {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 240px;
+  }
   .search {
     flex: 1;
     padding: 0.65rem 0.8rem;
@@ -291,35 +306,12 @@
   .badge.info { background: #eef5ff; color: #245; border: 1px solid #cfe1ff; }
   .badge.error { background: #ffecec; color: #712; border: 1px solid #ffc9c9; }
 
-  .table-wrap { overflow: hidden; border-radius: 18px; border: 1px solid rgba(255,255,255,0.08); }
-  .history-table { width: 100%; border-collapse: collapse; }
-  thead th {
-    text-align: left;
-    font-weight: 600;
-    font-size: 0.95rem;
-    padding: 0.75rem 0.85rem;
-    background: rgba(255, 255, 255, 0.08);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  .history-table thead th.sortable { cursor: pointer; }
+  .history-table td.empty { text-align: center; color: rgba(255,255,255,0.75); padding: 1.25rem; }
+  .history-table td.num,
+  .history-table td.date {
     white-space: nowrap;
-    user-select: none;
-    color: rgba(245, 248, 251, 0.85);
   }
-  .sortable { cursor: pointer; }
-  tbody tr {
-    background: rgba(0, 0, 0, 0.35);
-  }
-  tbody tr + tr {
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-  }
-  tbody td {
-    padding: 0.75rem 0.85rem;
-    vertical-align: middle;
-    color: #f5f8fb;
-    font-size: 0.95rem;
-  }
-  tbody tr:hover { background: rgba(255, 255, 255, 0.05); }
-  td.empty { text-align: center; color: rgba(255,255,255,0.75); padding: 1.25rem; }
-  td.num, td.date { white-space: nowrap; }
   .actions { display: flex; gap: 0.4rem; }
   .icon-btn {
     display: inline-flex;

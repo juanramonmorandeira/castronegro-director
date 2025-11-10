@@ -5,9 +5,14 @@
   import { t } from '../lib/i18n.js';
   import { createEventDispatcher } from 'svelte';
   import { loginWithEmail, sendPasswordResetIfExists } from '../lib/auth.js';
+  import Card from '../components/ui/Card.svelte';
+  import Button from '../components/ui/Button.svelte';
+  import InputField from '../components/ui/InputField.svelte';
+  import AlertPopup from '../components/ui/AlertPopup.svelte';
 
   export let onLoginSuccess = null;
   export let onLoginForgot = null;
+  export let verificationNotice = null;
 
   const dispatch = createEventDispatcher();
   let email = '';
@@ -17,6 +22,10 @@
   let feedback = '';
   let feedbackKind = 'info';
   let role = 'storyteller';
+  let alertOpen = false;
+  let alertMessage = '';
+  let alertVariant = 'error';
+  let lastNoticeKey = null;
 
   function goRegistration() {
     dispatch('navigate-registration');
@@ -29,24 +38,49 @@
     feedbackKind = 'info';
   };
 
+  function openAlert(message, variant = 'error') {
+    alertMessage = message;
+    alertVariant = variant;
+    alertOpen = true;
+  }
+
+  function closeAlert() {
+    alertOpen = false;
+  }
+
+  $: if (verificationNotice && verificationNotice.message) {
+    const key = `${verificationNotice.variant ?? 'info'}::${verificationNotice.message}`;
+    if (key !== lastNoticeKey) {
+      openAlert(verificationNotice.message, verificationNotice.variant ?? 'info');
+      lastNoticeKey = key;
+      dispatch('notice-consumed');
+    }
+  }
+
   async function onSubmit(event) {
     event.preventDefault();
     resetFeedback();
 
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
-      feedback = $t('login.form.errors.missing_email');
+      const msg = $t('login.form.errors.missing_email');
+      feedback = msg;
       feedbackKind = 'error';
+      openAlert(msg);
       return;
     }
     if (!emailPattern.test(trimmedEmail)) {
-      feedback = $t('login.form.errors.invalid_email');
+      const msg = $t('login.form.errors.invalid_email');
+      feedback = msg;
       feedbackKind = 'error';
+      openAlert(msg);
       return;
     }
     if (!password) {
-      feedback = $t('login.form.errors.missing_password');
+      const msg = $t('login.form.errors.missing_password');
+      feedback = msg;
       feedbackKind = 'error';
+      openAlert(msg);
       return;
     }
 
@@ -76,6 +110,7 @@
       } else {
         feedback = $t('login.form.errors.generic');
       }
+      openAlert(feedback, 'error');
     } finally {
       loginPending = false;
     }
@@ -87,21 +122,27 @@
 
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
-      feedback = $t('login.form.errors.missing_email');
+      const msg = $t('login.form.errors.missing_email');
+      feedback = msg;
       feedbackKind = 'error';
+      openAlert(msg);
       return;
     }
     if (!emailPattern.test(trimmedEmail)) {
-      feedback = $t('login.form.errors.invalid_email');
+      const msg = $t('login.form.errors.invalid_email');
+      feedback = msg;
       feedbackKind = 'error';
+      openAlert(msg);
       return;
     }
 
     forgotPending = true;
     try {
       await sendPasswordResetIfExists(trimmedEmail);
-      feedback = $t('login.form.success.reset_link_sent');
+      const successMsg = $t('login.form.success.reset_link_sent');
+      feedback = successMsg;
       feedbackKind = 'info';
+      openAlert(successMsg, 'info');
       const detail = { email: trimmedEmail };
       if (typeof onLoginForgot === 'function') {
         onLoginForgot(detail);
@@ -140,110 +181,108 @@
   <div class="page">
   <Topbar titleKey="login.title" showUserMenu={false} />
 
-  <main class="center">
+  <main class="auth-screen">
     <h1 class="sr-only">{$t('login.title')}</h1>
 
     <div class="auth-layout">
-      <form
-        class="auth-card card-glass"
-        aria-label={formSectionLabel}
-        on:submit|preventDefault={onSubmit}
-        novalidate
-      >
-        <h2>{formSectionLabel}</h2>
+      <Card className="auth-card">
+        <form class="auth-form" aria-label={formSectionLabel} on:submit|preventDefault={onSubmit} novalidate>
+          <div class="form-header">
+            <h2 class="panel-title">{$t('login.title')}</h2>
+            <p class="panel-subtitle">{formSectionLabel}</p>
+          </div>
 
-        <div class="field">
-          <label class="label" for="email">{emailLabel}</label>
-          <input
+          <InputField
             id="email"
-            class="input"
+            label={emailLabel}
             type="email"
             name="email"
             bind:value={email}
+            placeholder={emailPlaceholder}
+            required={true}
+            aria-invalid={emailInvalid}
             autocomplete="email"
             inputmode="email"
-            placeholder={emailPlaceholder}
-            aria-required="true"
-            aria-invalid={emailInvalid}
+            showRequiredIndicator={false}
           />
-        </div>
 
-        <div class="field">
-          <label class="label" for="password">{passwordLabel}</label>
-          <input
+          <InputField
             id="password"
-            class="input"
+            label={passwordLabel}
             type="password"
             name="password"
             bind:value={password}
-            autocomplete="current-password"
             placeholder={passwordPlaceholder}
-            aria-required="true"
+            required={true}
+            autocomplete="current-password"
+            showRequiredIndicator={false}
           />
-        </div>
 
-        {#if feedback}
-          <p class="message" class:error={feedbackKind === 'error'} class:info={feedbackKind === 'info'} role={messageRole} aria-live="polite">
-            {feedback}
-          </p>
-        {/if}
+          {#if feedback}
+            <p class="sr-only" role={messageRole} aria-live="polite">
+              {feedback}
+            </p>
+          {/if}
 
-        <fieldset class="field">
-          <legend class="label">{roleLabel}</legend>
-          <div class="role-options">
-            <label class="role-option">
-              <input
-                type="radio"
-                name="role"
-                value="storyteller"
-                bind:group={role}
-              />
-              <span>{storytellerLabel}</span>
-            </label>
-            <label class="role-option">
-              <input
-                type="radio"
-                name="role"
-                value="player"
-                bind:group={role}
-              />
-              <span>{playerLabel}</span>
-            </label>
+          <fieldset class="field">
+            <legend class="label">{roleLabel}</legend>
+            <div class="role-options">
+              <label class="role-option">
+                <input
+                  type="radio"
+                  name="role"
+                  value="storyteller"
+                  bind:group={role}
+                />
+                <span>{storytellerLabel}</span>
+              </label>
+              <label class="role-option">
+                <input
+                  type="radio"
+                  name="role"
+                  value="player"
+                  bind:group={role}
+                />
+                <span>{playerLabel}</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <div class="form-actions cluster">
+            <Button variant="primary" type="submit" loading={loginPending} disabled={loginPending}>
+              {submitDisplay}
+            </Button>
+            <Button
+              variant="link"
+              type="button"
+              on:click={onForgot}
+              disabled={forgotPending}
+            >
+              {forgotDisplay}
+            </Button>
           </div>
-        </fieldset>
 
-        <div class="form-actions">
-          <button
-            class="btn primary"
-            type="submit"
-            disabled={loginPending}
-            aria-disabled={loginPending}
-          >
-            {submitDisplay}
-          </button>
-          <button
-            class="link-button"
-            type="button"
-            on:click={onForgot}
-            disabled={forgotPending}
-            aria-disabled={forgotPending}
-          >
-            {forgotDisplay}
-          </button>
-        </div>
-
-        <p class="register-hint">
-          {registerPrompt}
-          <button type="button" class="link-button" on:click={goRegistration}>
-            {registerLink}
-          </button>
-        </p>
-      </form>
+          <p class="register-hint">
+            {registerPrompt}
+            <Button variant="link" type="button" on:click={goRegistration}>
+              {registerLink}
+            </Button>
+          </p>
+        </form>
+      </Card>
     </div>
   </main>
 
   <Footbar />
 </div>
+
+<AlertPopup
+  open={alertOpen}
+  title={$t('login.title')}
+  message={alertMessage}
+  variant={alertVariant}
+  on:close={closeAlert}
+/>
 
 <style>
   .page {
@@ -253,65 +292,14 @@
     grid-template-rows: auto 1fr auto;
   }
 
-  .center {
-    display: grid;
-    place-items: center;
-    padding: 2rem 1rem;
+  :global(.auth-card) {
+    text-align: left;
   }
 
-  .auth-layout {
-    display: grid;
-    gap: 1.5rem;
-    width: min(480px, 90vw);
-  }
-
-  .auth-card {
-    display: grid;
-    gap: 1rem;
-    padding: clamp(1.5rem, 3vw, 2.25rem);
-  }
-
-  .auth-card h2 {
-    margin: 0;
-    text-align: center;
-    font-family: "Merriweather", serif;
-    font-size: clamp(1.8rem, 3vw, 2.2rem);
-    color: #f4d47c;
-    text-shadow:
-      0 0 8px rgba(255, 200, 60, 0.7),
-      0 0 18px rgba(255, 180, 40, 0.4),
-      2px 2px 10px rgba(0, 0, 0, 0.85);
-  }
-
-  .field {
-    display: grid;
-    gap: 0.35rem;
-  }
-
-  .label {
-    font-weight: 600;
-    color: #f0f2f4;
-  }
-
-  .input {
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    padding: 0.65rem 0.8rem;
-    background: rgba(0, 0, 0, 0.3);
-    color: #f5f8fb;
-    font-size: 1rem;
-  }
-
-  .input:focus {
-    outline: 2px solid rgba(255, 232, 140, 0.6);
-    outline-offset: 2px;
-  }
-
-  .form-actions {
+  .auth-form {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    align-items: center;
+    flex-direction: column;
+    gap: var(--space-4);
   }
 
   fieldset.field {
@@ -346,68 +334,6 @@
     accent-color: rgba(255, 232, 140, 0.8);
   }
 
-  .btn.primary {
-    background: rgba(74, 141, 74, 0.8);
-    border: 1px solid rgba(74, 141, 74, 0.9);
-    color: #f6fff6;
-    padding: 0.65rem 1.4rem;
-    border-radius: 999px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-
-  .btn.primary[disabled] {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  .link-button {
-    display: inline;
-    background: none;
-    border: none;
-    border-radius: 0;
-    color: rgba(255, 230, 150, 0.9);
-    padding: 0;
-    text-decoration: underline;
-    cursor: pointer;
-    font-weight: 500;
-    backdrop-filter: none;
-    box-shadow: none;
-  }
-
-  .link-button[disabled] {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  .link-button:hover {
-    color: rgba(255, 240, 180, 1);
-  }
-
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    border: 0;
-  }
-
-  .message {
-    margin: 0.25rem 0 0;
-    font-size: 0.95rem;
-  }
-
-  .message.error {
-    color: #ffc9c9;
-  }
-
-  .message.info {
-    color: #d7f6ff;
-  }
-
   .register-hint {
     margin: 0.75rem 0 0;
     font-size: 0.95rem;
@@ -415,7 +341,7 @@
     text-align: center;
   }
 
-  .register-hint .link-button {
+  .register-hint :global(.btn--link) {
     margin-left: 0.4rem;
   }
 </style>

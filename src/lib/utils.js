@@ -74,6 +74,7 @@ export function normalizeStatus(raw) {
   const normalized = String(raw).toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_');
   const map = {
     draft: 'draft',
+    shared: 'shared',
     waiting: 'waiting',
     pending: 'waiting',
     in_progress: 'in_progress',

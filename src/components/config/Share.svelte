@@ -21,8 +21,12 @@
     resetQr();
   }
 
-  function close() {
+  function cancelShare() {
     dispatch('cancel');
+  }
+
+  function closeShare() {
+    dispatch('close');
   }
 
   function resetQr() {
@@ -72,9 +76,6 @@
     <div class="config-modal share">
       <header class="modal-header">
         <h3 id="share-title">{$t('configure.share_title')}</h3>
-        <button class="icon-btn" type="button" on:click={close} aria-label={$t('common.actions.cancel')}>
-          ×
-        </button>
       </header>
       <div class="modal-body">
         <p class="hint">{$t('configure.share_hint')}</p>
@@ -92,7 +93,12 @@
         </div>
       </div>
       <footer class="modal-actions">
-        <button class="btn secondary" type="button" on:click={close}>{$t('common.actions.cancel')}</button>
+        <button class="btn secondary" type="button" on:click={cancelShare}>
+          {$t('common.actions.cancel')}
+        </button>
+        <button class="btn primary" type="button" on:click={closeShare}>
+          {$t('common.actions.close')}
+        </button>
       </footer>
     </div>
   </div>
@@ -164,25 +170,7 @@
   .modal-actions {
     display: flex;
     justify-content: flex-end;
-  }
-  .btn {
-    border: none;
-    border-radius: 999px;
-    padding: 0.55rem 1.2rem;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .btn.secondary {
-    background: rgba(255, 255, 255, 0.08);
-    color: rgba(248, 248, 250, 0.9);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-  }
-  .icon-btn {
-    background: transparent;
-    border: none;
-    color: #fff;
-    font-size: 1.4rem;
-    cursor: pointer;
+    gap: 0.75rem;
   }
 
   @keyframes pulse {

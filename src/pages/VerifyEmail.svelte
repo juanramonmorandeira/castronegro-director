@@ -4,16 +4,32 @@
   import { get } from 'svelte/store';
   import Topbar from '../components/common/Topbar.svelte';
   import Footbar from '../components/common/Footbar.svelte';
+  import AlertPopup from '../components/ui/AlertPopup.svelte';
   import { t } from '../lib/i18n.js';
   import { confirmEmailVerification } from '../lib/auth.js';
 
   const dispatch = createEventDispatcher();
   const translate = (key, vars) => get(t)(key, vars);
 
-  let status = 'checking'; // checking | success | error | invalid
-  let email = '';
-  let errorCode = '';
-  let redirectTimer;
+let status = 'checking'; // checking | success | error | invalid
+let email = '';
+let errorCode = '';
+let redirectTimer;
+let alertOpen = false;
+let alertMessage = '';
+let alertVariant = 'info';
+let alertTitle = '';
+
+const openAlert = (message, variant = 'warning', title = null) => {
+  alertMessage = message;
+  alertVariant = variant;
+  alertTitle = title ?? translate('verify.title');
+  alertOpen = true;
+};
+
+const closeAlert = () => {
+  alertOpen = false;
+};
 
   onMount(async () => {
     const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
@@ -22,6 +38,7 @@
 
     if (!params || mode !== 'verifyEmail' || !code) {
       status = 'invalid';
+      openAlert(translate('verify.invalid_message'), 'warning', translate('verify.invalid_title'));
       return;
     }
 
@@ -47,6 +64,13 @@
       console.error('Email verification failed:', error);
       errorCode = error?.code ?? 'unknown';
       status = 'error';
+      const reason =
+        errorCode === 'auth/invalid-action-code'
+          ? translate('verify.error_invalid_code')
+          : errorCode === 'auth/expired-action-code'
+            ? translate('verify.error_expired_code')
+            : translate('verify.error_generic_reason');
+      openAlert(translate('verify.error_message', { reason }), 'error', translate('verify.error_title'));
     }
   });
 
@@ -73,7 +97,7 @@
 <div class="page">
   <Topbar titleKey="verify.title" showUserMenu={false} />
 
-  <main class="center">
+  <main class="auth-screen">
     <div class="card auth-card card-glass" aria-live="polite">
       <h2>{heading}</h2>
 
@@ -114,17 +138,19 @@
   <Footbar />
 </div>
 
+<AlertPopup
+  open={alertOpen}
+  title={alertTitle}
+  message={alertMessage}
+  variant={alertVariant}
+  on:close={closeAlert}
+/>
+
 <style>
   .page {
     min-height: 100vh;
     display: grid;
     grid-template-rows: auto 1fr auto;
-  }
-
-  .center {
-    display: grid;
-    place-items: center;
-    padding: 2rem 1rem;
   }
 
   .auth-card {

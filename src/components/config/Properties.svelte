@@ -228,15 +228,15 @@
     padding: 1rem;
   }
   .config-modal {
-    width: min(680px, 95vw);
-    background: rgba(8, 14, 24, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 20px;
+    width: min(540px, 92vw);
+    background: rgba(8, 14, 24, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 24px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
-    padding: 1.5rem;
+    gap: 1.25rem;
+    padding: clamp(1.25rem, 3vw, 1.75rem);
     color: #f5f8fb;
   }
   .modal-header {
@@ -247,7 +247,7 @@
   }
   .modal-header h3 {
     margin: 0;
-    font-size: 1.4rem;
+    font-size: 1.3rem;
   }
   .icon-btn {
     background: transparent;
@@ -258,14 +258,17 @@
   }
   .modal-body {
     display: grid;
-    gap: 1rem;
+    gap: 1.1rem;
   }
   .field {
-    display: grid;
-    gap: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
   }
   .label {
-    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
   }
   .input {
     background: rgba(12, 18, 28, 0.65);

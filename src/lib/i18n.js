@@ -26,7 +26,11 @@ const dictionaries = {
         edit: 'Edit',
         delete: 'Delete',
         cancel: 'Cancel',
-        save: 'Save'
+        save: 'Save',
+        close: 'Close'
+      },
+      alerts: {
+        default_title: 'Please review the information'
       }
     },
     topbar: {
@@ -39,6 +43,10 @@ const dictionaries = {
         profile: 'User profile',
         logout: 'Logout'
       }
+    },
+    navigation: {
+      back_to_login: 'Back to login',
+      back_to_dashboard: 'Back to dashboard'
     },
     header: {
       title: 'The Village Storyteller',
@@ -84,12 +92,13 @@ const dictionaries = {
     registration: {
       title: 'Registration',
       intro: 'Complete the form to create your account.',
+      alert_title: 'Complete the missing information',
       name_label: 'Full name',
       name_placeholder: 'John Doe',
       alias_label: 'Nickname',
       alias_placeholder: 'Optional nickname',
-      avatar_label: 'Choose an avatar',
-      avatar_help: 'Select one of the avatars below.',
+      avatar_label: 'Avatar',
+      avatar_help: 'Choose from gallery or upload your own.',
       avatar_change_button: 'Change avatar',
       avatar_selected_alt: 'Selected avatar',
       avatar_modal_title: 'Choose your avatar',
@@ -103,6 +112,7 @@ const dictionaries = {
         laura: 'Laura',
         martin: 'Martin',
         matyas: 'Mátyás',
+        emese: 'Emese',
         natalia: 'Natalia',
         ramon: 'Ramón',
         sofia: 'Sofia',
@@ -127,6 +137,11 @@ const dictionaries = {
       },
       errors: {
         registration_error: 'Could not complete registration. Please try again.',
+        missing_name: 'Please enter your full name.',
+        missing_email: 'Please enter your email address.',
+        invalid_email: 'Please enter a valid email address.',
+        missing_password: 'Please enter a password.',
+        missing_confirm: 'Please confirm your password.',
         password_mismatch: 'Passwords do not match.',
         password_strength: 'Password does not meet the security requirements.',
         email_in_use: 'There is already an account with this email address.',
@@ -148,9 +163,9 @@ const dictionaries = {
       optional: 'optional',
       email_label: 'Email address',
       email_placeholder: 'you@example.com',
-      email_hint: 'Changing your email will require verifying the new address.',
+      email_hint: 'Changing email will require new address verification.',
       avatar_label: 'Avatar',
-      avatar_hint: 'Choose one of the preset avatars or upload your own.',
+      avatar_hint: 'Choose from gallery or upload your own.',
       avatar_change_button: 'Change avatar',
       avatar_current_alt: 'Selected avatar preview',
       avatar_modal_title: 'Choose your avatar',
@@ -163,6 +178,7 @@ const dictionaries = {
       security_section: 'Security',
       current_password_label: 'Current password',
       required_for_sensitive: 'Required for email or password changes',
+      required_short: 'Required',
       current_password_placeholder: 'Enter your current password',
       new_password_label: 'New password',
       new_password_placeholder: 'Create a new secure password',
@@ -215,12 +231,15 @@ const dictionaries = {
     },
     configure: {
       title: 'Session configuration',
-      heading: 'Configure your new game',
+      heading: 'Session configuration',
+      intro: 'Set up your session details before sharing with players.',
       properties_title: 'Game properties',
       selection_title: 'Role selection',
       selection_hint: 'Adjust how many roles come from each group. Override limits to ignore the suggested mix.',
       selection_placeholder: 'Roles from this group',
       selection_placeholder_hint: 'Detailed role gallery coming soon.',
+      selection_counts: '{selected}/{required} selected',
+      selection_counts_unbound: '{selected} selected',
       title_label: 'Session title',
       title_placeholder: 'Game session name…',
       ruleset_label: 'Rule set',
@@ -241,6 +260,9 @@ const dictionaries = {
         ruleset: 'Rule set: {value}',
         mix: 'Mix for {value} players'
       },
+      session_stats_label: 'Session metrics',
+      players_counters_heading: 'PLAYERS COUNTERS',
+      expected_label: 'Expected',
       connected_label: 'Connected',
       ready_label: 'Ready',
       btn_properties: 'Properties',
@@ -248,7 +270,7 @@ const dictionaries = {
       btn_match: 'Match',
       btn_distribution: 'Distribution',
       btn_share: 'Share session',
-      btn_edit_selection: 'Edit selection',
+      btn_edit_selection: 'Select roles',
       start_button: 'Start game',
       continue_button: 'Continue',
       director_label: 'Storyteller',
@@ -277,10 +299,21 @@ const dictionaries = {
       share_qr_placeholder: 'QR code placeholder',
       share_qr_generating: 'Generating QR…',
       share_qr_alt: 'QR code for this session',
+      role_preview_empty: 'No roles selected yet',
       back: 'Back to dashboard',
       save: 'Save changes',
       saved: 'Saved!',
-      loading: 'Loading configuration…'
+      loading: 'Loading configuration…',
+      errors: {
+        missing_title: 'Please enter a session title before saving.',
+        missing_session: 'No session is selected.',
+        missing_game_id: 'Generate or enter a Game ID before sharing.',
+        share_unavailable: 'Complete the role selection before sharing.',
+        save_failed: 'We could not save these settings. Try again.',
+        share_failed: 'We could not mark the session as shared.',
+        start_failed: 'We could not update the session status.',
+        load_failed: 'We could not load this session.'
+      }
     },
     verify: {
       title: 'Email verification',
@@ -301,16 +334,17 @@ const dictionaries = {
       go_login: 'Return to login'
     },
     player: {
-      choose_title: 'Player Dashboard',
+      choose_title: 'Choose',
       join_methods: 'Choose how to join',
       join_intro: 'Scan a QR code, enter a session ID or pick one from the list.',
       scan_qr: 'Scan QR code',
-      session_id: 'Session ID',
-      session_id_placeholder: 'Enter the session ID',
-      session_id_hint: 'You will find this code on the storyteller’s screen.',
+      session_id: 'Game ID',
+      session_id_placeholder: 'Enter the game ID',
+      session_id_hint: "You will find this code on the storyteller's screen.",
       connect: 'Connect',
       connect_selected: 'Connect to selected session',
       active_sessions: 'Available sessions',
+      active_sessions_hint: 'Sessions shared by the storyteller appear here.',
       refresh: 'Refresh',
       loading: 'Loading sessions…',
       no_sessions: 'No sessions available right now.',
@@ -323,19 +357,24 @@ const dictionaries = {
     landing: {
       current: {
         heading: 'Current Session',
+        subtitle: 'Manage or resume the storyteller session currently in progress.',
         checking: 'Checking current game session…',
         active_prefix: 'Active game:',
         no_active: 'No active game sessions right now.',
         create: 'Create new game',
         creating: 'Creating…',
         create_error: 'We could not create the session. Please check the console logs.',
-        view: 'View current game'
+        load_error: 'We could not load the current session.',
+        view: 'View current game',
+        view_forbidden: 'You can only open sessions you created.'
       },
       history: {
         title: 'History',
+        subtitle: 'Review previously created sessions and their outcomes.',
         search_placeholder: 'Search by title, status or winner…',
         loading: 'Loading…',
         error_prefix: 'Error',
+        load_failed: 'We could not load the history.',
         empty: 'There are no sessions recorded.',
         empty_with_query: 'There are no results for “{query}”.',
         delete_forbidden: 'You can only delete sessions you created.',
@@ -365,6 +404,7 @@ const dictionaries = {
     },
     status: {
       draft: 'Draft',
+      shared: 'Shared',
       waiting: 'Waiting',
       in_progress: 'In progress',
       paused: 'Paused',
@@ -375,7 +415,7 @@ const dictionaries = {
       placeholders: {
         configure_title: 'Game configuration',
         session_title: 'Active session',
-        session_id: 'Session ID: {id}'
+        session_id: 'Game ID: {id}'
       }
     }
   },
@@ -396,7 +436,11 @@ const dictionaries = {
         edit: 'Editar',
         delete: 'Eliminar',
         cancel: 'Cancelar',
-        save: 'Guardar'
+        save: 'Guardar',
+        close: 'Cerrar'
+      },
+      alerts: {
+        default_title: 'Revisa la información'
       }
     },
     topbar: {
@@ -409,6 +453,10 @@ const dictionaries = {
         profile: 'Perfil de usuario',
         logout: 'Cerrar sesión'
       }
+    },
+    navigation: {
+      back_to_login: 'Volver al login',
+      back_to_dashboard: 'Volver al panel'
     },
     header: {
       title: 'El Narrador de la Aldea',
@@ -454,12 +502,13 @@ const dictionaries = {
     registration: {
       title: 'Registro',
       intro: 'Completa el formulario para crear tu cuenta.',
+      alert_title: 'Completa la información pendiente',
       name_label: 'Nombre completo',
       name_placeholder: 'Marina Pérez',
       alias_label: 'Apodo',
       alias_placeholder: 'Apodo opcional',
-      avatar_label: 'Elige un avatar',
-      avatar_help: 'Selecciona uno de los avatares disponibles.',
+      avatar_label: 'Avatar',
+      avatar_help: 'Elige desde la galería o sube uno propio.',
       avatar_change_button: 'Cambiar avatar',
       avatar_selected_alt: 'Avatar seleccionado',
       avatar_modal_title: 'Elige tu avatar',
@@ -473,6 +522,7 @@ const dictionaries = {
         laura: 'Laura',
         martin: 'Martin',
         matyas: 'Mátyás',
+        emese: 'Emese',
         natalia: 'Natalia',
         ramon: 'Ramón',
         sofia: 'Sofía',
@@ -497,6 +547,11 @@ const dictionaries = {
       },
       errors: {
         registration_error: 'No se pudo completar el registro. Inténtalo de nuevo.',
+        missing_name: 'Introduce tu nombre completo.',
+        missing_email: 'Introduce tu correo electrónico.',
+        invalid_email: 'Introduce un correo electrónico válido.',
+        missing_password: 'Escribe una contraseña.',
+        missing_confirm: 'Confirma tu contraseña.',
         password_mismatch: 'Las contraseñas no coinciden.',
         password_strength: 'La contraseña no cumple los requisitos de seguridad.',
         email_in_use: 'Ya existe una cuenta con este correo electrónico.',
@@ -520,7 +575,7 @@ const dictionaries = {
       email_placeholder: 'tu@ejemplo.com',
       email_hint: 'Cambiar el correo requiere verificar la nueva dirección.',
       avatar_label: 'Avatar',
-      avatar_hint: 'Elige uno de los avatares disponibles o sube tu propia imagen.',
+      avatar_hint: 'Elige desde la galería o sube uno propio.',
       avatar_change_button: 'Cambiar avatar',
       avatar_current_alt: 'Avatar seleccionado',
       avatar_modal_title: 'Elige un nuevo avatar',
@@ -533,6 +588,7 @@ const dictionaries = {
       security_section: 'Seguridad',
       current_password_label: 'Contraseña actual',
       required_for_sensitive: 'Necesaria para cambiar correo o contraseña',
+      required_short: 'Obligatorio',
       current_password_placeholder: 'Introduce tu contraseña actual',
       new_password_label: 'Nueva contraseña',
       new_password_placeholder: 'Crea una contraseña segura',
@@ -585,12 +641,15 @@ const dictionaries = {
     },
     configure: {
       title: 'Configuración de la sesión',
-      heading: 'Configura tu nueva partida',
+      heading: 'Configuración de la sesión',
+      intro: 'Ajusta la sesión antes de compartirla con los jugadores.',
       properties_title: 'Propiedades de la partida',
       selection_title: 'Selección de roles',
       selection_hint: 'Ajusta cuántos roles provienen de cada grupo. Activa el override para ignorar el reparto sugerido.',
       selection_placeholder: 'Roles de esta categoría',
       selection_placeholder_hint: 'Muy pronto verás cada rol con su ilustración.',
+      selection_counts: '{selected}/{required} seleccionados',
+      selection_counts_unbound: '{selected} seleccionados',
       title_label: 'Título de la sesión',
       title_placeholder: 'Nombre para la partida…',
       ruleset_label: 'Conjunto de reglas',
@@ -611,6 +670,9 @@ const dictionaries = {
         ruleset: 'Reglas: {value}',
         mix: 'Mezcla para {value} jugadores'
       },
+      session_stats_label: 'Indicadores de la sesión',
+      players_counters_heading: 'CONTADORES DE JUGADORES',
+      expected_label: 'Esperados',
       connected_label: 'Conectados',
       ready_label: 'Listos',
       btn_properties: 'Propiedades',
@@ -618,7 +680,7 @@ const dictionaries = {
       btn_match: 'Emparejar',
       btn_distribution: 'Distribución',
       btn_share: 'Compartir sesión',
-      btn_edit_selection: 'Editar selección',
+      btn_edit_selection: 'Seleccionar roles',
       start_button: 'Empezar partida',
       continue_button: 'Continuar',
       director_label: 'Narrador',
@@ -647,10 +709,21 @@ const dictionaries = {
       share_qr_placeholder: 'QR disponible en breve',
       share_qr_generating: 'Generando QR…',
       share_qr_alt: 'Código QR de la sesión',
+      role_preview_empty: 'Aún no seleccionaste roles',
       back: 'Volver al panel',
       save: 'Guardar cambios',
       saved: 'Guardado',
-      loading: 'Cargando configuración…'
+      loading: 'Cargando configuración…',
+      errors: {
+        missing_title: 'Escribe un título para la sesión.',
+        missing_session: 'No hay ninguna sesión seleccionada.',
+        missing_game_id: 'Genera o introduce un Game ID antes de compartir.',
+        share_unavailable: 'Completa la selección de roles antes de compartir.',
+        save_failed: 'No pudimos guardar la configuración. Intenta de nuevo.',
+        share_failed: 'No pudimos marcar la sesión como compartida.',
+        start_failed: 'No pudimos actualizar el estado de la sesión.',
+        load_failed: 'No pudimos cargar esta sesión.'
+      }
     },
     verify: {
       title: 'Verificación de correo',
@@ -671,16 +744,17 @@ const dictionaries = {
       go_login: 'Volver al login'
     },
     player: {
-      choose_title: 'Panel del Jugador',
+      choose_title: 'Choose',
       join_methods: 'Elige cómo unirte',
       join_intro: 'Escanea un código QR, escribe un ID de sesión o selecciona una partida activa.',
       scan_qr: 'Escanear código QR',
-      session_id: 'ID de sesión',
-      session_id_placeholder: 'Introduce el ID de sesión',
+      session_id: 'ID de partida',
+      session_id_placeholder: 'Introduce el ID de partida',
       session_id_hint: 'Encontrarás este código en la pantalla del narrador.',
       connect: 'Conectar',
       connect_selected: 'Conectar con la partida seleccionada',
       active_sessions: 'Partidas disponibles',
+      active_sessions_hint: 'Aquí aparecen las partidas que el narrador ha compartido.',
       refresh: 'Actualizar',
       loading: 'Cargando partidas…',
       no_sessions: 'No hay partidas disponibles ahora mismo.',
@@ -693,19 +767,24 @@ const dictionaries = {
     landing: {
       current: {
         heading: 'Partida actual',
+        subtitle: 'Gestiona o reanuda la partida del narrador que está en curso.',
         checking: 'Comprobando partida actual…',
         active_prefix: 'Partida activa:',
         no_active: 'No hay partidas activas ahora mismo.',
         create: 'Crear nueva partida',
         creating: 'Creando…',
         create_error: 'No pudimos crear la partida. Revisa la consola.',
-        view: 'Ver partida actual'
+        load_error: 'No pudimos cargar la partida actual.',
+        view: 'Ver partida actual',
+        view_forbidden: 'Solo puedes abrir partidas que hayas creado.'
       },
       history: {
         title: 'Histórico',
+        subtitle: 'Consulta las sesiones creadas y sus resultados.',
         search_placeholder: 'Buscar por título, estado o ganador…',
         loading: 'Cargando…',
         error_prefix: 'Error',
+        load_failed: 'No pudimos cargar el histórico.',
         empty: 'No hay sesiones registradas.',
         empty_with_query: 'No hay resultados para “{query}”.',
         delete_forbidden: 'Solo puedes eliminar partidas que hayas creado tú.',
@@ -735,6 +814,7 @@ const dictionaries = {
     },
     status: {
       draft: 'Borrador',
+      shared: 'Compartida',
       waiting: 'En espera',
       in_progress: 'En curso',
       paused: 'Pausada',
@@ -745,7 +825,7 @@ const dictionaries = {
       placeholders: {
         configure_title: 'Configuración de partida',
         session_title: 'Sesión en curso',
-        session_id: 'ID de sesión: {id}'
+        session_id: 'ID de partida: {id}'
       }
     }
   },
@@ -766,7 +846,11 @@ const dictionaries = {
         edit: 'Szerkesztés',
         delete: 'Törlés',
         cancel: 'Mégse',
-        save: 'Mentés'
+        save: 'Mentés',
+        close: 'Bezárás'
+      },
+      alerts: {
+        default_title: 'Ellenőrizd az adatokat'
       }
     },
     topbar: {
@@ -779,6 +863,10 @@ const dictionaries = {
         profile: 'Felhasználói profil',
         logout: 'Kijelentkezés'
       }
+    },
+    navigation: {
+      back_to_login: 'Vissza a bejelentkezéshez',
+      back_to_dashboard: 'Vissza a vezérlőpulthoz'
     },
     header: {
       title: 'A falu mesemondója',
@@ -824,12 +912,13 @@ const dictionaries = {
     registration: {
       title: 'Regisztráció',
       intro: 'Töltsd ki az űrlapot a fiók létrehozásához.',
+      alert_title: 'Töltsd ki a hiányzó adatokat',
       name_label: 'Teljes név',
       name_placeholder: 'Kovács Anna',
       alias_label: 'Becenév',
       alias_placeholder: 'Választható becenév',
-      avatar_label: 'Válassz egy avatárt',
-      avatar_help: 'Válaszd ki a lenti avatárok egyikét.',
+      avatar_label: 'Avatar',
+      avatar_help: 'Válassz a galériából vagy tölts fel sajátot.',
       avatar_change_button: 'Avatar módosítása',
       avatar_selected_alt: 'Kiválasztott avatar',
       avatar_modal_title: 'Válaszd ki az avatarod',
@@ -843,6 +932,7 @@ const dictionaries = {
         laura: 'Laura',
         martin: 'Martin',
         matyas: 'Mátyás',
+        emese: 'Emese',
         natalia: 'Natalia',
         ramon: 'Ramón',
         sofia: 'Sofia',
@@ -867,6 +957,11 @@ const dictionaries = {
       },
       errors: {
         registration_error: 'A regisztráció nem sikerült. Próbáld újra.',
+        missing_name: 'Add meg a teljes neved.',
+        missing_email: 'Add meg az e-mail címed.',
+        invalid_email: 'Adj meg érvényes e-mail címet.',
+        missing_password: 'Adj meg egy jelszót.',
+        missing_confirm: 'Erősítsd meg a jelszavad.',
         password_mismatch: 'A jelszavak nem egyeznek.',
         password_strength: 'A jelszó nem felel meg a biztonsági követelményeknek.',
         email_in_use: 'Ezzel az e-mail címmel már létezik fiók.',
@@ -890,7 +985,7 @@ const dictionaries = {
       email_placeholder: 'te@pelda.hu',
       email_hint: 'Az e-mail módosítása az új cím megerősítését igényli.',
       avatar_label: 'Avatar',
-      avatar_hint: 'Válassz egy avatart vagy tölts fel saját képet.',
+      avatar_hint: 'Válassz a galériából vagy tölts fel sajátot.',
       avatar_change_button: 'Avatar módosítása',
       avatar_current_alt: 'Kiválasztott avatar',
       avatar_modal_title: 'Válassz új avatart',
@@ -903,6 +998,7 @@ const dictionaries = {
       security_section: 'Biztonság',
       current_password_label: 'Jelenlegi jelszó',
       required_for_sensitive: 'Szükséges az e-mail vagy jelszó módosításához',
+      required_short: 'Kötelező',
       current_password_placeholder: 'Írd be a jelenlegi jelszavad',
       new_password_label: 'Új jelszó',
       new_password_placeholder: 'Adj meg biztonságos új jelszót',
@@ -954,13 +1050,16 @@ const dictionaries = {
       }
     },
     configure: {
-      title: 'Játék konfigurációja',
-      heading: 'Állítsd be az új játékot',
+      title: 'Session konfigurációja',
+      heading: 'Session konfigurációja',
+      intro: 'Állítsd be a játék részleteit, mielőtt megosztod a játékosokkal.',
       properties_title: 'Játék beállításai',
       selection_title: 'Szerepkiosztás',
       selection_hint: 'Állítsd be, hány szerep jön az egyes kategóriákból. A korlát feloldásával figyelmen kívül hagyhatod az ajánlást.',
       selection_placeholder: 'Szerepek ebből a csoportból',
       selection_placeholder_hint: 'Hamarosan itt lesznek a tényleges kártyák.',
+      selection_counts: '{selected}/{required} kiválasztva',
+      selection_counts_unbound: '{selected} kiválasztva',
       title_label: 'Játék címe',
       title_placeholder: 'Add meg a játék nevét…',
       ruleset_label: 'Szabálykészlet',
@@ -981,14 +1080,17 @@ const dictionaries = {
         ruleset: 'Szabálykészlet: {value}',
         mix: '{value} játékosra ajánlott mix'
       },
+      session_stats_label: 'Session mutatók',
+      players_counters_heading: 'JÁTÉKOS SZÁMLÁLÓK',
+      expected_label: 'Tervezett',
       connected_label: 'Csatlakozott',
-      ready_label: 'Készen',
+      ready_label: 'Kész',
       btn_properties: 'Tulajdonságok',
       btn_selection: 'Szerepek',
       btn_match: 'Párosítás',
       btn_distribution: 'Elrendezés',
       btn_share: 'Megosztás',
-      btn_edit_selection: 'Kiosztás szerkesztése',
+      btn_edit_selection: 'Szerepek kiválasztása',
       start_button: 'Játék indítása',
       continue_button: 'Folytatás',
       director_label: 'Mesemondó',
@@ -1017,10 +1119,21 @@ const dictionaries = {
       share_qr_placeholder: 'QR hamarosan',
       share_qr_generating: 'QR készítése…',
       share_qr_alt: 'QR-kód ehhez a sessionhöz',
+      role_preview_empty: 'Még nincs kiválasztott szerep',
       back: 'Vissza a vezérlőpultra',
       save: 'Mentés',
       saved: 'Mentve!',
-      loading: 'Konfiguráció betöltése…'
+      loading: 'Konfiguráció betöltése…',
+      errors: {
+        missing_title: 'Add meg a játék címét.',
+        missing_session: 'Nincs kiválasztott session.',
+        missing_game_id: 'Megosztás előtt hozz létre egy Game ID-t.',
+        share_unavailable: 'A szerepkiosztást kell előbb befejezni.',
+        save_failed: 'Nem sikerült menteni a beállításokat.',
+        share_failed: 'Nem sikerült megosztani a sessiont.',
+        start_failed: 'Nem tudtuk frissíteni a session állapotát.',
+        load_failed: 'Nem sikerült betölteni ezt a sessiont.'
+      }
     },
     verify: {
       title: 'E-mail megerősítés',
@@ -1041,16 +1154,17 @@ const dictionaries = {
       go_login: 'Vissza a bejelentkezéshez'
     },
     player: {
-      choose_title: 'Játékos vezérlőpult',
+      choose_title: 'Choose',
       join_methods: 'Válaszd ki a csatlakozás módját',
       join_intro: 'Olvass be egy QR-kódot, írd be a session azonosítót vagy válassz egy aktív játékot.',
       scan_qr: 'QR-kód beolvasása',
-      session_id: 'Session azonosító',
-      session_id_placeholder: 'Írd be a session azonosítót',
+      session_id: 'Játék azonosító',
+      session_id_placeholder: 'Írd be a játék azonosítót',
       session_id_hint: 'A kódot a mesélő képernyőjén találod.',
       connect: 'Csatlakozás',
       connect_selected: 'Csatlakozás a kiválasztott játékhoz',
       active_sessions: 'Elérhető játékok',
+      active_sessions_hint: 'Itt jelennek meg a mesélő által megosztott játékok.',
       refresh: 'Frissítés',
       loading: 'Játékok betöltése…',
       no_sessions: 'Jelenleg nincs elérhető játék.',
@@ -1063,19 +1177,24 @@ const dictionaries = {
     landing: {
       current: {
         heading: 'Aktív játék',
+        subtitle: 'Kezeld vagy folytasd a mesélő éppen futó játékát.',
         checking: 'Aktuális játék ellenőrzése…',
         active_prefix: 'Aktív játék:',
         no_active: 'Jelenleg nincs aktív játék.',
         create: 'Új játék létrehozása',
         creating: 'Játék létrehozása…',
         create_error: 'Nem sikerült létrehozni a játékot. Nézd meg a konzolt.',
-        view: 'Aktív játék megnyitása'
+        load_error: 'Nem tudtuk betölteni az aktuális játékot.',
+        view: 'Aktív játék megnyitása',
+        view_forbidden: 'Csak az általad létrehozott játékokat nyithatod meg.'
       },
       history: {
         title: 'Előzmények',
+        subtitle: 'Nézd át a korábban létrehozott játékokat és eredményeiket.',
         search_placeholder: 'Keresés cím, állapot vagy győztes alapján…',
         loading: 'Betöltés…',
         error_prefix: 'Hiba',
+        load_failed: 'Nem sikerült betölteni az előzményeket.',
         empty: 'Nincsenek mentett játékok.',
         empty_with_query: 'Nincs találat erre: “{query}”.',
         delete_forbidden: 'Csak az általad létrehozott játékokat törölheted.',
@@ -1105,6 +1224,7 @@ const dictionaries = {
     },
     status: {
       draft: 'Piszkozat',
+      shared: 'Megosztva',
       waiting: 'Várakozik',
       in_progress: 'Folyamatban',
       paused: 'Szünetel',

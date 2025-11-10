@@ -9,16 +9,16 @@
   // ─────────────────────────────────────────────────────────────
 
   import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
   import BackgroundLayer from './components/common/BackgroundLayer.svelte';
   import Storyteller from "./pages/Storyteller.svelte";
   import Login from './pages/Login.svelte';
   import Registration from './pages/Registration.svelte';
 import Choose from './pages/Choose.svelte';
   import Profile from './pages/Profile.svelte';
-  import VerifyEmail from './pages/VerifyEmail.svelte';
   import Configure from './pages/Configure.svelte';
   import { t } from './lib/i18n.js';
-  import { fetchCurrentUserProfile, signOutUser } from './lib/auth.js';
+  import { fetchCurrentUserProfile, signOutUser, confirmEmailVerification } from './lib/auth.js';
   import { auth } from './lib/firebase.js';
   import { onAuthStateChanged } from 'firebase/auth';
 
@@ -27,12 +27,18 @@ import Choose from './pages/Choose.svelte';
   let currentRole = null;
   let currentUser = null;
   let previousView = null;
+  let verificationNotice = null;
+  let pendingVerificationCode = null;
+  let shouldProcessVerification = false;
 
   if (typeof window !== 'undefined') {
     const initialPath = window.location.pathname;
     const params = new URLSearchParams(window.location.search);
-    if (params.get('mode') === 'verifyEmail' || initialPath === '/verify') {
-      view = 'verify-email';
+    const mode = params.get('mode');
+    if (mode === 'verifyEmail' || initialPath === '/verify') {
+      pendingVerificationCode = params.get('oobCode');
+      shouldProcessVerification = true;
+      view = 'login';
     } else if (initialPath === '/registration') {
       view = 'registration';
     } else if (initialPath === '/login') {
@@ -70,6 +76,54 @@ import Choose from './pages/Choose.svelte';
   function handleLoginForgot(payload) {
     const detail = payload && payload.detail !== undefined ? payload.detail : payload;
     console.info('Password reset requested for', detail?.email);
+  }
+
+  function clearVerificationParams() {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    ['mode', 'oobCode', 'apiKey', 'lang', 'continueUrl'].forEach((key) => url.searchParams.delete(key));
+    window.history.replaceState({}, '', url);
+  }
+
+  async function processEmailVerification(code) {
+    const translate = get(t);
+    if (!code) {
+      verificationNotice = {
+        variant: 'error',
+        message: translate('verify.invalid_message'),
+        title: translate('verify.invalid_title')
+      };
+      clearVerificationParams();
+      return;
+    }
+    try {
+      const result = await confirmEmailVerification(code);
+      const emailLabel = result?.email ?? translate('verify.unknown_email');
+      verificationNotice = {
+        variant: result?.activated ? 'success' : 'info',
+        message: translate('verify.success_message', { email: emailLabel }),
+        title: translate('verify.success_title')
+      };
+    } catch (error) {
+      console.error('Unable to confirm email verification', error);
+      const reason =
+        error?.code === 'auth/invalid-action-code'
+          ? translate('verify.error_invalid_code')
+          : error?.code === 'auth/expired-action-code'
+            ? translate('verify.error_expired_code')
+            : translate('verify.error_generic_reason');
+      verificationNotice = {
+        variant: 'error',
+        message: translate('verify.error_message', { reason }),
+        title: translate('verify.error_title')
+      };
+    } finally {
+      clearVerificationParams();
+    }
+  }
+
+  function handleNoticeConsumed() {
+    verificationNotice = null;
   }
 
   function goLogin() {
@@ -163,6 +217,9 @@ import Choose from './pages/Choose.svelte';
   }
 
   onMount(() => {
+    if (shouldProcessVerification) {
+      processEmailVerification(pendingVerificationCode);
+    }
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
@@ -203,15 +260,17 @@ import Choose from './pages/Choose.svelte';
   <Login
     onLoginSuccess={handleLoginSuccess}
     onLoginForgot={handleLoginForgot}
+    on:loginSuccess={handleLoginSuccess}
+    on:loginForgot={handleLoginForgot}
     on:navigate-registration={goRegistration}
+    verificationNotice={verificationNotice}
+    on:notice-consumed={handleNoticeConsumed}
   />
 {:else if view === 'registration'}
   <Registration
     on:registered={handleRegistered}
     on:navigate-login={goLogin}
   />
-{:else if view === 'verify-email'}
-  <VerifyEmail on:navigate-login={goLogin} />
 {:else if view === 'player-selection'}
   <Choose
     user={currentUser}

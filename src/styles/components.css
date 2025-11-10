@@ -1,0 +1,211 @@
+:root {
+  --btn-height: 2.75rem;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0 var(--space-4);
+  height: var(--btn-height);
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn--primary,
+.btn.primary {
+  background: linear-gradient(135deg, var(--color-jade-500), var(--color-jade-600));
+  border-color: rgba(53, 99, 53, 0.8);
+  color: #f6fff6;
+}
+
+.btn--secondary,
+.btn.secondary {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: var(--color-text-primary);
+}
+
+.btn--ghost {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.18);
+  color: var(--color-text-secondary);
+}
+
+.btn--danger {
+  background: var(--color-rose-500);
+  border-color: rgba(0, 0, 0, 0.2);
+  color: #fff;
+}
+
+.btn--danger,
+.btn.danger {
+  background: var(--color-rose-500);
+  border-color: rgba(0, 0, 0, 0.2);
+  color: #fff;
+}
+
+.btn--link,
+.link-button {
+  background: none;
+  border: none;
+  color: var(--color-gold-400);
+  padding: 0;
+  height: auto;
+}
+
+.btn--link:hover,
+.link-button:hover {
+  color: #fff0c0;
+}
+
+.input-field {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--radius-md);
+  padding: 0.65rem 0.85rem;
+  color: var(--color-text-primary);
+}
+
+.input-field:focus-visible {
+  outline: 2px solid rgba(244, 212, 124, 0.7);
+  outline-offset: 2px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.action-hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 6, 14, 0.85);
+  display: grid;
+  place-items: center;
+  z-index: 1000;
+  padding: var(--space-4);
+}
+
+.modal-panel {
+  background: var(--surface-2);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-hard);
+  width: min(640px, 95vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--color-text-invert);
+}
+
+.badge.draft {
+  background: var(--state-draft);
+}
+.badge.shared {
+  background: var(--state-shared);
+  color: #0b2e18;
+}
+.badge.waiting {
+  background: var(--state-waiting);
+  color: #fff;
+}
+.badge.in_progress {
+  background: var(--state-in-progress);
+  color: #0b2e18;
+}
+.badge.paused {
+  background: var(--state-paused);
+}
+.badge.finished {
+  background: var(--state-finished);
+  color: #fff;
+}
+.badge.cancelled {
+  background: var(--state-cancelled);
+}
+
+.table-panel {
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(8, 12, 18, 0.45);
+}
+
+.app-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.app-table thead th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(245, 247, 251, 0.85);
+}
+
+.app-table tbody tr {
+  background: rgba(0, 0, 0, 0.35);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.app-table tbody tr + tr {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.app-table tbody tr:hover,
+.app-table tbody tr:focus-visible {
+  background: rgba(255, 255, 255, 0.05);
+  outline: none;
+}
+
+.app-table tbody tr.selected {
+  background: rgba(244, 212, 124, 0.15);
+}
+
+.app-table td {
+  padding: 0.85rem 1rem;
+  color: #f5f8fb;
+  font-size: 0.95rem;
+}
+
+.app-table .table-actions {
+  display: flex;
+  gap: 0.4rem;
+}

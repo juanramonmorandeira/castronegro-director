@@ -4,36 +4,55 @@
   import Footbar from '../components/common/Footbar.svelte';
   import BackgroundLayer from '../components/common/BackgroundLayer.svelte';
   import { t } from '../lib/i18n.js';
-  import { listActiveSessions, getSessionById } from '../lib/db.js';
-  import { formatDateTime, statusBadgeClass, statusLabel } from '../lib/utils.js';
+  import { listActiveSessions, getSessionByGameId } from '../lib/db.js';
+  import { statusBadgeClass, statusLabel } from '../lib/utils.js';
+  import Button from '../components/ui/Button.svelte';
+  import InputField from '../components/ui/InputField.svelte';
+  import AlertPopup from '../components/ui/AlertPopup.svelte';
 
   const dispatch = createEventDispatcher();
 
   export let user = null;
 
-  let loading = false;
-  let error = '';
-  let info = '';
+  let listLoading = false;
+  let connectPending = false;
+  let listError = '';
+  let listInfo = '';
 
-  // Entrada manual
-  let typedId = '';
-  // Selección desde la lista
-  let selectedId = '';
+  let gameCode = '';
+  let selectedSessionId = '';
 
   // Lista de sesiones activas
   let sessions = [];
+  let alertOpen = false;
+  let alertMessage = '';
+  let alertVariant = 'info';
+  let alertTitle = '';
+
+  function openAlert(message, variant = 'info', title = null) {
+    alertMessage = message;
+    alertVariant = variant;
+    alertTitle = title ?? $t('player.choose_title');
+    alertOpen = true;
+  }
+
+  function closeAlert() {
+    alertOpen = false;
+  }
 
   async function loadActive() {
-    error = ''; info = '';
-    loading = true;
+    listError = '';
+    listInfo = '';
+    listLoading = true;
     try {
       sessions = await listActiveSessions(10);
-      if (sessions.length === 0) info = $t('player.no_sessions');
+      if (sessions.length === 0) listInfo = $t('player.no_sessions');
     } catch (e) {
       console.error(e);
-      error = $t('player.load_error');
+      listError = $t('player.load_error');
+      openAlert(listError, 'error');
     } finally {
-      loading = false;
+      listLoading = false;
     }
   }
 
@@ -41,34 +60,48 @@
     dispatch('scan-qr');
   }
 
-  async function connectById(id) {
-    error = ''; info = '';
-    const sessionId = (id || typedId || selectedId || '').trim();
-    if (!sessionId) return;
+  const formatGameCode = (value = '') => {
+    const cleaned = value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    if (!cleaned) return '';
+    const groups = cleaned.match(/.{1,3}/g) || [];
+    return groups.join(' ');
+  };
+
+  const normalizedGameCode = (value = '') => value.replace(/\s+/g, ' ').trim();
+
+  function handleManualInput(event) {
+    gameCode = formatGameCode(event.currentTarget.value);
+    selectedSessionId = '';
+  }
+
+  async function connectWithGameId() {
+    const code = normalizedGameCode(gameCode);
+    if (!code) return;
     try {
-      loading = true;
-      const doc = await getSessionById(sessionId);
-      if (!doc) {
-        error = $t('player.invalid_id');
+      connectPending = true;
+      const session = await getSessionByGameId(code);
+      if (!session) {
+        openAlert($t('player.invalid_id'), 'warning');
       } else {
-        dispatch('connect', { sessionId, session: doc });
+        dispatch('connect', { sessionId: session.id, session });
       }
     } catch (e) {
       console.error(e);
-      error = $t('player.connect_error');
+      openAlert($t('player.connect_error'), 'error');
     } finally {
-      loading = false;
+      connectPending = false;
     }
   }
 
-  function onPick(id) {
-    selectedId = id === selectedId ? '' : id;
+  function onPick(session) {
+    selectedSessionId = session.id;
+    gameCode = formatGameCode(session.game_id ?? session.id ?? '');
   }
 
-  function onOptionKey(event, id) {
+  function onRowKey(event, session) {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      onPick(id);
+      onPick(session);
     }
   }
 
@@ -81,245 +114,222 @@
 
 <BackgroundLayer />
 
-<div class="page">
+<div class="page-grid">
   <Topbar titleKey="player.choose_title" user={user} on:profile={relay} on:logout={relay} />
-  <main class="center">
-    <div class="layout">
-      <section class="auth-card card-glass">
-        <h2>{$t('player.join_methods')}</h2>
-        <p class="intro">{$t('player.join_intro')}</p>
+  <main class="page-main">
+    <section class="surface-panel choose-panel" aria-labelledby="choose-title">
+      <header class="form-header">
+        <h2 id="choose-title" class="panel-title">{$t('player.choose_title')}</h2>
+        <p class="panel-subtitle">{$t('player.join_intro')}</p>
+      </header>
 
-        <div class="field">
-          <button class="btn primary" type="button" on:click={scanQr} aria-label={$t('player.scan_qr')}>
-            {$t('player.scan_qr')}
-          </button>
-        </div>
+      <section class="method-block scan-block" aria-labelledby="scan-heading">
+        <h3 id="scan-heading" class="section-heading">{$t('player.scan_qr')}</h3>
+        <Button
+          variant="primary"
+          type="button"
+          on:click={scanQr}
+          aria-label={$t('player.scan_qr')}
+          className="full-width"
+        >
+          {$t('player.scan_qr')}
+        </Button>
+      </section>
 
-        <div class="field">
-          <label class="label" for="sid">{$t('player.session_id')}</label>
-          <div class="id-row">
-            <input
-              id="sid"
-              class="input"
-              type="text"
-              bind:value={typedId}
-              placeholder={$t('player.session_id_placeholder')}
-              autocomplete="off"
-            />
-            <button class="btn outline" type="button" on:click={() => connectById(typedId)} disabled={!typedId}>
-              {$t('player.connect')}
-            </button>
+      <section class="method-block sessions-block" aria-labelledby="sessions-heading">
+        <div class="sessions-head">
+          <div>
+            <h3 id="sessions-heading" class="section-heading">{$t('player.active_sessions')}</h3>
+            <p class="section-subheading">{$t('player.active_sessions_hint')}</p>
           </div>
-          <small class="hint">{$t('player.session_id_hint')}</small>
+          <Button
+            variant="secondary"
+            size="sm"
+            type="button"
+            on:click={loadActive}
+            className="refresh-btn"
+            disabled={listLoading}
+            aria-label={$t('player.refresh')}
+          >
+            {listLoading ? `${$t('player.refresh')}…` : $t('player.refresh')}
+          </Button>
+        </div>
+        <div class="table-panel sessions-panel">
+          {#if listLoading}
+            <p class="state info">{$t('player.loading')}</p>
+          {:else if listError}
+            <p class="state error">{listError}</p>
+          {:else if listInfo}
+            <p class="state info">{listInfo}</p>
+          {:else}
+            <table class="app-table choose-table" aria-label={$t('player.active_sessions')}>
+              <thead>
+                <tr>
+                  <th>{$t('history.headers.title')}</th>
+                  <th>{$t('player.session_id')}</th>
+                  <th>{$t('history.headers.status')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#if sessions.length === 0}
+                  <tr>
+                    <td class="empty" colspan="3">{$t('player.no_sessions')}</td>
+                  </tr>
+                {:else}
+                  {#each sessions as s}
+                    <tr
+                      class:selected={selectedSessionId === s.id}
+                      tabindex="0"
+                      on:click={() => onPick(s)}
+                      on:keydown={(event) => onRowKey(event, s)}
+                    >
+                      <td>{s.title ?? $t('common.untitled_session')}</td>
+                      <td class="code">{s.game_id ?? '—'}</td>
+                      <td>
+                        <span class="badge {statusBadgeClass(s.status)}">{statusLabel(s.status)}</span>
+                      </td>
+                    </tr>
+                  {/each}
+                {/if}
+              </tbody>
+            </table>
+          {/if}
         </div>
       </section>
 
-      <section class="auth-card card-glass">
-        <div class="head">
-          <h3>{$t('player.active_sessions')}</h3>
-          <button class="btn outline small" type="button" on:click={loadActive} aria-label={$t('player.refresh')}>
-            {$t('player.refresh')}
-          </button>
+      <section class="method-block manual-block" aria-labelledby="manual-heading">
+        <h3 id="manual-heading" class="section-heading">{$t('player.session_id')}</h3>
+        <InputField
+          id="game-code"
+          placeholder={$t('player.session_id_placeholder')}
+          bind:value={gameCode}
+          autocomplete="off"
+          on:input={handleManualInput}
+          aria-labelledby="manual-heading"
+          hint={$t('player.session_id_hint')}
+        />
+
+        <div class="connect-row">
+          <Button
+            variant="primary"
+            type="button"
+            className="full-width"
+            on:click={connectWithGameId}
+            disabled={!normalizedGameCode(gameCode) || connectPending}
+          >
+            {connectPending ? `${$t('player.connect')}…` : $t('player.connect')}
+          </Button>
         </div>
 
-        {#if loading}
-          <p class="info">{$t('player.loading')}</p>
-        {:else if error}
-          <p class="error">{error}</p>
-        {:else if info}
-          <p class="info">{info}</p>
-        {:else}
-          <div class="list-wrap">
-            <ul class="list" role="listbox" aria-label={$t('player.active_sessions')}>
-              {#each sessions as s}
-                <li
-                  class:selected={selectedId === s.id}
-                  role="option"
-                  aria-selected={selectedId === s.id}
-                  on:click={() => onPick(s.id)}
-                  on:keydown={(event) => onOptionKey(event, s.id)}
-                  tabindex="0"
-                >
-                  <div class="rowline">
-                    <strong class="titleline">{s.title ?? s.id}</strong>
-                    <span class="badge {statusBadgeClass(s.status)}">{statusLabel(s.status)}</span>
-                  </div>
-                  <small>
-                    {$t('player.created_at')} {formatDateTime(s.created_at)}
-                    · {$t('player.updated_at')} {formatDateTime(s.updated_at)}
-                  </small>
-                </li>
-              {/each}
-            </ul>
-          </div>
-
-          <div class="field">
-            <button class="btn primary" type="button" on:click={() => connectById(selectedId)} disabled={!selectedId}>
-              {$t('player.connect_selected')}
-            </button>
-          </div>
-        {/if}
       </section>
-    </div>
+    </section>
   </main>
   <Footbar />
 </div>
 
+<AlertPopup
+  open={alertOpen}
+  title={alertTitle}
+  message={alertMessage}
+  variant={alertVariant}
+  on:close={closeAlert}
+/>
+
 <style>
-  .page {
-    min-height: 100vh;
-    display: grid;
-    grid-template-rows: auto 1fr auto;
+  .choose-panel {
+    width: min(520px, 92vw);
+    margin: 0 auto;
+    gap: var(--space-4);
   }
-  .center {
-    display: grid;
-    place-items: center;
-    padding: 2rem 1rem;
+
+  .method-block {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
   }
-  .layout {
-    display: grid;
-    gap: 1.5rem;
-    width: min(980px, 94vw);
-  }
-  @media (min-width: 900px) {
-    .layout {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-  }
-  .auth-card {
-    display: grid;
-    gap: 1rem;
-    padding: clamp(1.5rem, 3vw, 2.25rem);
-  }
-  .auth-card h2,
-  .auth-card h3 {
+
+  .section-heading {
     margin: 0;
-    font-family: "Merriweather", serif;
-    font-size: clamp(1.6rem, 3vw, 2.1rem);
-    color: #f4d47c;
-    text-align: center;
-    text-shadow:
-      0 0 8px rgba(255, 200, 60, 0.7),
-      0 0 18px rgba(255, 180, 40, 0.4),
-      2px 2px 10px rgba(0, 0, 0, 0.85);
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--color-text-primary, #f5f8fb);
   }
-  .auth-card h3 {
-    font-size: clamp(1.4rem, 2.4vw, 1.8rem);
+
+  .section-subheading {
+    margin: 0.15rem 0 0;
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
   }
-  .intro {
+
+  .sessions-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+
+  .refresh-btn {
+    min-width: 110px;
+  }
+
+  .sessions-panel {
+    padding: 0;
+  }
+
+  .choose-table td.code {
+    font-family: var(--font-mono, 'Fira Code', monospace);
+    letter-spacing: 0.08em;
+  }
+
+  .choose-table tbody tr {
+    cursor: pointer;
+  }
+
+  .state {
     margin: 0;
-    text-align: center;
-    color: rgba(255, 255, 255, 0.85);
     font-size: 0.95rem;
   }
-  .field {
-    display: grid;
-    gap: 0.5rem;
+
+  .state.info {
+    color: #ffd27f;
   }
-  .label {
-    font-weight: 600;
-    color: #f0f3f7;
-  }
-  .input {
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    padding: 0.65rem 0.8rem;
-    background: rgba(0, 0, 0, 0.3);
-    color: #f5f8fb;
-    font-size: 1rem;
-  }
-  .input:focus {
-    outline: 2px solid rgba(255, 232, 140, 0.6);
-    outline-offset: 2px;
-  }
-  .id-row {
-    display: flex;
-    gap: 0.6rem;
-    flex-wrap: wrap;
-  }
-  .id-row .input {
-    flex: 1 1 160px;
-  }
-  .hint {
-    font-size: 0.85rem;
-    color: rgba(230, 236, 247, 0.8);
-  }
-  .head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .list-wrap {
-    max-height: 45vh;
-    overflow-y: auto;
-  }
-  .list {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    display: grid;
-    gap: 0.6rem;
-  }
-  .list li {
-    padding: 0.75rem 0.85rem;
-    border: 1px solid var(--glass-brd);
-    border-radius: 0.7rem;
-    background: rgba(0, 0, 0, 0.28);
-    cursor: pointer;
-    transition: background 0.15s ease, border-color 0.15s ease;
-  }
-  .list li:hover {
-    background: rgba(0, 0, 0, 0.35);
-  }
-  .list li.selected {
-    outline: 2px solid rgba(255, 255, 255, 0.35);
-    background: rgba(0, 0, 0, 0.4);
-  }
-  .rowline {
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .titleline {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 999px;
-    border: none;
-    cursor: pointer;
-    padding: 0.65rem 1.4rem;
-    font-weight: 600;
-  }
-  .btn.primary {
-    background: rgba(74, 141, 74, 0.8);
-    border: 1px solid rgba(74, 141, 74, 0.9);
-    color: #f6fff6;
-  }
-  .btn.primary[disabled] {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-  .btn.outline {
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    color: #f0f3f7;
-  }
-  .btn.small {
-    padding: 0.4rem 0.8rem;
-    font-size: 0.9rem;
-  }
+
+  .state.error,
   .error {
-    color: #ff9b9b;
-    margin: 0;
+    color: #ffb4b4;
   }
+
   .info {
     color: #ffd27f;
-    margin: 0;
+  }
+  .sessions-panel .state {
+    padding: var(--space-3);
+  }
+
+  .full-width {
+    width: 100%;
+  }
+
+  .manual-block :global(.form-field) {
+    width: 100%;
+  }
+
+  .connect-row {
+    display: flex;
+    flex-direction: column;
+  }
+
+  @media (max-width: 640px) {
+    .choose-panel {
+      width: min(94vw, 520px);
+    }
+    .sessions-surface {
+      max-height: none;
+    }
+    .sessions-head {
+      flex-direction: column;
+      align-items: flex-start;
+    }
   }
 </style>

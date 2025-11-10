@@ -82,6 +82,17 @@ export async function getSessionById(id) {
   return d.exists() ? { id: d.id, ...d.data() } : null;
 }
 
+export async function getSessionByGameId(gameId) {
+  const normalized = (gameId ?? '').replace(/\s+/g, ' ').trim();
+  if (!normalized) return null;
+  const col = collection(db, 'sessions');
+  const q = query(col, where('game_id', '==', normalized));
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  const docSnap = snap.docs[0];
+  return { id: docSnap.id, ...docSnap.data() };
+}
+
 /**
  * clearCurrentFlag()
  * ───────────────────────────────────────────────────────────
@@ -199,7 +210,6 @@ export async function createSessionDraft({ title, language, creatorUid } = {}) {
     game_id: gameId,
     created_by: creatorData,
     settings: {
-      name: computedTitle,
       rulesets: rulesetDefault,
       storyteller: storytellerDefault,
       players_expected: playersExpectedDefault,

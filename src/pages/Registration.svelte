@@ -12,6 +12,13 @@
     DEFAULT_AVATAR
   } from '../lib/avatars.js';
   import { createEventDispatcher } from 'svelte';
+  import Card from '../components/ui/Card.svelte';
+  import Button from '../components/ui/Button.svelte';
+  import InputField from '../components/ui/InputField.svelte';
+  import Modal from '../components/ui/Modal.svelte';
+  import NavActions from '../components/ui/NavActions.svelte';
+  import AlertPopup from '../components/ui/AlertPopup.svelte';
+  import { NAV_INTENT } from '../lib/navigation.js';
 
   const dispatch = createEventDispatcher();
 
@@ -30,12 +37,17 @@
   let loading = false;
   let info = '';
   let error = '';
+  let alertOpen = false;
+  let alertMessage = '';
+  let alertVariant = 'warning';
+  let alertTitle = '';
 
   $: namePlaceholder = $t('registration.name_placeholder');
   $: aliasPlaceholder = $t('registration.alias_placeholder');
   $: emailPlaceholder = $t('registration.email_placeholder');
   $: passwordPlaceholder = $t('registration.password_placeholder');
   $: confirmPasswordPlaceholder = $t('registration.confirm_password_placeholder');
+  $: defaultAlertTitle = $t('registration.alert_title');
 
   const passwordRules = {
     minLength: 10,
@@ -44,6 +56,8 @@
     number: /[0-9]/,
     symbol: /[^A-Za-z0-9]/
   };
+
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   function resetFeedback() {
     info = '';
@@ -73,13 +87,6 @@
     avatarModalOpen = false;
     pendingAvatar = avatarURL;
     customAvatarError = '';
-  }
-
-  function handleBackdropKeydown(event) {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      closeAvatarModal();
-    }
   }
 
   function selectPendingAvatar(url) {
@@ -118,26 +125,78 @@
     }
   }
 
+  function handleNavIntent(event) {
+    const intent = event?.detail?.intent;
+    if (intent === NAV_INTENT.BACK_TO_LOGIN) {
+      goLogin();
+    }
+  }
+
+  function openAlert(message, variant = 'warning', title = defaultAlertTitle) {
+    alertMessage = message;
+    alertVariant = variant;
+    alertTitle = title;
+    alertOpen = true;
+  }
+
+  function closeAlert() {
+    alertOpen = false;
+  }
+
   async function onSubmit() {
     resetFeedback();
 
+    const trimmedName = name.trim();
     const normalizedEmail = email.trim().toLowerCase();
+    const trimmedAlias = alias.trim();
+
+    if (!trimmedName) {
+      error = $t('registration.errors.missing_name');
+      openAlert(error);
+      return;
+    }
+
+    if (!normalizedEmail) {
+      error = $t('registration.errors.missing_email');
+      openAlert(error);
+      return;
+    }
+
+    if (!emailPattern.test(normalizedEmail)) {
+      error = $t('registration.errors.invalid_email');
+      openAlert(error);
+      return;
+    }
+
+    if (!password) {
+      error = $t('registration.errors.missing_password');
+      openAlert(error);
+      return;
+    }
+
+    if (!confirmPassword) {
+      error = $t('registration.errors.missing_confirm');
+      openAlert(error);
+      return;
+    }
 
     if (password !== confirmPassword) {
       error = $t('registration.errors.password_mismatch');
+      openAlert(error);
       return;
     }
 
     if (!meetsPasswordRequirements(password)) {
       error = $t('registration.errors.password_strength');
+      openAlert(error);
       return;
     }
 
     loading = true;
     try {
       const user = await registerWithEmail(normalizedEmail, password, {
-        name: name.trim(),
-        alias: alias.trim(),
+        name: trimmedName,
+        alias: trimmedAlias,
         avatarURL
       });
 
@@ -160,6 +219,7 @@
       } else {
         error = $t('registration.errors.registration_error');
       }
+      openAlert(error, 'error');
     } finally {
       loading = false;
     }
@@ -175,202 +235,168 @@
 <div class="page">
   <Topbar titleKey="registration.title" showUserMenu={false} />
 
-  <main class="center">
+  <main class="auth-screen">
     <div class="auth-layout">
-      <form
-        class="auth-card card-glass"
-        on:submit|preventDefault={onSubmit}
-        aria-label={$t('registration.title')}
-      >
-        <h2>{$t('registration.title')}</h2>
-        <p class="intro">{$t('registration.intro')}</p>
+      <Card className="auth-card">
+        <form class="auth-form" on:submit|preventDefault={onSubmit} novalidate aria-label={$t('registration.title')}>
+          <div class="form-header">
+            <h2 class="panel-title">{$t('registration.title')}</h2>
+            <p class="panel-subtitle">{$t('registration.intro')}</p>
+          </div>
 
-        <div class="field">
-          <label class="label" for="name">{$t('registration.name_label')}</label>
-          <input
-            id="name"
-            name="name"
-            class="input"
-            type="text"
-            bind:value={name}
-            required
-            autocomplete="name"
-            placeholder={namePlaceholder}
-          />
-        </div>
+        <InputField
+          id="name"
+          name="name"
+          label={$t('registration.name_label')}
+          type="text"
+          bind:value={name}
+          required={true}
+          autocomplete="name"
+          placeholder={namePlaceholder}
+        />
 
-        <div class="field">
-          <label class="label" for="alias">
-            {$t('registration.alias_label')}
-            <small>({$t('registration.optional')})</small>
-          </label>
-          <input
-            id="alias"
-            name="alias"
-            class="input"
-            type="text"
-            bind:value={alias}
-            autocomplete="nickname"
-            placeholder={aliasPlaceholder}
-          />
-        </div>
+        <InputField
+          id="alias"
+          name="alias"
+          label={`${$t('registration.alias_label')} (${$t('registration.optional')})`}
+          type="text"
+          bind:value={alias}
+          autocomplete="nickname"
+          placeholder={aliasPlaceholder}
+        />
 
-        <div class="field avatar-field">
-          <span class="label">
-            {$t('registration.avatar_label')}
-            <small>({$t('registration.optional')})</small>
-          </span>
-          <div class="current-avatar">
-            <img src={avatarURL} alt={$t('registration.avatar_selected_alt')} />
-            <div class="current-avatar-actions">
-              <span class="hint">{$t('registration.avatar_help')}</span>
-              <button type="button" class="btn outline" on:click={openAvatarModal}>
-                {$t('registration.avatar_change_button')}
-              </button>
+          <div class="field avatar-field">
+            <span class="label">
+              {$t('registration.avatar_label')}
+              <small>({$t('registration.optional')})</small>
+            </span>
+            <div class="current-avatar">
+              <img src={avatarURL} alt={$t('registration.avatar_selected_alt')} />
+              <div class="current-avatar-actions">
+                <span class="hint avatar-hint">{$t('registration.avatar_help')}</span>
+                <Button variant="secondary" type="button" on:click={openAvatarModal}>
+                  {$t('registration.avatar_change_button')}
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div class="field">
-          <label class="label" for="email">{$t('registration.email_label')}</label>
-          <input
-            id="email"
-            name="email"
-            class="input"
-            type="email"
-            bind:value={email}
-            required
-            autocomplete="email"
-            placeholder={emailPlaceholder}
-          />
-        </div>
+        <InputField
+          id="email"
+          name="email"
+          label={$t('registration.email_label')}
+          type="email"
+          bind:value={email}
+          required={true}
+          autocomplete="email"
+          placeholder={emailPlaceholder}
+        />
 
-        <div class="field">
-          <label class="label" for="password">{$t('registration.password_label')}</label>
-          <input
-            id="password"
-            name="password"
-            class="input"
-            type="password"
-            bind:value={password}
-            required
-            autocomplete="new-password"
-            minlength={passwordRules.minLength}
-            placeholder={passwordPlaceholder}
-          />
-          <small class="hint">{$t('registration.password_requirements')}</small>
-        </div>
+        <InputField
+          id="password"
+          name="password"
+          label={$t('registration.password_label')}
+          type="password"
+          bind:value={password}
+          required={true}
+          autocomplete="new-password"
+          minlength={passwordRules.minLength}
+          placeholder={passwordPlaceholder}
+          hint={$t('registration.password_requirements')}
+        />
 
-        <div class="field">
-          <label class="label" for="confirm">{$t('registration.confirm_password_label')}</label>
-          <input
-            id="confirm"
-            name="confirm"
-            class="input"
-            type="password"
-            bind:value={confirmPassword}
-            required
-            autocomplete="new-password"
-            minlength={passwordRules.minLength}
-            placeholder={confirmPasswordPlaceholder}
-          />
-        </div>
+        <InputField
+          id="confirm"
+          name="confirm"
+          label={$t('registration.confirm_password_label')}
+          type="password"
+          bind:value={confirmPassword}
+          required={true}
+          autocomplete="new-password"
+          minlength={passwordRules.minLength}
+          placeholder={confirmPasswordPlaceholder}
+        />
 
-        <div class="form-actions">
-          <button class="btn primary" type="submit" disabled={loading}>
-            {loading ? '…' : $t('registration.submit')}
-          </button>
-          <button type="button" class="link-button" on:click={goLogin}>
-            {$t('registration.back_to_login')}
-          </button>
-        </div>
+          <div class="form-actions cluster">
+            <Button variant="primary" type="submit" disabled={loading}>
+              {loading ? '…' : $t('registration.submit')}
+            </Button>
+            <NavActions
+              intents={[NAV_INTENT.BACK_TO_LOGIN]}
+              on:navigate={handleNavIntent}
+              className="nav-inline"
+            />
+          </div>
 
-        {#if info}
-          <p class="info" aria-live="polite">{info}</p>
-        {/if}
-        {#if error}
-          <p class="error" aria-live="assertive">{error}</p>
-        {/if}
-      </form>
+        </form>
+      </Card>
     </div>
   </main>
 
   <Footbar />
 
-  {#if avatarModalOpen}
-    <button
-      type="button"
-      class="modal-backdrop"
-      aria-label={$t('common.actions.cancel')}
-      on:click={closeAvatarModal}
-      on:keydown={handleBackdropKeydown}
-    ></button>
-    <div
-      class="modal"
-      role="dialog"
-      tabindex="-1"
-      aria-modal="true"
-      aria-labelledby="avatarModalTitle"
-      aria-describedby="avatarModalHelp"
-    >
-      <div class="modal-content">
-        <h3 id="avatarModalTitle">{$t('registration.avatar_modal_title')}</h3>
-        <p id="avatarModalHelp" class="modal-hint">{$t('registration.avatar_modal_help')}</p>
+  <Modal
+    open={avatarModalOpen}
+    title={$t('registration.avatar_modal_title')}
+    ariaLabel={$t('registration.avatar_modal_help')}
+    on:close={closeAvatarModal}
+  >
+    <p class="modal-hint">{$t('registration.avatar_modal_help')}</p>
 
-        <div class="avatar-options modal-grid">
-          {#each AVAILABLE_AVATARS as avatar}
-            <button
-              type="button"
-              class="avatar-option"
-              class:selected={pendingAvatar === avatar.value}
-              on:click={() => selectPendingAvatar(avatar.value)}
-              aria-pressed={pendingAvatar === avatar.value}
-            >
-              <img src={avatar.value} alt={$t(avatar.labelKey)} />
-              <span>{$t(avatar.labelKey)}</span>
-            </button>
-          {/each}
-        </div>
-
-        <div class="custom-upload">
-          <label class="custom-upload-label">
-            {$t('registration.avatar_custom_label')}
-            <input
-              type="file"
-              accept={ACCEPTED_AVATAR_STRING}
-              on:change={handleCustomAvatarChange}
-            />
-          </label>
-          <small class="hint">{$t('registration.avatar_custom_hint')}</small>
-          {#if customAvatarError}
-            <p class="error" aria-live="assertive">{customAvatarError}</p>
-          {/if}
-          {#if customAvatarData}
-            <div class="custom-preview">
-              <img src={customAvatarData} alt={$t('registration.avatar_custom_preview_alt')} />
-              <button
-                type="button"
-                class="btn outline"
-                class:selected={pendingAvatar === customAvatarData}
-                on:click={() => selectPendingAvatar(customAvatarData)}
-              >
-                {$t('registration.avatar_use_custom')}
-              </button>
-            </div>
-          {/if}
-        </div>
-
-        <div class="modal-actions">
-          <button type="button" class="btn outline" on:click={closeAvatarModal}>
-            {$t('common.actions.cancel')}
-          </button>
-          <button type="button" class="btn primary" on:click={confirmAvatarSelection}>
-            {$t('common.actions.save')}
-          </button>
-        </div>
-      </div>
+    <div class="avatar-options modal-grid">
+      {#each AVAILABLE_AVATARS as avatar}
+        <button
+          type="button"
+          class={`avatar-option ${pendingAvatar === avatar.value ? 'selected' : ''}`}
+          on:click={() => selectPendingAvatar(avatar.value)}
+          aria-pressed={pendingAvatar === avatar.value}
+        >
+          <img src={avatar.value} alt={$t(avatar.labelKey)} />
+          <span>{$t(avatar.labelKey)}</span>
+        </button>
+      {/each}
     </div>
-  {/if}
+
+    <div class="custom-upload">
+      <label class="custom-upload-label">
+        {$t('registration.avatar_custom_label')}
+        <input type="file" accept={ACCEPTED_AVATAR_STRING} on:change={handleCustomAvatarChange} />
+      </label>
+      <small class="hint">{$t('registration.avatar_custom_hint')}</small>
+      {#if customAvatarError}
+        <p class="error" aria-live="assertive">{customAvatarError}</p>
+      {/if}
+      {#if customAvatarData}
+        <div class="custom-preview">
+          <img src={customAvatarData} alt={$t('registration.avatar_custom_preview_alt')} />
+          <Button
+            variant="secondary"
+            type="button"
+            className={pendingAvatar === customAvatarData ? 'selected' : ''}
+            on:click={() => selectPendingAvatar(customAvatarData)}
+          >
+            {$t('registration.avatar_use_custom')}
+          </Button>
+        </div>
+      {/if}
+    </div>
+
+    <svelte:fragment slot="footer">
+      <Button variant="ghost" on:click={closeAvatarModal}>
+        {$t('common.actions.cancel')}
+      </Button>
+      <Button variant="primary" on:click={confirmAvatarSelection}>
+        {$t('common.actions.save')}
+      </Button>
+    </svelte:fragment>
+  </Modal>
+  <AlertPopup
+    open={alertOpen}
+    title={alertTitle}
+    message={alertMessage}
+    variant={alertVariant}
+    on:close={closeAlert}
+  />
 </div>
 
 <style>
@@ -380,85 +406,39 @@
     grid-template-rows: auto 1fr auto;
   }
 
-  .center {
-    display: grid;
-    place-items: center;
-    padding: 2rem 1rem;
+  :global(.auth-card) {
+    text-align: left;
   }
 
-  .auth-layout {
-    display: grid;
-    gap: 1.5rem;
-    width: min(480px, 90vw);
+  .auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
   }
 
-  .auth-card {
-    display: grid;
-    gap: 1rem;
-    padding: clamp(1.5rem, 3vw, 2.25rem);
-  }
-
-  .auth-card h2 {
-    margin: 0;
-    text-align: center;
-    font-family: "Merriweather", serif;
-    font-size: clamp(1.8rem, 3vw, 2.2rem);
-    color: #f4d47c;
-    text-shadow:
-      0 0 8px rgba(255, 200, 60, 0.7),
-      0 0 18px rgba(255, 180, 40, 0.4),
-      2px 2px 10px rgba(0, 0, 0, 0.85);
-  }
-
-  .intro {
-    margin: 0;
-    text-align: center;
-    color: rgba(255, 255, 255, 0.85);
-    font-size: 0.95rem;
-  }
-
-  .field {
-    display: grid;
-    gap: 0.35rem;
-  }
-
-  .label {
-    font-weight: 600;
-    color: #f0f3f7;
-  }
-
-  .label small {
-    margin-left: 0.35rem;
-    font-weight: 500;
-    color: rgba(240, 244, 249, 0.75);
-  }
-
-  .input {
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    padding: 0.65rem 0.8rem;
-    background: rgba(0, 0, 0, 0.3);
-    color: #f5f8fb;
-    font-size: 1rem;
-  }
-
-  .input:focus {
-    outline: 2px solid rgba(255, 232, 140, 0.6);
-    outline-offset: 2px;
-  }
   .hint {
-    font-size: 0.85rem;
-    color: rgba(230, 236, 247, 0.8);
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+  }
+
+  .avatar-hint {
+    display: block;
   }
 
   .avatar-field {
-    gap: 0.5rem;
+    display: grid;
+    gap: var(--space-2);
   }
 
   .current-avatar {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: var(--space-4);
+  }
+
+  .current-avatar-actions {
+    display: grid;
+    gap: var(--space-2);
   }
 
   .current-avatar img {
@@ -466,25 +446,14 @@
     height: 72px;
     border-radius: 50%;
     object-fit: cover;
-    border: 2px solid rgba(255, 255, 255, 0.45);
-    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
-  }
-
-  .current-avatar-actions {
-    display: grid;
-    gap: 0.35rem;
-  }
-
-  .avatar-field .label {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   }
 
   .avatar-options {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
-    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: var(--space-3);
   }
 
   .avatar-option {
@@ -492,12 +461,15 @@
     gap: 0.35rem;
     justify-items: center;
     padding: 0.75rem 0.5rem;
-    border-radius: 1rem;
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    background: rgba(255, 255, 255, 0.05);
-    color: #f5f8fb;
-    cursor: pointer;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    border-radius: var(--radius-lg);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--color-text-primary);
+  }
+
+  .avatar-option.selected {
+    border-color: rgba(255, 232, 140, 0.85);
+    box-shadow: 0 12px 30px rgba(255, 232, 140, 0.25);
   }
 
   .avatar-option img {
@@ -505,112 +477,27 @@
     height: 72px;
     border-radius: 50%;
     object-fit: cover;
-    border: 2px solid rgba(255, 255, 255, 0.4);
-    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
-  }
-
-  .avatar-option span {
-    font-size: 0.85rem;
-    font-weight: 600;
-  }
-
-  .avatar-option.selected {
-    border-color: rgba(255, 232, 140, 0.9);
-    box-shadow: 0 4px 16px rgba(255, 232, 140, 0.22);
-    transform: translateY(-2px);
-  }
-
-  .avatar-option:focus-visible {
-    outline: 2px solid rgba(255, 232, 140, 0.7);
-    outline-offset: 3px;
-  }
-
-  .btn.outline {
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.4);
-    color: #f0f4f9;
-    padding: 0.55rem 1.1rem;
-    border-radius: 999px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: border-color 0.2s ease, background 0.2s ease;
-  }
-
-  .btn.outline:hover,
-  .btn.outline:focus-visible {
-    border-color: rgba(255, 232, 140, 0.8);
-    background: rgba(255, 255, 255, 0.08);
-  }
-
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(2px);
-    z-index: 40;
-    cursor: pointer;
-    border: 0;
-    padding: 0;
-    display: block;
-  }
-
-  .modal-backdrop:focus-visible {
-    outline: 2px solid rgba(255, 232, 140, 0.7);
-  }
-
-  .modal {
-    position: fixed;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    padding: 2rem 1rem;
-    z-index: 50;
-  }
-
-  .modal-content {
-    width: min(480px, 92vw);
-    display: grid;
-    gap: 1.1rem;
-    padding: 1.6rem;
-    border-radius: 1.1rem;
-    background: rgba(12, 18, 28, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
-  }
-
-  .modal-content h3 {
-    margin: 0;
-    font-size: 1.25rem;
-    color: #f3f5f7;
   }
 
   .modal-hint {
     margin: 0;
-    color: rgba(230, 236, 247, 0.8);
-    font-size: 0.9rem;
-  }
-
-  .modal-grid {
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    color: var(--color-text-muted);
   }
 
   .custom-upload {
     display: grid;
-    gap: 0.5rem;
+    gap: var(--space-2);
   }
 
   .custom-upload-label {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 0.75rem;
+    gap: var(--space-3);
     padding: 0.6rem 0.8rem;
-    border-radius: 0.8rem;
-    border: 1px dashed rgba(255, 255, 255, 0.35);
-    background: rgba(255, 255, 255, 0.04);
-    color: rgba(255, 255, 255, 0.85);
-    font-size: 0.95rem;
-    font-weight: 600;
+    border-radius: var(--radius-md);
+    border: 1px dashed rgba(255, 255, 255, 0.3);
+    color: var(--color-text-secondary);
     cursor: pointer;
   }
 
@@ -621,71 +508,22 @@
   .custom-preview {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: var(--space-3);
   }
 
   .custom-preview img {
     width: 72px;
     height: 72px;
     border-radius: 50%;
-    object-fit: cover;
-    border: 2px solid rgba(255, 255, 255, 0.45);
-    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
-  }
-
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.75rem;
-  }
-
-  .form-actions {
-    display: flex;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-
-  .btn.primary {
-    background: rgba(74, 141, 74, 0.8);
-    border: 1px solid rgba(74, 141, 74, 0.9);
-    color: #f6fff6;
-    padding: 0.65rem 1.4rem;
-    border-radius: 999px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-
-  .btn.primary[disabled] {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  .link-button {
-    display: inline;
-    background: none;
-    border: none;
-    border-radius: 0;
-    color: rgba(255, 230, 150, 0.9);
-    padding: 0;
-    text-decoration: underline;
-    cursor: pointer;
-    font-weight: 500;
-  }
-
-  .link-button:hover {
-    color: rgba(255, 240, 180, 1);
   }
 
   .info {
-    color: #ffd27f;
-    font-size: 0.95rem;
+    color: var(--color-gold-400);
     margin: 0;
   }
 
   .error {
     color: #ff9b9b;
-    font-size: 0.95rem;
     margin: 0;
   }
 </style>

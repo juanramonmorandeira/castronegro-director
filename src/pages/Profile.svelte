@@ -19,6 +19,13 @@
     DEFAULT_AVATAR
   } from '../lib/avatars.js';
   import { get } from 'svelte/store';
+import Card from '../components/ui/Card.svelte';
+import Button from '../components/ui/Button.svelte';
+import InputField from '../components/ui/InputField.svelte';
+import Modal from '../components/ui/Modal.svelte';
+import NavActions from '../components/ui/NavActions.svelte';
+import AlertPopup from '../components/ui/AlertPopup.svelte';
+import { NAV_INTENT } from '../lib/navigation.js';
 
   const passwordRules = {
     minLength: 10,
@@ -55,14 +62,30 @@
   let deleteError = '';
   let deleteLoading = false;
 
-  let loading = false;
-  let info = '';
-  let error = '';
+let loading = false;
+let info = '';
+let error = '';
+let alertOpen = false;
+let alertMessage = '';
+let alertVariant = 'info';
+let alertTitle = '';
 
-  const resetMessages = () => {
-    info = '';
-    error = '';
-  };
+const resetMessages = () => {
+  info = '';
+  error = '';
+  alertMessage = '';
+};
+
+function openAlert(message, variant = 'info', title = null) {
+  alertMessage = message;
+  alertVariant = variant;
+  alertTitle = title ?? translate('profile.title');
+  alertOpen = true;
+}
+
+function closeAlert() {
+  alertOpen = false;
+}
 
   function setAvatarState(url) {
     const normalized = url || DEFAULT_AVATAR;
@@ -122,28 +145,34 @@
       passwordChanged;
 
     if (!hasProfileChanges) {
-      info = translate('profile.success.no_changes');
+      const msg = translate('profile.success.no_changes');
+      info = msg;
+      openAlert(msg, 'info');
       return;
     }
 
     if (passwordChanged) {
       if (!newPassword) {
         error = translate('profile.errors.password_required');
+        openAlert(error, 'warning');
         return;
       }
       if (newPassword !== confirmPassword) {
         error = translate('profile.errors.password_mismatch');
+        openAlert(error, 'warning');
         return;
       }
       if (!meetsPasswordRequirements(newPassword)) {
         error = translate('profile.errors.password_strength');
+        openAlert(error, 'warning');
         return;
       }
     }
 
-    const requiresReauth = emailChanged || passwordChanged;
+    const requiresReauth = passwordChanged;
     if (requiresReauth && !currentPassword) {
       error = translate('profile.errors.missing_current_password');
+      openAlert(error, 'warning');
       return;
     }
 
@@ -176,9 +205,11 @@
           user = refreshed;
           setAvatarState(refreshed.avatarURL);
         }
-        info = passwordChanged
+        const successMsg = passwordChanged
           ? translate('profile.success.password_updated')
           : translate('profile.success.profile_updated');
+        info = successMsg;
+        openAlert(successMsg, 'info');
         currentPassword = '';
         newPassword = '';
         confirmPassword = '';
@@ -196,7 +227,9 @@
         inactiveReason,
         avatarURL: normalizedAvatar
       };
-      info = translate('profile.success.email_verification_sent', { email: trimmedEmail });
+      const emailMsg = translate('profile.success.email_verification_sent', { email: trimmedEmail });
+      info = emailMsg;
+      openAlert(emailMsg, 'info');
       dispatch('email-change');
     } catch (err) {
       console.error('[profile.update]', err);
@@ -212,6 +245,7 @@
       } else {
         error = translate('profile.errors.generic');
       }
+      openAlert(error, 'error');
     } finally {
       loading = false;
     }
@@ -234,17 +268,17 @@
     avatarModalOpen = true;
   }
 
+  function handleNavIntent(event) {
+    const intent = event?.detail?.intent;
+    if (intent === NAV_INTENT.BACK_TO_DASHBOARD) {
+      goBack();
+    }
+  }
+
   function closeAvatarModal() {
     avatarModalOpen = false;
     customAvatarError = '';
     pendingAvatar = avatarURL || DEFAULT_AVATAR;
-  }
-
-  function handleAvatarBackdropKeydown(event) {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      closeAvatarModal();
-    }
   }
 
   function selectPendingAvatar(url) {
@@ -295,13 +329,6 @@
     deleteLoading = false;
   }
 
-  function handleDeleteBackdropKeydown(event) {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      closeDeleteModal();
-    }
-  }
-
   $: deletionCode = $t('profile.delete.confirm_code');
   $: deletionMatches =
     deleteConfirmation.trim().toLowerCase() === deletionCode?.trim().toLowerCase();
@@ -309,19 +336,20 @@
   async function confirmDeleteAccount() {
     deleteError = '';
     if (!deletionMatches) {
-      deleteError = translate('profile.delete.errors.code_mismatch', {
-        code: deletionCode
-      });
+      deleteError = translate('profile.delete.errors.code_mismatch', { code: deletionCode });
+      openAlert(deleteError, 'warning', translate('profile.delete.title'));
       return;
     }
     if (!deletePassword) {
       deleteError = translate('profile.delete.errors.missing_password');
+      openAlert(deleteError, 'warning', translate('profile.delete.title'));
       return;
     }
     deleteLoading = true;
     try {
       await deleteCurrentUser(deletePassword);
       info = translate('profile.delete.success');
+      openAlert(info, 'info', translate('profile.delete.title'));
       deleteModalOpen = false;
       dispatch('deleted');
     } catch (err) {
@@ -334,6 +362,7 @@
       } else {
         deleteError = translate('profile.delete.errors.generic');
       }
+      openAlert(deleteError, 'error', translate('profile.delete.title'));
     } finally {
       deleteLoading = false;
       deletePassword = '';
@@ -343,22 +372,18 @@
 
 <BackgroundLayer />
 
-<div class="page">
+<div class="page-grid profile-screen">
   <Topbar titleKey="profile.title" user={user} on:profile={relay} on:logout={relay} />
 
-  <main class="center">
-    <form class="auth-card card-glass" on:submit|preventDefault={onSubmit} aria-label={$t('profile.title')}>
-      <h2>{$t('profile.title')}</h2>
-      <p class="intro">{$t('profile.intro')}</p>
-
-      <div class="status">
-        <span class:inactive={status !== 'active'}>
-          {status === 'active' ? $t('profile.status.active') : $t('profile.status.inactive')}
-        </span>
-        {#if status !== 'active' && inactiveReason === 'pending_verification'}
-          <small class="status-hint">{$t('profile.status.pending_verification')}</small>
-        {/if}
-      </div>
+  <main class="page-main">
+    <form class="profile-card surface-panel" on:submit|preventDefault={onSubmit} aria-label={$t('profile.title')}>
+      <header class="profile-header">
+        <div>
+          <h2 class="panel-title">{$t('profile.title')}</h2>
+          <p class="panel-subtitle">{$t('profile.intro')}</p>
+        </div>
+      </header>
+      <div class="form-stack">
 
       <div class="field">
         <label class="label" for="name">{$t('profile.name_label')}</label>
@@ -396,10 +421,10 @@
         <div class="current-avatar">
           <img src={avatarURL} alt={$t('profile.avatar_current_alt')} />
           <div class="current-avatar-actions">
-            <span class="hint">{$t('profile.avatar_hint')}</span>
-            <button type="button" class="btn outline" on:click={openAvatarModal}>
+            <span class="hint avatar-hint">{$t('profile.avatar_hint')}</span>
+            <Button variant="secondary" type="button" on:click={openAvatarModal}>
               {$t('profile.avatar_change_button')}
-            </button>
+            </Button>
           </div>
         </div>
         {#if customAvatarError}
@@ -428,7 +453,7 @@
       <div class="field">
         <label class="label" for="current-password">
           {$t('profile.current_password_label')}
-          <small>({$t('profile.required_for_sensitive')})</small>
+          <small>({$t('profile.required_short')})</small>
         </label>
         <input
           id="current-password"
@@ -460,7 +485,6 @@
       <div class="field">
         <label class="label" for="confirm-password">
           {$t('profile.confirm_password_label')}
-          <small>({$t('profile.optional')})</small>
         </label>
         <input
           id="confirm-password"
@@ -474,405 +498,197 @@
       </div>
 
       <div class="actions">
-        <button class="btn primary" type="submit" disabled={loading}>
+        <Button variant="primary" type="submit" disabled={loading}>
           {loading ? '…' : $t('profile.save')}
-        </button>
-        <button class="link-button" type="button" on:click={goBack}>
-          {$t('profile.back')}
-        </button>
+        </Button>
+        <NavActions
+          intents={[NAV_INTENT.BACK_TO_DASHBOARD]}
+          on:navigate={handleNavIntent}
+          className="nav-inline"
+        />
       </div>
 
-      <div class="danger-zone">
-        <h3>{$t('profile.delete.title')}</h3>
-        <p>{$t('profile.delete.description')}</p>
-        <p class="danger-note">{$t('profile.delete.playful_warning')}</p>
-        <button type="button" class="btn danger" on:click={openDeleteModal}>
-          {$t('profile.delete.button')}
-        </button>
       </div>
-
-      {#if info}
-        <p class="info" aria-live="polite">{info}</p>
-      {/if}
-      {#if error}
-        <p class="error" aria-live="assertive">{error}</p>
-      {/if}
     </form>
+
+    <section class="danger-card surface-panel" aria-labelledby="danger-title">
+      <header class="form-header">
+        <h2 id="danger-title" class="panel-title">{$t('profile.delete.title')}</h2>
+        <p class="panel-subtitle">{$t('profile.delete.description')}</p>
+      </header>
+      <p class="hint danger-note">{$t('profile.delete.playful_warning')}</p>
+      <Button type="button" variant="danger" on:click={openDeleteModal}>
+        {$t('profile.delete.button')}
+      </Button>
+    </section>
   </main>
 
   <Footbar />
 </div>
 
-{#if avatarModalOpen}
-  <button
-    type="button"
-    class="modal-backdrop"
-    aria-label={$t('common.actions.cancel')}
-    on:click={closeAvatarModal}
-    on:keydown={handleAvatarBackdropKeydown}
-  ></button>
-  <div
-    class="modal avatar-modal"
-    role="dialog"
-    tabindex="-1"
-    aria-modal="true"
-    aria-labelledby="avatarModalTitle"
-    aria-describedby="avatarModalHelp"
-  >
-    <div class="modal-content avatar-modal-content">
-      <h3 id="avatarModalTitle">{$t('profile.avatar_modal_title')}</h3>
-      <p id="avatarModalHelp" class="modal-hint">{$t('profile.avatar_modal_help')}</p>
+<Modal
+  open={avatarModalOpen}
+  title={$t('profile.avatar_modal_title')}
+  ariaLabel={$t('profile.avatar_modal_help')}
+  showClose={false}
+  on:close={closeAvatarModal}
+>
+  <p class="modal-hint">{$t('profile.avatar_modal_help')}</p>
 
-      <div class="avatar-options modal-grid">
-        {#each AVAILABLE_AVATARS as avatar}
-          <button
-            type="button"
-            class="avatar-option"
-            class:selected={pendingAvatar === avatar.value}
-            on:click={() => selectPendingAvatar(avatar.value)}
-            aria-pressed={pendingAvatar === avatar.value}
-          >
-            <img src={avatar.value} alt={$t(avatar.labelKey)} />
-            <span>{$t(avatar.labelKey)}</span>
-          </button>
-        {/each}
-      </div>
-
-      <div class="custom-upload">
-        <label class="custom-upload-label">
-          {$t('profile.avatar_custom_label')}
-          <input type="file" accept={ACCEPTED_AVATAR_STRING} on:change={handleCustomAvatarChange} />
-        </label>
-        <small class="hint">{$t('profile.avatar_custom_hint')}</small>
-        {#if customAvatarError}
-          <p class="error" aria-live="assertive">{customAvatarError}</p>
-        {/if}
-        {#if customAvatarData}
-          <div class="custom-preview">
-            <img src={customAvatarData} alt={$t('profile.avatar_custom_preview_alt')} />
-            <button
-              type="button"
-              class="btn outline"
-              class:selected={pendingAvatar === customAvatarData}
-              on:click={() => selectPendingAvatar(customAvatarData)}
-            >
-              {$t('profile.avatar_use_custom')}
-            </button>
-          </div>
-        {/if}
-      </div>
-
-      <div class="modal-actions">
-        <button type="button" class="btn outline" on:click={closeAvatarModal}>
-          {$t('common.actions.cancel')}
-        </button>
-        <button type="button" class="btn primary" on:click={confirmAvatarSelection}>
-          {$t('profile.avatar_save_selection')}
-        </button>
-      </div>
-    </div>
+  <div class="avatar-options modal-grid">
+    {#each AVAILABLE_AVATARS as avatar}
+      <button
+        type="button"
+        class={`avatar-option ${pendingAvatar === avatar.value ? 'selected' : ''}`}
+        on:click={() => selectPendingAvatar(avatar.value)}
+        aria-pressed={pendingAvatar === avatar.value}
+      >
+        <img src={avatar.value} alt={$t(avatar.labelKey)} />
+        <span class="hint avatar-option-label">{$t(avatar.labelKey)}</span>
+      </button>
+    {/each}
   </div>
-{/if}
 
-{#if deleteModalOpen}
-  <button
-    type="button"
-    class="modal-backdrop"
-    aria-label={$t('common.actions.cancel')}
-    on:click={closeDeleteModal}
-    on:keydown={handleDeleteBackdropKeydown}
-  ></button>
-  <div
-    class="modal delete-modal"
-    role="dialog"
-    tabindex="-1"
-    aria-modal="true"
-    aria-labelledby="deleteModalTitle"
-    aria-describedby="deleteModalDescription"
-  >
-    <div class="modal-content">
-      <h3 id="deleteModalTitle">{$t('profile.delete.modal_title')}</h3>
-      <p id="deleteModalDescription" class="modal-hint">{$t('profile.delete.modal_hint')}</p>
-      <p class="modal-warning">{$t('profile.delete.modal_warning')}</p>
-
-      <div class="field">
-        <label class="label" for="delete-confirm">
-          {$t('profile.delete.confirm_label', { code: deletionCode })}
-        </label>
-        <input
-          id="delete-confirm"
-          class="input"
-          type="text"
-          bind:value={deleteConfirmation}
-          placeholder={$t('profile.delete.confirm_placeholder', { code: deletionCode })}
-        />
-      </div>
-
-      <div class="field">
-        <label class="label" for="delete-password">{$t('profile.delete.password_label')}</label>
-        <input
-          id="delete-password"
-          class="input"
-          type="password"
-          bind:value={deletePassword}
-          autocomplete="current-password"
-          placeholder={$t('profile.delete.password_placeholder')}
-        />
-      </div>
-
-      {#if deleteError}
-        <p class="error" aria-live="assertive">{deleteError}</p>
-      {/if}
-
-      <div class="modal-actions">
-        <button type="button" class="btn outline" on:click={closeDeleteModal} disabled={deleteLoading}>
-          {$t('common.actions.cancel')}
-        </button>
-        <button
+  <div class="custom-upload">
+    <label class="custom-upload-label">
+      {$t('profile.avatar_custom_label')}
+      <input type="file" accept={ACCEPTED_AVATAR_STRING} on:change={handleCustomAvatarChange} />
+    </label>
+    <small class="hint">{$t('profile.avatar_custom_hint')}</small>
+    {#if customAvatarError}
+      <p class="error" aria-live="assertive">{customAvatarError}</p>
+    {/if}
+    {#if customAvatarData}
+      <div class="custom-preview">
+        <img src={customAvatarData} alt={$t('profile.avatar_custom_preview_alt')} />
+        <Button
+          variant="secondary"
           type="button"
-          class="btn danger"
-          on:click={confirmDeleteAccount}
-          disabled={!deletionMatches || deleteLoading}
+          className={pendingAvatar === customAvatarData ? 'selected' : ''}
+          on:click={() => selectPendingAvatar(customAvatarData)}
         >
-          {deleteLoading ? '…' : $t('profile.delete.confirm_button')}
-        </button>
+          {$t('profile.avatar_use_custom')}
+        </Button>
       </div>
-    </div>
+    {/if}
   </div>
-{/if}
+
+  <svelte:fragment slot="footer">
+    <Button variant="ghost" on:click={closeAvatarModal}>
+      {$t('common.actions.cancel')}
+    </Button>
+    <Button variant="primary" on:click={confirmAvatarSelection}>
+      {$t('common.actions.save')}
+    </Button>
+  </svelte:fragment>
+</Modal>
+
+<Modal
+  open={deleteModalOpen}
+  showClose={false}
+  title={$t('profile.delete.modal_title')}
+  ariaLabel={$t('profile.delete.modal_hint')}
+  on:close={closeDeleteModal}
+>
+  <p class="modal-hint">{$t('profile.delete.modal_hint')}</p>
+  <p class="modal-warning">{$t('profile.delete.modal_warning')}</p>
+
+  <div class="field">
+    <label class="label" for="delete-confirm">
+      {$t('profile.delete.confirm_label', { code: deletionCode })}
+    </label>
+    <input
+      id="delete-confirm"
+      class="input"
+      type="text"
+      bind:value={deleteConfirmation}
+      placeholder={$t('profile.delete.confirm_placeholder', { code: deletionCode })}
+      autocomplete="off"
+      autocorrect="off"
+      autocapitalize="off"
+      spellcheck={false}
+    />
+  </div>
+
+  <div class="field">
+    <label class="label" for="delete-password">{$t('profile.delete.password_label')}</label>
+    <input
+      id="delete-password"
+      class="input"
+      type="password"
+      bind:value={deletePassword}
+      autocomplete="current-password"
+      placeholder={$t('profile.delete.password_placeholder')}
+    />
+  </div>
+
+  {#if deleteError}
+    <p class="error" aria-live="assertive">{deleteError}</p>
+  {/if}
+
+  <svelte:fragment slot="footer">
+    <Button variant="ghost" on:click={closeDeleteModal} disabled={deleteLoading}>
+      {$t('common.actions.cancel')}
+    </Button>
+    <Button variant="danger" on:click={confirmDeleteAccount} disabled={!deletionMatches || deleteLoading}>
+      {deleteLoading ? '…' : $t('profile.delete.confirm_button')}
+    </Button>
+  </svelte:fragment>
+</Modal>
+
+<AlertPopup
+  open={alertOpen}
+  title={alertTitle}
+  message={alertMessage}
+  variant={alertVariant}
+  on:close={closeAlert}
+/>
 
 <style>
-  .page {
-    min-height: 100vh;
-    display: grid;
-    grid-template-rows: auto 1fr auto;
-  }
-
-  .center {
-    display: grid;
-    place-items: center;
-    padding: 2rem 1rem;
-  }
-
-  .auth-card {
-    display: grid;
-    gap: 1rem;
+  .profile-card {
     width: min(520px, 92vw);
-    padding: clamp(1.5rem, 3vw, 2.25rem);
+    margin: 0 auto;
+    gap: var(--space-4);
   }
 
-  .auth-card h2 {
-    margin: 0;
-    text-align: center;
-    font-family: "Merriweather", serif;
-    font-size: clamp(1.8rem, 3vw, 2.2rem);
-    color: #f4d47c;
-    text-shadow:
-      0 0 8px rgba(255, 200, 60, 0.7),
-      0 0 18px rgba(255, 180, 40, 0.4),
-      2px 2px 10px rgba(0, 0, 0, 0.85);
-  }
-
-  .intro {
-    margin: 0;
-    text-align: center;
-    color: rgba(255, 255, 255, 0.85);
-    font-size: 0.95rem;
-  }
-
-  .status {
+  .danger-card {
+    width: min(520px, 92vw);
+    margin: var(--space-5) auto 0;
+    gap: var(--space-3);
     display: flex;
     flex-direction: column;
+  }
+
+  .profile-header {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--space-3);
     align-items: center;
-    gap: 0.35rem;
   }
 
-  .status span {
-    padding: 0.2rem 0.75rem;
-    border-radius: 999px;
-    font-size: 0.85rem;
-    background: rgba(74, 141, 74, 0.85);
-    border: 1px solid rgba(74, 141, 74, 0.95);
-    color: #f6fff6;
+  .avatar-hint {
+    display: block;
   }
 
-  .status span.inactive {
-    background: rgba(180, 75, 75, 0.85);
-    border-color: rgba(180, 75, 75, 0.95);
-  }
-
-  .status-hint {
-    margin: 0;
-    font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.75);
-    text-align: center;
-  }
-
-  .field {
+  .profile-card .field {
     display: grid;
     gap: 0.5rem;
   }
 
-  .section-title {
-    margin: 0;
-    font-weight: 600;
-    text-transform: uppercase;
-    font-size: 0.85rem;
-    letter-spacing: 0.05em;
-    color: rgba(255, 255, 255, 0.7);
-  }
-
-  .label {
-    font-weight: 600;
-    color: #f0f3f7;
-  }
-
-  .label small {
-    margin-left: 0.35rem;
-    font-weight: 500;
-    color: rgba(240, 244, 249, 0.75);
-  }
-
-  .input {
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    padding: 0.65rem 0.8rem;
-    background: rgba(0, 0, 0, 0.3);
-    color: #f5f8fb;
-    font-size: 1rem;
-  }
-
-  .input:focus {
-    outline: 2px solid rgba(255, 232, 140, 0.6);
-    outline-offset: 2px;
-  }
-
   .hint {
-    font-size: 0.85rem;
-    color: rgba(230, 236, 247, 0.8);
-  }
-
-  .divider {
-    border: none;
-    border-top: 1px solid rgba(255, 255, 255, 0.15);
-    margin: 0.75rem 0;
-  }
-
-  .actions {
-    display: flex;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 999px;
-    border: none;
-    cursor: pointer;
-    padding: 0.65rem 1.4rem;
-    font-weight: 600;
-  }
-
-  .btn.primary {
-    background: rgba(74, 141, 74, 0.8);
-    border: 1px solid rgba(74, 141, 74, 0.9);
-    color: #f6fff6;
-  }
-
-  .btn.primary[disabled] {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  .link-button {
-    background: none;
-    border: none;
-    color: rgba(255, 230, 150, 0.9);
-    cursor: pointer;
-    text-decoration: underline;
-    font-weight: 500;
-    padding: 0;
-  }
-
-  .link-button:hover {
-    color: rgba(255, 240, 180, 1);
-  }
-
-  .info {
-    color: #ffd27f;
-    font-size: 0.95rem;
-    margin: 0;
-  }
-
-  .error {
-    color: #ff9b9b;
-    font-size: 0.95rem;
-    margin: 0;
-  }
-
-  .danger-zone {
-    margin-top: 1.5rem;
-    padding: 1rem;
-    border: 1px solid rgba(255, 120, 120, 0.4);
-    border-radius: 1rem;
-    background: rgba(70, 20, 20, 0.35);
-    display: grid;
-    gap: 0.75rem;
-  }
-
-  .danger-zone h3 {
-    margin: 0;
-    font-size: 1.1rem;
-    color: rgba(255, 180, 180, 0.95);
-  }
-
-  .danger-zone p {
-    margin: 0;
-    color: rgba(255, 215, 215, 0.85);
+    color: var(--color-text-muted);
     font-size: 0.9rem;
   }
 
-  .danger-note {
-    font-style: italic;
-    color: rgba(255, 200, 200, 0.85);
-  }
-
-  .btn.danger {
-    background: rgba(200, 60, 60, 0.85);
-    border: 1px solid rgba(210, 70, 70, 0.95);
-    color: #fff1f1;
-  }
-
-  .btn.danger[disabled] {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  .btn.outline {
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.4);
-    color: #f0f4f9;
-    padding: 0.55rem 1.2rem;
-    transition: border-color 0.2s ease, background 0.2s ease;
-  }
-
-  .btn.outline:hover,
-  .btn.outline:focus-visible {
-    border-color: rgba(255, 255, 255, 0.7);
-    background: rgba(255, 255, 255, 0.08);
-  }
-
   .avatar-field {
-    gap: 0.75rem;
+    gap: var(--space-2);
   }
 
   .current-avatar {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: var(--space-3);
   }
 
   .current-avatar img {
@@ -880,172 +696,106 @@
     height: 72px;
     border-radius: 50%;
     object-fit: cover;
-    border: 2px solid rgba(255, 255, 255, 0.45);
-    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
   }
 
   .current-avatar-actions {
     display: grid;
-    gap: 0.35rem;
+    gap: 0.3rem;
   }
 
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(2px);
-    z-index: 80;
-    border: 0;
-    padding: 0;
-    cursor: pointer;
+  .divider {
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    margin: var(--space-3) 0;
   }
 
-  .modal-backdrop:focus-visible {
-    outline: 2px solid rgba(255, 232, 140, 0.7);
-  }
-
-  .modal {
-    position: fixed;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    padding: 2rem 1rem;
-    z-index: 90;
-  }
-
-  .modal.delete-modal {
-    z-index: 95;
-  }
-
-  .avatar-modal {
-    z-index: 90;
-  }
-
-  .modal-content {
-    width: min(480px, 95vw);
-    display: grid;
-    gap: 1rem;
-    padding: 1.75rem;
-    border-radius: 1.2rem;
-    background: rgba(20, 18, 28, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.55);
-  }
-
-  .avatar-modal .modal-content {
-    border-color: rgba(255, 232, 140, 0.3);
-  }
-
-  .delete-modal .modal-content {
-    border-color: rgba(255, 120, 120, 0.3);
-  }
-
-  .modal-content h3 {
+  .section-title {
     margin: 0;
-    font-size: 1.3rem;
-    color: #f3f5f7;
-  }
-
-  .delete-modal .modal-content h3 {
-    color: rgba(255, 190, 190, 0.95);
-  }
-
-  .modal-hint,
-  .modal-warning {
-    margin: 0;
-    font-size: 0.95rem;
-    color: rgba(245, 245, 245, 0.8);
-  }
-
-  .delete-modal .modal-hint {
-    color: rgba(255, 230, 230, 0.85);
-  }
-
-  .modal-warning {
     font-weight: 600;
-    color: rgba(255, 180, 180, 0.95);
+    color: var(--color-text-secondary);
   }
 
-  .modal-actions {
+  .actions {
     display: flex;
-    justify-content: flex-end;
-    gap: 0.75rem;
+    gap: var(--space-3);
     flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .danger-note {
+    margin: 0;
+    color: #ffbeb8;
+  }
+
+  .modal-warning {
+    color: #ffbeb8;
+    font-size: 0.95rem;
+  }
+
+  .modal-hint {
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
   }
 
   .avatar-options {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
-    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: var(--space-3);
   }
 
   .avatar-option {
     display: grid;
-    gap: 0.35rem;
+    gap: 0.3rem;
     justify-items: center;
     padding: 0.75rem 0.5rem;
-    border-radius: 1rem;
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    background: rgba(255, 255, 255, 0.05);
-    color: #f5f8fb;
-    cursor: pointer;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.02);
   }
 
   .avatar-option.selected {
-    border-color: rgba(255, 232, 140, 0.9);
-    box-shadow: 0 4px 16px rgba(255, 232, 140, 0.22);
-    transform: translateY(-2px);
+    border-color: rgba(244, 212, 124, 0.85);
+    box-shadow: 0 12px 24px rgba(244, 212, 124, 0.2);
   }
 
   .avatar-option img {
-    width: 72px;
-    height: 72px;
+    width: 64px;
+    height: 64px;
     border-radius: 50%;
-    object-fit: cover;
-    border: 2px solid rgba(255, 255, 255, 0.4);
-    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
   }
 
-  .avatar-option span {
-    font-size: 0.85rem;
-    font-weight: 600;
-  }
-
-  .avatar-option:focus-visible {
-    outline: 2px solid rgba(255, 232, 140, 0.7);
-    outline-offset: 3px;
+  .avatar-option-label {
+    text-align: center;
   }
 
   .custom-upload {
     display: grid;
-    gap: 0.5rem;
+    gap: var(--space-2);
   }
 
   .custom-upload-label {
-    display: inline-flex;
+    display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: 0.5rem;
-    cursor: pointer;
-    color: rgba(245, 245, 245, 0.85);
-  }
-
-  .custom-upload-label input {
-    display: none;
+    gap: var(--space-3);
+    padding: 0.65rem 0.8rem;
+    border-radius: var(--radius-md);
+    border: 1px dashed rgba(255, 255, 255, 0.25);
+    color: var(--color-text-secondary);
   }
 
   .custom-preview {
-    display: grid;
-    gap: 0.5rem;
-    justify-items: center;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
   }
 
   .custom-preview img {
-    width: 96px;
-    height: 96px;
+    width: 72px;
+    height: 72px;
     border-radius: 50%;
-    object-fit: cover;
-    border: 2px solid rgba(255, 255, 255, 0.45);
-    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
   }
 </style>

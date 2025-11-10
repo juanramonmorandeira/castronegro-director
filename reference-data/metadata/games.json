@@ -1,10 +1,11 @@
 {
   "status_values": ["draft", "shared", "waiting", "in_progress", "paused", "finished", "cancelled"],
   "status_transitions": {
-    "draft": ["waiting", "cancelled"],
-    "waiting": ["draft", "in_progress", "cancelled"],
+    "draft": ["shared", "cancelled"],
+    "shared": ["waiting", "cancelled"],
+    "waiting": ["in_progress", "cancelled"],
     "in_progress": ["paused", "finished", "cancelled"],
-    "paused": ["in_progress", "finished", "cancelled"],
+    "paused": ["in_progress", "cancelled"],
     "finished": [],
     "cancelled": []
   },

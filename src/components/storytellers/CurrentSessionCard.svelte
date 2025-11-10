@@ -1,6 +1,7 @@
 <script>
   import { normalizeStatus, statusBadgeClass } from '../../lib/utils.js';
   import { t } from '../../lib/i18n.js';
+  import Button from '../ui/Button.svelte';
 
   export let session = null;
   export let loading = false;
@@ -14,6 +15,7 @@
   $: statusText = $t(`status.${normalizeStatus(session?.status)}`);
   $: checkingLabel = $t('landing.current.checking');
   $: headingLabel = $t('landing.current.heading');
+  $: subtitleLabel = $t('landing.current.subtitle');
   $: noSessionLabel = $t('landing.current.no_active');
   $: createLabel = $t('landing.current.create');
   $: creatingLabel = $t('landing.current.creating');
@@ -22,8 +24,9 @@
 </script>
 
 <section class="current-card card-glass" aria-live="polite">
-  <header class="card-header">
-    <h2 class="card-title">{headingLabel}</h2>
+  <header class="form-header">
+    <h2 class="panel-title">{headingLabel}</h2>
+    <p class="panel-subtitle">{subtitleLabel}</p>
   </header>
   <div class="status-box" data-has-session={!!session}>
     {#if loading}
@@ -41,12 +44,17 @@
   </div>
 
   <div class="actions">
-    <button class="primary" on:click={onCreateClick} aria-label={createLabel} disabled={creating}>
+    <Button variant="primary" on:click={onCreateClick} aria-label={createLabel} disabled={creating}>
       {creating ? creatingLabel : createLabel}
-    </button>
-    <button class="ghost" on:click={onViewClick} disabled={!session || !canView} aria-label={viewLabel}>
+    </Button>
+    <Button
+      variant="secondary"
+      on:click={onViewClick}
+      disabled={!session || !canView}
+      aria-label={viewLabel}
+    >
       {viewLabel}
-    </button>
+    </Button>
   </div>
   {#if createError}
     <p class="error-msg" role="alert">{createError}</p>
@@ -63,22 +71,6 @@
     padding: clamp(1.25rem, 3vw, 2rem);
     box-sizing: border-box;
   }
-  .card-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .card-title {
-    font-family: var(--title-font, 'Cinzel', serif);
-    font-size: 1.8rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-shadow: 0 0 10px rgba(255, 230, 140, 0.8), 0 0 20px rgba(255, 200, 80, 0.5);
-    color: #f7d774;
-    margin: 0;
-  }
-
   .status-box {
     text-align: left;
     padding: 0.85rem 1rem;
@@ -112,24 +104,6 @@
     justify-content: center;
     flex-wrap: wrap;
   }
-
-  .primary {
-    padding: 0.5rem 0.8rem;
-    border-radius: 8px;
-    border: 1px solid #3a5a3a;
-    background: rgba(60, 120, 60, 0.25);
-    color: #e9ffe9;
-    cursor: pointer;
-  }
-  .ghost {
-    padding: 0.5rem 0.8rem;
-    border-radius: 8px;
-    border: 1px solid rgba(255,255,255,0.25);
-    background: rgba(255,255,255,0.08);
-    color: #e8ecf1;
-    cursor: pointer;
-  }
-  .ghost:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .error-msg {
     margin: 0.5rem 0 0;

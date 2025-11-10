@@ -1,0 +1,70 @@
+:root {
+  --page-max-width: 960px;
+}
+
+.page-grid {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+
+.centered-section {
+  display: grid;
+  place-items: center;
+  padding: var(--space-6) var(--space-4);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.stack-sm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.cluster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.section-label {
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.heading-display {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 4vw, 2.8rem);
+  color: var(--color-gold-400);
+  text-shadow:
+    0 0 8px rgba(244, 212, 124, 0.55),
+    0 0 24px rgba(244, 212, 124, 0.35);
+  margin: 0;
+}
+
+.heading-section {
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 3vw, 2rem);
+  color: var(--color-gold-400);
+  margin: 0;
+}
+
+.text-muted {
+  color: var(--color-text-muted);
+}
+
+.surface-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(12px);
+}

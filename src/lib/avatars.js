@@ -13,6 +13,7 @@ export const AVAILABLE_AVATARS = [
   { value: '/avatars/Avatar_Laura.png', labelKey: 'registration.avatar_option.laura' },
   { value: '/avatars/Avatar_Martin.png', labelKey: 'registration.avatar_option.martin' },
   { value: '/avatars/Avatar_Matyas.png', labelKey: 'registration.avatar_option.matyas' },
+  { value: '/avatars/Avatar_Emese.png', labelKey: 'registration.avatar_option.emese' },
   { value: '/avatars/Avatar_Natalia.png', labelKey: 'registration.avatar_option.natalia' },
   { value: '/avatars/Avatar_Ramon.png', labelKey: 'registration.avatar_option.ramon' },
   { value: '/avatars/Avatar_Sofia.png', labelKey: 'registration.avatar_option.sofia' },
