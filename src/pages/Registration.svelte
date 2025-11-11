@@ -22,6 +22,9 @@
 
   const dispatch = createEventDispatcher();
 
+  export let showSessionIndicator = false;
+  export let sessionIndicator = null;
+
   let name = '';
   let alias = '';
   let email = '';
@@ -233,7 +236,12 @@
 <BackgroundLayer />
 
 <div class="page">
-  <Topbar titleKey="registration.title" showUserMenu={false} />
+  <Topbar
+    titleKey="registration.title"
+    showUserMenu={false}
+    showSessionIndicator={showSessionIndicator}
+    sessionIndicator={sessionIndicator}
+  />
 
   <main class="auth-screen">
     <div class="auth-layout">
@@ -339,6 +347,7 @@
     open={avatarModalOpen}
     title={$t('registration.avatar_modal_title')}
     ariaLabel={$t('registration.avatar_modal_help')}
+    closeOnBackdrop={false}
     on:close={closeAvatarModal}
   >
     <p class="modal-hint">{$t('registration.avatar_modal_help')}</p>

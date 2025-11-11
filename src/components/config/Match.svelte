@@ -1,6 +1,7 @@
 <script>
   import { createEventDispatcher } from 'svelte';
   import { t } from '../../lib/i18n.js';
+  import Modal from '../ui/Modal.svelte';
 
   export let open = false;
 
@@ -17,66 +18,29 @@
   function confirm() {
     dispatch('save');
   }
+  const hint = $t('configure.match_hint');
 </script>
 
-{#if open}
-  <div
-    class="config-modal-backdrop"
-    role="dialog"
-    tabindex="0"
-    aria-modal="true"
-    aria-labelledby="match-title"
-    on:click={close}
-    on:keydown={(event) => {
-      if (event.key === 'Escape') close();
-    }}
-  >
-    <div class="config-modal" role="document" on:click|stopPropagation>
-      <header class="modal-header">
-        <h3 id="match-title">{$t('configure.match_title')}</h3>
-      </header>
-      <div class="modal-body">
-        <p class="hint">{$t('configure.match_hint')}</p>
-        <div class="match-actions">
-          <button class="btn secondary" type="button" on:click={autoAssign}>{$t('configure.match_auto')}</button>
-          <button class="btn primary" type="button" on:click={confirm}>{$t('configure.match_manual')}</button>
-        </div>
-      </div>
+<Modal
+  open={open}
+  title={$t('configure.match_title')}
+  description={hint}
+  size="sm"
+  on:close={close}
+>
+  <div class="match-body">
+    <div class="match-actions">
+      <button class="btn secondary" type="button" on:click={close}>{$t('common.actions.cancel')}</button>
+      <button class="btn primary" type="button" on:click={confirm}>{$t('common.actions.save')}</button>
     </div>
   </div>
-{/if}
+</Modal>
 
 <style>
-  .config-modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(2, 6, 14, 0.75);
-    display: grid;
-    place-items: center;
-    z-index: 1200;
-    padding: 1rem;
-  }
-  .config-modal {
-    width: min(520px, 95vw);
-    background: #04070f;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 24px;
-    padding: 1.75rem;
-    color: #f5f8fb;
-  }
-  .modal-header {
+  .match-body {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-  }
-  .modal-body {
-    display: grid;
+    flex-direction: column;
     gap: 1rem;
-  }
-  .hint {
-    margin: 0;
-    color: rgba(245, 245, 245, 0.7);
   }
   .match-actions {
     display: flex;

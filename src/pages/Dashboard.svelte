@@ -27,6 +27,8 @@ import { locale as localeStore, t } from '../lib/i18n.js';
   export let onCreate = () => {};
   export let onViewCurrent = () => {};
   export let user = null;
+  export let showSessionIndicator = false;
+  export let sessionIndicator = null;
 
   let current = null;
   let historyDocs = [];
@@ -258,6 +260,8 @@ async function handleHistoryDelete(event) {
     flagSrc={topbarFlagSrc}
     langCode={topbarLangCode}
     user={user}
+    showSessionIndicator={showSessionIndicator}
+    sessionIndicator={sessionIndicator}
     on:profile={relay}
     on:logout={relay}
     on:lang={() => { /* aquí harás el toggle de idioma cuando llegue i18n */ }}

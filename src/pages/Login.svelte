@@ -13,6 +13,8 @@
   export let onLoginSuccess = null;
   export let onLoginForgot = null;
   export let verificationNotice = null;
+  export let showSessionIndicator = false;
+  export let sessionIndicator = null;
 
   const dispatch = createEventDispatcher();
   let email = '';
@@ -179,7 +181,12 @@
 <BackgroundLayer />
 
   <div class="page">
-  <Topbar titleKey="login.title" showUserMenu={false} />
+  <Topbar
+    titleKey="login.title"
+    showUserMenu={false}
+    showSessionIndicator={showSessionIndicator}
+    sessionIndicator={sessionIndicator}
+  />
 
   <main class="auth-screen">
     <h1 class="sr-only">{$t('login.title')}</h1>

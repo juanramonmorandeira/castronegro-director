@@ -38,6 +38,8 @@ import { NAV_INTENT } from '../lib/navigation.js';
   const dispatch = createEventDispatcher();
 
   export let user = null;
+  export let showSessionIndicator = false;
+  export let sessionIndicator = null;
 
   const translate = (key, vars) => get(t)(key, vars);
 
@@ -373,7 +375,14 @@ function closeAlert() {
 <BackgroundLayer />
 
 <div class="page-grid profile-screen">
-  <Topbar titleKey="profile.title" user={user} on:profile={relay} on:logout={relay} />
+  <Topbar
+    titleKey="profile.title"
+    user={user}
+    showSessionIndicator={showSessionIndicator}
+    sessionIndicator={sessionIndicator}
+    on:profile={relay}
+    on:logout={relay}
+  />
 
   <main class="page-main">
     <form class="profile-card surface-panel" on:submit|preventDefault={onSubmit} aria-label={$t('profile.title')}>
@@ -531,6 +540,7 @@ function closeAlert() {
   title={$t('profile.avatar_modal_title')}
   ariaLabel={$t('profile.avatar_modal_help')}
   showClose={false}
+  closeOnBackdrop={false}
   on:close={closeAvatarModal}
 >
   <p class="modal-hint">{$t('profile.avatar_modal_help')}</p>
@@ -588,6 +598,7 @@ function closeAlert() {
   showClose={false}
   title={$t('profile.delete.modal_title')}
   ariaLabel={$t('profile.delete.modal_hint')}
+  closeOnBackdrop={false}
   on:close={closeDeleteModal}
 >
   <p class="modal-hint">{$t('profile.delete.modal_hint')}</p>

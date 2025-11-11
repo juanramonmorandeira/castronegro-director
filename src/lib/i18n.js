@@ -39,6 +39,7 @@ const dictionaries = {
       change_language: 'Change language',
       change_language_current: 'Change language, current: {language}',
       navigation_label: 'Top navigation',
+      session_status_label: 'Session status',
       menu: {
         profile: 'User profile',
         logout: 'Logout'
@@ -185,7 +186,7 @@ const dictionaries = {
       confirm_password_label: 'Confirm new password',
       confirm_password_placeholder: 'Repeat the new password',
       password_requirements: 'Use at least 10 characters combining uppercase, lowercase, numbers and symbols.',
-      save: 'Save changes',
+      save: 'Save',
       back: 'Back',
       success: {
         profile_updated: 'Your profile has been updated.',
@@ -248,7 +249,7 @@ const dictionaries = {
       balance_roles: {
         villagers: 'Villagers',
         ambiguous: 'Ambiguous',
-        outsiders: 'Outsiders',
+        loners: 'Loners',
         werewolves: 'Werewolves'
       },
       role_selector_label: 'Role selection',
@@ -258,7 +259,7 @@ const dictionaries = {
       role_override_active: 'Override enabled',
       role_constraints: {
         ruleset: 'Rule set: {value}',
-        mix: 'Mix for {value} players'
+        mix: 'Suggested mix for {value} players'
       },
       session_stats_label: 'Session metrics',
       players_counters_heading: 'Players counters',
@@ -301,7 +302,7 @@ const dictionaries = {
       share_qr_alt: 'QR code for this session',
       role_preview_empty: 'No roles selected yet',
       back: 'Back to dashboard',
-      save: 'Save changes',
+      save: 'Save',
       saved: 'Saved!',
       loading: 'Loading configuration…',
       errors: {
@@ -449,6 +450,7 @@ const dictionaries = {
       change_language: 'Cambiar idioma',
       change_language_current: 'Cambiar idioma, actual: {language}',
       navigation_label: 'Barra de navegación',
+      session_status_label: 'Estado de la sesión',
       menu: {
         profile: 'Perfil de usuario',
         logout: 'Cerrar sesión'
@@ -595,7 +597,7 @@ const dictionaries = {
       confirm_password_label: 'Confirmar nueva contraseña',
       confirm_password_placeholder: 'Repite la nueva contraseña',
       password_requirements: 'Usa al menos 10 caracteres combinando mayúsculas, minúsculas, números y símbolos.',
-      save: 'Guardar cambios',
+      save: 'Guardar',
       back: 'Volver',
       success: {
         profile_updated: 'Tu perfil se ha actualizado correctamente.',
@@ -658,7 +660,7 @@ const dictionaries = {
       balance_roles: {
         villagers: 'Aldeanos',
         ambiguous: 'Ambiguos',
-        outsiders: 'Forasteros',
+        loners: 'Forasteros',
         werewolves: 'Hombres lobo'
       },
       role_selector_label: 'Selector de roles',
@@ -668,7 +670,7 @@ const dictionaries = {
       role_override_active: 'Ignorando límites',
       role_constraints: {
         ruleset: 'Reglas: {value}',
-        mix: 'Mezcla para {value} jugadores'
+        mix: 'Mezcla sugerida para {value} jugadores'
       },
       session_stats_label: 'Indicadores de la sesión',
       players_counters_heading: 'Contadores de jugadores',
@@ -711,7 +713,7 @@ const dictionaries = {
       share_qr_alt: 'Código QR de la sesión',
       role_preview_empty: 'Aún no seleccionaste roles',
       back: 'Volver al panel',
-      save: 'Guardar cambios',
+      save: 'Guardar',
       saved: 'Guardado',
       loading: 'Cargando configuración…',
       errors: {
@@ -859,6 +861,7 @@ const dictionaries = {
       change_language: 'Nyelv módosítása',
       change_language_current: 'Nyelv módosítása, aktuális: {language}',
       navigation_label: 'Fő navigáció',
+      session_status_label: 'Játék állapota',
       menu: {
         profile: 'Felhasználói profil',
         logout: 'Kijelentkezés'
@@ -1068,7 +1071,7 @@ const dictionaries = {
       balance_roles: {
         villagers: 'Falusiak',
         ambiguous: 'Átmeneti szerepek',
-        outsiders: 'Kívülállók',
+        loners: 'Kívülállók',
         werewolves: 'Farkasok'
       },
       role_selector_label: 'Szerepek kiosztása',
@@ -1078,7 +1081,7 @@ const dictionaries = {
       role_override_active: 'Feloldva',
       role_constraints: {
         ruleset: 'Szabálykészlet: {value}',
-        mix: '{value} játékosra ajánlott mix'
+        mix: 'Ajánlott mix {value} játékoshoz'
       },
       session_stats_label: 'Session mutatók',
       players_counters_heading: 'Játékos számlálók',

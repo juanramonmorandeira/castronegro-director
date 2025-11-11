@@ -17,6 +17,8 @@
 
   export let sessionId;
   export let user = null;
+  export let showSessionIndicator = false;
+  export let sessionIndicator = null;
 
   const dispatch = createEventDispatcher();
 
@@ -74,7 +76,7 @@
     Logbook: 'logbook'
   };
 
-  const ROLE_BREAKDOWN_ORDER = ['villagers', 'ambiguous', 'outsiders', 'werewolves'];
+  const ROLE_BREAKDOWN_ORDER = ['villagers', 'ambiguous', 'loners', 'werewolves'];
   const DUPLICATE_ROLE_NAMES = new Set(['common', 'villager', 'werewolf']);
 
   const clampPlayers = (value) => {
@@ -266,6 +268,14 @@
     form.storyteller === 'AI' ||
     (form.storyteller === 'human-AI' && Array.isArray(form.assistTasks) && form.assistTasks.includes('Roles_Selection'));
   $: distributionTokens = buildDistributionTokens(selectedRoles);
+  $: if (sessionId && !loading) {
+    dispatch('session-stats', {
+      expected: clampPlayers(form.players_expected),
+      connected: connectedCount,
+      ready: readyCount,
+      status: sessionStatus
+    });
+  }
 
   function getAssistTaskLabel(task) {
     const key = ASSIST_TASK_TRANSLATIONS[task];
@@ -485,6 +495,8 @@
   <Topbar
     titleKey="configure.title"
     user={user}
+    showSessionIndicator={showSessionIndicator}
+    sessionIndicator={sessionIndicator}
     on:profile={(event) => dispatch('profile', event.detail)}
     on:logout={(event) => dispatch('logout', event.detail)}
   />
@@ -510,23 +522,6 @@
                 maxlength="80"
               />
             </label>
-            <div class="players-counter-block" aria-label={$t('configure.session_stats_label')}>
-              <span class="counter-heading">{$t('configure.players_counters_heading')}</span>
-              <div class="session-stats">
-                <div class="stat-chip stat-expected">
-                  <span class="chip-label">{$t('configure.expected_label')}</span>
-                  <span class="chip-value">{form.players_expected}</span>
-                </div>
-                <div class="stat-chip stat-connected">
-                  <span class="chip-label">{$t('configure.connected_label')}</span>
-                  <span class="chip-value">{connectedCount}</span>
-                </div>
-                <div class="stat-chip stat-ready">
-                  <span class="chip-label">{$t('configure.ready_label')}</span>
-                  <span class="chip-value">{readyCount}</span>
-                </div>
-              </div>
-            </div>
           </div>
         </header>
 
@@ -692,7 +687,7 @@
   .config-main {
     display: grid;
     place-items: center;
-    padding: 2rem 1rem 3rem;
+    padding: calc(56px + 2rem) 1rem 3rem;
   }
 
   .config-card {
@@ -744,69 +739,6 @@
     width: 100%;
   }
 
-  .players-counter-block {
-    width: 100%;
-    margin-top: var(--space-3);
-    position: relative;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: 32px;
-    padding: 1.4rem 1rem 0.9rem;
-    background: transparent;
-  }
-
-  .counter-heading {
-    position: absolute;
-    top: 0;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    margin: 0;
-    padding: 0 1.25rem;
-    font-size: 0.95rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    color: var(--color-text-primary, #f5f8fb);
-    background: var(--glass-bg, rgba(6, 10, 18, 0.75));
-    border-radius: 999px;
-  }
-
-  .session-stats {
-    width: 100%;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.4rem;
-    align-items: stretch;
-  }
-
-  .stat-chip {
-    display: inline-flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    padding: 0.55rem 1rem;
-    border-radius: 999px;
-    background: rgba(5, 9, 16, 0.85);
-    min-width: 0;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-  }
-
-  .chip-label {
-    font-size: 0.85rem;
-    color: rgba(245, 245, 245, 0.85);
-  }
-
-  .chip-value {
-    font-size: 1.15rem;
-    font-weight: 600;
-    color: #f5f8fb;
-  }
-
-  .stat-chip.stat-connected .chip-value {
-    color: #ffb45b;
-  }
-
-  .stat-chip.stat-ready .chip-value {
-    color: #6fe3a2;
-  }
 
   .actions-grid {
     display: grid;
@@ -876,6 +808,9 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
+    align-self: flex-start;
+    justify-self: flex-start;
+    width: auto;
   }
 
   .role-chip {
@@ -883,7 +818,7 @@
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 0.85rem;
     padding: 0.35rem 0.6rem;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 0.4rem;
     background: rgba(255, 255, 255, 0.03);
@@ -900,6 +835,7 @@
   .role-chip.empty {
     border-style: dashed;
     color: rgba(245, 245, 245, 0.55);
+    justify-content: center;
   }
 
   .chip-badge {
@@ -968,12 +904,6 @@
 
   .saved-hint {
     color: rgba(160, 255, 160, 0.8);
-  }
-
-  @media (max-width: 560px) {
-    .session-stats {
-      flex-wrap: wrap;
-    }
   }
 
   @media (max-width: 720px) {

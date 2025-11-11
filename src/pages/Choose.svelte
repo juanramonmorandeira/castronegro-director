@@ -13,6 +13,8 @@
   const dispatch = createEventDispatcher();
 
   export let user = null;
+  export let showSessionIndicator = false;
+  export let sessionIndicator = null;
 
   let listLoading = false;
   let connectPending = false;
@@ -115,7 +117,14 @@
 <BackgroundLayer />
 
 <div class="page-grid">
-  <Topbar titleKey="player.choose_title" user={user} on:profile={relay} on:logout={relay} />
+  <Topbar
+    titleKey="player.choose_title"
+    user={user}
+    showSessionIndicator={showSessionIndicator}
+    sessionIndicator={sessionIndicator}
+    on:profile={relay}
+    on:logout={relay}
+  />
   <main class="page-main">
     <section class="surface-panel choose-panel" aria-labelledby="choose-title">
       <header class="form-header">

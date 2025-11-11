@@ -1,6 +1,7 @@
 <script>
   import { createEventDispatcher } from 'svelte';
   import { t } from '../../lib/i18n.js';
+  import Modal from '../ui/Modal.svelte';
 
   const clampPlayers = (value, min, max) => {
     const numeric = Number(value);
@@ -130,16 +131,18 @@
   function save() {
     dispatch('save', { value: { ...draft } });
   }
+  const modalDescription = $t('configure.intro');
 </script>
 
-{#if open}
-  <div class="config-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="properties-title">
-    <div class="config-modal large">
-      <header class="modal-header">
-        <h3 id="properties-title">{$t('configure.properties_title')}</h3>
-      </header>
-
-      <section class="modal-body">
+<Modal
+  open={open}
+  title={$t('configure.properties_title')}
+  description={modalDescription}
+  size="md"
+  closeOnBackdrop={false}
+  on:close={close}
+>
+  <section class="properties-body">
         <label class="field">
           <span class="label">{$t('configure.ruleset_label')}</span>
           <div class="input-shell select-shell">
@@ -230,51 +233,16 @@
             {/if}
           </div>
         {/if}
-      </section>
+  </section>
 
-      <footer class="modal-actions">
-        <button class="btn secondary" type="button" on:click={close}>{$t('common.actions.cancel')}</button>
-        <button class="btn primary" type="button" on:click={save}>{$t('common.actions.save')}</button>
-      </footer>
-    </div>
-  </div>
-{/if}
+  <svelte:fragment slot="footer">
+    <button class="btn secondary" type="button" on:click={close}>{$t('common.actions.cancel')}</button>
+    <button class="btn primary" type="button" on:click={save}>{$t('common.actions.save')}</button>
+  </svelte:fragment>
+</Modal>
 
 <style>
-  .config-modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(2, 6, 14, 0.8);
-    display: grid;
-    place-items: center;
-    z-index: 1100;
-    padding: 1rem;
-  }
-  .config-modal {
-    width: min(540px, 92vw);
-    background: #04070f;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 28px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
-    display: flex;
-    flex-direction: column;
-    gap: 1.25rem;
-    padding: clamp(1.25rem, 3vw, 1.75rem);
-    color: #f5f8fb;
-  }
-  .modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
-  }
-  .modal-header h3 {
-    margin: 0;
-    font-size: 1.35rem;
-    font-weight: 600;
-    color: #f4f7fb;
-  }
-  .modal-body {
+  .properties-body {
     display: grid;
     gap: 1.4rem;
   }
@@ -295,10 +263,10 @@
     background: rgba(11, 17, 26, 0.85);
     padding: 0.25rem 0.35rem;
   }
-  .config-modal select {
+  .properties-body select {
     color-scheme: dark;
   }
-  .config-modal option {
+  .properties-body option {
     background: #0b111a;
     color: #f5f8fb;
   }

@@ -1,6 +1,7 @@
 <script>
   import { createEventDispatcher } from 'svelte';
   import { t } from '../../lib/i18n.js';
+  import Modal from '../ui/Modal.svelte';
 
   export let open = false;
   export let categories = [];
@@ -209,15 +210,18 @@
   function save() {
     dispatch('save', { selections: draftSelections, override: draftOverride });
   }
+  const selectionDescription = $t('configure.selection_hint');
 </script>
 
-{#if open}
-  <div class="config-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="selection-title">
-    <div class="config-modal xl">
-      <header class="modal-header">
-        <h3 id="selection-title">{$t('configure.selection_title')}</h3>
-      </header>
-
+<Modal
+  open={open}
+  title={$t('configure.selection_title')}
+  description={selectionDescription}
+  size="xl"
+  closeOnBackdrop={false}
+  on:close={close}
+>
+  <div class="selection-body">
       <div class="override-banner">
         <label class="override-toggle">
           <input type="checkbox" bind:checked={draftOverride} />
@@ -299,48 +303,25 @@
         {/each}
       </div>
 
-      <footer class="modal-actions">
-        <button class="btn secondary" type="button" on:click={close}>{$t('common.actions.cancel')}</button>
-        <button class="btn primary" type="button" on:click={save}>{$t('common.actions.save')}</button>
-      </footer>
-    </div>
   </div>
-{/if}
+
+  <svelte:fragment slot="footer">
+    <button class="btn secondary" type="button" on:click={close}>{$t('common.actions.cancel')}</button>
+    <button class="btn primary" type="button" on:click={save}>{$t('common.actions.save')}</button>
+  </svelte:fragment>
+</Modal>
 
 <style>
-  .config-modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(3, 6, 14, 0.85);
-    display: grid;
-    place-items: center;
-    z-index: 1150;
-    padding: 1rem;
-  }
-  .config-modal {
-    width: min(1100px, 96vw);
-    max-height: 90vh;
-    overflow-y: auto;
-    background: #04070f;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 28px;
-    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.65);
-    color: #f5f8fb;
+  .selection-body {
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
-    padding: 2rem;
-  }
-  .modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    gap: 1.25rem;
   }
   .section-label {
-    font-size: 0.78rem;
-    text-transform: uppercase;
-    letter-spacing: 0.18em;
-    color: rgba(248, 248, 250, 0.65);
+    font-size: 0.95rem;
+    text-transform: none;
+    letter-spacing: 0.04em;
+    color: rgba(252, 253, 255, 0.92);
   }
   .override-banner {
     display: flex;
@@ -377,12 +358,13 @@
   }
   .mix-header {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
   }
   .mix-hint {
     font-size: 0.85rem;
-    color: rgba(245, 245, 245, 0.6);
+    color: rgba(245, 245, 245, 0.75);
   }
   .mix-grid {
     display: grid;
@@ -502,11 +484,6 @@
     font-weight: 600;
     min-width: 1.5rem;
     text-align: center;
-  }
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.8rem;
   }
   .btn {
     border: none;

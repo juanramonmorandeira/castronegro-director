@@ -11,7 +11,7 @@
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
   import BackgroundLayer from './components/common/BackgroundLayer.svelte';
-  import Storyteller from "./pages/Storyteller.svelte";
+  import Dashboard from "./pages/Dashboard.svelte";
   import Login from './pages/Login.svelte';
   import Registration from './pages/Registration.svelte';
 import Choose from './pages/Choose.svelte';
@@ -30,6 +30,11 @@ import Choose from './pages/Choose.svelte';
   let verificationNotice = null;
   let pendingVerificationCode = null;
   let shouldProcessVerification = false;
+  const SESSION_INDICATOR_STATES = new Set(['shared', 'waiting', 'in_progress', 'paused']);
+  const SESSION_INDICATOR_EXCLUDED_VIEWS = new Set(['login', 'registration', 'landing', 'player-selection']);
+  let sessionIndicator = null;
+  let sessionIndicatorStatus = null;
+  let sessionIndicatorEnabled = false;
 
   if (typeof window !== 'undefined') {
     const initialPath = window.location.pathname;
@@ -182,6 +187,9 @@ import Choose from './pages/Choose.svelte';
       currentRole = null;
       currentSessionId = null;
       previousView = null;
+      sessionIndicator = null;
+      sessionIndicatorStatus = null;
+      sessionIndicatorEnabled = false;
       goLogin();
     }
   }
@@ -197,6 +205,31 @@ import Choose from './pages/Choose.svelte';
       currentUser = detail.user;
     }
   }
+
+  function handleSessionStats(event) {
+    const detail = event?.detail ?? event;
+    if (!detail) return;
+    if (detail.reset) {
+      sessionIndicator = null;
+      sessionIndicatorStatus = null;
+      sessionIndicatorEnabled = false;
+      return;
+    }
+    sessionIndicator = {
+      expected: Number(detail.expected) || 0,
+      connected: Number(detail.connected) || 0,
+      ready: Number(detail.ready) || 0
+    };
+    if (detail.status) {
+      sessionIndicatorStatus = detail.status;
+    }
+    sessionIndicatorEnabled = sessionIndicatorStatus
+      ? SESSION_INDICATOR_STATES.has(sessionIndicatorStatus)
+      : false;
+  }
+
+  $: allowIndicatorForView = !SESSION_INDICATOR_EXCLUDED_VIEWS.has(view);
+  $: showSessionIndicator = allowIndicatorForView && sessionIndicatorEnabled && !!sessionIndicator;
 
   async function handleProfileEmailChange() {
     await handleLogout();
@@ -265,11 +298,15 @@ import Choose from './pages/Choose.svelte';
     on:navigate-registration={goRegistration}
     verificationNotice={verificationNotice}
     on:notice-consumed={handleNoticeConsumed}
+    showSessionIndicator={showSessionIndicator}
+    sessionIndicator={sessionIndicator}
   />
 {:else if view === 'registration'}
   <Registration
     on:registered={handleRegistered}
     on:navigate-login={goLogin}
+    showSessionIndicator={showSessionIndicator}
+    sessionIndicator={sessionIndicator}
   />
 {:else if view === 'player-selection'}
   <Choose
@@ -278,11 +315,15 @@ import Choose from './pages/Choose.svelte';
     on:scan-qr={handlePlayerScan}
     on:profile={openProfile}
     on:logout={handleLogout}
+    showSessionIndicator={showSessionIndicator}
+    sessionIndicator={sessionIndicator}
   />
 {:else if view === "configure"}
   <Configure
     sessionId={currentSessionId}
     user={currentUser}
+    showSessionIndicator={showSessionIndicator}
+    sessionIndicator={sessionIndicator}
     on:back={() => {
       view = 'landing';
     }}
@@ -294,6 +335,7 @@ import Choose from './pages/Choose.svelte';
     }}
     on:profile={openProfile}
     on:logout={handleLogout}
+    on:session-stats={handleSessionStats}
   />
 {:else if view === "session"}
   <!-- Placeholder de la vista de sesión activa -->
@@ -305,12 +347,14 @@ import Choose from './pages/Choose.svelte';
     </div>
   </div>
 {:else if view === "landing"}
-  <Storyteller
+  <Dashboard
     user={currentUser}
     onCreate={goConfigure}
     onViewCurrent={goSession}
     on:profile={openProfile}
     on:logout={handleLogout}
+    showSessionIndicator={showSessionIndicator}
+    sessionIndicator={sessionIndicator}
   />
 {:else if view === 'profile'}
   <Profile
@@ -321,6 +365,8 @@ import Choose from './pages/Choose.svelte';
     on:logout={handleLogout}
     on:profile={openProfile}
     on:deleted={handleAccountDeleted}
+    showSessionIndicator={showSessionIndicator}
+    sessionIndicator={sessionIndicator}
   />
 {/if}
 

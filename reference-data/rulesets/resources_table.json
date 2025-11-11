@@ -1,37 +1,221 @@
 {
-  "basic":  { 
-    "roles": { "ambiguous": [ "thief" ],
-               "outsiders": [],  
-               "villagers": [ "common", "cupid", "girl", "hunter", "seer", "witch" ],
-               "werewolves": [ "werewolf" ] },
+  "basic": {
+    "roles": {
+      "ambiguous": [
+        "thief"
+      ],
+      "villagers": [
+        "common",
+        "cupid",
+        "girl",
+        "hunter",
+        "seer",
+        "witch"
+      ],
+      "werewolves": [
+        "werewolf"
+      ],
+      "loners": []
+    },
     "professions": [],
-    "honorary_positions": [ "sheriff" ] },
-  "newmoon":  { 
-    "roles": { "ambiguous": [ "thief" ],
-               "outsiders": [ "piper" ],  
-               "villagers": [ "common", "cupid", "elder", "fool", "girl", "hunter", "protector", "scapegoat", "seer", "witch" ],
-               "werewolves": [ "werewolf" ] },
+    "honorary_positions": [
+      "sheriff"
+    ]
+  },
+  "newmoon": {
+    "roles": {
+      "ambiguous": [
+        "thief"
+      ],
+      "villagers": [
+        "common",
+        "cupid",
+        "elder",
+        "fool",
+        "girl",
+        "hunter",
+        "protector",
+        "scapegoat",
+        "seer",
+        "witch"
+      ],
+      "werewolves": [
+        "werewolf"
+      ],
+      "loners": [
+        "piper"
+      ]
+    },
     "professions": [],
-    "honorary_positions": [ "sheriff" ] },
-  "characters":  { 
-    "roles": { "ambiguous": [ "child", "comedian", "hound", "servant", "thief" ],
-               "outsiders": [ "angel", "piper", "sectarian", "white" ],  
-               "villagers": [ "brothers", "common", "cupid", "elder", "fool", "fox", "girl", "gypsy", "hunter", "judge", "knight", "protector", "scapegoat", "seer", "sisters", "tamer", "villager", "witch" ],
-               "werewolves": [ "bad", "father", "werewolf" ] },
+    "honorary_positions": [
+      "sheriff"
+    ]
+  },
+  "characters": {
+    "roles": {
+      "ambiguous": [
+        "child",
+        "comedian",
+        "hound",
+        "servant",
+        "thief"
+      ],
+      "villagers": [
+        "brothers",
+        "common",
+        "cupid",
+        "elder",
+        "fool",
+        "fox",
+        "girl",
+        "gypsy",
+        "hunter",
+        "judge",
+        "knight",
+        "protector",
+        "scapegoat",
+        "seer",
+        "sisters",
+        "tamer",
+        "villager",
+        "witch"
+      ],
+      "werewolves": [
+        "bad",
+        "father",
+        "werewolf"
+      ],
+      "loners": [
+        "angel",
+        "piper",
+        "sectarian",
+        "white"
+      ]
+    },
     "professions": [],
-    "honorary_positions": [ "guard", "sheriff" ] },
-  "village":  { 
-    "roles": { "ambiguous": [ "child", "comedian", "hound", "servant", "thief" ],
-               "outsiders": [ "angel", "piper", "sectarian", "white" ],  
-               "villagers": [ "brothers", "common", "cupid", "elder", "fool", "fox", "girl", "gypsy", "hunter", "judge", "knight", "protector", "pyromaniac", "raven", "scapegoat", "seer", "sisters", "tamer", "villager", "witch" ],
-               "werewolves": [ "bad", "father", "werewolf" ] },
-    "professions": ["apothecary", "baker", "barber", "confessor", "farmer", "governess", "innkeeper", "mayor", "noble", "vagabond"],
-    "honorary_positions": [ "guard", "sheriff" ] },
-  "thepact":  { 
-    "roles": { "ambiguous": [ "child", "comedian", "hound", "servant", "thief" ],
-               "outsiders": [ "angel", "piper", "sectarian", "white" ],  
-               "villagers": [ "brothers", "common", "cupid", "elder", "fool", "fox", "girl", "gypsy", "hunter", "judge", "knight", "protector", "pyromaniac", "raven", "scapegoat", "seer", "sisters", "tamer", "villager", "witch" ],
-               "werewolves": [ "bad", "father", "werewolf" ] },
-    "professions": ["apothecary", "baker", "barber", "confessor", "farmer", "governess", "innkeeper", "mayor", "noble", "vagabond"],
-    "honorary_positions": [ "guard", "sheriff" ] }
+    "honorary_positions": [
+      "guard",
+      "sheriff"
+    ]
+  },
+  "village": {
+    "roles": {
+      "ambiguous": [
+        "child",
+        "comedian",
+        "hound",
+        "servant",
+        "thief"
+      ],
+      "villagers": [
+        "brothers",
+        "common",
+        "cupid",
+        "elder",
+        "fool",
+        "fox",
+        "girl",
+        "gypsy",
+        "hunter",
+        "judge",
+        "knight",
+        "protector",
+        "pyromaniac",
+        "raven",
+        "scapegoat",
+        "seer",
+        "sisters",
+        "tamer",
+        "villager",
+        "witch"
+      ],
+      "werewolves": [
+        "bad",
+        "father",
+        "werewolf"
+      ],
+      "loners": [
+        "angel",
+        "piper",
+        "sectarian",
+        "white"
+      ]
+    },
+    "professions": [
+      "apothecary",
+      "baker",
+      "barber",
+      "confessor",
+      "farmer",
+      "governess",
+      "innkeeper",
+      "mayor",
+      "noble",
+      "vagabond"
+    ],
+    "honorary_positions": [
+      "guard",
+      "sheriff"
+    ]
+  },
+  "thepact": {
+    "roles": {
+      "ambiguous": [
+        "child",
+        "comedian",
+        "hound",
+        "servant",
+        "thief"
+      ],
+      "villagers": [
+        "brothers",
+        "common",
+        "cupid",
+        "elder",
+        "fool",
+        "fox",
+        "girl",
+        "gypsy",
+        "hunter",
+        "judge",
+        "knight",
+        "protector",
+        "pyromaniac",
+        "raven",
+        "scapegoat",
+        "seer",
+        "sisters",
+        "tamer",
+        "villager",
+        "witch"
+      ],
+      "werewolves": [
+        "bad",
+        "father",
+        "werewolf"
+      ],
+      "loners": [
+        "angel",
+        "piper",
+        "sectarian",
+        "white"
+      ]
+    },
+    "professions": [
+      "apothecary",
+      "baker",
+      "barber",
+      "confessor",
+      "farmer",
+      "governess",
+      "innkeeper",
+      "mayor",
+      "noble",
+      "vagabond"
+    ],
+    "honorary_positions": [
+      "guard",
+      "sheriff"
+    ]
+  }
 }

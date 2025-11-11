@@ -1,6 +1,7 @@
 <script>
   import { createEventDispatcher } from 'svelte';
   import { t } from '../../lib/i18n.js';
+  import Modal from '../ui/Modal.svelte';
 
   export let open = false;
   export let tokens = [];
@@ -81,80 +82,48 @@
   function handlePointerLeave() {
     handlePointerUp();
   }
+  const distributionHint = $t('configure.distribution_hint');
 </script>
 
-{#if open}
-  <div class="config-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="distribution-title">
-    <div class="config-modal full">
-      <header class="modal-header">
-        <div>
-          <h3 id="distribution-title">{$t('configure.distribution_title')}</h3>
-          <p class="modal-hint">{$t('configure.distribution_hint')}</p>
-        </div>
-      </header>
-      <div
-        class="distribution-board"
-        bind:this={boardElement}
-        on:pointermove={handlePointerMove}
-        on:pointerup={handlePointerUp}
-        on:pointerleave={handlePointerLeave}
-      >
-        {#if tokens.length === 0}
-          <p class="board-empty">{$t('configure.role_preview_empty')}</p>
-        {:else}
-          {#each tokens as token}
-            <button
-              type="button"
-              class={`role-token category-${token.category}`}
-              style={`--x:${positions[token.id]?.x ?? 50}%; --y:${positions[token.id]?.y ?? 50}%;`}
-              on:pointerdown={(event) => handlePointerDown(token, event)}
-            >
-              <span class="token-role">{token.role}</span>
-              <span class="token-category">{$t(`configure.balance_roles.${token.category}`)}</span>
-            </button>
-          {/each}
-        {/if}
-      </div>
-      <footer class="modal-actions">
-        <button class="btn secondary" type="button" on:click={close}>{$t('common.actions.cancel')}</button>
-        <button class="btn primary" type="button" on:click={save}>{$t('common.actions.save')}</button>
-      </footer>
-    </div>
+<Modal
+  open={open}
+  title={$t('configure.distribution_title')}
+  description={distributionHint}
+  size="xl"
+  closeOnBackdrop={false}
+  on:close={close}
+>
+  <div
+    class="distribution-board"
+    bind:this={boardElement}
+    on:pointermove={handlePointerMove}
+    on:pointerup={handlePointerUp}
+    on:pointerleave={handlePointerLeave}
+  >
+    {#if tokens.length === 0}
+      <p class="board-empty">{$t('configure.role_preview_empty')}</p>
+    {:else}
+      {#each tokens as token}
+        <button
+          type="button"
+          class={`role-token category-${token.category}`}
+          style={`--x:${positions[token.id]?.x ?? 50}%; --y:${positions[token.id]?.y ?? 50}%;`}
+          on:pointerdown={(event) => handlePointerDown(token, event)}
+        >
+          <span class="token-role">{token.role}</span>
+          <span class="token-category">{$t(`configure.balance_roles.${token.category}`)}</span>
+        </button>
+      {/each}
+    {/if}
   </div>
-{/if}
+
+  <svelte:fragment slot="footer">
+    <button class="btn secondary" type="button" on:click={close}>{$t('common.actions.cancel')}</button>
+    <button class="btn primary" type="button" on:click={save}>{$t('common.actions.save')}</button>
+  </svelte:fragment>
+</Modal>
 
 <style>
-  .config-modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(2, 6, 14, 0.8);
-    display: grid;
-    place-items: center;
-    z-index: 1250;
-    padding: 1rem;
-  }
-  .config-modal.full {
-    width: min(1200px, 98vw);
-    min-height: 70vh;
-    background: #04070f;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 32px;
-    padding: 2rem;
-    color: #f5f8fb;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
-  .modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .modal-hint {
-    margin: 0.35rem 0 0;
-    font-size: 0.9rem;
-    color: rgba(245, 245, 245, 0.65);
-  }
   .distribution-board {
     flex: 1;
     border: 1px dashed rgba(255, 255, 255, 0.2);
@@ -214,16 +183,11 @@
   .role-token.category-ambiguous {
     border-color: rgba(195, 188, 255, 0.8);
   }
-  .role-token.category-outsiders {
+  .role-token.category-loners {
     border-color: rgba(255, 180, 135, 0.8);
   }
   .role-token.category-werewolves {
     border-color: rgba(255, 120, 120, 0.85);
-  }
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.75rem;
   }
   .btn.primary {
     background: #1f6b2b;

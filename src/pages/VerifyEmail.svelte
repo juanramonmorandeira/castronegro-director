@@ -11,6 +11,9 @@
   const dispatch = createEventDispatcher();
   const translate = (key, vars) => get(t)(key, vars);
 
+  export let showSessionIndicator = false;
+  export let sessionIndicator = null;
+
 let status = 'checking'; // checking | success | error | invalid
 let email = '';
 let errorCode = '';
@@ -95,7 +98,12 @@ const closeAlert = () => {
 </script>
 
 <div class="page">
-  <Topbar titleKey="verify.title" showUserMenu={false} />
+  <Topbar
+    titleKey="verify.title"
+    showUserMenu={false}
+    showSessionIndicator={showSessionIndicator}
+    sessionIndicator={sessionIndicator}
+  />
 
   <main class="auth-screen">
     <div class="card auth-card card-glass" aria-live="polite">

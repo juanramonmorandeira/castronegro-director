@@ -25,6 +25,8 @@
   export let brandLogoSrc = DEFAULT_BRAND_LOGO;
   export let brandLogoAlt = '';
   export let brandFlicker = true;
+  export let showSessionIndicator = false;
+  export let sessionIndicator = null;
   const dispatch = createEventDispatcher();
   let menuOpen = false;
   let menuElement;
@@ -43,6 +45,22 @@
   $: resolvedBrandTitle = brandTitle || (brandTitleKey ? $t(brandTitleKey) : DEFAULT_BRAND_TITLE);
   $: resolvedBrandLogo = brandLogoSrc || DEFAULT_BRAND_LOGO;
   $: resolvedBrandAlt = brandLogoAlt || resolvedBrandTitle;
+  $: indicatorStats = {
+    expected: sessionIndicator?.expected ?? null,
+    connected: sessionIndicator?.connected ?? null,
+    ready: sessionIndicator?.ready ?? null
+  };
+  const labelLower = (value) => (typeof value === 'string' ? value.toLowerCase() : value);
+  $: indicatorLabels = {
+    expected: labelLower($t('configure.expected_label')),
+    connected: labelLower($t('configure.connected_label')),
+    ready: labelLower($t('configure.ready_label'))
+  };
+  $: indicatorStats = {
+    expected: sessionIndicator?.expected ?? null,
+    connected: sessionIndicator?.connected ?? null,
+    ready: sessionIndicator?.ready ?? null
+  };
 
   // El avatar de usuario solo depende de avatarURL (string completo o vacío).
   function resolveAvatarSource(currentUser) {
@@ -125,6 +143,22 @@
     </div>
   {/if}
   <div class="right">
+    {#if showSessionIndicator && sessionIndicator}
+      <div class="session-indicator" aria-label={$t('topbar.session_status_label')}>
+        <div class="indicator-pill">
+          <span class="indicator-label">{indicatorLabels.expected}</span>
+          <strong>{indicatorStats.expected ?? '—'}</strong>
+        </div>
+        <div class="indicator-pill indicator-pill--connected">
+          <span class="indicator-label">{indicatorLabels.connected}</span>
+          <strong>{indicatorStats.connected ?? '—'}</strong>
+        </div>
+        <div class="indicator-pill indicator-pill--ready">
+          <span class="indicator-label">{indicatorLabels.ready}</span>
+          <strong>{indicatorStats.ready ?? '—'}</strong>
+        </div>
+      </div>
+    {/if}
     <span class="chip">{chipTitle}</span>
 
     <div class="lang-switch" bind:this={langMenuElement}>
@@ -222,6 +256,46 @@
 
   .left { justify-content: flex-start; }
   .right { justify-content: flex-end; }
+
+  .session-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    padding: 0.2rem 0.4rem;
+    background: rgba(12, 18, 28, 0.7);
+    margin-right: 0.5rem;
+  }
+
+  .indicator-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 999px;
+    background: rgba(4, 8, 15, 0.75);
+  }
+
+  .indicator-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    color: rgba(245, 245, 245, 0.7);
+  }
+
+  .indicator-pill strong {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #f5f8fb;
+  }
+
+  .indicator-pill--connected strong {
+    color: #ffb45b;
+  }
+
+  .indicator-pill--ready strong {
+    color: #6fe3a2;
+  }
 
   .brand {
     display: inline-flex;
