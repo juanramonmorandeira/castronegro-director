@@ -20,13 +20,20 @@
 </script>
 
 {#if open}
-  <div class="config-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="match-title">
-    <div class="config-modal">
+  <div
+    class="config-modal-backdrop"
+    role="dialog"
+    tabindex="0"
+    aria-modal="true"
+    aria-labelledby="match-title"
+    on:click={close}
+    on:keydown={(event) => {
+      if (event.key === 'Escape') close();
+    }}
+  >
+    <div class="config-modal" role="document" on:click|stopPropagation>
       <header class="modal-header">
         <h3 id="match-title">{$t('configure.match_title')}</h3>
-        <button class="icon-btn" type="button" on:click={close} aria-label={$t('common.actions.cancel')}>
-          ×
-        </button>
       </header>
       <div class="modal-body">
         <p class="hint">{$t('configure.match_hint')}</p>
@@ -43,7 +50,7 @@
   .config-modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.55);
+    background: rgba(2, 6, 14, 0.75);
     display: grid;
     place-items: center;
     z-index: 1200;
@@ -51,10 +58,10 @@
   }
   .config-modal {
     width: min(520px, 95vw);
-    background: rgba(8, 14, 24, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 20px;
-    padding: 1.5rem;
+    background: #04070f;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 24px;
+    padding: 1.75rem;
     color: #f5f8fb;
   }
   .modal-header {
@@ -75,6 +82,10 @@
     display: flex;
     gap: 0.75rem;
   }
+  .match-actions .btn {
+    flex: 1;
+    justify-content: center;
+  }
   .btn {
     border: none;
     border-radius: 999px;
@@ -83,19 +94,12 @@
     cursor: pointer;
   }
   .btn.primary {
-    background: rgba(74, 141, 74, 0.85);
-    color: #fff;
+    background: #1f6b2b;
+    color: #f6fff6;
   }
   .btn.secondary {
     background: rgba(255, 255, 255, 0.08);
-    color: #fff;
+    color: rgba(248, 248, 250, 0.9);
     border: 1px solid rgba(255, 255, 255, 0.18);
-  }
-  .icon-btn {
-    background: transparent;
-    border: none;
-    color: #fff;
-    font-size: 1.5rem;
-    cursor: pointer;
   }
 </style>

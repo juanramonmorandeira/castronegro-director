@@ -8,6 +8,18 @@
     return Math.min(Math.max(numeric, min), max);
   };
 
+  const ASSIST_TASK_TRANSLATIONS = {
+    Roles_Selection: 'roles_selection',
+    Roles_Matching: 'roles_matching',
+    Introduction: 'introduction',
+    Night: 'night',
+    Day: 'day',
+    Votes: 'votes',
+    Execution: 'execution',
+    Summary: 'summary',
+    Logbook: 'logbook'
+  };
+
   export let open = false;
   export let value = {
     rulesets: 'basic',
@@ -89,19 +101,26 @@
     }
   }
 
+  const readableTask = (task) => task.replace(/_/g, ' ');
+
+  function getAssistTaskLabel(task) {
+    const key = ASSIST_TASK_TRANSLATIONS[task];
+    if (!key) return readableTask(task);
+    const lookup = $t(`configure.assist_tasks.${key}`);
+    return typeof lookup === 'string' ? lookup : readableTask(task);
+  }
+
   function toggleAssistTask(task) {
     if (!derivedAssistEnabled) return;
-    if (draft.assistTasks.includes(task)) {
-      draft = {
-        ...draft,
-        assistTasks: draft.assistTasks.filter((t) => t !== task)
-      };
-    } else {
-      draft = {
-        ...draft,
-        assistTasks: [...draft.assistTasks, task]
-      };
-    }
+    draft = draft.assistTasks.includes(task)
+      ? {
+          ...draft,
+          assistTasks: draft.assistTasks.filter((t) => t !== task)
+        }
+      : {
+          ...draft,
+          assistTasks: [...draft.assistTasks, task]
+        };
   }
 
   function close() {
@@ -118,46 +137,49 @@
     <div class="config-modal large">
       <header class="modal-header">
         <h3 id="properties-title">{$t('configure.properties_title')}</h3>
-        <button class="icon-btn" type="button" on:click={close} aria-label={$t('common.actions.cancel')}>
-          ×
-        </button>
       </header>
 
       <section class="modal-body">
         <label class="field">
           <span class="label">{$t('configure.ruleset_label')}</span>
-          <select
-            class="input"
-            bind:value={draft.rulesets}
-          >
-            {#each options.availableRulesets as ruleset}
-              <option value={ruleset}>{ruleset}</option>
-            {/each}
-          </select>
+          <div class="input-shell select-shell">
+            <select
+              class="input"
+              bind:value={draft.rulesets}
+            >
+              {#each options.availableRulesets as ruleset}
+                <option value={ruleset}>{ruleset}</option>
+              {/each}
+            </select>
+          </div>
         </label>
 
         <label class="field">
           <span class="label">{$t('configure.players_label')}</span>
-          <input
-            type="number"
-            class="input"
-            min={options.minPlayers}
-            max={options.maxPlayers}
-            bind:value={draft.players_expected}
-            on:change={(event) => setPlayers(event.currentTarget.value)}
-          />
-          <input
-            type="range"
-            min={options.minPlayers}
-            max={options.maxPlayers}
-            step="1"
-            bind:value={draft.players_expected}
-            on:input={(event) => setPlayers(event.currentTarget.value)}
-          />
+          <div class="numeric-shell">
+            <input
+              type="number"
+              class="input"
+              min={options.minPlayers}
+              max={options.maxPlayers}
+              bind:value={draft.players_expected}
+              on:change={(event) => setPlayers(event.currentTarget.value)}
+            />
+          </div>
+          <div class="range-shell">
+            <input
+              type="range"
+              min={options.minPlayers}
+              max={options.maxPlayers}
+              step="1"
+              bind:value={draft.players_expected}
+              on:input={(event) => setPlayers(event.currentTarget.value)}
+            />
+          </div>
         </label>
 
-        <fieldset class="field">
-          <legend class="label">{$t('configure.director_label')}</legend>
+        <fieldset class="storyteller-field">
+          <legend>{$t('configure.director_label')}</legend>
           <div class="director-options">
             {#each options.availableStorytellers as option}
               <label class="radio-option">
@@ -177,11 +199,13 @@
         {#if showLanguageSelector}
           <label class="field">
             <span class="label">{$t('configure.language_label')}</span>
-            <select class="input" bind:value={draft.language}>
-              {#each options.availableLanguages as lang}
-                <option value={lang}>{lang}</option>
-              {/each}
-            </select>
+            <div class="input-shell select-shell">
+              <select class="input" bind:value={draft.language}>
+                {#each options.availableLanguages as lang}
+                  <option value={lang}>{lang}</option>
+                {/each}
+              </select>
+            </div>
           </label>
         {/if}
 
@@ -193,15 +217,14 @@
             {:else}
               <div class="assist-tasks">
                 {#each options.assistTaskOptions as task}
-                  <label class="task-chip {draft.assistTasks.includes(task) ? 'task-chip-on' : ''}">
-                    <input
-                      type="checkbox"
-                      checked={draft.assistTasks.includes(task)}
-                      disabled={!derivedAssistEnabled}
-                      on:change={() => toggleAssistTask(task)}
-                    />
-                    <span>{task.replace(/_/g, ' ')}</span>
-                  </label>
+                  <button
+                    type="button"
+                    class={`task-chip ${draft.assistTasks.includes(task) ? 'task-chip-on' : ''}`}
+                    on:click={() => toggleAssistTask(task)}
+                    disabled={!derivedAssistEnabled}
+                  >
+                    {getAssistTaskLabel(task)}
+                  </button>
                 {/each}
               </div>
             {/if}
@@ -221,7 +244,7 @@
   .config-modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(3, 6, 14, 0.75);
+    background: rgba(2, 6, 14, 0.8);
     display: grid;
     place-items: center;
     z-index: 1100;
@@ -229,9 +252,9 @@
   }
   .config-modal {
     width: min(540px, 92vw);
-    background: rgba(8, 14, 24, 0.92);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 24px;
+    background: #04070f;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 28px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
     display: flex;
     flex-direction: column;
@@ -247,52 +270,155 @@
   }
   .modal-header h3 {
     margin: 0;
-    font-size: 1.3rem;
-  }
-  .icon-btn {
-    background: transparent;
-    border: none;
-    color: #fff;
-    font-size: 1.5rem;
-    cursor: pointer;
+    font-size: 1.35rem;
+    font-weight: 600;
+    color: #f4f7fb;
   }
   .modal-body {
     display: grid;
-    gap: 1.1rem;
+    gap: 1.4rem;
   }
   .field {
     display: flex;
     flex-direction: column;
-    gap: 0.45rem;
+    gap: 0.5rem;
   }
   .label {
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.18em;
+    color: rgba(237, 238, 245, 0.82);
+  }
+  .input-shell {
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(11, 17, 26, 0.85);
+    padding: 0.25rem 0.35rem;
+  }
+  .config-modal select {
+    color-scheme: dark;
+  }
+  .config-modal option {
+    background: #0b111a;
+    color: #f5f8fb;
   }
   .input {
-    background: rgba(12, 18, 28, 0.65);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: 10px;
-    padding: 0.6rem 0.9rem;
+    width: 100%;
+    background: transparent;
+    border: none;
     color: #f7f9fc;
+    font-size: 1rem;
+    padding: 0.65rem 0.75rem;
+    appearance: none;
+  }
+  .input:focus-visible {
+    outline: none;
+  }
+  .select-shell {
+    position: relative;
+  }
+  .select-shell::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: 0.9rem;
+    width: 0.6rem;
+    height: 0.6rem;
+    border-right: 2px solid rgba(255, 255, 255, 0.6);
+    border-bottom: 2px solid rgba(255, 255, 255, 0.6);
+    transform: translateY(-50%) rotate(45deg);
+    pointer-events: none;
+  }
+  .numeric-shell {
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(11, 17, 26, 0.85);
+  }
+  .numeric-shell .input {
+    text-align: left;
+  }
+  .range-shell {
+    padding: 0 0.6rem;
   }
   input[type='range'] {
     width: 100%;
-    accent-color: rgba(255, 220, 140, 0.85);
+    -webkit-appearance: none;
+    height: 4px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #f3ce74, #f0e0ae);
+  }
+  input[type='range']::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #f3ce74;
+    border: 2px solid #0b111a;
+    box-shadow: 0 0 0 2px rgba(243, 206, 116, 0.3);
+  }
+  input[type='range']::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #f3ce74;
+    border: 2px solid #0b111a;
+    box-shadow: 0 0 0 2px rgba(243, 206, 116, 0.3);
+  }
+  .storyteller-field {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    padding: 1rem;
+    margin: 0;
+    display: grid;
+    gap: 0.75rem;
+  }
+  .storyteller-field legend {
+    padding: 0 0.4rem;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: rgba(237, 238, 245, 0.82);
   }
   .director-options {
     display: flex;
-    gap: 0.75rem;
+    gap: 0.65rem;
     flex-wrap: wrap;
   }
   .radio-option {
+    position: relative;
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.4rem 0.85rem;
+    gap: 0.35rem;
+    padding: 0.45rem 0.95rem;
     border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(11, 17, 26, 0.7);
+    color: #f1f3f8;
+    text-transform: lowercase;
+  }
+  .radio-option input {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    display: grid;
+    place-items: center;
+    background: transparent;
+  }
+  .radio-option input::after {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: transparent;
+    transition: background 0.2s ease;
+  }
+  .radio-option input:checked::after {
+    background: #4dc0ff;
+  }
+  .radio-option input:checked {
+    border-color: #4dc0ff;
   }
   .assist-field {
     gap: 0.75rem;
@@ -300,26 +426,29 @@
   .assist-tasks {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.45rem;
+    gap: 0.5rem;
   }
   .assist-tasks.empty {
     color: rgba(245, 245, 245, 0.7);
   }
   .task-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.35rem 0.7rem;
     border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(10, 14, 20, 0.8);
+    color: #f0f3f8;
+    padding: 0.35rem 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  }
+  .task-chip:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
   .task-chip-on {
-    background: rgba(255, 232, 140, 0.15);
-    border-color: rgba(255, 232, 140, 0.4);
-  }
-  .task-chip input {
-    display: none;
+    background: rgba(86, 82, 45, 0.8);
+    border-color: rgba(242, 210, 124, 0.7);
+    color: #f8e5af;
   }
   .modal-actions {
     display: flex;
@@ -329,12 +458,12 @@
   .btn {
     border: none;
     border-radius: 999px;
-    padding: 0.55rem 1.4rem;
+    padding: 0.6rem 1.6rem;
     font-weight: 600;
     cursor: pointer;
   }
   .btn.primary {
-    background: rgba(74, 141, 74, 0.85);
+    background: #1f6b2b;
     color: #f6fff6;
   }
   .btn.secondary {

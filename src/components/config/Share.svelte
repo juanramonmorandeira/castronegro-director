@@ -97,7 +97,7 @@
           {$t('common.actions.cancel')}
         </button>
         <button class="btn primary" type="button" on:click={closeShare}>
-          {$t('common.actions.close')}
+          {$t('common.actions.save')}
         </button>
       </footer>
     </div>
@@ -108,7 +108,7 @@
   .config-modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.65);
+    background: rgba(2, 6, 14, 0.8);
     display: grid;
     place-items: center;
     z-index: 1300;
@@ -116,10 +116,10 @@
   }
   .config-modal.share {
     width: min(460px, 95vw);
-    background: rgba(8, 14, 24, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 20px;
-    padding: 1.5rem;
+    background: #04070f;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 28px;
+    padding: 1.8rem;
     color: #f5f8fb;
     display: flex;
     flex-direction: column;
@@ -135,9 +135,15 @@
     gap: 1rem;
     text-align: center;
   }
+  .modal-body .hint {
+    margin: 0;
+    font-size: 0.9rem;
+    color: rgba(245, 245, 245, 0.65);
+  }
   .game-id {
-    font-size: 2rem;
-    letter-spacing: 0.2em;
+    font-size: 2.1rem;
+    letter-spacing: 0.22em;
+    font-weight: 600;
   }
   .qr-panel {
     display: grid;
@@ -171,6 +177,20 @@
     display: flex;
     justify-content: flex-end;
     gap: 0.75rem;
+  }
+  .btn.primary {
+    background: #1f6b2b;
+    color: #f6fff6;
+    border-radius: 999px;
+    padding: 0.6rem 1.4rem;
+    border: none;
+  }
+  .btn.secondary {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(248, 248, 250, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    padding: 0.6rem 1.4rem;
   }
 
   @keyframes pulse {

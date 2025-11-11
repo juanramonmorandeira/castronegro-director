@@ -230,8 +230,8 @@ const dictionaries = {
       }
     },
     configure: {
-      title: 'Session configuration',
-      heading: 'Session configuration',
+      title: 'Configure',
+      heading: 'Configure',
       intro: 'Set up your session details before sharing with players.',
       properties_title: 'Game properties',
       selection_title: 'Role selection',
@@ -261,7 +261,7 @@ const dictionaries = {
         mix: 'Mix for {value} players'
       },
       session_stats_label: 'Session metrics',
-      players_counters_heading: 'PLAYERS COUNTERS',
+      players_counters_heading: 'Players counters',
       expected_label: 'Expected',
       connected_label: 'Connected',
       ready_label: 'Ready',
@@ -292,7 +292,7 @@ const dictionaries = {
       match_hint: 'Assign each selected role to a connected player manually or let the system do it for you.',
       match_auto: 'Auto assign',
       match_manual: 'Manual assignment',
-      distribution_title: 'Tabletop view',
+      distribution_title: 'Distribution',
       distribution_hint: 'Coming soon: drag role tokens around to build your seating chart.',
       share_title: 'Share session',
       share_hint: 'Scan or type this code from the player portal to join the session.',
@@ -640,8 +640,8 @@ const dictionaries = {
       }
     },
     configure: {
-      title: 'Configuración de la sesión',
-      heading: 'Configuración de la sesión',
+      title: 'Configurar',
+      heading: 'Configurar',
       intro: 'Ajusta la sesión antes de compartirla con los jugadores.',
       properties_title: 'Propiedades de la partida',
       selection_title: 'Selección de roles',
@@ -671,7 +671,7 @@ const dictionaries = {
         mix: 'Mezcla para {value} jugadores'
       },
       session_stats_label: 'Indicadores de la sesión',
-      players_counters_heading: 'CONTADORES DE JUGADORES',
+      players_counters_heading: 'Contadores de jugadores',
       expected_label: 'Esperados',
       connected_label: 'Conectados',
       ready_label: 'Listos',
@@ -702,7 +702,7 @@ const dictionaries = {
       match_hint: 'Asigna cada rol seleccionado a un jugador o deja que el sistema lo reparta por ti.',
       match_auto: 'Asignar automáticamente',
       match_manual: 'Asignar manualmente',
-      distribution_title: 'Vista de mesa',
+      distribution_title: 'Distribución',
       distribution_hint: 'Próximamente: arrastra las fichas para organizar la mesa narrativa.',
       share_title: 'Compartir sesión',
       share_hint: 'Comparte este código o su QR para que los jugadores se unan.',
@@ -1050,8 +1050,8 @@ const dictionaries = {
       }
     },
     configure: {
-      title: 'Session konfigurációja',
-      heading: 'Session konfigurációja',
+      title: 'Konfigurálás',
+      heading: 'Konfigurálás',
       intro: 'Állítsd be a játék részleteit, mielőtt megosztod a játékosokkal.',
       properties_title: 'Játék beállításai',
       selection_title: 'Szerepkiosztás',
@@ -1081,7 +1081,7 @@ const dictionaries = {
         mix: '{value} játékosra ajánlott mix'
       },
       session_stats_label: 'Session mutatók',
-      players_counters_heading: 'JÁTÉKOS SZÁMLÁLÓK',
+      players_counters_heading: 'Játékos számlálók',
       expected_label: 'Tervezett',
       connected_label: 'Csatlakozott',
       ready_label: 'Kész',
@@ -1112,7 +1112,7 @@ const dictionaries = {
       match_hint: 'Oszt szét minden szerepet kézzel vagy kérj automatikus kiosztást.',
       match_auto: 'Automatikus kiosztás',
       match_manual: 'Kézi kiosztás',
-      distribution_title: 'Asztali nézet',
+      distribution_title: 'Elrendezés',
       distribution_hint: 'Hamarosan: húzd a szerepkorongokat, hogy lásd az egész elrendezést.',
       share_title: 'Session megosztása',
       share_hint: 'Oszd meg ezt a kódot vagy a QR-t, hogy a játékosok csatlakozzanak.',

@@ -144,6 +144,24 @@
     return `/roles/${category}/${file}.png`;
   }
 
+  function buildDistributionTokens(selection) {
+    const tokens = [];
+    ROLE_BREAKDOWN_ORDER.forEach((category) => {
+      const roles = selection?.[category] ?? {};
+      Object.entries(roles).forEach(([roleName, count]) => {
+        const slug = slugifyRole(roleName);
+        for (let index = 0; index < count; index += 1) {
+          tokens.push({
+            id: `${category}-${slug}-${index}`,
+            role: roleName,
+            category
+          });
+        }
+      });
+    });
+    return tokens;
+  }
+
   let loading = true;
   let saving = false;
   let saved = false;
@@ -215,11 +233,21 @@
     }
     return acc;
   }, {});
+  $: resourceLimits = ROLE_BREAKDOWN_ORDER.reduce((acc, role) => {
+    acc[role] = rulesetResources?.[role] ?? null;
+    return acc;
+  }, {});
+
+  const hasSelectedRoles = (selection) =>
+    ROLE_BREAKDOWN_ORDER.some((category) => Object.keys(selection?.[category] ?? {}).length > 0);
 
   $: if (!rolesCustomized) {
-    const seedKey = `${form.rulesets}|${form.players_expected}`;
+    const seedKey = `${form.rulesets}|${form.players_expected}|${selectionAssistEnabled ? 'auto' : 'manual'}`;
     if (playerBreakdown && rulesetRoles && seedKey !== autoSeedKey) {
-      selectedRoles = buildAutoSelection();
+      selectedRoles = selectionAssistEnabled ? buildAutoSelection() : createEmptySelection();
+      autoSeedKey = seedKey;
+    } else if (!selectionAssistEnabled && hasSelectedRoles(selectedRoles)) {
+      selectedRoles = createEmptySelection();
       autoSeedKey = seedKey;
     }
   }
@@ -229,6 +257,15 @@
     0
   );
   $: canShareSession = totalSelectedRoles >= clampPlayers(form.players_expected);
+  $: rolesMatchingTaskEnabled =
+    Array.isArray(form.assistTasks) && form.assistTasks.includes('Roles_Matching');
+  $: matchEnabled =
+    form.storyteller === 'human' ||
+    (form.storyteller === 'human-AI' && !rolesMatchingTaskEnabled);
+  $: selectionAssistEnabled =
+    form.storyteller === 'AI' ||
+    (form.storyteller === 'human-AI' && Array.isArray(form.assistTasks) && form.assistTasks.includes('Roles_Selection'));
+  $: distributionTokens = buildDistributionTokens(selectedRoles);
 
   function getAssistTaskLabel(task) {
     const key = ASSIST_TASK_TRANSLATIONS[task];
@@ -396,6 +433,7 @@
 
   function handleMatchAuto() {
     console.info('[configure] auto-assign roles requested');
+    closeModal();
   }
 
   function handleMatchSave() {
@@ -403,6 +441,11 @@
   }
 
   function handleDistributionClose() {
+    closeModal();
+  }
+
+  function handleDistributionSave() {
+    console.info('[configure] distribution save requested');
     closeModal();
   }
 
@@ -467,20 +510,20 @@
                 maxlength="80"
               />
             </label>
-            <div class="players-counter-block">
-              <p class="counter-heading">{$t('configure.players_counters_heading')}</p>
-              <div class="session-stats" aria-label={$t('configure.session_stats_label')}>
-                <div class="stat-chip">
-                  <span class="section-label">{$t('configure.expected_label')}</span>
-                  <strong>{form.players_expected}</strong>
+            <div class="players-counter-block" aria-label={$t('configure.session_stats_label')}>
+              <span class="counter-heading">{$t('configure.players_counters_heading')}</span>
+              <div class="session-stats">
+                <div class="stat-chip stat-expected">
+                  <span class="chip-label">{$t('configure.expected_label')}</span>
+                  <span class="chip-value">{form.players_expected}</span>
                 </div>
-                <div class="stat-chip">
-                  <span class="section-label">{$t('configure.connected_label')}</span>
-                  <strong>{connectedCount}</strong>
+                <div class="stat-chip stat-connected">
+                  <span class="chip-label">{$t('configure.connected_label')}</span>
+                  <span class="chip-value">{connectedCount}</span>
                 </div>
-                <div class="stat-chip">
-                  <span class="section-label">{$t('configure.ready_label')}</span>
-                  <strong>{readyCount}</strong>
+                <div class="stat-chip stat-ready">
+                  <span class="chip-label">{$t('configure.ready_label')}</span>
+                  <span class="chip-value">{readyCount}</span>
                 </div>
               </div>
             </div>
@@ -491,7 +534,10 @@
           <button class="pill-btn" type="button" on:click={() => openModal('properties')}>
             {$t('configure.btn_properties')}
           </button>
-          <button class="pill-btn" type="button" on:click={() => openModal('match')}>
+          <button class="pill-btn" type="button" on:click={() => openModal('selection')}>
+            {$t('configure.btn_selection')}
+          </button>
+          <button class="pill-btn" type="button" on:click={() => openModal('match')} disabled={!matchEnabled}>
             {$t('configure.btn_match')}
           </button>
           <button class="pill-btn" type="button" on:click={() => openModal('distribution')}>
@@ -505,9 +551,6 @@
         <section class="role-selection-preview">
           <div class="preview-header">
             <h3 class="section-label">{$t('configure.role_selector_label')}</h3>
-            <button class="link-btn" type="button" on:click={() => openModal('selection')}>
-              {$t('configure.btn_edit_selection')}
-            </button>
           </div>
           <div class="role-preview-grid">
             {#each ROLE_BREAKDOWN_ORDER as category}
@@ -545,13 +588,10 @@
             <NavActions
               intents={[NAV_INTENT.BACK_TO_DASHBOARD]}
               on:navigate={handleNavIntent}
-              overrides={{
-                [NAV_INTENT.BACK_TO_DASHBOARD]: { variant: 'secondary', size: 'md' }
-              }}
             />
           </div>
           <div class="right-actions">
-            <button class="btn secondary" type="button" on:click={saveConfig} disabled={saving}>
+            <button class="btn primary save-btn" type="button" on:click={saveConfig} disabled={saving}>
               {saving ? '…' : $t('configure.save')}
             </button>
             <button class="btn primary" type="button" on:click={handleStartOrContinue}>
@@ -603,9 +643,11 @@
   roles={rulesetRoles}
   selected={selectedRoles}
   limits={roleLimits}
+  resourceLimits={resourceLimits}
   override={overrideRoleLimits}
   players={form.players_expected}
   mix={playerBreakdown}
+  totalLimit={clampPlayers(form.players_expected)}
   duplicates={[...DUPLICATE_ROLE_NAMES]}
   on:save={handleSelectionSave}
   on:cancel={closeModal}
@@ -620,7 +662,9 @@
 
 <DistributionModal
   open={activeModal === 'distribution'}
+  tokens={distributionTokens}
   on:cancel={handleDistributionClose}
+  on:save={handleDistributionSave}
 />
 
 <ShareModal
@@ -679,10 +723,11 @@
   }
 
   .section-label {
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: rgba(248, 248, 250, 0.65);
+    font-size: 0.95rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    color: var(--color-text-primary, #f5f8fb);
   }
 
   .title-field {
@@ -702,39 +747,65 @@
   .players-counter-block {
     width: 100%;
     margin-top: var(--space-3);
-    display: grid;
-    gap: 0.5rem;
+    position: relative;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 32px;
+    padding: 1.4rem 1rem 0.9rem;
+    background: transparent;
   }
 
   .counter-heading {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translate(-50%, -50%);
     margin: 0;
-    font-size: 0.75rem;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: rgba(247, 212, 124, 0.9);
+    padding: 0 1.25rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--color-text-primary, #f5f8fb);
+    background: var(--glass-bg, rgba(6, 10, 18, 0.75));
+    border-radius: 999px;
   }
 
   .session-stats {
-    flex: 1 1 220px;
+    width: 100%;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 0.75rem;
-    align-content: flex-start;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.4rem;
+    align-items: stretch;
   }
 
   .stat-chip {
-    background: rgba(8, 14, 22, 0.55);
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.55rem 1rem;
+    border-radius: 999px;
+    background: rgba(5, 9, 16, 0.85);
+    min-width: 0;
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 0.9rem;
-    padding: 0.8rem 1rem;
-    display: grid;
-    gap: 0.35rem;
   }
 
-  .stat-chip strong {
-    font-size: 1.4rem;
-    font-weight: 700;
-    color: #f7f3d7;
+  .chip-label {
+    font-size: 0.85rem;
+    color: rgba(245, 245, 245, 0.85);
+  }
+
+  .chip-value {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: #f5f8fb;
+  }
+
+  .stat-chip.stat-connected .chip-value {
+    color: #ffb45b;
+  }
+
+  .stat-chip.stat-ready .chip-value {
+    color: #6fe3a2;
   }
 
   .actions-grid {
@@ -778,14 +849,6 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-  }
-
-  .link-btn {
-    background: none;
-    border: none;
-    color: #f7d774;
-    font-weight: 600;
-    cursor: pointer;
   }
 
   .role-preview-grid {
@@ -899,14 +962,18 @@
     border: 1px solid rgba(74, 141, 74, 0.95);
   }
 
-  .btn.secondary {
-    background: rgba(255, 255, 255, 0.08);
-    color: rgba(248, 248, 250, 0.9);
-    border: 1px solid rgba(255, 255, 255, 0.18);
+  .save-btn {
+    min-width: 150px;
   }
 
   .saved-hint {
     color: rgba(160, 255, 160, 0.8);
+  }
+
+  @media (max-width: 560px) {
+    .session-stats {
+      flex-wrap: wrap;
+    }
   }
 
   @media (max-width: 720px) {

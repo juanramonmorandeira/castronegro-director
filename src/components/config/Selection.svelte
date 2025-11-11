@@ -7,8 +7,10 @@
   export let roles = {};
   export let selected = {};
   export let limits = {};
+  export let resourceLimits = {};
   export let override = false;
   export let players = 0;
+  export let totalLimit = 0;
   export let duplicates = ['common', 'villager', 'werewolf'];
   export let mix = null;
 
@@ -42,13 +44,20 @@
   const categoryTotal = (category, data = draftSelections) =>
     Object.values(data?.[category] ?? {}).reduce((sum, value) => sum + (Number(value) || 0), 0);
 
+  const totalSelected = (data = draftSelections) =>
+    (categories ?? []).reduce((sum, category) => sum + categoryTotal(category, data), 0);
+
   const ensureCategory = (category) => {
     if (!draftSelections[category]) {
       draftSelections = { ...draftSelections, [category]: {} };
     }
   };
 
-  const playersLimit = () => Number(players) || 0;
+  const playersLimit = () => Number(totalLimit || players) || 0;
+  const categoryResourceLimit = (category) => {
+    const value = resourceLimits?.[category];
+    return typeof value === 'number' ? value : null;
+  };
 
   let draftOverride = override;
   let draftSelections = cloneSelection(selected);
@@ -87,6 +96,26 @@
         updated = true;
       }
     }
+    const totalLimitValue = playersLimit();
+    if (totalLimitValue && totalSelected(next) > totalLimitValue) {
+      let overflow = totalSelected(next) - totalLimitValue;
+      for (const category of [...categories].reverse()) {
+        if (overflow <= 0) break;
+        const entries = Object.entries(next[category] ?? {});
+        for (const [role, count] of entries) {
+          if (overflow <= 0) break;
+          const reduceBy = Math.min(count, overflow);
+          const remainder = count - reduceBy;
+          if (remainder > 0) {
+            next[category][role] = remainder;
+          } else {
+            delete next[category][role];
+          }
+          overflow -= reduceBy;
+          updated = true;
+        }
+      }
+    }
     return updated ? next : selection;
   }
 
@@ -98,7 +127,7 @@
 
   const categoryLimit = (category) => {
     if (draftOverride) {
-      return playersLimit() || null;
+      return categoryResourceLimit(category);
     }
     const base = limits?.[category];
     return typeof base === 'number' ? base : null;
@@ -106,16 +135,30 @@
 
   const clampCount = (category, role, desired) => {
     const limit = categoryLimit(category);
-    if (limit == null) return Math.max(0, desired);
-    const others = categoryTotal(category) - (draftSelections[category]?.[role] ?? 0);
-    const available = Math.max(0, limit - others);
-    return Math.max(0, Math.min(desired, available));
+    const currentValue = draftSelections[category]?.[role] ?? 0;
+    let candidate = Math.max(0, desired);
+    if (limit != null) {
+      const others = categoryTotal(category) - currentValue;
+      const available = Math.max(0, limit - others);
+      candidate = Math.min(candidate, available);
+    }
+    const totalCap = playersLimit();
+    if (totalCap) {
+      const othersTotal = totalSelected() - currentValue;
+      const available = Math.max(0, totalCap - othersTotal);
+      candidate = Math.min(candidate, available);
+    }
+    return candidate;
   };
 
-  const canIncrement = (category) => {
+  const canIncrement = (category, increment = 1) => {
+    const totalCap = playersLimit();
+    if (totalCap && totalSelected() + increment > totalCap) {
+      return false;
+    }
     const limit = categoryLimit(category);
     if (limit == null) return true;
-    return categoryTotal(category) < limit;
+    return categoryTotal(category) + increment <= limit;
   };
 
   function setRoleCount(category, role, count) {
@@ -143,6 +186,7 @@
       setRoleCount(category, role, 0);
       return;
     }
+    if (!canIncrement(category)) return;
     const final = clampCount(category, role, 1);
     if (final <= 0) return;
     setRoleCount(category, role, final);
@@ -151,6 +195,9 @@
   function adjustRole(category, role, delta) {
     const current = draftSelections[category]?.[role] ?? 0;
     const desired = Math.max(0, current + delta);
+    if (delta > 0 && !canIncrement(category, delta)) {
+      return;
+    }
     const finalCount = clampCount(category, role, desired);
     setRoleCount(category, role, finalCount);
   }
@@ -169,17 +216,14 @@
     <div class="config-modal xl">
       <header class="modal-header">
         <h3 id="selection-title">{$t('configure.selection_title')}</h3>
-        <button class="icon-btn" type="button" on:click={close} aria-label={$t('common.actions.cancel')}>
-          ×
-        </button>
       </header>
 
       <div class="override-banner">
-        <label>
+        <label class="override-toggle">
           <input type="checkbox" bind:checked={draftOverride} />
           <span>{$t('configure.role_override_label')}</span>
         </label>
-        <p>{$t('configure.selection_hint')}</p>
+        <p class="override-hint">{$t('configure.selection_hint')}</p>
       </div>
 
       {#if mix}
@@ -231,7 +275,7 @@
                         <button
                           type="button"
                           on:click={() => adjustRole(category, role, 1)}
-                          disabled={!draftOverride && !canIncrement(category)}
+                          disabled={!canIncrement(category)}
                         >
                           +
                         </button>
@@ -277,43 +321,37 @@
     width: min(1100px, 96vw);
     max-height: 90vh;
     overflow-y: auto;
-    background: rgba(8, 14, 24, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 20px;
-    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.55);
+    background: #04070f;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 28px;
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.65);
     color: #f5f8fb;
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
-    padding: 1.5rem;
+    padding: 2rem;
   }
   .modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
   }
-  .icon-btn {
-    background: transparent;
-    border: none;
-    color: #fff;
-    font-size: 1.6rem;
-    cursor: pointer;
-  }
   .section-label {
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.18em;
     color: rgba(248, 248, 250, 0.65);
   }
   .override-banner {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
-    padding: 0.75rem 1rem;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.05);
+    gap: 0.35rem;
+    padding: 1rem 1.25rem;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(8, 12, 20, 0.85);
   }
-  .override-banner label {
+  .override-toggle {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
@@ -321,10 +359,21 @@
   }
   .override-banner input {
     accent-color: rgba(255, 232, 140, 0.85);
+    width: 1rem;
+    height: 1rem;
+  }
+  .override-hint {
+    margin: 0;
+    font-size: 0.85rem;
+    color: rgba(245, 245, 245, 0.65);
   }
   .mix-summary {
     display: grid;
-    gap: 0.5rem;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(6, 10, 18, 0.85);
   }
   .mix-header {
     display: flex;
@@ -341,16 +390,17 @@
     gap: 0.75rem;
   }
   .mix-chip {
-    background: rgba(8, 14, 22, 0.55);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 0.9rem;
-    padding: 0.6rem 0.9rem;
+    background: rgba(10, 16, 26, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    padding: 0.85rem 0.9rem;
     display: grid;
     justify-items: center;
-    gap: 0.2rem;
+    gap: 0.3rem;
+    min-height: 90px;
   }
   .mix-value {
-    font-size: 1.25rem;
+    font-size: 1.65rem;
     font-weight: 700;
     color: #f7f3d7;
   }
@@ -365,9 +415,9 @@
   }
   .category {
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 14px;
-    padding: 1rem;
-    background: rgba(255, 255, 255, 0.02);
+    border-radius: 20px;
+    padding: 1.2rem;
+    background: rgba(6, 12, 20, 0.75);
     display: grid;
     gap: 0.75rem;
   }
@@ -382,22 +432,23 @@
   }
   .role-cards {
     display: grid;
-    gap: 0.75rem;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.85rem;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   }
   .role-card {
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 1rem;
-    background: rgba(255, 255, 255, 0.03);
-    padding: 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 18px;
+    background: rgba(10, 14, 20, 0.7);
+    padding: 0.85rem;
     display: flex;
     align-items: center;
     gap: 0.6rem;
     color: #f5f8fb;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
   }
   button.role-card {
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(10, 14, 20, 0.7);
     width: 100%;
     text-align: left;
     cursor: pointer;
@@ -407,8 +458,8 @@
     cursor: not-allowed;
   }
   .role-card img {
-    width: 48px;
-    height: 48px;
+    width: 56px;
+    height: 56px;
     border-radius: 50%;
     background: #0c1624;
     padding: 0.25rem;
@@ -422,26 +473,35 @@
     gap: 0.25rem;
   }
   .role-card.selected {
-    border-color: rgba(247, 215, 116, 0.8);
-    box-shadow: 0 0 15px rgba(247, 215, 116, 0.25);
+    border-color: rgba(247, 215, 116, 0.9);
+    box-shadow: 0 0 20px rgba(247, 215, 116, 0.25);
+    transform: translateY(-2px);
   }
   .counter {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.35rem;
+    background: rgba(4, 7, 12, 0.85);
+    border-radius: 999px;
+    padding: 0.3rem 0.5rem;
   }
   .counter button {
-    width: 28px;
-    height: 28px;
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.05);
     color: #f5f8fb;
     cursor: pointer;
   }
   .counter button:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+  }
+  .counter span {
+    font-weight: 600;
+    min-width: 1.5rem;
+    text-align: center;
   }
   .modal-actions {
     display: flex;
@@ -456,7 +516,7 @@
     cursor: pointer;
   }
   .btn.primary {
-    background: rgba(74, 141, 74, 0.85);
+    background: #1f6b2b;
     color: #f6fff6;
   }
   .btn.secondary {
