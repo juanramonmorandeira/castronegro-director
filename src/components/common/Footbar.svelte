@@ -77,13 +77,13 @@
 }
 
 .clock {
-  color: #ffffff;             /* 👉 hora en blanco */
+  color: var(--color-white-contrast);             /* 👉 hora en blanco */
   font-weight: 400;
   text-shadow: 0 0 4px rgba(255,255,255,0.25);
 }
 
 .signature {
-  color: #ffcc66;             /* 👉 firma en amarillo-naranja */
+  color: var(--color-gold-info);             /* 👉 firma en amarillo-naranja */
   font-weight: 500;
   opacity: 0.95;
 }

@@ -35,7 +35,7 @@
     pointer-events: none;
     background-image:
       radial-gradient(rgba(255, 255, 255, 0.14),
-                      rgba(255, 255, 255, 0.06) 40%,
+                      var(--glass-fill) 40%,
                       transparent 75%),
       var(--fog-url);
     background-repeat: no-repeat, no-repeat;

@@ -133,7 +133,7 @@
     border: 1px dashed rgba(255, 255, 255, 0.3);
     border-radius: 16px;
     padding: 2rem;
-    color: rgba(245, 245, 245, 0.7);
+    color: var(--color-white-muted);
   }
 
   .qr-placeholder.loading {
@@ -141,20 +141,20 @@
   }
 
   .qr-placeholder.error {
-    color: #ffb0b0;
-    border-color: rgba(255, 120, 120, 0.7);
+    color: var(--color-error-soft);
+    border-color: var(--color-error-soft);
   }
   .btn.primary {
     background: #1f6b2b;
-    color: #f6fff6;
+  color: var(--color-green-text);
     border-radius: 999px;
     padding: 0.6rem 1.4rem;
     border: none;
   }
   .btn.secondary {
-    background: rgba(255, 255, 255, 0.08);
-    color: rgba(248, 248, 250, 0.9);
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: var(--glass-hover);
+    color: var(--color-white-contrast);
+    border: 1px solid var(--glass-border-strong);
     border-radius: 999px;
     padding: 0.6rem 1.4rem;
   }

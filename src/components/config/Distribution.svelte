@@ -36,6 +36,11 @@
     positions = next;
   }
 
+  function arcId(token) {
+    if (!token?.id) return '';
+    return `arc-${token.id.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+  }
+
   function close() {
     dispatch('cancel');
   }
@@ -108,10 +113,23 @@
           type="button"
           class={`role-token category-${token.category}`}
           style={`--x:${positions[token.id]?.x ?? 50}%; --y:${positions[token.id]?.y ?? 50}%;`}
+          title={token.role}
           on:pointerdown={(event) => handlePointerDown(token, event)}
         >
-          <span class="token-role">{token.role}</span>
-          <span class="token-category">{$t(`configure.balance_roles.${token.category}`)}</span>
+          {#if token.player}
+            <span class="token-player">{token.player}</span>
+          {:else}
+            <span class="token-player token-player--placeholder"></span>
+          {/if}
+          <span class="token-circle">
+            {#if token.image}
+              <img src={token.image} alt={token.role} draggable="false" />
+            {:else}
+              <span class="token-initials">{token.role?.[0] ?? '?'}</span>
+            {/if}
+          </span>
+          <span class="token-role" aria-hidden="true">{token.role}</span>
+          <span class="sr-only">{token.role}</span>
         </button>
       {/each}
     {/if}
@@ -141,65 +159,107 @@
     left: 50%;
     transform: translate(-50%, -50%);
     margin: 0;
-    color: rgba(245, 245, 245, 0.65);
+    color: var(--color-white-muted);
     text-align: center;
   }
-  .role-token {
-    position: absolute;
-    left: var(--x);
-    top: var(--y);
-    transform: translate(-50%, -50%);
-    width: 92px;
-    height: 92px;
-    border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.25);
-    background: rgba(8, 14, 22, 0.9);
-    color: #f5f8fb;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.35rem;
-    font-weight: 600;
-    cursor: grab;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
-    border-width: 2px;
-  }
-  .role-token:active {
-    cursor: grabbing;
-  }
-  .token-role {
-    font-size: 0.9rem;
-  }
-  .token-category {
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: rgba(245, 245, 245, 0.75);
-  }
-  .role-token.category-villagers {
-    border-color: rgba(255, 221, 150, 0.8);
-  }
-  .role-token.category-ambiguous {
-    border-color: rgba(195, 188, 255, 0.8);
-  }
-  .role-token.category-loners {
-    border-color: rgba(255, 180, 135, 0.8);
-  }
-  .role-token.category-werewolves {
-    border-color: rgba(255, 120, 120, 0.85);
-  }
+.role-token {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  transform: translate(-50%, -50%);
+  width: 110px;
+  color: var(--color-white-contrast);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+  padding: 0.1rem 0.1rem 0.2rem;
+  font-weight: 600;
+  cursor: grab;
+  background: transparent;
+  border: none;
+}
+.role-token:active {
+  cursor: grabbing;
+}
+.token-player {
+  font-size: 0.75rem;
+  color: var(--color-white-muted);
+  min-height: 1em;
+  max-width: 100%;
+  text-align: center;
+}
+.token-player--placeholder {
+  visibility: hidden;
+}
+.token-circle {
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.35);
+  background: rgba(3, 6, 14, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+.token-circle img {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  border-radius: 50%;
+  pointer-events: none;
+  user-select: none;
+}
+.token-initials {
+  font-size: 1.2rem;
+  letter-spacing: 0.08em;
+}
+.token-role {
+  width: 110px;
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: 0.98rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--color-white-muted);
+  margin-top: 8px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+.role-token.category-villagers .token-circle {
+  border-color: var(--color-green-cta--primary);
+}
+.role-token.category-ambiguous .token-circle {
+  border-color: var(--color-gold-info);
+}
+.role-token.category-loners .token-circle {
+  border-color: var(--color-white-contrast);
+}
+.role-token.category-werewolves .token-circle {
+  border-color: var(--color-error-strong);
+}
   .btn.primary {
     background: #1f6b2b;
-    color: #f6fff6;
+  color: var(--color-green-text);
     border-radius: 999px;
     padding: 0.6rem 1.4rem;
     border: none;
   }
   .btn.secondary {
-    background: rgba(255, 255, 255, 0.08);
-    color: rgba(248, 248, 250, 0.9);
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: var(--glass-hover);
+    color: var(--color-white-contrast);
+    border: 1px solid var(--glass-border-strong);
     border-radius: 999px;
     padding: 0.6rem 1.4rem;
   }

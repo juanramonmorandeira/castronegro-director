@@ -317,19 +317,19 @@
     flex-direction: column;
     gap: 1.25rem;
   }
-  .section-label {
-    font-size: 0.95rem;
-    text-transform: none;
-    letter-spacing: 0.04em;
-    color: rgba(252, 253, 255, 0.92);
-  }
+.section-label {
+  font-size: 0.95rem;
+  text-transform: none;
+  letter-spacing: 0.04em;
+  color: var(--color-white-contrast);
+}
   .override-banner {
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
     padding: 1rem 1.25rem;
     border-radius: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--glass-border);
     background: rgba(8, 12, 20, 0.85);
   }
   .override-toggle {
@@ -346,14 +346,14 @@
   .override-hint {
     margin: 0;
     font-size: 0.85rem;
-    color: rgba(245, 245, 245, 0.65);
+    color: var(--color-white-muted);
   }
   .mix-summary {
     display: grid;
     gap: 0.75rem;
     padding: 1rem 1.25rem;
     border-radius: 24px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--glass-hover);
     background: rgba(6, 10, 18, 0.85);
   }
   .mix-header {
@@ -364,7 +364,7 @@
   }
   .mix-hint {
     font-size: 0.85rem;
-    color: rgba(245, 245, 245, 0.75);
+    color: var(--color-white-muted);
   }
   .mix-grid {
     display: grid;
@@ -373,7 +373,7 @@
   }
   .mix-chip {
     background: rgba(10, 16, 26, 0.9);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--glass-hover);
     border-radius: 18px;
     padding: 0.85rem 0.9rem;
     display: grid;
@@ -384,19 +384,19 @@
   .mix-value {
     font-size: 1.65rem;
     font-weight: 700;
-    color: #f7f3d7;
+    color: var(--color-gold-info);
   }
   .mix-label {
     font-size: 0.85rem;
     text-transform: capitalize;
-    color: rgba(245, 245, 245, 0.78);
+    color: var(--color-white-muted);
   }
   .categories {
     display: grid;
     gap: 1.25rem;
   }
   .category {
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--glass-hover);
     border-radius: 20px;
     padding: 1.2rem;
     background: rgba(6, 12, 20, 0.75);
@@ -410,7 +410,7 @@
   .category .totals {
     margin: 0.2rem 0 0;
     font-size: 0.85rem;
-    color: rgba(245, 245, 245, 0.65);
+    color: var(--color-white-muted);
   }
   .role-cards {
     display: grid;
@@ -418,18 +418,18 @@
     grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   }
   .role-card {
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--glass-border);
     border-radius: 18px;
     background: rgba(10, 14, 20, 0.7);
     padding: 0.85rem;
     display: flex;
     align-items: center;
     gap: 0.6rem;
-    color: #f5f8fb;
+    color: var(--color-white-contrast);
     transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
   }
   button.role-card {
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--glass-border);
     background: rgba(10, 14, 20, 0.7);
     width: 100%;
     text-align: left;
@@ -443,7 +443,7 @@
     width: 56px;
     height: 56px;
     border-radius: 50%;
-    background: #0c1624;
+    background: var(--surface-chip);
     padding: 0.25rem;
   }
   .role-card.duplicable {
@@ -473,7 +473,7 @@
     border-radius: 50%;
     border: 1px solid rgba(255, 255, 255, 0.15);
     background: rgba(255, 255, 255, 0.05);
-    color: #f5f8fb;
+    color: var(--color-white-contrast);
     cursor: pointer;
   }
   .counter button:disabled {
@@ -494,11 +494,11 @@
   }
   .btn.primary {
     background: #1f6b2b;
-    color: #f6fff6;
+    color: var(--color-green-text);
   }
   .btn.secondary {
-    background: rgba(255, 255, 255, 0.08);
-    color: rgba(248, 248, 250, 0.9);
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: var(--glass-hover);
+    color: var(--color-white-contrast);
+    border: 1px solid var(--glass-border-strong);
   }
 </style>

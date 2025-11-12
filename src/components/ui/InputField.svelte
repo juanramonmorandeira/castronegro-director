@@ -61,6 +61,6 @@
 
   :global(.field-error) {
     font-size: 0.85rem;
-    color: #ffc9c9;
+    color: var(--color-error-soft);
   }
 </style>

@@ -59,11 +59,11 @@
   }
   .btn.primary {
     background: #1f6b2b;
-    color: #f6fff6;
+  color: var(--color-green-text);
   }
   .btn.secondary {
-    background: rgba(255, 255, 255, 0.08);
-    color: rgba(248, 248, 250, 0.9);
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: var(--glass-hover);
+    color: var(--color-white-contrast);
+    border: 1px solid var(--glass-border-strong);
   }
 </style>

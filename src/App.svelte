@@ -389,7 +389,7 @@ import Choose from './pages/Choose.svelte';
     width: min(90%, 700px);
     border-radius: 12px;
     background-color: rgba(0, 0, 0, 0.4);
-    color: #fff;
+    color: var(--color-white-contrast);
     backdrop-filter: blur(5px);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
   }

@@ -174,7 +174,7 @@
             <table class="app-table choose-table" aria-label={$t('player.active_sessions')}>
               <thead>
                 <tr>
-                  <th>{$t('history.headers.title')}</th>
+                  <th class="title-cell">{$t('history.headers.title')}</th>
                   <th>{$t('player.session_id')}</th>
                   <th>{$t('history.headers.status')}</th>
                 </tr>
@@ -192,7 +192,12 @@
                       on:click={() => onPick(s)}
                       on:keydown={(event) => onRowKey(event, s)}
                     >
-                      <td>{s.title ?? $t('common.untitled_session')}</td>
+                      <td
+                        class="title-cell"
+                        title={s.title ?? $t('common.untitled_session')}
+                      >
+                        {s.title ?? $t('common.untitled_session')}
+                      </td>
                       <td class="code">{s.game_id ?? '—'}</td>
                       <td>
                         <span class="badge {statusBadgeClass(s.status)}">{statusLabel(s.status)}</span>
@@ -246,7 +251,7 @@
 
 <style>
   .choose-panel {
-    width: min(520px, 92vw);
+    width: min(640px, 96vw);
     margin: 0 auto;
     gap: var(--space-4);
   }
@@ -262,7 +267,7 @@
     font-size: 1rem;
     font-weight: 600;
     letter-spacing: 0.02em;
-    color: var(--color-text-primary, #f5f8fb);
+    color: var(--color-white-contrast);
   }
 
   .section-subheading {
@@ -284,11 +289,18 @@
 
   .sessions-panel {
     padding: 0;
+    overflow-x: auto;
+  }
+
+  .choose-table {
+    min-width: 560px;
+    table-layout: auto;
   }
 
   .choose-table td.code {
     font-family: var(--font-mono, 'Fira Code', monospace);
     letter-spacing: 0.08em;
+    white-space: nowrap;
   }
 
   .choose-table tbody tr {
@@ -301,19 +313,26 @@
   }
 
   .state.info {
-    color: #ffd27f;
+    color: var(--color-gold-info);
   }
 
   .state.error,
   .error {
-    color: #ffb4b4;
+    color: var(--color-error-soft);
   }
 
   .info {
-    color: #ffd27f;
+    color: var(--color-gold-info);
   }
   .sessions-panel .state {
     padding: var(--space-3);
+  }
+
+  .title-cell {
+    max-width: clamp(16ch, 48vw, 28ch);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .full-width {
@@ -331,7 +350,7 @@
 
   @media (max-width: 640px) {
     .choose-panel {
-      width: min(94vw, 520px);
+      width: min(96vw, 520px);
     }
     .sessions-surface {
       max-height: none;

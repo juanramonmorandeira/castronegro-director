@@ -299,15 +299,23 @@
     border-radius: 10px;
     outline: none;
     background: rgba(0, 0, 0, 0.35);
-    color: #f5f8fb;
+    color: var(--color-white-contrast);
   }
   .search:focus { border-color: rgba(255, 232, 140, 0.6); }
   .badge { font-size: 0.85rem; padding: 0.2rem 0.5rem; border-radius: 999px; }
-  .badge.info { background: #eef5ff; color: #245; border: 1px solid #cfe1ff; }
-  .badge.error { background: #ffecec; color: #712; border: 1px solid #ffc9c9; }
+  .badge.info {
+    background: rgba(255, 232, 140, 0.16);
+    color: var(--color-white-contrast);
+    border: 1px solid var(--color-gold-info);
+  }
+  .badge.error {
+    background: var(--color-error-soft);
+    color: var(--color-white-contrast);
+    border: 1px solid var(--color-error-strong);
+  }
 
   .history-table thead th.sortable { cursor: pointer; }
-  .history-table td.empty { text-align: center; color: rgba(255,255,255,0.75); padding: 1.25rem; }
+  .history-table td.empty { text-align: center; color: var(--color-white-muted); padding: 1.25rem; }
   .history-table td.num,
   .history-table td.date {
     white-space: nowrap;
@@ -342,8 +350,9 @@
   }
 
   .icon-btn.danger {
-    border-color: rgba(241, 196, 196, 0.9);
-    background: rgba(255, 240, 240, 0.8);
+    border-color: var(--color-error-strong);
+    background: var(--color-error-soft);
+    color: var(--color-white-contrast);
   }
 
   .icon-btn.danger:hover { background: rgba(255, 220, 220, 0.9); }
@@ -379,12 +388,12 @@
     display: flex;
     flex-direction: column;
     gap: 1rem;
-    color: #f5f8fb;
+    color: var(--color-white-contrast);
   }
   .delete-modal h3 {
     margin: 0;
     font-size: 1.25rem;
-    color: #ffe68c;
+    color: var(--color-gold-info);
   }
   .delete-modal p {
     margin: 0;
@@ -392,7 +401,7 @@
   }
   .delete-modal-label {
     font-size: 0.9rem;
-    color: rgba(245, 248, 251, 0.85);
+    color: var(--color-white-muted);
   }
   .delete-modal-input {
     width: 100%;
@@ -400,7 +409,7 @@
     border-radius: 10px;
     border: 1px solid rgba(255, 255, 255, 0.3);
     background: rgba(0, 0, 0, 0.35);
-    color: #f5f8fb;
+    color: var(--color-white-contrast);
   }
   .delete-modal-input:focus {
     outline: none;
@@ -425,12 +434,12 @@
   }
   .btn.ghost {
     background: transparent;
-    color: #f5f8fb;
+    color: var(--color-white-contrast);
     border: 1px solid rgba(255, 255, 255, 0.4);
   }
   .btn.danger {
     background: linear-gradient(120deg, #ff4747, #f57c00);
-    color: #fff;
+    color: var(--color-white-contrast);
   }
 
   @media (max-width: 760px) {

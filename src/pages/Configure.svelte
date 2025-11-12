@@ -156,7 +156,9 @@
           tokens.push({
             id: `${category}-${slug}-${index}`,
             role: roleName,
-            category
+            category,
+            image: roleImageSrc(category, roleName),
+            player: null
           });
         }
       });
@@ -699,7 +701,7 @@
 
   .info-card {
     text-align: center;
-    color: rgba(245, 245, 245, 0.85);
+    color: var(--color-white-muted);
     font-size: 1rem;
   }
 
@@ -722,7 +724,7 @@
     font-weight: 600;
     letter-spacing: 0.02em;
     text-transform: none;
-    color: var(--color-text-primary, #f5f8fb);
+    color: var(--color-white-contrast);
   }
 
   .title-field {
@@ -750,7 +752,7 @@
     border-radius: 999px;
     border: 1px solid rgba(255, 255, 255, 0.2);
     background: rgba(255, 255, 255, 0.05);
-    color: #f5f8fb;
+    color: var(--color-white-contrast);
     padding: 0.65rem 1rem;
     font-weight: 600;
     cursor: pointer;
@@ -768,7 +770,7 @@
   }
 
   .hint {
-    color: rgba(225, 230, 240, 0.65);
+    color: var(--color-white-muted);
     font-size: 0.85rem;
   }
 
@@ -790,7 +792,7 @@
   }
 
   .role-preview-column {
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--glass-border);
     border-radius: 1rem;
     padding: 0.85rem;
     display: grid;
@@ -801,7 +803,7 @@
     display: flex;
     justify-content: space-between;
     font-size: 0.9rem;
-    color: rgba(245, 245, 245, 0.75);
+    color: var(--color-white-muted);
   }
 
   .role-chip-grid {
@@ -828,13 +830,13 @@
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: #0c1624;
+    background: var(--surface-chip);
     padding: 0.2rem;
   }
 
   .role-chip.empty {
     border-style: dashed;
-    color: rgba(245, 245, 245, 0.55);
+    color: var(--color-white-muted);
     justify-content: center;
   }
 
@@ -846,15 +848,15 @@
     border-radius: 999px;
     padding: 0.1rem 0.4rem;
     font-size: 0.75rem;
-    color: #f7d774;
+    color: var(--color-gold-info);
   }
 
   .input {
-    background: rgba(15, 22, 30, 0.55);
+    background: var(--surface-input);
     border: 1px solid rgba(250, 252, 255, 0.18);
     border-radius: 0.8rem;
     padding: 0.65rem 0.9rem;
-    color: #f7f9fc;
+    color: var(--color-white-contrast);
     font-size: 1rem;
     transition: border-color 0.25s ease, background 0.25s ease;
   }
@@ -894,7 +896,7 @@
 
   .btn.primary {
     background: rgba(74, 141, 74, 0.85);
-    color: #f6fff6;
+    color: var(--color-green-text);
     border: 1px solid rgba(74, 141, 74, 0.95);
   }
 
@@ -903,7 +905,7 @@
   }
 
   .saved-hint {
-    color: rgba(160, 255, 160, 0.8);
+    color: var(--color-green-accent);
   }
 
   @media (max-width: 720px) {

@@ -59,7 +59,7 @@
   .alert-panel {
     width: min(420px, 92vw);
     border-radius: var(--radius-lg);
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    border: 1px solid var(--glass-border-strong);
     background: rgba(10, 16, 26, 0.95);
     box-shadow: var(--shadow-hard);
     padding: var(--space-4);
@@ -73,7 +73,7 @@
   }
 
   .alert-panel--error {
-    border-color: rgba(255, 150, 150, 0.5);
+    border-color: var(--color-error-soft);
   }
 
   .alert-panel--info {
@@ -83,7 +83,7 @@
   .alert-header h3 {
     margin: 0;
     font-size: 1.2rem;
-    color: var(--color-gold-400);
+    color: var(--color-gold-highlight);
   }
 
   .alert-close {

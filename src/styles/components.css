@@ -24,54 +24,58 @@
 
 .btn--primary,
 .btn.primary {
-  background: linear-gradient(135deg, var(--color-jade-500), var(--color-jade-600));
+  background: linear-gradient(
+    135deg,
+    var(--color-green-cta--primary),
+    var(--color-green-cta-primary)
+  );
   border-color: rgba(53, 99, 53, 0.8);
-  color: #f6fff6;
+  color: var(--color-green-text);
 }
 
 .btn--secondary,
 .btn.secondary {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.22);
+  background: var(--glass-hover);
+  border-color: var(--glass-border-strong);
   color: var(--color-text-primary);
 }
 
 .btn--ghost {
   background: transparent;
-  border-color: rgba(255, 255, 255, 0.18);
+  border-color: var(--glass-border-strong);
   color: var(--color-text-secondary);
 }
 
 .btn--danger {
   background: var(--color-rose-500);
   border-color: rgba(0, 0, 0, 0.2);
-  color: #fff;
+  color: var(--color-white-contrast);
 }
 
 .btn--danger,
 .btn.danger {
   background: var(--color-rose-500);
   border-color: rgba(0, 0, 0, 0.2);
-  color: #fff;
+  color: var(--color-white-contrast);
 }
 
 .btn--link,
 .link-button {
   background: none;
   border: none;
-  color: var(--color-gold-400);
+  color: var(--color-gold-highlight);
   padding: 0;
   height: auto;
 }
 
 .btn--link:hover,
 .link-button:hover {
-  color: #fff0c0;
+  color: var(--color-gold-hover);
 }
 
 .input-field {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-border-strong);
   border-radius: var(--radius-md);
   padding: 0.65rem 0.85rem;
   color: var(--color-text-primary);
@@ -137,22 +141,22 @@
 }
 .badge.shared {
   background: var(--state-shared);
-  color: #0b2e18;
+  color: var(--color-text-invert);
 }
 .badge.waiting {
   background: var(--state-waiting);
-  color: #fff;
+  color: var(--color-white-contrast);
 }
 .badge.in_progress {
   background: var(--state-in-progress);
-  color: #0b2e18;
+  color: var(--color-text-invert);
 }
 .badge.paused {
   background: var(--state-paused);
 }
 .badge.finished {
   background: var(--state-finished);
-  color: #fff;
+  color: var(--color-white-contrast);
 }
 .badge.cancelled {
   background: var(--state-cancelled);
@@ -161,8 +165,8 @@
 .table-panel {
   overflow: hidden;
   border-radius: var(--radius-lg);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(8, 12, 18, 0.45);
+  border: 1px solid var(--glass-hover);
+  background: var(--surface-muted);
 }
 
 .app-table {
@@ -175,9 +179,9 @@
   font-weight: 600;
   font-size: 0.9rem;
   padding: 0.75rem 1rem;
-  background: rgba(255, 255, 255, 0.08);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-  color: rgba(245, 247, 251, 0.85);
+  background: var(--glass-hover);
+  border-bottom: 1px solid var(--glass-border);
+  color: var(--color-white-muted);
 }
 
 .app-table tbody tr {
@@ -186,7 +190,7 @@
 }
 
 .app-table tbody tr + tr {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--glass-hover);
 }
 
 .app-table tbody tr:hover,
@@ -201,7 +205,7 @@
 
 .app-table td {
   padding: 0.85rem 1rem;
-  color: #f5f8fb;
+  color: var(--color-white-contrast);
   font-size: 0.95rem;
 }
 

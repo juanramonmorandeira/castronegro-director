@@ -29,13 +29,13 @@ body {
 }
 
 a {
-  color: var(--color-gold-400);
+  color: var(--color-gold-highlight);
   text-decoration: none;
   transition: color 0.25s ease;
 }
 
 a:hover {
-  color: #fff0c0;
+  color: var(--color-gold-hover);
 }
 
 button,

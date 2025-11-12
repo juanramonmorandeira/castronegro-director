@@ -718,7 +718,7 @@ function closeAlert() {
 
   .divider {
     border: none;
-    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    border-top: 1px solid var(--glass-border);
     margin: var(--space-3) 0;
   }
 
@@ -737,11 +737,11 @@ function closeAlert() {
 
   .danger-note {
     margin: 0;
-    color: #ffbeb8;
+    color: var(--color-error-soft);
   }
 
   .modal-warning {
-    color: #ffbeb8;
+    color: var(--color-error-soft);
     font-size: 0.95rem;
   }
 

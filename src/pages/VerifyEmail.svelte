@@ -173,7 +173,7 @@ const closeAlert = () => {
     margin: 0;
     font-family: "Merriweather", serif;
     font-size: clamp(1.8rem, 3vw, 2.2rem);
-    color: #f4d47c;
+    color: var(--color-gold-brand);
     text-shadow:
       0 0 8px rgba(255, 200, 60, 0.7),
       0 0 18px rgba(255, 180, 40, 0.4),
@@ -186,21 +186,21 @@ const closeAlert = () => {
   }
 
   .message.info {
-    color: rgba(230, 236, 247, 0.85);
+    color: var(--color-white-muted);
   }
 
   .message.success {
-    color: #d7ffb6;
+    color: var(--color-green-accent);
   }
 
   .message.error {
-    color: #ffb8b8;
+    color: var(--color-error-soft);
   }
 
   .hint {
     margin: 0;
     font-size: 0.9rem;
-    color: rgba(245, 245, 245, 0.75);
+    color: var(--color-white-muted);
   }
 
   .btn.primary {
@@ -215,7 +215,7 @@ const closeAlert = () => {
     font-weight: 600;
     background: rgba(74, 141, 74, 0.85);
     border: 1px solid rgba(74, 141, 74, 0.95);
-    color: #f6fff6;
+    color: var(--color-green-text);
     transition: transform 0.2s ease, box-shadow 0.2s ease;
   }
 
@@ -235,6 +235,6 @@ const closeAlert = () => {
   .redirect {
     margin: 0;
     font-size: 0.85rem;
-    color: rgba(245, 245, 245, 0.7);
+    color: var(--color-white-muted);
   }
 </style>

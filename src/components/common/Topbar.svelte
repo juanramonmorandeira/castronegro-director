@@ -261,7 +261,7 @@
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--glass-border);
     border-radius: 999px;
     padding: 0.2rem 0.4rem;
     background: rgba(12, 18, 28, 0.7);
@@ -280,21 +280,21 @@
   .indicator-label {
     font-size: 0.68rem;
     letter-spacing: 0.08em;
-    color: rgba(245, 245, 245, 0.7);
+    color: var(--color-white-muted);
   }
 
   .indicator-pill strong {
     font-size: 0.95rem;
     font-weight: 600;
-    color: #f5f8fb;
+    color: var(--color-white-contrast);
   }
 
   .indicator-pill--connected strong {
-    color: #ffb45b;
+    color: var(--color-gold-info);
   }
 
   .indicator-pill--ready strong {
-    color: #6fe3a2;
+    color: var(--color-green-accent);
   }
 
   .brand {
@@ -317,7 +317,7 @@
     font-size: clamp(1rem, 2vw, 1.4rem);
     font-weight: 600;
     letter-spacing: 0.05em;
-    color: #f4d47c;
+    color: var(--color-gold-brand);
     text-shadow:
       0 0 6px rgba(255, 200, 60, 0.65),
       0 0 14px rgba(255, 180, 40, 0.4);
@@ -354,7 +354,7 @@
     border-radius: 999px;
     border: 1px solid rgba(255,255,255,0.25);
     background: rgba(255,255,255,0.08);
-    color: #f3f5f7;
+    color: var(--color-white-muted);
     font-size: 0.9rem;
     box-shadow: 0 0 8px rgba(255, 230, 140, 0.2);
     white-space: nowrap;
@@ -372,7 +372,7 @@
     border-radius: 50%;
     border: 1px solid rgba(255,255,255,0.25);
     background: rgba(255,255,255,0.08);
-    color: #f3f5f7;
+    color: var(--color-white-muted);
     pointer-events: auto;
     min-height: var(--topbar-item-height);
     min-width: var(--topbar-item-height);
@@ -422,7 +422,7 @@
     border-radius: 50%;
     border: 1px solid rgba(255,255,255,0.25);
     background: rgba(255,255,255,0.08);
-    color: #f3f5f7;
+    color: var(--color-white-muted);
     pointer-events: auto;
     min-height: var(--topbar-item-height);
     min-width: var(--topbar-item-height);
@@ -480,7 +480,7 @@
     margin: 0;
     list-style: none;
     min-width: 160px;
-    background: rgba(0, 0, 0, 0.75);
+    background: var(--surface-strong);
     border: 1px solid rgba(255, 255, 255, 0.25);
     border-radius: 0.6rem;
     box-shadow: 0 6px 15px rgba(0, 0, 0, 0.4);
@@ -491,7 +491,7 @@
   .menu-list button {
     background: none;
     border: none;
-    color: #f3f5f7;
+    color: var(--color-white-muted);
     text-align: left;
     padding: 0.4rem 0.6rem;
     border-radius: 0.5rem;
@@ -501,7 +501,7 @@
 
   .menu-list button:hover,
   .menu-list button:focus {
-    background: rgba(255, 255, 255, 0.12);
+    background: var(--glass-border);
     outline: none;
   }
 

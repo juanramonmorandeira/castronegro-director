@@ -28,8 +28,8 @@
 
 .input,
 .input-field {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-border-strong);
   border-radius: var(--radius-md);
   padding: 0.65rem 0.85rem;
   color: var(--color-text-primary);
@@ -90,7 +90,7 @@
 .panel-title {
   font-family: var(--font-display);
   font-size: clamp(1.5rem, 3vw, 2.2rem);
-  color: var(--color-gold-400);
+  color: var(--color-gold-highlight);
   margin: 0;
   text-shadow:
     0 0 8px rgba(244, 212, 124, 0.55),
@@ -118,14 +118,14 @@
 .list-surface {
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
-  background: rgba(8, 12, 18, 0.45);
+  background: var(--surface-muted);
 }
 
 .list-option {
   padding: 0.85rem 1rem;
   display: grid;
   gap: 0.35rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--glass-fill);
   cursor: pointer;
   transition: background 0.2s ease, border-color 0.2s ease;
 }

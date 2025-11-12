@@ -77,7 +77,7 @@
     border: 1px solid rgba(255,255,255,0.35);
     border-radius: 10px;
     background: rgba(20, 24, 28, 0.25);
-    color: #f0f3f6;
+    color: var(--color-white-muted);
     backdrop-filter: blur(2px);
   }
   .status-box[data-has-session="true"] {
@@ -108,7 +108,7 @@
   .error-msg {
     margin: 0.5rem 0 0;
     text-align: center;
-    color: #ffbdbd;
+    color: var(--color-error-soft);
     font-size: 0.9rem;
   }
 

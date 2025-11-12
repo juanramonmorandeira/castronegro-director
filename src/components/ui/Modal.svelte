@@ -105,10 +105,10 @@
 
   .modal-panel {
     background: #04070f;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--glass-hover);
     border-radius: 28px;
     box-shadow: 0 25px 80px rgba(0, 0, 0, 0.65);
-    color: #f5f8fb;
+    color: var(--color-white-contrast);
     max-height: 92vh;
     display: flex;
     flex-direction: column;
@@ -132,7 +132,7 @@
   .modal-panel__description {
     margin: 0.35rem 0 0;
     font-size: 0.92rem;
-    color: rgba(245, 245, 245, 0.72);
+    color: var(--color-white-muted);
   }
 
   .modal-panel__close {
@@ -140,8 +140,8 @@
     border-radius: 999px;
     width: 34px;
     height: 34px;
-    background: rgba(255, 255, 255, 0.08);
-    color: #f5f8fb;
+    background: var(--glass-hover);
+    color: var(--color-white-contrast);
     font-size: 1.2rem;
     cursor: pointer;
   }

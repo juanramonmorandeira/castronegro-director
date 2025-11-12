@@ -241,7 +241,7 @@
                   value="storyteller"
                   bind:group={role}
                 />
-                <span>{storytellerLabel}</span>
+                <span class="role-chip">{storytellerLabel}</span>
               </label>
               <label class="role-option">
                 <input
@@ -250,7 +250,7 @@
                   value="player"
                   bind:group={role}
                 />
-                <span>{playerLabel}</span>
+                <span class="role-chip">{playerLabel}</span>
               </label>
             </div>
           </fieldset>
@@ -330,21 +330,50 @@
   }
 
   .role-option {
+    position: relative;
     display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-size: 0.95rem;
-    color: #f0f4f9;
   }
 
   .role-option input {
-    accent-color: rgba(255, 232, 140, 0.8);
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .role-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 140px;
+    padding: 0.65rem 1.25rem;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--glass-border);
+    background: var(--glass-fill);
+    color: var(--color-white-muted);
+    font-size: 0.95rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease,
+      box-shadow 0.2s ease;
+  }
+
+  .role-option input:checked + .role-chip {
+    background: rgba(255, 232, 140, 0.16);
+    border-color: var(--color-gold-info);
+    color: var(--color-white-contrast);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+  }
+
+  .role-option input:focus-visible + .role-chip {
+    outline: 2px solid rgba(255, 232, 140, 0.65);
+    outline-offset: 2px;
   }
 
   .register-hint {
     margin: 0.75rem 0 0;
     font-size: 0.95rem;
-    color: #f0f3f7;
+    color: var(--color-white-muted);
     text-align: center;
   }
 

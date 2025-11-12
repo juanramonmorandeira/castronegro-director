@@ -193,7 +193,7 @@
                   checked={draft.storyteller === option}
                   on:change={() => onStorytellerChange(option)}
                 />
-                <span>{option}</span>
+                <span class="radio-chip">{option}</span>
               </label>
             {/each}
           </div>
@@ -220,14 +220,22 @@
             {:else}
               <div class="assist-tasks">
                 {#each options.assistTaskOptions as task}
-                  <button
-                    type="button"
-                    class={`task-chip ${draft.assistTasks.includes(task) ? 'task-chip-on' : ''}`}
-                    on:click={() => toggleAssistTask(task)}
-                    disabled={!derivedAssistEnabled}
-                  >
-                    {getAssistTaskLabel(task)}
-                  </button>
+                  {#if task}
+                    <label
+                      class={`assist-toggle ${draft.assistTasks.includes(task) ? 'assist-toggle--on' : ''} ${derivedAssistEnabled ? '' : 'assist-toggle--disabled'}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={draft.assistTasks.includes(task)}
+                        disabled={!derivedAssistEnabled}
+                        on:change={() => toggleAssistTask(task)}
+                      />
+                      <span class="assist-toggle__track">
+                        <span class="assist-toggle__thumb" aria-hidden="true"></span>
+                      </span>
+                      <span class="assist-toggle__label">{getAssistTaskLabel(task)}</span>
+                    </label>
+                  {/if}
                 {/each}
               </div>
             {/if}
@@ -255,11 +263,11 @@
     font-size: 0.78rem;
     text-transform: uppercase;
     letter-spacing: 0.18em;
-    color: rgba(237, 238, 245, 0.82);
+    color: var(--color-white-muted);
   }
   .input-shell {
     border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--glass-border);
     background: rgba(11, 17, 26, 0.85);
     padding: 0.25rem 0.35rem;
   }
@@ -267,14 +275,14 @@
     color-scheme: dark;
   }
   .properties-body option {
-    background: #0b111a;
-    color: #f5f8fb;
+    background: var(--surface-panel);
+    color: var(--color-white-contrast);
   }
   .input {
     width: 100%;
     background: transparent;
     border: none;
-    color: #f7f9fc;
+    color: var(--color-white-contrast);
     font-size: 1rem;
     padding: 0.65rem 0.75rem;
     appearance: none;
@@ -299,7 +307,7 @@
   }
   .numeric-shell {
     border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--glass-border);
     background: rgba(11, 17, 26, 0.85);
   }
   .numeric-shell .input {
@@ -321,7 +329,7 @@
     height: 16px;
     border-radius: 50%;
     background: #f3ce74;
-    border: 2px solid #0b111a;
+    border: 2px solid var(--surface-panel);
     box-shadow: 0 0 0 2px rgba(243, 206, 116, 0.3);
   }
   input[type='range']::-moz-range-thumb {
@@ -329,11 +337,11 @@
     height: 16px;
     border-radius: 50%;
     background: #f3ce74;
-    border: 2px solid #0b111a;
+    border: 2px solid var(--surface-panel);
     box-shadow: 0 0 0 2px rgba(243, 206, 116, 0.3);
   }
   .storyteller-field {
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--glass-border);
     border-radius: 20px;
     padding: 1rem;
     margin: 0;
@@ -345,78 +353,113 @@
     font-size: 0.78rem;
     text-transform: uppercase;
     letter-spacing: 0.18em;
-    color: rgba(237, 238, 245, 0.82);
+    color: var(--color-white-muted);
   }
-  .director-options {
-    display: flex;
-    gap: 0.65rem;
-    flex-wrap: wrap;
-  }
-  .radio-option {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.45rem 0.95rem;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    background: rgba(11, 17, 26, 0.7);
-    color: #f1f3f8;
-    text-transform: lowercase;
-  }
-  .radio-option input {
-    appearance: none;
-    width: 14px;
-    height: 14px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.5);
-    display: grid;
-    place-items: center;
-    background: transparent;
-  }
-  .radio-option input::after {
-    content: '';
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: transparent;
-    transition: background 0.2s ease;
-  }
-  .radio-option input:checked::after {
-    background: #4dc0ff;
-  }
-  .radio-option input:checked {
-    border-color: #4dc0ff;
-  }
+.director-options {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.radio-option {
+  position: relative;
+  display: inline-flex;
+}
+.radio-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.radio-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 150px;
+  padding: 0.7rem 1.1rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-fill);
+  color: var(--color-white-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+.radio-option input:checked + .radio-chip {
+  background: rgba(255, 232, 140, 0.16);
+  border-color: var(--color-gold-info);
+  color: var(--color-white-contrast);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+.radio-option input:focus-visible + .radio-chip {
+  outline: 2px solid rgba(255, 232, 140, 0.65);
+  outline-offset: 2px;
+}
   .assist-field {
     gap: 0.75rem;
   }
   .assist-tasks {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
+    display: grid;
+    gap: 0.65rem;
   }
   .assist-tasks.empty {
-    color: rgba(245, 245, 245, 0.7);
+    color: var(--color-white-muted);
   }
-  .task-chip {
+  .assist-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.35rem 0.25rem;
+  }
+  .assist-toggle input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .assist-toggle__track {
+    position: relative;
+    width: 54px;
+    height: 28px;
     border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    background: rgba(10, 14, 20, 0.8);
-    color: #f0f3f8;
-    padding: 0.35rem 0.9rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    border: 1px solid var(--glass-border);
+    background: var(--glass-fill);
+    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   }
-  .task-chip:disabled {
+  .assist-toggle__thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--color-white-contrast);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
+    transition: transform 0.2s ease;
+  }
+  .assist-toggle__label {
+    font-size: 0.92rem;
+    color: var(--color-white-contrast);
+  }
+  .assist-toggle--on .assist-toggle__track {
+    background: linear-gradient(
+      135deg,
+      var(--color-green-cta--primary),
+      var(--color-green-cta-primary)
+    );
+    border-color: var(--color-green-cta-primary);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+  }
+  .assist-toggle--on .assist-toggle__thumb {
+    transform: translateX(24px);
+  }
+  .assist-toggle--disabled {
     opacity: 0.45;
-    cursor: not-allowed;
   }
-  .task-chip-on {
-    background: rgba(86, 82, 45, 0.8);
-    border-color: rgba(242, 210, 124, 0.7);
-    color: #f8e5af;
+  .assist-toggle input:focus-visible + .assist-toggle__track,
+  .assist-toggle input:focus-visible ~ .assist-toggle__label {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(255, 232, 140, 0.6);
   }
   .modal-actions {
     display: flex;
@@ -432,11 +475,11 @@
   }
   .btn.primary {
     background: #1f6b2b;
-    color: #f6fff6;
+  color: var(--color-green-text);
   }
   .btn.secondary {
-    background: rgba(255, 255, 255, 0.08);
-    color: rgba(248, 248, 250, 0.9);
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: var(--glass-hover);
+    color: var(--color-white-contrast);
+    border: 1px solid var(--glass-border-strong);
   }
 </style>

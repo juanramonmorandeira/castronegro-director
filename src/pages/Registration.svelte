@@ -471,7 +471,7 @@
     justify-items: center;
     padding: 0.75rem 0.5rem;
     border-radius: var(--radius-lg);
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    border: 1px solid var(--glass-border-strong);
     background: rgba(255, 255, 255, 0.04);
     color: var(--color-text-primary);
   }
@@ -527,12 +527,12 @@
   }
 
   .info {
-    color: var(--color-gold-400);
+    color: var(--color-gold-highlight);
     margin: 0;
   }
 
   .error {
-    color: #ff9b9b;
+    color: var(--color-error-soft);
     margin: 0;
   }
 </style>
