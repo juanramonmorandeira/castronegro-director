@@ -12,8 +12,19 @@
   import AlertPopup from '../components/ui/AlertPopup.svelte';
   import { NAV_INTENT } from '../lib/navigation.js';
   import { t } from '../lib/i18n.js';
-  import { getSessionById, updateSession } from '../lib/db.js';
+  import { getSessionById, updateSession, subscribeToSession, savePlayerRoleAssignments } from '../lib/db.js';
   import { getGamesMetadata, getAssistTasks, getBalanceTable, getResourcesTable } from '../lib/gameMetadata.js';
+  import {
+    ROLE_CATEGORIES as ROLE_BREAKDOWN_ORDER,
+    DUPLICATE_ROLE_NAMES,
+    createEmptyRoleSelection,
+    normalizeRoleSelection,
+    roleImageSrc,
+    slugifyRole,
+    buildDistributionTokens,
+    flattenRoleSelection
+  } from '../lib/roles.js';
+  import { mapPlayers, computePlayerCounts } from '../lib/players.js';
 
   export let sessionId;
   export let user = null;
@@ -76,9 +87,6 @@
     Logbook: 'logbook'
   };
 
-  const ROLE_BREAKDOWN_ORDER = ['villagers', 'ambiguous', 'loners', 'werewolves'];
-  const DUPLICATE_ROLE_NAMES = new Set(['common', 'villager', 'werewolf']);
-
   const clampPlayers = (value) => {
     const numeric = Number(value);
     if (!Number.isFinite(numeric)) return minPlayers;
@@ -87,37 +95,13 @@
 
   const readableTask = (task) => task.replace(/_/g, ' ');
 
-  const slugifyRole = (name) => name?.toLowerCase().replace(/\s+/g, '_') ?? '';
-
-  function createEmptySelection() {
-    return ROLE_BREAKDOWN_ORDER.reduce((acc, category) => ({
-      ...acc,
-      [category]: {}
-    }), {});
-  }
-
-  function normalizeSelection(source) {
-    const base = createEmptySelection();
-    if (!source || typeof source !== 'object') return base;
-    for (const category of ROLE_BREAKDOWN_ORDER) {
-      const entries = source[category];
-      if (!entries || typeof entries !== 'object') continue;
-      base[category] = Object.entries(entries).reduce((acc, [role, count]) => {
-        const numeric = Number(count) || 0;
-        if (numeric > 0) acc[role] = numeric;
-        return acc;
-      }, {});
-    }
-    return base;
-  }
-
   function categoryTotal(category, selection = selectedRoles) {
     return Object.values(selection?.[category] ?? {}).reduce((sum, value) => sum + (Number(value) || 0), 0);
   }
 
   function buildAutoSelection() {
     if (!playerBreakdown || !rulesetRoles) return selectedRoles;
-    const next = createEmptySelection();
+    const next = createEmptyRoleSelection();
     for (const category of ROLE_BREAKDOWN_ORDER) {
       let remaining = playerBreakdown?.[category] ?? 0;
       if (!remaining) continue;
@@ -141,31 +125,6 @@
     return next;
   }
 
-  function roleImageSrc(category, role) {
-    const file = slugifyRole(role);
-    return `/roles/${category}/${file}.png`;
-  }
-
-  function buildDistributionTokens(selection) {
-    const tokens = [];
-    ROLE_BREAKDOWN_ORDER.forEach((category) => {
-      const roles = selection?.[category] ?? {};
-      Object.entries(roles).forEach(([roleName, count]) => {
-        const slug = slugifyRole(roleName);
-        for (let index = 0; index < count; index += 1) {
-          tokens.push({
-            id: `${category}-${slug}-${index}`,
-            role: roleName,
-            category,
-            image: roleImageSrc(category, roleName),
-            player: null
-          });
-        }
-      });
-    });
-    return tokens;
-  }
-
   let loading = true;
   let saving = false;
   let saved = false;
@@ -177,6 +136,7 @@
   let form = {
     name: '',
     game_id: '',
+    description: '',
     rulesets: metadata?.defaults?.rulesets ?? availableRulesets[0],
     players_expected: metadata?.defaults?.players_expected ?? minPlayers,
     storyteller: metadata?.defaults?.storyteller ?? availableStorytellers[0],
@@ -191,13 +151,17 @@
     form.assistEnabled = false;
   }
 
-  let selectedRoles = createEmptySelection();
+  let selectedRoles = createEmptyRoleSelection();
   let rolesCustomized = false;
   let autoSeedKey = '';
   let alertOpen = false;
   let alertMessage = '';
   let alertVariant = 'info';
   let alertTitle = '';
+  let livePlayers = {};
+  let playerList = [];
+  let playerAssignments = {};
+  let sessionUnsubscribe = null;
 
   const countEntries = (value) => {
     if (Array.isArray(value)) return value.length;
@@ -205,6 +169,32 @@
     if (typeof value === 'number' && Number.isFinite(value)) return value;
     return 0;
   };
+
+  function updatePlayerStats(players = {}, legacyReadySource = null) {
+    livePlayers = players && typeof players === 'object' ? players : {};
+    const counts = computePlayerCounts(livePlayers);
+    const fallbackConnected = countEntries(livePlayers);
+    const legacyReady = countEntries(
+      legacyReadySource ??
+        {}
+    );
+    connectedCount = counts.connected || fallbackConnected;
+    readyCount = Math.max(counts.ready, legacyReady);
+    playerList = mapPlayers(livePlayers);
+  }
+
+  function handleSessionSnapshot(snapshot) {
+    if (!snapshot) return;
+    sessionStatus = snapshot.status ?? sessionStatus;
+    playerAssignments = snapshot.player_roles ?? {};
+    const legacyReadySource =
+      snapshot.players_ready ??
+      snapshot.ready_players ??
+      snapshot.ready ??
+      snapshot.playersReady ??
+      null;
+    updatePlayerStats(snapshot.players ?? {}, legacyReadySource);
+  }
 
   $: derivedAssistEnabled =
     form.storyteller === 'AI'
@@ -248,10 +238,10 @@
   $: if (!rolesCustomized) {
     const seedKey = `${form.rulesets}|${form.players_expected}|${selectionAssistEnabled ? 'auto' : 'manual'}`;
     if (playerBreakdown && rulesetRoles && seedKey !== autoSeedKey) {
-      selectedRoles = selectionAssistEnabled ? buildAutoSelection() : createEmptySelection();
+      selectedRoles = selectionAssistEnabled ? buildAutoSelection() : createEmptyRoleSelection();
       autoSeedKey = seedKey;
     } else if (!selectionAssistEnabled && hasSelectedRoles(selectedRoles)) {
-      selectedRoles = createEmptySelection();
+      selectedRoles = createEmptyRoleSelection();
       autoSeedKey = seedKey;
     }
   }
@@ -260,6 +250,7 @@
     (sum, category) => sum + categoryTotal(category, selectedRoles),
     0
   );
+  $: roleOptions = flattenRoleSelection(selectedRoles);
   $: canShareSession = totalSelectedRoles >= clampPlayers(form.players_expected);
   $: rolesMatchingTaskEnabled =
     Array.isArray(form.assistTasks) && form.assistTasks.includes('Roles_Matching');
@@ -270,9 +261,15 @@
     form.storyteller === 'AI' ||
     (form.storyteller === 'human-AI' && Array.isArray(form.assistTasks) && form.assistTasks.includes('Roles_Selection'));
   $: distributionTokens = buildDistributionTokens(selectedRoles);
+  $: expectedPlayersCount = clampPlayers(form.players_expected);
+  $: allPlayersReady =
+    expectedPlayersCount > 0 &&
+    connectedCount >= expectedPlayersCount &&
+    readyCount >= expectedPlayersCount;
+  $: startActionDisabled = sessionStatus !== 'paused' && !allPlayersReady;
   $: if (sessionId && !loading) {
     dispatch('session-stats', {
-      expected: clampPlayers(form.players_expected),
+      expected: expectedPlayersCount,
       connected: connectedCount,
       ready: readyCount,
       status: sessionStatus
@@ -286,54 +283,59 @@
     return typeof lookup === 'string' ? lookup : readableTask(task);
   }
 
-  onMount(async () => {
+  onMount(() => {
     if (!sessionId) {
       loading = false;
-      return;
+      return () => {};
     }
 
-    try {
-      const session = await getSessionById(sessionId);
-      if (session) {
-        const settings = session.settings ?? {};
-        sessionStatus = session.status ?? 'draft';
-        connectedCount = countEntries(session.players);
-        readyCount = countEntries(
-          session.players_ready ??
-          session.ready_players ??
-          session.ready ??
-          session.playersReady ?? null
-        );
-        form = {
-          name: session.title ?? settings.name ?? '',
-          game_id: session.game_id ?? '',
-          rulesets: settings.rulesets ?? form.rulesets,
-          players_expected: clampPlayers(settings.players_expected ?? form.players_expected),
-          storyteller: settings.storyteller ?? form.storyteller,
-          language: settings.language ?? form.language,
-          assistEnabled: !!settings.assist_enabled,
-          assistTasks: Array.isArray(settings.assist_tasks)
-            ? settings.assist_tasks.filter((task) => assistTaskOptions.includes(task))
-            : []
-        };
-        if (settings.roles) {
-          selectedRoles = normalizeSelection(settings.roles);
-          rolesCustomized = true;
+    sessionUnsubscribe = subscribeToSession(sessionId, handleSessionSnapshot);
+
+    (async () => {
+      try {
+        const session = await getSessionById(sessionId);
+        if (session) {
+          handleSessionSnapshot(session);
+          const settings = session.settings ?? {};
+          form = {
+            name: session.title ?? settings.name ?? '',
+            game_id: session.game_id ?? '',
+            description: settings.description ?? form.description,
+            rulesets: settings.rulesets ?? form.rulesets,
+            players_expected: clampPlayers(settings.players_expected ?? form.players_expected),
+            storyteller: settings.storyteller ?? form.storyteller,
+            language: settings.language ?? form.language,
+            assistEnabled: !!settings.assist_enabled,
+            assistTasks: Array.isArray(settings.assist_tasks)
+              ? settings.assist_tasks.filter((task) => assistTaskOptions.includes(task))
+              : []
+          };
+          if (settings.roles) {
+            selectedRoles = normalizeRoleSelection(settings.roles);
+            rolesCustomized = true;
+          }
+          if (form.storyteller === 'human') {
+            form.assistEnabled = false;
+            form.assistTasks = [];
+          } else if (form.storyteller === 'AI' && !form.assistTasks.length && assistTaskOptions.length) {
+            form.assistEnabled = true;
+            form.assistTasks = [...assistTaskOptions];
+          }
         }
-        if (form.storyteller === 'human') {
-          form.assistEnabled = false;
-          form.assistTasks = [];
-        } else if (form.storyteller === 'AI' && !form.assistTasks.length && assistTaskOptions.length) {
-          form.assistEnabled = true;
-          form.assistTasks = [...assistTaskOptions];
-        }
+      } catch (error) {
+        console.error('[configure] unable to load session', error);
+        openAlert($t('configure.errors.load_failed'), 'error');
+      } finally {
+        loading = false;
       }
-    } catch (error) {
-      console.error('[configure] unable to load session', error);
-      openAlert($t('configure.errors.load_failed'), 'error');
-    } finally {
-      loading = false;
-    }
+    })();
+
+    return () => {
+      if (sessionUnsubscribe) {
+        sessionUnsubscribe();
+        sessionUnsubscribe = null;
+      }
+    };
   });
 
   async function saveConfig() {
@@ -352,11 +354,13 @@
       const languageValue =
         form.storyteller === 'human' ? defaultLanguage : form.language;
       const assistEnabled = derivedAssistEnabled;
+      const trimmedDescription = form.description?.trim() ?? '';
 
       const nextStatus = sessionStatus === 'draft' ? 'draft' : sessionStatus;
 
       const payload = {
         title: trimmedName,
+        'settings.description': trimmedDescription,
         'settings.rulesets': form.rulesets,
         'settings.players_expected': clampPlayers(form.players_expected),
         'settings.storyteller': form.storyteller,
@@ -433,7 +437,7 @@
   function handleSelectionSave(event) {
     const detail = event?.detail ?? {};
     if (detail.selections) {
-      selectedRoles = normalizeSelection(detail.selections);
+      selectedRoles = normalizeRoleSelection(detail.selections);
       rolesCustomized = true;
       autoSeedKey = `${form.rulesets}|${form.players_expected}`;
     }
@@ -448,8 +452,20 @@
     closeModal();
   }
 
-  function handleMatchSave() {
-    closeModal();
+  async function handleMatchSave(event) {
+    if (!sessionId) {
+      openAlert($t('configure.errors.missing_session'), 'warning');
+      return;
+    }
+    const assignments = event?.detail?.assignments ?? {};
+    try {
+      await savePlayerRoleAssignments(sessionId, assignments);
+      playerAssignments = assignments;
+      closeModal();
+    } catch (error) {
+      console.error('[configure] unable to save role assignments', error);
+      openAlert($t('configure.errors.save_failed'), 'error');
+    }
   }
 
   function handleDistributionClose() {
@@ -472,6 +488,10 @@
   async function handleStartOrContinue() {
     if (!sessionId) {
       openAlert($t('configure.errors.missing_session'), 'warning');
+      return;
+    }
+    if (sessionStatus !== 'paused' && startActionDisabled) {
+      openAlert($t('configure.errors.start_requirements', { expected: expectedPlayersCount }), 'warning');
       return;
     }
     const nextStatus = sessionStatus === 'paused' ? 'in_progress' : 'waiting';
@@ -523,6 +543,17 @@
                 placeholder={$t('configure.title_placeholder')}
                 maxlength="80"
               />
+            </label>
+            <label class="field description-field">
+              <span class="section-label">{$t('configure.description_label')}</span>
+              <textarea
+                class="input description-input"
+                bind:value={form.description}
+                placeholder={$t('configure.description_placeholder')}
+                maxlength="400"
+                rows="3"
+              ></textarea>
+              <small class="hint">{$t('configure.description_hint')}</small>
             </label>
           </div>
         </header>
@@ -591,12 +622,22 @@
             <button class="btn primary save-btn" type="button" on:click={saveConfig} disabled={saving}>
               {saving ? '…' : $t('configure.save')}
             </button>
-            <button class="btn primary" type="button" on:click={handleStartOrContinue}>
+            <button
+              class={`btn ${sessionStatus === 'paused' ? 'primary' : 'start'}`}
+              type="button"
+              on:click={handleStartOrContinue}
+              disabled={sessionStatus === 'paused' ? false : startActionDisabled}
+            >
               {sessionStatus === 'paused'
                 ? $t('configure.continue_button')
                 : $t('configure.start_button')}
             </button>
           </div>
+          {#if sessionStatus !== 'paused' && startActionDisabled}
+            <span class="hint start-hint">
+              {$t('configure.start_disabled_hint')}
+            </span>
+          {/if}
           {#if saved}
             <span class="hint saved-hint">{$t('configure.saved')}</span>
           {/if}
@@ -652,6 +693,9 @@
 
 <MatchModal
   open={activeModal === 'match'}
+  players={playerList}
+  roles={roleOptions}
+  assignments={playerAssignments}
   on:auto={handleMatchAuto}
   on:save={handleMatchSave}
   on:cancel={closeModal}
@@ -741,6 +785,16 @@
     width: 100%;
   }
 
+  .description-field textarea {
+    width: 100%;
+    resize: vertical;
+    min-height: 100px;
+  }
+
+  .description-input {
+    min-height: 96px;
+  }
+
 
   .actions-grid {
     display: grid;
@@ -772,6 +826,10 @@
   .hint {
     color: var(--color-white-muted);
     font-size: 0.85rem;
+  }
+
+  .start-hint {
+    width: 100%;
   }
 
   .role-selection-preview {

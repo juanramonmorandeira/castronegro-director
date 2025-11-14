@@ -4,7 +4,7 @@
   import Footbar from '../components/common/Footbar.svelte';
   import BackgroundLayer from '../components/common/BackgroundLayer.svelte';
   import { t } from '../lib/i18n.js';
-  import { listActiveSessions, getSessionByGameId } from '../lib/db.js';
+  import { listActiveSessions, getSessionByGameId, connectPlayerToSession } from '../lib/db.js';
   import { statusBadgeClass, statusLabel } from '../lib/utils.js';
   import Button from '../components/ui/Button.svelte';
   import InputField from '../components/ui/InputField.svelte';
@@ -85,7 +85,13 @@
       if (!session) {
         openAlert($t('player.invalid_id'), 'warning');
       } else {
-        dispatch('connect', { sessionId: session.id, session });
+        try {
+          await connectPlayerToSession(session.id, user);
+          dispatch('connect', { sessionId: session.id, session, target: 'waiting' });
+        } catch (error) {
+          console.error('[choose] unable to connect player', error);
+          handleConnectError(error);
+        }
       }
     } catch (e) {
       console.error(e);
@@ -109,6 +115,19 @@
 
   function relay(event) {
     dispatch(event.type, event.detail);
+  }
+
+  function handleConnectError(error) {
+    const code = error?.code;
+    const message =
+      code === 'session/full'
+        ? $t('player.errors.session_full')
+        : code === 'session/unavailable'
+          ? $t('player.errors.session_unavailable')
+          : code === 'session/missing-player'
+            ? $t('player.errors.missing_player')
+            : $t('player.errors.generic');
+    openAlert(message, 'warning');
   }
 
   onMount(loadActive);

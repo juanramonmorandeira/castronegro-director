@@ -40,6 +40,16 @@
   color: var(--color-text-primary);
 }
 
+.btn.start {
+  background: linear-gradient(
+    135deg,
+    var(--color-green-cta--primary),
+    var(--color-green-cta-primary)
+  );
+  border-color: rgba(53, 99, 53, 0.85);
+  color: var(--color-green-text);
+}
+
 .btn--ghost {
   background: transparent;
   border-color: var(--glass-border-strong);

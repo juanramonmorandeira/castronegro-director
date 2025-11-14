@@ -19,19 +19,39 @@ import {
   updateDoc,
   deleteDoc,
   serverTimestamp,
-  writeBatch
+  writeBatch,
+  onSnapshot,
+  runTransaction,
+  deleteField
 } from "firebase/firestore";
+import { normalizeStatus } from './utils.js';
+import {
+  resolvePlayerKey,
+  derivePlayerAlias,
+  resolvePlayerAvatar,
+  computePlayerCounts
+} from './players.js';
+import { slugifyRole } from './roles.js';
 
 // Estados considerados "activos" para unirse como jugador.
 const ACTIVE_STATES = ['shared', 'waiting', 'in_progress', 'paused'];
 
 const MIN_PLAYERS = 5;
 const MAX_PLAYERS = 15;
+const JOINABLE_STATES = new Set(['shared', 'waiting', 'in_progress', 'paused']);
+const MAX_WAITING_MESSAGES = 50;
+const MAX_CHAT_LENGTH = 280;
 
 const clampPlayers = (value = MIN_PLAYERS) => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return MIN_PLAYERS;
   return Math.min(Math.max(numeric, MIN_PLAYERS), MAX_PLAYERS);
+};
+
+const buildError = (code, message) => {
+  const error = new Error(message || code);
+  error.code = code;
+  return error;
 };
 
 function randomGroup() {
@@ -91,6 +111,191 @@ export async function getSessionByGameId(gameId) {
   if (snap.empty) return null;
   const docSnap = snap.docs[0];
   return { id: docSnap.id, ...docSnap.data() };
+}
+
+export function subscribeToSession(sessionId, callback) {
+  if (!sessionId || typeof callback !== 'function') return () => {};
+  const ref = doc(db, 'sessions', sessionId);
+  const unsubscribe = onSnapshot(
+    ref,
+    (snap) => {
+      if (!snap.exists()) {
+        callback(null);
+        return;
+      }
+      callback({ id: snap.id, ...snap.data() });
+    },
+    (error) => {
+      console.error('[db] session subscription failed', error);
+      callback(null);
+    }
+  );
+  return unsubscribe;
+}
+
+export async function connectPlayerToSession(sessionId, playerProfile = {}) {
+  if (!sessionId) throw buildError('session/missing-id', 'Missing session ID');
+  const playerId = resolvePlayerKey(playerProfile);
+  if (!playerId) {
+    throw buildError('session/missing-player', 'Missing player identity');
+  }
+
+  return runTransaction(db, async (transaction) => {
+    const ref = doc(db, 'sessions', sessionId);
+    const snap = await transaction.get(ref);
+    if (!snap.exists()) {
+      throw buildError('session/not-found', 'Session not found');
+    }
+
+    const data = snap.data() ?? {};
+    const status = normalizeStatus(data.status);
+    if (!JOINABLE_STATES.has(status)) {
+      throw buildError('session/unavailable', 'Session is not accepting players');
+    }
+
+    const settings = data.settings ?? {};
+    const expected = clampPlayers(settings.players_expected ?? MIN_PLAYERS);
+    const players =
+      data.players && typeof data.players === 'object'
+        ? { ...data.players }
+        : {};
+    const entryKeys = Object.keys(players);
+    const existingEntry = players[playerId];
+    const counts = computePlayerCounts(players);
+    const alreadyCounted =
+      existingEntry &&
+      (existingEntry.status === 'connected' || existingEntry.status === 'ready');
+
+    if (!alreadyCounted && counts.connected >= expected) {
+      throw buildError('session/full', 'Session already reached the maximum number of players');
+    }
+
+    const alias = derivePlayerAlias(playerProfile, existingEntry?.alias, entryKeys.length);
+    const avatarURL = resolvePlayerAvatar(playerProfile, existingEntry?.avatarURL);
+    const now = serverTimestamp();
+    const isReady = existingEntry?.status === 'ready';
+    const entry = {
+      alias,
+      avatarURL: avatarURL ?? null,
+      status: isReady ? 'ready' : 'connected',
+      ready: isReady,
+      user_id: playerId,
+      email: playerProfile?.email ?? existingEntry?.email ?? null,
+      generic_alias: !playerProfile?.alias,
+      connected_at: existingEntry?.connected_at ?? now,
+      updated_at: now
+    };
+
+    const updates = {
+      [`players.${playerId}`]: entry,
+      updated_at: now
+    };
+
+    if (entry.status === 'ready') {
+      updates[`players_ready.${playerId}`] = true;
+      updates[`players.${playerId}.ready_at`] = existingEntry?.ready_at ?? now;
+    } else {
+      updates[`players_ready.${playerId}`] = deleteField();
+    }
+
+    transaction.update(ref, updates);
+    return { playerId, player: entry, sessionStatus: status };
+  });
+}
+
+export async function updatePlayerReadyStatus(sessionId, playerId, ready = true) {
+  if (!sessionId) throw buildError('session/missing-id', 'Missing session ID');
+  if (!playerId) throw buildError('session/missing-player', 'Missing player identity');
+  const ref = doc(db, 'sessions', sessionId);
+  const now = serverTimestamp();
+  const status = ready ? 'ready' : 'connected';
+  const updates = {
+    [`players.${playerId}.status`]: status,
+    [`players.${playerId}.ready`]: !!ready,
+    [`players.${playerId}.updated_at`]: now,
+    updated_at: now
+  };
+  if (ready) {
+    updates[`players_ready.${playerId}`] = true;
+    updates[`players.${playerId}.ready_at`] = now;
+  } else {
+    updates[`players_ready.${playerId}`] = deleteField();
+  }
+  await updateDoc(ref, updates);
+  return true;
+}
+
+export async function disconnectPlayerFromSession(sessionId, playerId) {
+  if (!sessionId || !playerId) return false;
+  const ref = doc(db, 'sessions', sessionId);
+  await updateDoc(ref, {
+    [`players.${playerId}`]: deleteField(),
+    [`players_ready.${playerId}`]: deleteField(),
+    updated_at: serverTimestamp()
+  });
+  return true;
+}
+
+export function subscribeWaitingRoomMessages(sessionId, callback, maxMessages = MAX_WAITING_MESSAGES) {
+  if (!sessionId || typeof callback !== 'function') return () => {};
+  const col = collection(db, 'sessions', sessionId, 'waiting_chat');
+  const capped = Math.max(1, Math.min(maxMessages ?? MAX_WAITING_MESSAGES, 200));
+  const q = query(col, orderBy('created_at', 'asc'), limit(capped));
+  const unsubscribe = onSnapshot(
+    q,
+    (snapshot) => {
+      const messages = snapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data()
+      }));
+      callback(messages);
+    },
+    (error) => {
+      console.error('[db] waiting-room chat subscription failed', error);
+      callback([]);
+    }
+  );
+  return unsubscribe;
+}
+
+export async function sendWaitingRoomMessage(sessionId, message = {}) {
+  if (!sessionId) throw buildError('session/missing-id', 'Missing session ID');
+  const text = typeof message.text === 'string' ? message.text.trim() : '';
+  if (!text) {
+    throw buildError('chat/empty', 'Cannot send an empty message');
+  }
+  const trimmed = text.slice(0, MAX_CHAT_LENGTH);
+  const col = collection(db, 'sessions', sessionId, 'waiting_chat');
+  await addDoc(col, {
+    message: trimmed,
+    alias: message.alias?.trim() || 'Player',
+    user_id: message.playerId ?? message.userId ?? null,
+    avatar_url: message.avatarURL ?? message.avatar ?? null,
+    created_at: serverTimestamp()
+  });
+  return true;
+}
+
+export async function savePlayerRoleAssignments(sessionId, assignments = {}) {
+  if (!sessionId) throw buildError('session/missing-id', 'Missing session ID');
+  const normalized = {};
+  if (assignments && typeof assignments === 'object') {
+    Object.entries(assignments).forEach(([playerId, roleInfo]) => {
+      if (!playerId || !roleInfo || !roleInfo.role) return;
+      normalized[playerId] = {
+        role: roleInfo.role,
+        slug: slugifyRole(roleInfo.role),
+        category: roleInfo.category ?? null,
+        updated_at: serverTimestamp()
+      };
+    });
+  }
+  const ref = doc(db, 'sessions', sessionId);
+  await updateDoc(ref, {
+    player_roles: normalized,
+    updated_at: serverTimestamp()
+  });
+  return normalized;
 }
 
 /**

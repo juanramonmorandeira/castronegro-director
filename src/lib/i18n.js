@@ -243,6 +243,9 @@ const dictionaries = {
       selection_placeholder_hint: 'Detailed role gallery coming soon.',
       selection_counts: '{selected}/{required} selected',
       selection_counts_unbound: '{selected} selected',
+      description_label: 'Session description',
+      description_placeholder: 'Share what the players should expect in this story…',
+      description_hint: 'This text is shown to players inside the waiting room.',
       title_label: 'Session title',
       title_placeholder: 'Game session name…',
       ruleset_label: 'Rule set',
@@ -268,6 +271,7 @@ const dictionaries = {
       expected_label: 'Expected',
       connected_label: 'Connected',
       ready_label: 'Ready',
+      start_disabled_hint: 'All expected players must be connected and ready before starting.',
       btn_properties: 'Properties',
       btn_selection: 'Roles',
       btn_match: 'Match',
@@ -293,6 +297,13 @@ const dictionaries = {
       },
       match_title: 'Assign roles',
       match_hint: 'Assign each selected role to a connected player manually or let the system do it for you.',
+      match_players_title: 'Players waiting',
+      match_roles_title: 'Assigned role',
+      match_no_players: 'No connected players yet.',
+      match_no_roles: 'Select roles first to enable assignments.',
+      match_unassigned: 'Unassigned',
+      match_status_ready: 'Ready',
+      match_status_connected: 'Connected',
       match_auto: 'Auto assign',
       match_manual: 'Manual assignment',
       distribution_title: 'Distribution',
@@ -315,7 +326,8 @@ const dictionaries = {
         save_failed: 'We could not save these settings. Try again.',
         share_failed: 'We could not mark the session as shared.',
         start_failed: 'We could not update the session status.',
-        load_failed: 'We could not load this session.'
+        load_failed: 'We could not load this session.',
+        start_requirements: 'You need {expected} players connected and ready before starting.'
       }
     },
     verify: {
@@ -355,7 +367,39 @@ const dictionaries = {
       invalid_id: 'We could not find that session.',
       connect_error: 'Could not connect to the session. Please try again.',
       created_at: 'Created',
-      updated_at: 'Updated'
+      updated_at: 'Updated',
+      errors: {
+        session_full: 'This session already has the maximum number of players.',
+        session_unavailable: 'You can only join sessions that are shared, waiting or in progress.',
+        missing_player: 'We could not identify your player profile.',
+        generic: 'Could not connect to the session. Please try again.'
+      },
+      waiting: {
+        heading: 'Waiting',
+        title: 'Waiting room',
+        subtitle: 'Hang tight while the storyteller prepares the tale.',
+        description_title: 'About this session',
+        description_empty: 'The storyteller has not written a description yet.',
+        roles_title: 'Roles in play',
+        roles_empty: 'Roles will appear here once the storyteller finalizes the setup.',
+        roles_count: '{count} roles selected',
+        players_title: 'Players in the room',
+        players_empty: 'No other players are connected yet.',
+        ready_connected: 'Connected',
+        ready_ready: 'Ready',
+        ready_hint: 'Mark yourself ready when you are set to play.',
+        ready_mark: 'Ready',
+        ready_cancel: 'Cancel ready',
+        leave_room: 'Leave room',
+        chat_title: 'Waiting room chat',
+        chat_placeholder: 'Send a short message',
+        chat_empty: 'No messages yet. Say hi!',
+        chat_send: 'Send',
+        chat_sending: 'Sending…',
+        chat_error: 'We could not send your message.',
+        join_full: 'This session already reached the expected number of players.',
+        join_unavailable: 'This session is no longer available.'
+      }
     },
     landing: {
       current: {
@@ -656,6 +700,9 @@ const dictionaries = {
       selection_placeholder_hint: 'Muy pronto verás cada rol con su ilustración.',
       selection_counts: '{selected}/{required} seleccionados',
       selection_counts_unbound: '{selected} seleccionados',
+      description_label: 'Descripción de la sesión',
+      description_placeholder: 'Comparte qué pueden esperar los jugadores…',
+      description_hint: 'Se mostrará a los jugadores en la sala de espera.',
       title_label: 'Título de la sesión',
       title_placeholder: 'Nombre para la partida…',
       ruleset_label: 'Conjunto de reglas',
@@ -681,6 +728,7 @@ const dictionaries = {
       expected_label: 'Esperados',
       connected_label: 'Conectados',
       ready_label: 'Listos',
+      start_disabled_hint: 'Debes tener a todos los jugadores esperados conectados y listos antes de empezar.',
       btn_properties: 'Propiedades',
       btn_selection: 'Roles',
       btn_match: 'Emparejar',
@@ -706,6 +754,13 @@ const dictionaries = {
       },
       match_title: 'Asignar roles',
       match_hint: 'Asigna cada rol seleccionado a un jugador o deja que el sistema lo reparta por ti.',
+      match_players_title: 'Jugadores conectados',
+      match_roles_title: 'Rol asignado',
+      match_no_players: 'Todavía no hay jugadores conectados.',
+      match_no_roles: 'Primero selecciona roles para poder asignarlos.',
+      match_unassigned: 'Sin asignar',
+      match_status_ready: 'Listo',
+      match_status_connected: 'Conectado',
       match_auto: 'Asignar automáticamente',
       match_manual: 'Asignar manualmente',
       distribution_title: 'Distribución',
@@ -728,7 +783,8 @@ const dictionaries = {
         save_failed: 'No pudimos guardar la configuración. Intenta de nuevo.',
         share_failed: 'No pudimos marcar la sesión como compartida.',
         start_failed: 'No pudimos actualizar el estado de la sesión.',
-        load_failed: 'No pudimos cargar esta sesión.'
+        load_failed: 'No pudimos cargar esta sesión.',
+        start_requirements: 'Necesitas {expected} jugadores conectados y listos antes de empezar.'
       }
     },
     verify: {
@@ -768,7 +824,39 @@ const dictionaries = {
       invalid_id: 'No encontramos una partida con ese ID.',
       connect_error: 'No se pudo conectar a la partida. Inténtalo de nuevo.',
       created_at: 'Creada',
-      updated_at: 'Actualizada'
+      updated_at: 'Actualizada',
+      errors: {
+        session_full: 'Esta sesión ya alcanzó el máximo de jugadores.',
+        session_unavailable: 'Solo puedes unirte a sesiones compartidas, en espera o en curso.',
+        missing_player: 'No pudimos identificar tu perfil de jugador.',
+        generic: 'No pudimos conectar con la sesión. Inténtalo de nuevo.'
+      },
+      waiting: {
+        heading: 'Esperando',
+        title: 'Sala de espera',
+        subtitle: 'Permanece atento mientras el Narrador prepara la historia.',
+        description_title: 'Sobre esta sesión',
+        description_empty: 'El Narrador aún no ha compartido una descripción.',
+        roles_title: 'Roles en juego',
+        roles_empty: 'Los roles aparecerán aquí cuando el Narrador termine de configurar la partida.',
+        roles_count: '{count} roles seleccionados',
+        players_title: 'Jugadores en la sala',
+        players_empty: 'Aún no hay otros jugadores conectados.',
+        ready_connected: 'Conectado',
+        ready_ready: 'Listo',
+        ready_hint: 'Marca que estás listo cuando quieras empezar.',
+        ready_mark: 'Listo',
+        ready_cancel: 'Cancelar listo',
+        leave_room: 'Salir de la sala',
+        chat_title: 'Chat de la sala de espera',
+        chat_placeholder: 'Envía un mensaje corto',
+        chat_empty: 'Aún no hay mensajes. ¡Saluda!',
+        chat_send: 'Enviar',
+        chat_sending: 'Enviando…',
+        chat_error: 'No pudimos enviar tu mensaje.',
+        join_full: 'Esta sesión ya alcanzó el número esperado de jugadores.',
+        join_unavailable: 'Esta sesión ya no está disponible.'
+      }
     },
     landing: {
       current: {
@@ -1069,6 +1157,9 @@ const dictionaries = {
       selection_placeholder_hint: 'Hamarosan itt lesznek a tényleges kártyák.',
       selection_counts: '{selected}/{required} kiválasztva',
       selection_counts_unbound: '{selected} kiválasztva',
+      description_label: 'Session leírása',
+      description_placeholder: 'Írd le röviden, mire számíthatnak a játékosok…',
+      description_hint: 'Ezt a szöveget a váróban látják majd a játékosok.',
       title_label: 'Játék címe',
       title_placeholder: 'Add meg a játék nevét…',
       ruleset_label: 'Szabálykészlet',
@@ -1094,6 +1185,7 @@ const dictionaries = {
       expected_label: 'Tervezett',
       connected_label: 'Csatlakozott',
       ready_label: 'Kész',
+      start_disabled_hint: 'A kezdés előtt minden várt játékosnak csatlakoznia kell és készen kell állnia.',
       btn_properties: 'Tulajdonságok',
       btn_selection: 'Szerepek',
       btn_match: 'Párosítás',
@@ -1119,6 +1211,13 @@ const dictionaries = {
       },
       match_title: 'Szerepek kiosztása',
       match_hint: 'Oszt szét minden szerepet kézzel vagy kérj automatikus kiosztást.',
+      match_players_title: 'Csatlakozott játékosok',
+      match_roles_title: 'Hozzárendelt szerep',
+      match_no_players: 'Még nincs csatlakozott játékos.',
+      match_no_roles: 'Előbb válassz szerepeket a kiosztáshoz.',
+      match_unassigned: 'Nincs kiosztva',
+      match_status_ready: 'Kész',
+      match_status_connected: 'Csatlakozott',
       match_auto: 'Automatikus kiosztás',
       match_manual: 'Kézi kiosztás',
       distribution_title: 'Elrendezés',
@@ -1141,7 +1240,8 @@ const dictionaries = {
         save_failed: 'Nem sikerült menteni a beállításokat.',
         share_failed: 'Nem sikerült megosztani a sessiont.',
         start_failed: 'Nem tudtuk frissíteni a session állapotát.',
-        load_failed: 'Nem sikerült betölteni ezt a sessiont.'
+        load_failed: 'Nem sikerült betölteni ezt a sessiont.',
+        start_requirements: '{expected} játékosnak kell csatlakoznia és készen állnia a kezdéshez.'
       }
     },
     verify: {
@@ -1181,7 +1281,39 @@ const dictionaries = {
       invalid_id: 'Nem található ilyen azonosítójú játék.',
       connect_error: 'Nem sikerült csatlakozni a játékhoz. Próbáld újra.',
       created_at: 'Létrehozva',
-      updated_at: 'Frissítve'
+      updated_at: 'Frissítve',
+      errors: {
+        session_full: 'Ez a session elérte a maximális játékosszámot.',
+        session_unavailable: 'Csak megosztott, várakozó vagy futó sessionhöz csatlakozhatsz.',
+        missing_player: 'Nem tudtuk azonosítani a játékos profilodat.',
+        generic: 'Nem sikerült csatlakozni a sessionhöz. Próbáld újra.'
+      },
+      waiting: {
+        heading: 'Várakozás',
+        title: 'Váró',
+        subtitle: 'Várj türelemmel, amíg a mesélő felkészül.',
+        description_title: 'A sessionről',
+        description_empty: 'A mesélő még nem adott meg leírást.',
+        roles_title: 'Aktív szerepek',
+        roles_empty: 'A szerepek itt jelennek meg, amint a mesélő véglegesítette a beállításokat.',
+        roles_count: '{count} kiválasztott szerep',
+        players_title: 'Játékosok a váróban',
+        players_empty: 'Még senki más nem csatlakozott.',
+        ready_connected: 'Csatlakozott',
+        ready_ready: 'Kész',
+        ready_hint: 'Jelöld magad késznek, amikor indulásra készen állsz.',
+        ready_mark: 'Kész vagyok',
+        ready_cancel: 'Mégsem vagyok kész',
+        leave_room: 'Kilépés a váróból',
+        chat_title: 'Váró chat',
+        chat_placeholder: 'Írj egy rövid üzenetet',
+        chat_empty: 'Még nincs üzenet. Köszönj a többieknek!',
+        chat_send: 'Küldés',
+        chat_sending: 'Küldés…',
+        chat_error: 'Nem sikerült elküldeni az üzenetet.',
+        join_full: 'Ez a session már elérte a várt játékosszámot.',
+        join_unavailable: 'Ez a session már nem érhető el.'
+      }
     },
     landing: {
       current: {

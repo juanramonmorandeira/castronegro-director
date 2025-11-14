@@ -11,18 +11,19 @@
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
   import BackgroundLayer from './components/common/BackgroundLayer.svelte';
-  import Dashboard from "./pages/Dashboard.svelte";
-  import Login from './pages/Login.svelte';
-  import Registration from './pages/Registration.svelte';
+import Dashboard from "./pages/Dashboard.svelte";
+import Login from './pages/Login.svelte';
+import Registration from './pages/Registration.svelte';
 import Choose from './pages/Choose.svelte';
-  import Profile from './pages/Profile.svelte';
-  import Configure from './pages/Configure.svelte';
+import Profile from './pages/Profile.svelte';
+import Configure from './pages/Configure.svelte';
+import Waiting from './pages/Waiting.svelte';
   import { t } from './lib/i18n.js';
   import { fetchCurrentUserProfile, signOutUser, confirmEmailVerification } from './lib/auth.js';
   import { auth } from './lib/firebase.js';
   import { onAuthStateChanged } from 'firebase/auth';
 
-  let view = "login"; // login, registration, verify-email, landing, player-selection, configure, session, profile
+  let view = "login"; // login, registration, verify-email, landing, player-selection, configure, waiting, session, profile
   let currentSessionId = null;
   let currentRole = null;
   let currentUser = null;
@@ -161,7 +162,11 @@ import Choose from './pages/Choose.svelte';
   function handlePlayerConnect(event) {
     const detail = event?.detail ?? event;
     if (detail?.sessionId) {
-      goSession(detail.sessionId);
+      currentSessionId = detail.sessionId;
+      const explicitTarget = detail?.target;
+      const inferredTarget = currentRole === 'player' ? 'waiting' : 'session';
+      const nextView = explicitTarget || inferredTarget;
+      view = nextView;
     }
   }
 
@@ -197,6 +202,12 @@ import Choose from './pages/Choose.svelte';
   function handleProfileClose() {
     view = previousView ?? (currentRole === 'storyteller' ? 'landing' : 'player-selection');
     previousView = null;
+  }
+
+  function handleLeaveWaiting() {
+    currentSessionId = null;
+    view = 'player-selection';
+    handleSessionStats({ detail: { reset: true } });
   }
 
   function handleProfileUpdated(event) {
@@ -336,6 +347,17 @@ import Choose from './pages/Choose.svelte';
     on:profile={openProfile}
     on:logout={handleLogout}
     on:session-stats={handleSessionStats}
+  />
+{:else if view === 'waiting'}
+  <Waiting
+    sessionId={currentSessionId}
+    user={currentUser}
+    on:profile={openProfile}
+    on:logout={handleLogout}
+    on:leave={handleLeaveWaiting}
+    on:session-stats={handleSessionStats}
+    showSessionIndicator={showSessionIndicator}
+    sessionIndicator={sessionIndicator}
   />
 {:else if view === "session"}
   <!-- Placeholder de la vista de sesión activa -->
