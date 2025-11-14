@@ -1,8 +1,16 @@
 // src/lib/navigation.js
-// ───────────────────────────────────────────────────────────
-// Catálogo centralizado de intenciones de navegación y metadatos
-// asociados para que todos los botones/enlaces compartan copy,
-// estilo y semántica.
+// Shared helpers for view routing and navigation metadata.
+
+export const APP_VIEWS = Object.freeze({
+  LOGIN: 'login',
+  REGISTRATION: 'registration',
+  LANDING: 'landing',
+  PLAYER_SELECTION: 'player-selection',
+  CONFIGURE: 'configure',
+  WAITING: 'waiting',
+  SESSION: 'session',
+  PROFILE: 'profile'
+});
 
 export const NAV_INTENT = {
   BACK_TO_LOGIN: 'nav/back-to-login',
@@ -22,16 +30,10 @@ const NAV_ACTIONS = {
   }
 };
 
-/**
- * Devuelve la definición de una intent (sin traducir).
- */
 export function getNavigationAction(intent) {
   return NAV_ACTIONS[intent] ?? null;
 }
 
-/**
- * Resuelve una lista de intents preservando el orden original.
- */
 export function resolveNavigationActions(intents = []) {
   return intents
     .map((intent) => {
@@ -44,4 +46,39 @@ export function resolveNavigationActions(intents = []) {
         : null;
     })
     .filter(Boolean);
+}
+
+export function resolveInitialView(pathname = '/', searchParams = new URLSearchParams()) {
+  const mode = searchParams.get('mode');
+  const oobCode = searchParams.get('oobCode');
+
+  if (mode === 'verifyEmail' || pathname === '/verify') {
+    return {
+      view: APP_VIEWS.LOGIN,
+      pendingVerificationCode: oobCode,
+      shouldProcessVerification: true
+    };
+  }
+
+  if (pathname === '/registration') {
+    return {
+      view: APP_VIEWS.REGISTRATION,
+      pendingVerificationCode: null,
+      shouldProcessVerification: false
+    };
+  }
+
+  if (pathname === '/login') {
+    return {
+      view: APP_VIEWS.LOGIN,
+      pendingVerificationCode: null,
+      shouldProcessVerification: false
+    };
+  }
+
+  return {
+    view: APP_VIEWS.LOGIN,
+    pendingVerificationCode: null,
+    shouldProcessVerification: false
+  };
 }

@@ -11,19 +11,20 @@
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
   import BackgroundLayer from './components/common/BackgroundLayer.svelte';
-import Dashboard from "./pages/Dashboard.svelte";
-import Login from './pages/Login.svelte';
-import Registration from './pages/Registration.svelte';
-import Choose from './pages/Choose.svelte';
-import Profile from './pages/Profile.svelte';
-import Configure from './pages/Configure.svelte';
-import Waiting from './pages/Waiting.svelte';
+  import Dashboard from './pages/Dashboard.svelte';
+  import Login from './pages/Login.svelte';
+  import Registration from './pages/Registration.svelte';
+  import Choose from './pages/Choose.svelte';
+  import Profile from './pages/Profile.svelte';
+  import Configure from './pages/Configure.svelte';
+  import Waiting from './pages/Waiting.svelte';
   import { t } from './lib/i18n.js';
   import { fetchCurrentUserProfile, signOutUser, confirmEmailVerification } from './lib/auth.js';
   import { auth } from './lib/firebase.js';
   import { onAuthStateChanged } from 'firebase/auth';
+  import { APP_VIEWS, resolveInitialView } from './lib/navigation.js';
 
-  let view = "login"; // login, registration, verify-email, landing, player-selection, configure, waiting, session, profile
+  let view = APP_VIEWS.LOGIN;
   let currentSessionId = null;
   let currentRole = null;
   let currentUser = null;
@@ -32,50 +33,47 @@ import Waiting from './pages/Waiting.svelte';
   let pendingVerificationCode = null;
   let shouldProcessVerification = false;
   const SESSION_INDICATOR_STATES = new Set(['shared', 'waiting', 'in_progress', 'paused']);
-  const SESSION_INDICATOR_EXCLUDED_VIEWS = new Set(['login', 'registration', 'landing', 'player-selection']);
+  const SESSION_INDICATOR_EXCLUDED_VIEWS = new Set([
+    APP_VIEWS.LOGIN,
+    APP_VIEWS.REGISTRATION,
+    APP_VIEWS.LANDING,
+    APP_VIEWS.PLAYER_SELECTION
+  ]);
   let sessionIndicator = null;
   let sessionIndicatorStatus = null;
   let sessionIndicatorEnabled = false;
 
   if (typeof window !== 'undefined') {
-    const initialPath = window.location.pathname;
-    const params = new URLSearchParams(window.location.search);
-    const mode = params.get('mode');
-    if (mode === 'verifyEmail' || initialPath === '/verify') {
-      pendingVerificationCode = params.get('oobCode');
-      shouldProcessVerification = true;
-      view = 'login';
-    } else if (initialPath === '/registration') {
-      view = 'registration';
-    } else if (initialPath === '/login') {
-      view = 'login';
-    }
+    const initial = resolveInitialView(
+      window.location.pathname,
+      new URLSearchParams(window.location.search)
+    );
+    view = initial.view;
+    pendingVerificationCode = initial.pendingVerificationCode;
+    shouldProcessVerification = initial.shouldProcessVerification;
   }
 
   function goConfigure(sessionId) {
     currentSessionId = sessionId;
-    view = "configure";
+    view = APP_VIEWS.CONFIGURE;
   }
 
   function goSession(sessionId) {
     currentSessionId = sessionId;
-    view = "session";
+    view = APP_VIEWS.SESSION;
   }
   async function handleLoginSuccess(payload) {
     const detail = payload && payload.detail !== undefined ? payload.detail : payload;
     currentRole = detail?.role ?? null;
     currentSessionId = null;
+
+    view = currentRole === 'storyteller' ? APP_VIEWS.LANDING : APP_VIEWS.PLAYER_SELECTION;
+
     try {
       currentUser = await fetchCurrentUserProfile();
     } catch (error) {
       console.error('Unable to load user profile', error);
       currentUser = null;
-    }
-
-    if (currentRole === 'storyteller') {
-      view = 'landing';
-    } else {
-      view = 'player-selection';
     }
   }
 
@@ -140,7 +138,7 @@ import Waiting from './pages/Waiting.svelte';
       url.hash = '';
       window.history.replaceState({}, '', url);
     }
-    view = 'login';
+    view = APP_VIEWS.LOGIN;
   }
 
   function goRegistration() {
@@ -151,7 +149,7 @@ import Waiting from './pages/Waiting.svelte';
       url.hash = '';
       window.history.replaceState({}, '', url);
     }
-    view = 'registration';
+    view = APP_VIEWS.REGISTRATION;
   }
 
   function handleRegistered(event) {
@@ -164,7 +162,7 @@ import Waiting from './pages/Waiting.svelte';
     if (detail?.sessionId) {
       currentSessionId = detail.sessionId;
       const explicitTarget = detail?.target;
-      const inferredTarget = currentRole === 'player' ? 'waiting' : 'session';
+      const inferredTarget = currentRole === 'player' ? APP_VIEWS.WAITING : APP_VIEWS.SESSION;
       const nextView = explicitTarget || inferredTarget;
       view = nextView;
     }
@@ -176,10 +174,10 @@ import Waiting from './pages/Waiting.svelte';
 
   function openProfile() {
     if (!currentUser) return;
-    if (view !== 'profile') {
+    if (view !== APP_VIEWS.PROFILE) {
       previousView = view;
     }
-    view = 'profile';
+    view = APP_VIEWS.PROFILE;
   }
 
   async function handleLogout() {
@@ -200,13 +198,13 @@ import Waiting from './pages/Waiting.svelte';
   }
 
   function handleProfileClose() {
-    view = previousView ?? (currentRole === 'storyteller' ? 'landing' : 'player-selection');
+    view = previousView ?? (currentRole === 'storyteller' ? APP_VIEWS.LANDING : APP_VIEWS.PLAYER_SELECTION);
     previousView = null;
   }
 
   function handleLeaveWaiting() {
     currentSessionId = null;
-    view = 'player-selection';
+    view = APP_VIEWS.PLAYER_SELECTION;
     handleSessionStats({ detail: { reset: true } });
   }
 
@@ -277,8 +275,8 @@ import Waiting from './pages/Waiting.svelte';
         currentRole = null;
         currentSessionId = null;
         previousView = null;
-        if (view !== 'login' && view !== 'registration') {
-          view = 'login';
+        if (view !== APP_VIEWS.LOGIN && view !== APP_VIEWS.REGISTRATION) {
+          view = APP_VIEWS.LOGIN;
         }
       }
     });
@@ -300,10 +298,8 @@ import Waiting from './pages/Waiting.svelte';
      CONTENIDO PRINCIPAL SEGÚN LA VISTA ACTUAL
      Solo se muestra una sección a la vez.
      ───────────────────────────────────────────────────────────── -->
-{#if view === "login"}
+{#if view === APP_VIEWS.LOGIN}
   <Login
-    onLoginSuccess={handleLoginSuccess}
-    onLoginForgot={handleLoginForgot}
     on:loginSuccess={handleLoginSuccess}
     on:loginForgot={handleLoginForgot}
     on:navigate-registration={goRegistration}
@@ -312,14 +308,14 @@ import Waiting from './pages/Waiting.svelte';
     showSessionIndicator={showSessionIndicator}
     sessionIndicator={sessionIndicator}
   />
-{:else if view === 'registration'}
+{:else if view === APP_VIEWS.REGISTRATION}
   <Registration
     on:registered={handleRegistered}
     on:navigate-login={goLogin}
     showSessionIndicator={showSessionIndicator}
     sessionIndicator={sessionIndicator}
   />
-{:else if view === 'player-selection'}
+{:else if view === APP_VIEWS.PLAYER_SELECTION}
   <Choose
     user={currentUser}
     on:connect={handlePlayerConnect}
@@ -329,14 +325,14 @@ import Waiting from './pages/Waiting.svelte';
     showSessionIndicator={showSessionIndicator}
     sessionIndicator={sessionIndicator}
   />
-{:else if view === "configure"}
+{:else if view === APP_VIEWS.CONFIGURE}
   <Configure
     sessionId={currentSessionId}
     user={currentUser}
     showSessionIndicator={showSessionIndicator}
     sessionIndicator={sessionIndicator}
     on:back={() => {
-      view = 'landing';
+      view = APP_VIEWS.LANDING;
     }}
     on:start={(event) => {
       const targetId = event?.detail?.sessionId ?? currentSessionId;
@@ -348,7 +344,7 @@ import Waiting from './pages/Waiting.svelte';
     on:logout={handleLogout}
     on:session-stats={handleSessionStats}
   />
-{:else if view === 'waiting'}
+{:else if view === APP_VIEWS.WAITING}
   <Waiting
     sessionId={currentSessionId}
     user={currentUser}
@@ -359,7 +355,7 @@ import Waiting from './pages/Waiting.svelte';
     showSessionIndicator={showSessionIndicator}
     sessionIndicator={sessionIndicator}
   />
-{:else if view === "session"}
+{:else if view === APP_VIEWS.SESSION}
   <!-- Placeholder de la vista de sesión activa -->
   <div class="page">
     <div class="card">
@@ -368,7 +364,7 @@ import Waiting from './pages/Waiting.svelte';
       <!-- Aquí se montará la interfaz de partida -->
     </div>
   </div>
-{:else if view === "landing"}
+{:else if view === APP_VIEWS.LANDING}
   <Dashboard
     user={currentUser}
     onCreate={goConfigure}
@@ -378,7 +374,7 @@ import Waiting from './pages/Waiting.svelte';
     showSessionIndicator={showSessionIndicator}
     sessionIndicator={sessionIndicator}
   />
-{:else if view === 'profile'}
+{:else if view === APP_VIEWS.PROFILE}
   <Profile
     user={currentUser}
     on:updated={handleProfileUpdated}

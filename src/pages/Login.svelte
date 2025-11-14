@@ -9,9 +9,8 @@
   import Button from '../components/ui/Button.svelte';
   import InputField from '../components/ui/InputField.svelte';
   import AlertPopup from '../components/ui/AlertPopup.svelte';
-
-  export let onLoginSuccess = null;
-  export let onLoginForgot = null;
+  import RoleSelector from '../lib/components/auth/RoleSelector.svelte';
+  import { isValidEmail } from '../lib/utils/validators.js';
   export let verificationNotice = null;
   export let showSessionIndicator = false;
   export let sessionIndicator = null;
@@ -32,8 +31,6 @@
   function goRegistration() {
     dispatch('navigate-registration');
   }
-
-  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   const resetFeedback = () => {
     feedback = '';
@@ -71,7 +68,7 @@
       openAlert(msg);
       return;
     }
-    if (!emailPattern.test(trimmedEmail)) {
+    if (!isValidEmail(trimmedEmail)) {
       const msg = $t('login.form.errors.invalid_email');
       feedback = msg;
       feedbackKind = 'error';
@@ -90,9 +87,6 @@
     try {
       await loginWithEmail(trimmedEmail, password);
       const detail = { email: trimmedEmail, role };
-      if (typeof onLoginSuccess === 'function') {
-        onLoginSuccess(detail);
-      }
       dispatch('loginSuccess', detail);
       password = '';
     } catch (error) {
@@ -130,7 +124,7 @@
       openAlert(msg);
       return;
     }
-    if (!emailPattern.test(trimmedEmail)) {
+    if (!isValidEmail(trimmedEmail)) {
       const msg = $t('login.form.errors.invalid_email');
       feedback = msg;
       feedbackKind = 'error';
@@ -146,9 +140,6 @@
       feedbackKind = 'info';
       openAlert(successMsg, 'info');
       const detail = { email: trimmedEmail };
-      if (typeof onLoginForgot === 'function') {
-        onLoginForgot(detail);
-      }
       dispatch('loginForgot', detail);
     } catch (error) {
       console.error('Password reset error', error);
@@ -174,7 +165,7 @@
   $: registerLink = $t('login.form.register_link');
   $: submitDisplay = loginPending ? `${submitLabel}…` : submitLabel;
   $: forgotDisplay = forgotPending ? `${forgotLabel}…` : forgotLabel;
-  $: emailInvalid = feedbackKind === 'error' && (!email.trim() || !emailPattern.test(email.trim()));
+  $: emailInvalid = feedbackKind === 'error' && (!email.trim() || !isValidEmail(email));
   $: messageRole = feedbackKind === 'error' ? 'alert' : 'status';
 </script>
 
@@ -231,29 +222,13 @@
             </p>
           {/if}
 
-          <fieldset class="field">
-            <legend class="label">{roleLabel}</legend>
-            <div class="role-options">
-              <label class="role-option">
-                <input
-                  type="radio"
-                  name="role"
-                  value="storyteller"
-                  bind:group={role}
-                />
-                <span class="role-chip">{storytellerLabel}</span>
-              </label>
-              <label class="role-option">
-                <input
-                  type="radio"
-                  name="role"
-                  value="player"
-                  bind:group={role}
-                />
-                <span class="role-chip">{playerLabel}</span>
-              </label>
-            </div>
-          </fieldset>
+          <RoleSelector
+            label={roleLabel}
+            storytellerLabel={storytellerLabel}
+            playerLabel={playerLabel}
+            selected={role}
+            on:change={(event) => (role = event.detail)}
+          />
 
           <div class="form-actions cluster">
             <Button variant="primary" type="submit" loading={loginPending} disabled={loginPending}>
@@ -307,67 +282,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
-  }
-
-  fieldset.field {
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    border-radius: 12px;
-    padding: 1rem;
-    text-align: center;
-    display: grid;
-    gap: 0.75rem;
-  }
-
-  fieldset.field legend {
-    padding: 0 0.5rem;
-  }
-
-  .role-options {
-    display: flex;
-    justify-content: center;
-    gap: 1.25rem;
-    flex-wrap: wrap;
-  }
-
-  .role-option {
-    position: relative;
-    display: inline-flex;
-  }
-
-  .role-option input {
-    position: absolute;
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .role-chip {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 140px;
-    padding: 0.65rem 1.25rem;
-    border-radius: var(--radius-pill);
-    border: 1px solid var(--glass-border);
-    background: var(--glass-fill);
-    color: var(--color-white-muted);
-    font-size: 0.95rem;
-    font-weight: 600;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease,
-      box-shadow 0.2s ease;
-  }
-
-  .role-option input:checked + .role-chip {
-    background: rgba(255, 232, 140, 0.16);
-    border-color: var(--color-gold-info);
-    color: var(--color-white-contrast);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
-  }
-
-  .role-option input:focus-visible + .role-chip {
-    outline: 2px solid rgba(255, 232, 140, 0.65);
-    outline-offset: 2px;
   }
 
   .register-hint {

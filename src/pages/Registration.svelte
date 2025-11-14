@@ -19,6 +19,7 @@
   import NavActions from '../components/ui/NavActions.svelte';
   import AlertPopup from '../components/ui/AlertPopup.svelte';
   import { NAV_INTENT } from '../lib/navigation.js';
+  import { isValidEmail, PASSWORD_RULES, meetsPasswordRequirements } from '../lib/utils/validators.js';
 
   const dispatch = createEventDispatcher();
 
@@ -52,29 +53,9 @@
   $: confirmPasswordPlaceholder = $t('registration.confirm_password_placeholder');
   $: defaultAlertTitle = $t('registration.alert_title');
 
-  const passwordRules = {
-    minLength: 10,
-    uppercase: /[A-Z]/,
-    lowercase: /[a-z]/,
-    number: /[0-9]/,
-    symbol: /[^A-Za-z0-9]/
-  };
-
-  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
   function resetFeedback() {
     info = '';
     error = '';
-  }
-
-  function meetsPasswordRequirements(value = '') {
-    return (
-      value.length >= passwordRules.minLength &&
-      passwordRules.uppercase.test(value) &&
-      passwordRules.lowercase.test(value) &&
-      passwordRules.number.test(value) &&
-      passwordRules.symbol.test(value)
-    );
   }
 
   function openAvatarModal() {
@@ -165,7 +146,7 @@
       return;
     }
 
-    if (!emailPattern.test(normalizedEmail)) {
+    if (!isValidEmail(normalizedEmail)) {
       error = $t('registration.errors.invalid_email');
       openAlert(error);
       return;
@@ -308,7 +289,7 @@
           bind:value={password}
           required={true}
           autocomplete="new-password"
-          minlength={passwordRules.minLength}
+          minlength={PASSWORD_RULES.minLength}
           placeholder={passwordPlaceholder}
           hint={$t('registration.password_requirements')}
         />
@@ -321,7 +302,7 @@
           bind:value={confirmPassword}
           required={true}
           autocomplete="new-password"
-          minlength={passwordRules.minLength}
+          minlength={PASSWORD_RULES.minLength}
           placeholder={confirmPasswordPlaceholder}
         />
 
