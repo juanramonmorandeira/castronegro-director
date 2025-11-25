@@ -9,17 +9,24 @@
   gap: 0.35rem;
   padding: 0 var(--space-4);
   height: var(--btn-height);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-md);
   border: 1px solid transparent;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  font-size: 0.95rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease,
+    color 0.15s ease, border-color 0.15s ease;
 }
 
 .btn:disabled,
 .btn[aria-disabled='true'] {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(217, 179, 108, 0.35), 0 6px 14px rgba(0, 0, 0, 0.25);
 }
 
 .btn--primary,
@@ -29,15 +36,28 @@
     var(--color-green-cta--primary),
     var(--color-green-cta-primary)
   );
-  border-color: rgba(53, 99, 53, 0.8);
+  border-color: rgba(54, 122, 55, 0.8);
   color: var(--color-green-text);
+}
+
+.btn--primary:hover:not(:disabled),
+.btn.primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #377c37, #2f6a31);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+  transform: translateY(-1px);
 }
 
 .btn--secondary,
 .btn.secondary {
-  background: var(--glass-hover);
-  border-color: var(--glass-border-strong);
-  color: var(--color-text-primary);
+  background: transparent;
+  border-color: var(--color-gold-brand);
+  color: var(--color-gold-brand);
+}
+
+.btn--secondary:hover:not(:disabled),
+.btn.secondary:hover:not(:disabled) {
+  background: rgba(217, 179, 108, 0.1);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
 }
 
 .btn.start {
@@ -46,20 +66,28 @@
     var(--color-green-cta--primary),
     var(--color-green-cta-primary)
   );
-  border-color: rgba(53, 99, 53, 0.85);
+  border-color: rgba(54, 122, 55, 0.85);
   color: var(--color-green-text);
 }
 
 .btn--ghost {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.06);
   border-color: var(--glass-border-strong);
-  color: var(--color-text-secondary);
+  color: var(--color-text-primary);
+}
+
+.btn--ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .btn--danger {
   background: var(--color-rose-500);
   border-color: rgba(0, 0, 0, 0.2);
   color: var(--color-white-contrast);
+}
+
+.btn--danger:hover:not(:disabled) {
+  background: #aa4f42;
 }
 
 .btn--danger,
@@ -84,16 +112,22 @@
 }
 
 .input-field {
-  background: var(--glass-fill);
-  border: 1px solid var(--glass-border-strong);
-  border-radius: var(--radius-md);
-  padding: 0.65rem 0.85rem;
+  background: var(--surface-input);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 0.9rem;
   color: var(--color-text-primary);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.input-field::placeholder {
+  color: var(--color-text-muted);
 }
 
 .input-field:focus-visible {
-  outline: 2px solid rgba(244, 212, 124, 0.7);
-  outline-offset: 2px;
+  outline: none;
+  border-color: var(--color-gold-brand);
+  box-shadow: 0 0 0 2px rgba(217, 179, 108, 0.35);
 }
 
 .form-field {
@@ -139,10 +173,15 @@
 }
 
 .badge {
-  padding: 0.25rem 0.5rem;
-  border-radius: var(--radius-pill);
+  height: 26px;
+  padding: 0 12px;
+  border-radius: 0.75rem;
   font-weight: 600;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
   color: var(--color-text-invert);
 }
 
@@ -175,8 +214,9 @@
 .table-panel {
   overflow: hidden;
   border-radius: var(--radius-lg);
-  border: 1px solid var(--glass-hover);
+  border: 1px solid var(--surface-border);
   background: var(--surface-muted);
+  box-shadow: var(--shadow-soft);
 }
 
 .app-table {
@@ -189,9 +229,9 @@
   font-weight: 600;
   font-size: 0.9rem;
   padding: 0.75rem 1rem;
-  background: var(--glass-hover);
-  border-bottom: 1px solid var(--glass-border);
-  color: var(--color-white-muted);
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--surface-border);
+  color: var(--color-text-secondary);
 }
 
 .app-table tbody tr {

@@ -1,0 +1,232 @@
+{
+  "bailiff": {
+    "category": "professions",
+    "building": {
+      "en": "The Bailiff's house",
+      "es": "El Ayuntamiento",
+      "hu": ""
+    },
+    "names": {
+      "en": "Bailiff",
+      "es": "Alcalde",
+      "hu": ""
+    },
+    "descriptions": {
+      "en": "Permanent power. Representing law and order, they're the one who has the task of granting vacant houses to the Vagabonds. • When a building is freed due to the death of its occupant, the Bailiff can choose a Vagabond. This Vagabond changes places to sit behind the building, hands the moderator in their bindle token, and gets the building's corresponding token back from the moderator if it had previously been used. • If, come morning, multiple buildings are free, this selection will take place for each building. Remark: the elimination of the Bailiff will cause the end of the housing distribution. The Bailiff's house will remain empty. The Vagabonds thus have a vested interest in protecting the Bailiff if they hope to claim a building!",
+      "es": "Poder permanente. Es la máxima autoridad de Castronegro, y sobre él recae la responsabilidad de asignar a los Vagabundos aquellos edificios que estén abandonados. • En el momento en el que un edificio queda libre, el Alcalde puede alojar en él a un Vagabundo de su elección. Dicho jugador cambiará de lugar situándose detrás del edificio y consiguiendo la ficha de su nuevo alojamiento, en caso de que ésta hubiera sido utilizada anteriormente. • Si una mañana aparecen varios edificios sin dueño, se procederá igual con cada una de las edificaciones. Nota: en caso de que el Alcalde muera, la reasignación de edificios cesará. El Ayuntamiento quedará vacío. ¡Los Vagabundos deberán intentar por todos los medios mantener al Alcalde vivo si quieren llegar a ocupar un edificio!",
+      "hu": ""
+    },
+    "short_description": {
+      "en": "",
+      "es": "",
+      "hu": ""
+    }
+  },
+  "barber": {
+    "category": "professions",
+    "building": {
+      "en": "The Barber shop",
+      "es": "La Barbería",
+      "hu": ""
+    },
+    "names": {
+      "en": "Barber",
+      "es": "Barbero",
+      "hu": ""
+    },
+    "descriptions": {
+      "en": "Unique power: after its use, the Barber loses their power and hands in their token. This famous Barber is an artist with a razor. They sometimes take advantage of their tool to mete out justice by themselves, in order to eliminate somebody whom they feel is suspect… • At any point during the day, the Barber can eliminate a player of their choice. • If the player eliminated is a a Werewolf of any kind, the Barber is congratulated by the village and survives their action. Otherwise the Barber is immediately eliminated. • The Barber cannot eliminate a Vagabond.",
+      "es": "Poder único: después de su uso, el Barbero pierde su poder y entrega su ficha. Este Barbero es un auténtico artista del rasurado. Pero además, a veces, se sirve de su afilado instrumento de trabajo para tomarse la justicia por su mano, degollando a aquel que considera sospechoso… • En cualquier momento del día, el Barbero puede eliminar al jugador que él elija. • Si el jugador degollado resulta ser un Hombre Lobo*, el Barbero será felicitado por el resto de los habitantes y su crimen será perdonado. En caso contrario, el Barbero será también ejecutado. • El Barbero no puede eliminar a un Vagabundo. Poder permanente. * Hombre Lobo Común, Lobo Feroz, Infecto Padre de todos los Lobos, u Hombre Lobo Albino.",
+      "hu": ""
+    },
+    "short_description": {
+      "en": "",
+      "es": "",
+      "hu": ""
+    }
+  },
+  "barkeep": {
+    "category": "professions",
+    "building": {
+      "en": "The Pub",
+      "es": "La Taberna",
+      "hu": ""
+    },
+    "names": {
+      "en": "Barkeep",
+      "es": "Tabernero",
+      "hu": ""
+    },
+    "descriptions": {
+      "en": "Power: permanent and conditional. To keep business booming, the Barkeep takes care not to run afoul of any of their patrons, especially as their tavern is open all hours... • The Werewolves can’t devour them, and the villagers can’t vote against them. • If they vote against someone who is then eliminated (even if they’re saved before actually being eliminated), the Barkeep loses their immunity and their token. • Tradition demands that they always vote alone before anyone else (unless they've lost their immunity), which can complicate their task. Remark: Of course, all special powers work against them (their immunity is quite relative).",
+      "es": "Poder permanente (condicional). Para prosperar en su negocio, el Tabernero no hace ascos a ningún tipo de clientela. Es por esto que su taberna está abierta desde el alba hasta altas horas de la noche… • Los Hombres Lobo no pueden devorarle y los aldeanos no pueden votar en su contra. • Si él ha votado en contra de una persona que ha sido eliminada (aunque ésta sea posteriormente indultada) pierde su inmunidad y su ficha. La costumbre es que el Tabernero vote antes que el resto de los jugadores (salvo si ha perdido la inmunidad), ya que esto puede complicarle un poco más las cosas a la hora de mantenerse a salvo. Nota: por supuesto, todos los poderes especiales pueden aplicarse contra él (su inmunidad es sólo relativa).",
+      "hu": ""
+    },
+    "short_description": {
+      "en": "",
+      "es": "",
+      "hu": ""
+    }
+  },
+  "baker": {
+    "category": "professions",
+    "building": {
+      "en": "The Bakery",
+      "es": "La Panadería",
+      "hu": ""
+    },
+    "names": {
+      "en": "Baker",
+      "es": "Panadero",
+      "hu": ""
+    },
+    "descriptions": {
+      "en": "Permanent power. In Castronegro, the Baker is always the first one up to get their daily ovenful ready. Sometimes, right before dawn, they could swear that they can see Werewolves slinking home after their misdeeds… Each night, the Baker opens their eyes immediately after the moderator finishes saying '…the Werewolves go to sleep!' After a few seconds, the moderator asks the Baker to go back to sleep.",
+      "es": "Poder permanente. En Castronegro, él es el primero que se levanta para preparar el pan. De hecho, madruga tanto que a veces, entre las brumas que preceden al alba, cree haber visto las siluetas de los terribles Hombres Lobo regresando a su cubil… Cada noche, inmediatamente después de que el narrador haya dicho la frase 'los Hombres Lobo vuelven a dormirse', el Panadero abre los ojos. Después de unos instantes, el narrador le manda dormir de nuevo.",
+      "hu": ""
+    },
+    "short_description": {
+      "en": "",
+      "es": "",
+      "hu": ""
+    }
+  },
+  "bonesetter": {
+    "category": "professions",
+    "building": {
+      "en": "The Hovel",
+      "es": "La Choza",
+      "hu": ""
+    },
+    "names": {
+      "en": "Bonesetter",
+      "es": "Boticario",
+      "hu": ""
+    },
+    "descriptions": {
+      "en": "Unique power: after its use, the Bonesetter loses their power and hands in their token. In a few seconds, the talented Bonesetter can give you back your youth as well as all of its benefits. At any point during the day, the Bonesetter can make a player regain the unique power for a building that they've already used. The moderator hands the building's corresponding token back to the selected player (for a new unique use).",
+      "es": "Poder único: después de su uso, el Boticario pierde su poder y entrega su ficha. En unos pocos segundos, el talento de nuestro Boticario puede devolverte la juventud junto con todos sus beneficios. En cualquier momento del día, el Boticario puede restablecer a un jugador su poder único si éste ya ha sido utilizado. El narrador devolverá al jugador la ficha que restablece el poder ligado a su edificio (para un nuevo uso solamente).",
+      "hu": ""
+    },
+    "short_description": {
+      "en": "",
+      "es": "",
+      "hu": ""
+    }
+  },
+  "confessor": {
+    "category": "professions",
+    "building": {
+      "en": "The Church",
+      "es": "La Iglesia",
+      "hu": ""
+    },
+    "names": {
+      "en": "Confessor",
+      "es": "Confesor",
+      "hu": ""
+    },
+    "descriptions": {
+      "en": "Unique power: after its use, the Confessor loses their power and hands in their token. This character can hear the confession of a player of their choice, whose secrets they'd like to learn. • At any point during the day, even after the choice of the eliminated player via vote, the Confessor chooses a player who must immediately and secretly show them their character card.",
+      "es": "Poder único: después de su uso, el Confesor pierde su poder y entrega su ficha. Este personaje puede escuchar en confesión a otro jugador a su elección, descubriendo así sus secretos. • En cualquier momento del día, incluso después de la votación de la aldea, el Confesor designa a un jugador, que deberá mostrarle su carta de personaje inmediatamente.",
+      "hu": ""
+    },
+    "short_description": {
+      "en": "",
+      "es": "",
+      "hu": ""
+    }
+  },
+  "farmer": {
+    "category": "professions",
+    "building": {
+      "en": "The Farm",
+      "es": "La Granja",
+      "hu": ""
+    },
+    "names": {
+      "en": "Farmer",
+      "es": "Granjero",
+      "hu": ""
+    },
+    "descriptions": {
+      "en": "Permanent power. In this idyllic countryside, Farmers are numerous and their influence remains very important. • Starting on the second turn, the Farmers debate and vote amongst themselves to choose one of them to be the Sheriff. • If they are eliminated, the Sheriff must choose their successor only from among the remaining living Farmers. • If the last Farmer is eliminated, there will no longer be a Sheriff.",
+      "es": "Poder permanente. En nuestra querida comunidad, los granjeros son numerosos, e importante su poder. • Desde el segundo turno, los Granjeros votan para designar de entre ellos al Alguacil. • Si éste es eliminado, él mismo designa a su sucesor de entre los Granjeros supervivientes. • Si mueren todos los Granjeros, no hay Alguacil.",
+      "hu": ""
+    },
+    "short_description": {
+      "en": "",
+      "es": "",
+      "hu": ""
+    }
+  },
+  "lord": {
+    "category": "professions",
+    "building": {
+      "en": "The Manor",
+      "es": "El Palacete",
+      "hu": ""
+    },
+    "names": {
+      "en": "Lord",
+      "es": "Noble",
+      "hu": ""
+    },
+    "descriptions": {
+      "en": "Unique power: after its use, the Lord loses their power and hands in their token. Sure, the Lord's arrogant attitude might be annoying at times, but they're the only one who, due to an old and still-lingering tradition, can pardon a convict. The Lord thus remains a respected personality with whom it's better to stay on good terms. • After any vote, the Lord can, when requested by the player in question, pardon a villager chosen by the village’s vote. The player will thus not get eliminated and will not reveal their character card. No replacement vote will be held; the game will proceed to night. • A selfish Lord can, of course, pardon themselves...",
+      "es": "Poder único: después de su uso, el Noble pierde su poder y entrega su ficha. Es bien cierto que a veces su actitud altiva puede llegar a ser enervante, pero es el único que por una antigua tradición mantenida hasta nuestros días, puede indultar a un condenado. El Noble es, a pesar de todo, un personaje respetado con el que es mejor estar a buenas. • Después de cualquier votación, el Noble puede, a petición de la futura víctima, indultar a un aldeano que haya sido elegido por el resto de la aldea. El jugador no será eliminado y no mostrará su carta de personaje. • Un Noble egoísta puede guardarse el derecho a indultar para sí mismo...",
+      "hu": ""
+    },
+    "short_description": {
+      "en": "",
+      "es": "",
+      "hu": ""
+    }
+  },
+  "schoolmarm": {
+    "category": "professions",
+    "building": {
+      "en": "The School",
+      "es": "La Escuela",
+      "hu": ""
+    },
+    "names": {
+      "en": "Schoolmarm",
+      "es": "Institutriz",
+      "hu": ""
+    },
+    "descriptions": {
+      "en": "Permanent power. In the village, the Schoolmarm often reprimands those who point fingers. • Each day, right before the votes, the Schoolmarm can forbid up to two players from voting that turn. The Schoolmarm may never vote. • The Schoolmarm and the players kept from voting can still take part in debates. • The Schoolmarm can stop the Barkeep from voting. • The Schoolmarm cannot stop a Vagabond from voting.",
+      "es": "Poder permanente. En la aldea, la Institutriz amonesta a aquellos que, faltos de educación, señalan con el dedo. • Cada día, justo antes de las votaciones, la Institutriz puede prohibir el voto a 2 jugadores durante ese turno. Ella no vota nunca. • Tanto la Institutriz como los jugadores amonestados pueden participar en el debate. • La Institutriz puede prohibir el voto al Tabernero. • La Institutriz nunca puede amonestar a un Vagabundo.",
+      "hu": ""
+    },
+    "short_description": {
+      "en": "",
+      "es": "",
+      "hu": ""
+    }
+  },
+  "vagabond": {
+    "category": "professions",
+    "building": {
+      "en": "no buildings",
+      "es": "ningún edificio",
+      "hu": ""
+    },
+    "names": {
+      "en": "Vagabond",
+      "es": "Vagabundo",
+      "hu": ""
+    },
+    "descriptions": {
+      "en": "Permanent power. Though they don't yet have any property of their own, these brave people wish to join the village and fulfil their potential. • The powers of the Schoolmarm, the Barber, the Scandalmonger, and the Pyromaniac have no effect on the Vagabonds. • When a building is freed due to the death of its occupant, the Bailiff chooses a Vagabond. The chosen player changes places to sit behind the building, hands in their bindle oken and gets the building's corresponding token back from the moderator if it had previously been used. • A Vagabond can refuse to occupy a house offered by the Bailiff.",
+      "es": "Poder permanente. Estos valientes trotamundos sin hogar, aspiran a formar parte de la aldea, para dar rienda suelta a su deseo de ser útiles a la comunidad. • Los poderes de la Institutriz, el Barbero, el Cuervo y el Pirómano no tienen efecto sobre los Vagabundos. • En el momento en que un edificio quede disponible, el Alcalde puede realojar en él a un Vagabundo a su elección. El jugador cambiará de sitio, ocupando el edificio en cuestión, entregará su ficha de Hatillo, y recuperará la ficha del edificio, si ésta hubiera sido utilizada con anterioridad. • Un Vagabundo puede rechazar ocupar un edificio propuesto por el Alcalde.",
+      "hu": ""
+    },
+    "short_description": {
+      "en": "",
+      "es": "",
+      "hu": ""
+    }
+  }
+}

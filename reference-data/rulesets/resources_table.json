@@ -5,11 +5,11 @@
         "thief"
       ],
       "villagers": [
-        "common",
         "cupid",
         "girl",
         "hunter",
         "seer",
+        "villager",
         "witch"
       ],
       "werewolves": [
@@ -28,15 +28,15 @@
         "thief"
       ],
       "villagers": [
-        "common",
         "cupid",
+        "defender",
         "elder",
-        "fool",
         "girl",
         "hunter",
-        "protector",
+        "idiot",
         "scapegoat",
         "seer",
+        "villager",
         "witch"
       ],
       "werewolves": [
@@ -54,29 +54,29 @@
   "characters": {
     "roles": {
       "ambiguous": [
+        "actor",
         "child",
-        "comedian",
         "hound",
         "servant",
         "thief"
       ],
       "villagers": [
         "brothers",
-        "common",
         "cupid",
+        "defender",
         "elder",
-        "fool",
         "fox",
         "girl",
         "gypsy",
         "hunter",
+        "idiot",
         "judge",
         "knight",
-        "protector",
         "scapegoat",
         "seer",
         "sisters",
         "tamer",
+        "trusted",
         "villager",
         "witch"
       ],
@@ -87,8 +87,8 @@
       ],
       "loners": [
         "angel",
+        "manipulator",
         "piper",
-        "sectarian",
         "white"
       ]
     },
@@ -101,31 +101,31 @@
   "village": {
     "roles": {
       "ambiguous": [
+        "actor",
         "child",
-        "comedian",
         "hound",
         "servant",
         "thief"
       ],
       "villagers": [
         "brothers",
-        "common",
         "cupid",
+        "defender",
         "elder",
-        "fool",
         "fox",
         "girl",
         "gypsy",
         "hunter",
+        "idiot",
         "judge",
         "knight",
-        "protector",
         "pyromaniac",
-        "raven",
+        "scandalmonger",
         "scapegoat",
         "seer",
         "sisters",
         "tamer",
+        "trusted",
         "villager",
         "witch"
       ],
@@ -136,56 +136,56 @@
       ],
       "loners": [
         "angel",
+        "manipulator",
         "piper",
-        "sectarian",
         "white"
       ]
     },
     "professions": [
-      "apothecary",
+      "bailiff",
       "baker",
       "barber",
+      "barkeep",
+      "bonesetter",
       "confessor",
       "farmer",
-      "governess",
-      "innkeeper",
-      "mayor",
-      "noble",
+      "lord",
+      "schoolmarm",
       "vagabond"
     ],
     "honorary_positions": [
-      "guard",
+      "crier",
       "sheriff"
     ]
   },
   "thepact": {
     "roles": {
       "ambiguous": [
+        "actor",
         "child",
-        "comedian",
         "hound",
         "servant",
         "thief"
       ],
       "villagers": [
         "brothers",
-        "common",
         "cupid",
+        "defender",
         "elder",
-        "fool",
         "fox",
         "girl",
         "gypsy",
         "hunter",
+        "idiot",
         "judge",
         "knight",
-        "protector",
         "pyromaniac",
-        "raven",
+        "scandalmonger",
         "scapegoat",
         "seer",
         "sisters",
         "tamer",
+        "trusted",
         "villager",
         "witch"
       ],
@@ -196,25 +196,25 @@
       ],
       "loners": [
         "angel",
+        "manipulator",
         "piper",
-        "sectarian",
         "white"
       ]
     },
     "professions": [
-      "apothecary",
+      "bailiff",
       "baker",
       "barber",
+      "barkeep",
+      "bonesetter",
       "confessor",
       "farmer",
-      "governess",
-      "innkeeper",
-      "mayor",
-      "noble",
+      "lord",
+      "schoolmarm",
       "vagabond"
     ],
     "honorary_positions": [
-      "guard",
+      "crier",
       "sheriff"
     ]
   }

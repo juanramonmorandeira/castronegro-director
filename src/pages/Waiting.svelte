@@ -276,17 +276,16 @@ import {
     {:else}
       <section class="waiting-card card-glass">
         <header class="waiting-header">
-          <p class="waiting-kicker">{$t('player.waiting.heading')}</p>
-          <h2 class="waiting-title">{$t('player.waiting.title')}</h2>
+          <h2 class="waiting-title panel-title">{$t('player.waiting.title')}</h2>
           <p class="waiting-subtitle">{$t('player.waiting.subtitle')}</p>
         </header>
 
         <div class="waiting-stack">
           <article class="waiting-section description">
-            <div class="section-head description-head">
-              <p class="section-kicker">{$t('player.waiting.description_title')}</p>
-              <h3>{sessionTitle || $t('common.untitled_session')}</h3>
-            </div>
+            <header class="section-head description-head">
+              <h3>{$t('player.waiting.description_title')}</h3>
+            </header>
+            <p class="session-name">{sessionTitle || $t('common.untitled_session')}</p>
             <p>
               {sessionDescription
                 ? sessionDescription
@@ -297,9 +296,6 @@ import {
           <article class="waiting-section roles full-width">
             <header class="section-head">
               <h3>{$t('player.waiting.roles_title')}</h3>
-              <span class="stat-pill">
-                {$t('player.waiting.roles_count', { count: roles.length })}
-              </span>
             </header>
             {#if roles.length === 0}
               <p class="empty">{$t('player.waiting.roles_empty')}</p>
@@ -309,7 +305,7 @@ import {
                   <li class="role-card">
                     <img src={role.image} alt={role.label} />
                     <div>
-                      <strong>{role.label} ×{role.count}</strong>
+                      <strong>{role.label}</strong>
                       <p>{role.summary || role.description}</p>
                     </div>
                   </li>
@@ -324,8 +320,8 @@ import {
               <div class="chat-log">
                 {#if chatMessages.length === 0}
                   <p class="empty">{$t('player.waiting.chat_empty')}</p>
-                {:else}
-                  {#each chatMessages as message}
+              {:else}
+                {#each chatMessages as message}
                     <div class={`chat-message ${message.isSelf ? 'chat-message--self' : ''}`}>
                       <div class="chat-meta">
                         <span class="chat-alias">{message.alias}</span>
@@ -362,10 +358,24 @@ import {
                   {#each players as participant}
                     <li>
                       <span>{participant.alias}</span>
-                      <span class={`status-pill status-pill--${participant.ready ? 'ready' : 'connected'}`}>
-                        {participant.ready
-                          ? $t('player.waiting.ready_ready')
-                          : $t('player.waiting.ready_connected')}
+                      <span
+                        class={`status-dot status-dot--${participant.ready ? 'ready' : 'connected'}`}
+                        title={
+                          participant.ready
+                            ? $t('player.waiting.ready_ready')
+                            : $t('player.waiting.ready_connected')
+                        }
+                        aria-label={
+                          participant.ready
+                            ? $t('player.waiting.ready_ready')
+                            : $t('player.waiting.ready_connected')
+                        }
+                      >
+                        <span class="sr-only">
+                          {participant.ready
+                            ? $t('player.waiting.ready_ready')
+                            : $t('player.waiting.ready_connected')}
+                        </span>
                       </span>
                     </li>
                   {/each}
@@ -432,13 +442,11 @@ import {
 
   .waiting-title {
     margin: 0;
-    font-size: clamp(1.5rem, 3vw, 2rem);
-    color: var(--color-gold-highlight);
   }
 
   .waiting-subtitle {
-    margin: 0.25rem 0 0;
-    color: var(--color-white-muted);
+    margin: 0.15rem 0 0;
+    color: var(--color-text-secondary);
   }
 
   .waiting-stack {
@@ -447,30 +455,43 @@ import {
     gap: var(--space-3);
   }
 
-  .waiting-grid {
-    display: grid;
-    grid-template-columns: 3fr 1fr;
-    gap: var(--space-3);
-    align-items: start;
+.waiting-grid {
+  display: grid;
+  grid-template-columns: 3fr 1fr;
+  gap: var(--space-3);
+  align-items: stretch;
+}
+
+.waiting-section {
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  background: var(--glass-fill);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+  .waiting-section h3,
+  .section-title {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
   }
 
-  .waiting-section {
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-lg);
-    padding: var(--space-4);
-    background: var(--glass-fill);
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
+.waiting-section.chat,
+.waiting-section.players {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 0.75rem;
+  min-height: 260px;
+  height: 100%;
+}
 
-  .waiting-section.chat {
-    min-height: 260px;
-  }
-
-  .waiting-section.players {
-    height: 100%;
-  }
+.waiting-section.players {
+  height: 100%;
+}
 
   .waiting-section.full-width,
   .waiting-section.description {
@@ -484,14 +505,27 @@ import {
     gap: 0.5rem;
   }
 
+  .description-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
+  }
+
+  .session-name {
+    margin: 0;
+    font-weight: 700;
+    color: var(--color-text-primary);
+  }
+
   .waiting-kicker,
   .section-kicker {
     margin: 0;
     text-transform: uppercase;
-    font-size: 0.75rem;
+    font-size: 0.78rem;
     letter-spacing: 0.08em;
-    color: var(--color-gold-highlight);
+    color: var(--color-text-muted);
   }
+
 
   .stat-pill {
     padding: 0.15rem 0.65rem;
@@ -500,16 +534,36 @@ import {
     font-size: 0.85rem;
   }
 
-  .players-list,
+.players-list,
+.roles-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 220px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+  /* Scrollbar más sutil en la lista de roles */
+  .roles-list::-webkit-scrollbar {
+    width: 8px;
+  }
+  .roles-list::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .roles-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+  }
+  .roles-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
   .roles-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    max-height: 220px;
-    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
   }
 
   .players-list li {
@@ -528,11 +582,13 @@ import {
     color: var(--color-white-muted);
   }
 
-  .players-actions {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-  }
+.players-actions {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.5rem;
+}
 
   .roles-list .role-card {
     display: flex;
@@ -573,6 +629,7 @@ import {
     flex-direction: column;
     gap: 0.75rem;
     background: var(--glass-fill);
+    min-height: 0;
   }
 
   .chat-message {
@@ -594,9 +651,10 @@ import {
   }
 
   .chat-form {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr auto;
     gap: 0.5rem;
-    flex-wrap: wrap;
+    align-items: center;
   }
 
   .chat-input {
@@ -612,14 +670,21 @@ import {
     letter-spacing: 0.04em;
   }
 
-  .status-pill--ready {
-    background: var(--state-in-progress);
-    color: var(--color-text-invert);
+  .status-dot {
+    width: 14px;
+    height: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
   }
 
-  .status-pill--connected {
+  .status-dot--ready {
+    background: var(--state-in-progress);
+  }
+
+  .status-dot--connected {
     background: var(--state-waiting);
-    color: var(--color-text-invert);
   }
 
   .waiting-error {
@@ -645,11 +710,14 @@ import {
     }
 
     .players-actions {
-      flex-direction: column;
+      flex-direction: row;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      flex-wrap: wrap;
     }
 
     .chat-form {
-      flex-direction: column;
+      grid-template-columns: 1fr;
     }
 
     .chat-input {

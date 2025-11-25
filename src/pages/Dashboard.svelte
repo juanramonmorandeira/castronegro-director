@@ -3,11 +3,21 @@
   import Topbar from '../components/common/Topbar.svelte';
   import CurrentSessionCard from '../components/storytellers/CurrentSessionCard.svelte';
   import HistoryCard from '../components/storytellers/HistoryCard.svelte';
-import Footbar from '../components/common/Footbar.svelte';
-import AlertPopup from '../components/ui/AlertPopup.svelte';
-import { getCurrentSession, listSessionHistory, createSessionDraft, deleteSessionIfCreator } from '../lib/db.js';
-import { normalizeStatus } from '../lib/utils.js';
-import { locale as localeStore, t } from '../lib/i18n.js';
+  import Footbar from '../components/common/Footbar.svelte';
+  import AlertPopup from '../components/ui/AlertPopup.svelte';
+  import { locale as localeStore, t } from '../lib/i18n.js';
+  import {
+    APP_VIEWS
+  } from '../lib/navigation.js';
+  import {
+    resolveViewTarget,
+    getViewerContext,
+    sessionOwnedByViewer,
+    normalizeHistoryDoc,
+    loadDashboardData,
+    createDraftSession,
+    removeHistorySession
+  } from '../lib/services/dashboardService.js';
 
   const dispatch = createEventDispatcher();
 
@@ -21,8 +31,6 @@ import { locale as localeStore, t } from '../lib/i18n.js';
     hu: '/flags/hu_HU.png'
   };
   const DEFAULT_FLAG_SRC = FLAG_BY_LOCALE.en;
-  const CONFIG_STATUSES = new Set(['draft', 'shared', 'waiting']);
-  const LIVE_STATUSES = new Set(['in_progress', 'paused']);
 
   export let onCreate = () => {};
   export let onViewCurrent = () => {};
@@ -50,90 +58,13 @@ let alertTitle = '';
   $: deleteForbiddenMessage = $t('landing.history.delete_forbidden');
   $: deleteFailedMessage = $t('landing.history.delete_failed');
   $: viewForbiddenMessage = $t('landing.current.view_forbidden');
-  $: viewerContext = getViewerContext();
-  $: currentStatus = current ? normalizeStatus(current.status) : null;
+  $: viewerContext = getViewerContext(user);
+  $: currentStatus = current ? current.status : null;
   $: currentViewTarget = resolveViewTarget(currentStatus);
   $: currentOwnedByViewer = sessionOwnedByViewer(current, viewerContext);
   $: canOpenCurrent = !!(current && currentViewTarget && currentOwnedByViewer);
 
-  function getViewerContext() {
-    if (!user) return null;
-    const uid = user.uid ?? user.auth_uid ?? null;
-    const email = user.email ? String(user.email).toLowerCase() : null;
-    if (!uid && !email) return null;
-    return { uid, email };
-  }
-
-  function sessionOwnedByViewer(session, viewer = getViewerContext()) {
-    if (!session || !viewer) return false;
-    const rawOwner = session.created_by;
-    let ownerUid = null;
-    let ownerEmail = null;
-    if (typeof rawOwner === 'string') {
-      ownerUid = rawOwner;
-    } else if (rawOwner && typeof rawOwner === 'object') {
-      ownerUid = rawOwner.uid ?? null;
-      ownerEmail = rawOwner.email ? String(rawOwner.email).toLowerCase() : null;
-    }
-    const viewerUid = viewer.uid ?? null;
-    const viewerEmail = viewer.email ?? null;
-    if (ownerUid && viewerUid) return ownerUid === viewerUid;
-    if (ownerEmail && viewerEmail) return ownerEmail === viewerEmail;
-    return false;
-  }
-
-  function resolveViewTarget(status) {
-    if (!status) return null;
-    if (CONFIG_STATUSES.has(status)) return 'configure';
-    if (LIVE_STATUSES.has(status)) return 'session';
-    return null;
-  }
-
-  const normalizeHistoryDoc = (doc) => {
-    const winners = Array.isArray(doc.winners)
-      ? doc.winners
-      : doc.winners
-      ? [doc.winners]
-      : [];
-
-    const actualPlayers =
-      doc.players && typeof doc.players === 'object'
-        ? Object.keys(doc.players).length
-        : Array.isArray(doc.players)
-          ? doc.players.length
-          : null;
-
-    const creator = doc.created_by;
-    const ownerUid =
-      typeof creator === 'string'
-        ? creator
-        : creator?.uid ?? null;
-    const ownerEmail =
-      typeof creator === 'object'
-        ? (creator?.email ?? '').toLowerCase()
-        : '';
-    const viewerUid = user?.uid ?? user?.auth_uid ?? null;
-    const viewerEmail = (user?.email ?? '').toLowerCase();
-    const canDelete =
-      !!viewerUid && !!ownerUid
-        ? viewerUid === ownerUid
-        : !!ownerEmail && !!viewerEmail
-          ? ownerEmail === viewerEmail
-          : false;
-
-    return {
-      id: doc.id,
-      title: doc.title ?? doc.settings?.name ?? '—',
-      numPlayers: actualPlayers ?? Number(doc.settings?.players_expected ?? 0),
-      winners,
-      date: doc.updated_at ?? doc.created_at ?? doc.date ?? null,
-      status: normalizeStatus(doc.status),
-      createdBy: creator,
-      canDelete
-    };
-  };
-
-  $: historyItems = (historyDocs ?? []).map((doc) => normalizeHistoryDoc(doc));
+  $: historyItems = (historyDocs ?? []).map((doc) => normalizeHistoryDoc(doc, user));
 
 function openAlert(message, variant = 'info', title = null) {
   alertMessage = message;
@@ -149,7 +80,8 @@ function closeAlert() {
 async function loadCurrentSession() {
   loadingCurrent = true;
   try {
-    current = await getCurrentSession();
+    const { current: session } = await loadDashboardData(0);
+    current = session;
   } catch (error) {
     console.error('Error loading current session', error);
     current = null;
@@ -162,7 +94,7 @@ async function loadCurrentSession() {
 async function loadHistory() {
   loadingHistory = true;
   try {
-    const docs = await listSessionHistory(HISTORY_LIMIT);
+    const { historyDocs: docs } = await loadDashboardData(HISTORY_LIMIT);
     historyDocs = docs ?? [];
   } catch (error) {
     console.error('Error loading history', error);
@@ -174,16 +106,28 @@ async function loadHistory() {
 }
 
   async function refreshAll() {
-    await Promise.all([loadCurrentSession(), loadHistory()]);
+    loadingCurrent = true;
+    loadingHistory = true;
+    try {
+      const { current: session, historyDocs: docs } = await loadDashboardData(HISTORY_LIMIT);
+      current = session;
+      historyDocs = docs ?? [];
+    } catch (error) {
+      console.error('Error refreshing dashboard', error);
+      openAlert($t('landing.history.load_failed'), 'error');
+    } finally {
+      loadingCurrent = false;
+      loadingHistory = false;
+    }
   }
 
 async function createAndGo() {
   creating = true;
   try {
-    const viewer = getViewerContext();
-    const session = await createSessionDraft({
+    const viewer = getViewerContext(user);
+    const session = await createDraftSession({
       language: localeKey,
-      creatorUid: viewer?.uid ?? null
+      viewer
     });
     await refreshAll();
     onCreate(session.id);
@@ -229,7 +173,7 @@ async function handleHistoryDelete(event) {
   deletingHistoryId = id;
   let deleted = false;
   try {
-    await deleteSessionIfCreator(id, viewer);
+    await removeHistorySession(id, viewer);
     historyDocs = historyDocs.filter((doc) => doc.id !== id);
     deleted = true;
   } catch (error) {

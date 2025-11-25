@@ -4,7 +4,8 @@
 import roleDefinitions from '../../reference-data/datasets/roles.json' with { type: 'json' };
 
 export const ROLE_CATEGORIES = ['villagers', 'ambiguous', 'loners', 'werewolves'];
-export const DUPLICATE_ROLE_NAMES = new Set(['common', 'villager', 'werewolf']);
+// Roles que admiten múltiples copias (usar slugifyRole)
+export const DUPLICATE_ROLE_NAMES = new Set(['trusted', 'villager', 'werewolf']);
 
 export function slugifyRole(name = '') {
   return String(name ?? '')

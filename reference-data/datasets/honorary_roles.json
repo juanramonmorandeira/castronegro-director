@@ -1,0 +1,38 @@
+{ 
+  "crier": {
+    "category": "honorary",
+    "names": {
+      "en": "The Town Crier",
+      "es": "El Guardia",
+      "hu": ""
+    },
+    "descriptions": {
+      "en": "Every Villager has dreamed of one day wearing that prestigious uniform, of rolling the Town Crier's drum, and announcing the news of the day to the entire hamlet. This is an extra power publicly granted by the Sheriff to another player of their choice. There is no way of combining the responsibilities: the Sheriff cannot choose themselves. Before the game, the moderator chooses a certain number of Event cards (other than the Spiritualism cards) and gives them to the Town Crier as soon as they are appointed. Each morning, starting from the day after their nomination, the moderator asks the Town Crier if they have something to announce. If the answer is affirmative, the Town Crier then reads out loud the event card of their choice, as if it were a public announcement, and its effects are applied. The card is then discarded. At any point, after the announcements of an event and before the village's vote, the Sheriff can revoke the role of Town Crier then name a new one. Moderator advice: If your players are unfamiliar with New Moon, set aside no more than five cards to give to the Town Crier. Be careful: some of these cards are lethal! Clarifications: If a Town Crier is chosen as the new Sheriff, they must pass on their responsibility as Town Crier to another inhabitant. If the Town Crier is eliminated, the Sheriff chooses their successor. The new Town Crier is given any event cards not yet used used by previous Town Criers. If the Sheriff is eliminated, the new Sheriff may immediately choose a new Town Crier or keep the old one.",
+      "es": "Todos los aldeanos han soñado con llevar este prestigioso uniforme algún día, redoblar el tambor de la Guardia y anunciar con voz poderosa los eventos importantes en la aldea entera, como si los hubiera decidido él mismo. Es una autoridad adicional asignada por el Alguacil a un habitante de su elección, de forma pública y representada con una carta adicional. No puede haber una acumulación de cargos; es decir, el Alguacil no puede designarse a sí mismo. Antes de la partida, el narrador elige un número de cartas de evento (excepto cartas de Espiritismo). Éstas serán confiadas al Guardia cuando tome posesión del título. Cada mañana a partir del día siguiente a su nombramiento, el narrador preguntará al Guardia si tiene algo que anunciar. Si es así, leerá en voz alta una de las cartas a su elección como anuncio público. En cualquier momento tras el anuncio de su evento y antes de la votación en la aldea, el Alguacil puede destituir al Guardia y nombrar uno nuevo. Consejo para el narrador: no prepares más de 5 cartas si los jugadores no dominan Luna Nueva. Ten cuidado, algunas cartas son terribles… Notas: si un Guardia es nombrado Alguacil, ha de transmitir su puesto de Guardia a otro jugador. Si el Guardia es eliminado, será el Alguacil quien nombre a su sucesor. Si el Alguacil es eliminado, el nuevo Alguacil puede nombrar a un nuevo Guardia o mantener al mismo.",
+      "hu": ""
+    },
+    "short_description": {
+      "en": "",
+      "es": "Autoridad adicional asignada por el Alguacil a un habitante de su elección. No puede haber una acumulación de cargos. El narrador elige un número de cartas de evento que serán confiadas al Guardia. Cada mañana leerá en voz alta una de las cartas a su elección como anuncio público.",
+      "hu": ""
+    }
+  },
+  "sheriff": {
+    "category": "honorary",
+    "names": {
+      "en": "The Sheriff",
+      "es": "El Alguacil",
+      "hu": ""
+    },
+    "descriptions": {
+      "en": "At the start of the game or a little later, at the moderator's discretion, the players vote to elect a Sheriff. Anyone except the moderator can be a candidate. If elected, the Sheriff cannot refuse the honor, and they take on the responsibility in addition to the role on their character card. From now on, that player's vote counts as two votes. They also cast the deciding vote in case of a tie. If the Sheriff is eliminated, they choose their successor with their dying breath.",
+      "es": "El Alguacil no nace, sino que se hace. Esta carta se entrega a uno de los jugadores además de su carta de personaje. El Alguacil es elegido por votación. No se puede rechazar el cargo de Alguacil. Desde ese momento, el voto de ese jugador en los linchamientos cuenta el doble. Si el jugador muere, designa a su sucesor en su último suspiro.",
+      "hu": ""
+    },
+    "short_description": {
+      "en": "",
+      "es": "El Alguacil es elegido por votación. No se puede rechazar el cargo de Alguacil. Desde ese momento, el voto de ese jugador en los linchamientos cuenta el doble. Si el jugador muere, designa a su sucesor en su último suspiro.",
+      "hu": ""
+    }
+  }
+}

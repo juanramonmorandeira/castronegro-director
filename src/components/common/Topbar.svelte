@@ -237,9 +237,14 @@
     justify-content: space-between;
     z-index: 10;
     pointer-events: none;  /* evita tapar el contenido salvo en la zona derecha */
-    background: linear-gradient(to bottom, rgba(0,0,0,0.35), rgba(0,0,0,0.05) 70%, transparent);
-    -webkit-backdrop-filter: blur(4px);
-    backdrop-filter: blur(4px);
+    background: linear-gradient(
+      to bottom,
+      rgba(8, 12, 18, 0.8),
+      rgba(8, 12, 18, 0.55) 65%,
+      transparent
+    );
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
     padding: 0 clamp(12px, 3vw, 32px);
     box-sizing: border-box;
   }
@@ -261,10 +266,10 @@
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    border: 1px solid var(--glass-border);
+    border: 1px solid var(--surface-border);
     border-radius: 999px;
     padding: 0.2rem 0.4rem;
-    background: rgba(12, 18, 28, 0.7);
+    background: rgba(15, 20, 28, 0.78);
     margin-right: 0.5rem;
   }
 
@@ -274,7 +279,7 @@
     gap: 0.35rem;
     padding: 0.15rem 0.45rem;
     border-radius: 999px;
-    background: rgba(4, 8, 15, 0.75);
+    background: rgba(4, 8, 15, 0.82);
   }
 
   .indicator-label {
@@ -290,11 +295,19 @@
   }
 
   .indicator-pill--connected strong {
-    color: var(--color-gold-info);
+    color: var(--state-waiting);
   }
 
   .indicator-pill--ready strong {
-    color: var(--color-green-accent);
+    color: var(--state-in-progress);
+  }
+
+  .indicator-pill--connected .indicator-label {
+    color: var(--state-waiting);
+  }
+
+  .indicator-pill--ready .indicator-label {
+    color: var(--state-in-progress);
   }
 
   .brand {
@@ -352,9 +365,9 @@
     height: var(--topbar-item-height);
     padding: 0 12px;
     border-radius: 999px;
-    border: 1px solid rgba(255,255,255,0.25);
+    border: 1px solid var(--surface-border);
     background: rgba(255,255,255,0.08);
-    color: var(--color-white-muted);
+    color: var(--color-text-secondary);
     font-size: 0.9rem;
     box-shadow: 0 0 8px rgba(255, 230, 140, 0.2);
     white-space: nowrap;
@@ -370,9 +383,9 @@
     width: var(--topbar-item-height);
     height: var(--topbar-item-height);
     border-radius: 50%;
-    border: 1px solid rgba(255,255,255,0.25);
+    border: 1px solid var(--surface-border);
     background: rgba(255,255,255,0.08);
-    color: var(--color-white-muted);
+    color: var(--color-text-secondary);
     pointer-events: auto;
     min-height: var(--topbar-item-height);
     min-width: var(--topbar-item-height);
@@ -420,9 +433,9 @@
     width: var(--topbar-item-height);
     height: var(--topbar-item-height);
     border-radius: 50%;
-    border: 1px solid rgba(255,255,255,0.25);
+    border: 1px solid var(--surface-border);
     background: rgba(255,255,255,0.08);
-    color: var(--color-white-muted);
+    color: var(--color-text-secondary);
     pointer-events: auto;
     min-height: var(--topbar-item-height);
     min-width: var(--topbar-item-height);

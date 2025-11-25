@@ -12,7 +12,7 @@
   export let override = false;
   export let players = 0;
   export let totalLimit = 0;
-  export let duplicates = ['common', 'villager', 'werewolf'];
+  export let duplicates = ['trusted', 'villager', 'werewolf'];
   export let mix = null;
 
   const dispatch = createEventDispatcher();

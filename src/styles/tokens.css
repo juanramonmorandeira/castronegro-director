@@ -1,38 +1,41 @@
+@import url('https://fonts.googleapis.com/css2?family=Merriweather:wght@400;600;700&family=Source+Sans+3:wght@400;600;700&display=swap');
+
 :root {
   /* Typography */
   --font-display: "Merriweather", "Times New Roman", serif;
-  --font-body: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-body: "Source Sans 3", "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 
   /* Text colors */
-  --color-white-base: #f5f7fb;
+  --color-white-base: #e9ecf1;
   --color-white-contrast: #f5f8fb;
-  --color-white-muted: #f3f5f7;
-  --color-text-primary: var(--color-white-base);
-  --color-text-secondary: rgba(245, 247, 251, 0.72);
-  --color-text-muted: rgba(229, 234, 244, 0.55);
-  --color-text-invert: #05070a;
+  --color-white-muted: #dfe4ec;
+  --color-text-primary: #e6e6ea;
+  --color-text-secondary: #c3c5cc;
+  --color-text-muted: #9aa1aa;
+  --color-text-invert: #0b0f14;
 
   /* Brand palette */
-  --color-gold-brand: #f4d47c;
-  --color-gold-highlight: #ffd27f;
-  --color-gold-info: #ffd27f;
-  --color-gold-hover: #fff0c0;
-  --color-green-cta--primary: #4a8d4a;
-  --color-green-cta-primary: #3a6f3a;
-  --color-green-accent: #d7ffb6;
-  --color-green-text: #f6fff6;
-  --color-error-soft: var(--color-error-soft);
-  --color-error-strong: #ff4f4f;
-  --color-rose-500: #ef4444;
+  --color-gold-brand: #d9b36c;
+  --color-gold-highlight: #e7c37d;
+  --color-gold-info: #d9b36c;
+  --color-gold-hover: #ffe7b0;
+  --color-green-cta--primary: #3f8c3f;
+  --color-green-cta-primary: #367a37;
+  --color-green-accent: #5cab5c;
+  --color-green-text: #f7f7f7;
+  --color-error-soft: #e07b6a;
+  --color-error-strong: #c15b4a;
+  --color-rose-500: #c15b4a;
+  --color-blue-accent: #3a8ac7;
 
   /* Surface system */
-  --surface-2: rgba(10, 16, 24, 0.85);
-  --surface-muted: rgba(8, 12, 18, 0.45);
-  --surface-strong: rgba(0, 0, 0, 0.75);
-  --surface-input: rgba(15, 22, 30, 0.55);
-  --surface-panel: #0b111a;
-  --surface-chip: #0c1624;
-  --surface-border: rgba(255, 255, 255, 0.14);
+  --surface-2: rgba(13, 16, 20, 0.92);
+  --surface-muted: rgba(15, 20, 28, 0.72);
+  --surface-strong: rgba(8, 12, 18, 0.88);
+  --surface-input: rgba(21, 26, 34, 0.85);
+  --surface-panel: #0f141c;
+  --surface-chip: #151a22;
+  --surface-border: #2a313a;
 
   /* State colors */
   --state-draft: #d4d4d8;
@@ -45,9 +48,9 @@
 
   /* Radii */
   --radius-xs: 0.25rem;
-  --radius-sm: 0.5rem;
-  --radius-md: 0.75rem;
-  --radius-lg: 1rem;
+  --radius-sm: 0.625rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.125rem;
   --radius-pill: 999px;
 
   /* Spacing scale */
@@ -60,11 +63,11 @@
   --space-7: 3rem;
 
   /* Shadows */
-  --shadow-soft: 0 15px 35px rgba(0, 0, 0, 0.45);
-  --shadow-hard: 0 25px 60px rgba(0, 0, 0, 0.65);
+  --shadow-soft: 0 18px 45px rgba(0, 0, 0, 0.35);
+  --shadow-hard: 0 25px 60px rgba(0, 0, 0, 0.55);
 
   /* Glass */
-  --glass-bg: rgba(6, 9, 15, 0.78);
+  --glass-bg: rgba(12, 16, 22, 0.82);
   --glass-fill: rgba(255, 255, 255, 0.06);
   --glass-hover: rgba(255, 255, 255, 0.08);
   --glass-border: rgba(255, 255, 255, 0.12);
