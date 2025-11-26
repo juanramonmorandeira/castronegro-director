@@ -2,6 +2,7 @@
   import { createEventDispatcher } from 'svelte';
   import { t } from '../../lib/i18n.js';
   import Modal from '../ui/Modal.svelte';
+  import Button from '../ui/Button.svelte';
 
   export let open = false;
   export let players = [];
@@ -157,24 +158,14 @@
     {/if}
 
     <div class="match-actions">
-      <button
-        class="btn secondary"
-        type="button"
-        on:click={autoAssign}
-        disabled={!hasPlayers || !hasRoles}
-      >
+      <Button variant="ghost" type="button" on:click={autoAssign} disabled={!hasPlayers || !hasRoles}>
         {$t('configure.match_auto')}
-      </button>
+      </Button>
       <div class="spacer"></div>
-      <button class="btn secondary" type="button" on:click={close}>{$t('common.actions.cancel')}</button>
-      <button
-        class="btn primary"
-        type="button"
-        on:click={confirm}
-        disabled={!hasPlayers || !hasRoles}
-      >
+      <Button variant="ghost" type="button" on:click={close}>{$t('common.actions.cancel')}</Button>
+      <Button variant="primary" type="button" on:click={confirm} disabled={!hasPlayers || !hasRoles}>
         {$t('common.actions.save')}
-      </button>
+      </Button>
     </div>
   </div>
 </Modal>

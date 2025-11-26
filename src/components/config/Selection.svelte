@@ -2,6 +2,7 @@
   import { createEventDispatcher } from 'svelte';
   import { t } from '../../lib/i18n.js';
   import Modal from '../ui/Modal.svelte';
+  import Button from '../ui/Button.svelte';
 
   export let open = false;
   export let categories = [];
@@ -306,8 +307,8 @@
   </div>
 
   <svelte:fragment slot="footer">
-    <button class="btn secondary" type="button" on:click={close}>{$t('common.actions.cancel')}</button>
-    <button class="btn primary" type="button" on:click={save}>{$t('common.actions.save')}</button>
+    <Button variant="ghost" type="button" on:click={close}>{$t('common.actions.cancel')}</Button>
+    <Button variant="primary" type="button" on:click={save}>{$t('common.actions.save')}</Button>
   </svelte:fragment>
 </Modal>
 
@@ -484,21 +485,5 @@
     font-weight: 600;
     min-width: 1.5rem;
     text-align: center;
-  }
-  .btn {
-    border: none;
-    border-radius: 999px;
-    padding: 0.6rem 1.4rem;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .btn.primary {
-    background: #1f6b2b;
-    color: var(--color-green-text);
-  }
-  .btn.secondary {
-    background: var(--glass-hover);
-    color: var(--color-white-contrast);
-    border: 1px solid var(--glass-border-strong);
   }
 </style>

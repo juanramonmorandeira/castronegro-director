@@ -307,14 +307,14 @@
         />
 
           <div class="form-actions cluster">
-            <Button variant="primary" type="submit" disabled={loading}>
-              {loading ? '…' : $t('registration.submit')}
-            </Button>
             <NavActions
               intents={[NAV_INTENT.BACK_TO_LOGIN]}
               on:navigate={handleNavIntent}
               className="nav-inline"
             />
+            <Button variant="primary" type="submit" disabled={loading}>
+              {loading ? '…' : $t('registration.submit')}
+            </Button>
           </div>
 
         </form>

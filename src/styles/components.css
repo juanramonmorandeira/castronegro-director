@@ -1,5 +1,6 @@
 :root {
   --btn-height: 2.75rem;
+  --radius-btn: var(--radius-md);
 }
 
 .btn {
@@ -9,7 +10,7 @@
   gap: 0.35rem;
   padding: 0 var(--space-4);
   height: var(--btn-height);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-btn);
   border: 1px solid transparent;
   font-weight: 600;
   cursor: pointer;

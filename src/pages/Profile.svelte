@@ -507,14 +507,14 @@ function closeAlert() {
       </div>
 
       <div class="actions">
-        <Button variant="primary" type="submit" disabled={loading}>
-          {loading ? '…' : $t('profile.save')}
-        </Button>
         <NavActions
           intents={[NAV_INTENT.BACK_TO_DASHBOARD]}
           on:navigate={handleNavIntent}
           className="nav-inline"
         />
+        <Button variant="primary" type="submit" disabled={loading}>
+          {loading ? '…' : $t('profile.save')}
+        </Button>
       </div>
 
       </div>
@@ -539,7 +539,6 @@ function closeAlert() {
   open={avatarModalOpen}
   title={$t('profile.avatar_modal_title')}
   ariaLabel={$t('profile.avatar_modal_help')}
-  showClose={false}
   closeOnBackdrop={false}
   on:close={closeAvatarModal}
 >

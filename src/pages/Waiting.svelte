@@ -391,7 +391,7 @@ import {
                   {readyPending ? '…' : readyLabel}
                 </button>
                 <button
-                  class="btn secondary"
+                  class="btn btn--ghost leave-room"
                   type="button"
                   on:click={handleLeaveRoom}
                   disabled={leavePending}
@@ -460,6 +460,7 @@ import {
   grid-template-columns: 3fr 1fr;
   gap: var(--space-3);
   align-items: stretch;
+  grid-auto-rows: 1fr;
 }
 
 .waiting-section {
@@ -470,6 +471,7 @@ import {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  height: 100%;
 }
 
   .waiting-section h3,
@@ -486,10 +488,6 @@ import {
   grid-template-rows: auto 1fr auto;
   gap: 0.75rem;
   min-height: 260px;
-  height: 100%;
-}
-
-.waiting-section.players {
   height: 100%;
 }
 
@@ -588,6 +586,15 @@ import {
   justify-content: flex-end;
   align-items: center;
   gap: 0.5rem;
+}
+
+.leave-room {
+  border-color: var(--color-error-strong);
+  color: var(--color-error-strong);
+}
+
+.leave-room:hover:not(:disabled) {
+  background: rgba(193, 91, 74, 0.12);
 }
 
   .roles-list .role-card {

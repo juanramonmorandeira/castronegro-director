@@ -48,7 +48,7 @@
       {creating ? creatingLabel : createLabel}
     </Button>
     <Button
-      variant="secondary"
+      variant="ghost"
       on:click={onViewClick}
       disabled={!session || !canView}
       aria-label={viewLabel}

@@ -20,13 +20,13 @@ export const NAV_INTENT = {
 const NAV_ACTIONS = {
   [NAV_INTENT.BACK_TO_LOGIN]: {
     labelKey: 'navigation.back_to_login',
-    variant: 'link',
-    size: 'sm'
+    variant: 'ghost',
+    size: 'md'
   },
   [NAV_INTENT.BACK_TO_DASHBOARD]: {
     labelKey: 'navigation.back_to_dashboard',
-    variant: 'link',
-    size: 'sm'
+    variant: 'ghost',
+    size: 'md'
   }
 };
 

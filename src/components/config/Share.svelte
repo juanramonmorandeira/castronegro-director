@@ -3,6 +3,7 @@
   import QRCode from 'qrcode';
   import { t } from '../../lib/i18n.js';
   import Modal from '../ui/Modal.svelte';
+  import Button from '../ui/Button.svelte';
 
   export let open = false;
   export let gameId = '';
@@ -96,12 +97,12 @@
   </div>
 
   <svelte:fragment slot="footer">
-    <button class="btn secondary" type="button" on:click={cancelShare}>
+    <Button variant="ghost" type="button" on:click={cancelShare}>
       {$t('common.actions.cancel')}
-    </button>
-    <button class="btn primary" type="button" on:click={closeShare}>
+    </Button>
+    <Button variant="primary" type="button" on:click={closeShare}>
       {$t('common.actions.save')}
-    </button>
+    </Button>
   </svelte:fragment>
 </Modal>
 
@@ -143,20 +144,6 @@
   .qr-placeholder.error {
     color: var(--color-error-soft);
     border-color: var(--color-error-soft);
-  }
-  .btn.primary {
-    background: #1f6b2b;
-  color: var(--color-green-text);
-    border-radius: 999px;
-    padding: 0.6rem 1.4rem;
-    border: none;
-  }
-  .btn.secondary {
-    background: var(--glass-hover);
-    color: var(--color-white-contrast);
-    border: 1px solid var(--glass-border-strong);
-    border-radius: 999px;
-    padding: 0.6rem 1.4rem;
   }
 
   @keyframes pulse {

@@ -942,20 +942,7 @@
   }
 
   .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 999px;
-    padding: 0.65rem 1.6rem;
-    font-weight: 600;
-    border: none;
-    cursor: pointer;
-  }
-
-  .btn.primary {
-    background: rgba(74, 141, 74, 0.85);
-    color: var(--color-green-text);
-    border: 1px solid rgba(74, 141, 74, 0.95);
+    /* Usa el estilo global de botones */
   }
 
   .save-btn {
