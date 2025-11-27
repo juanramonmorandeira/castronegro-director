@@ -266,8 +266,8 @@
   .history-card {
     display: grid;
     gap: clamp(1rem, 3vw, 1.75rem);
-    width: min(100%, 960px);
-    max-width: 960px;
+    width: min(var(--page-width-main), 96vw);
+    max-width: var(--page-width-main);
     margin: 0 auto;
     padding: clamp(1.25rem, 3vw, 2rem);
     box-sizing: border-box;

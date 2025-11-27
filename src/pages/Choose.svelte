@@ -202,7 +202,7 @@
 
 <style>
   .choose-panel {
-    width: min(640px, 96vw);
+    width: min(var(--page-width-narrow), 96vw);
     margin: 0 auto;
     gap: var(--space-4);
   }
@@ -229,7 +229,7 @@
 
   @media (max-width: 640px) {
     .choose-panel {
-      width: min(96vw, 520px);
+      width: min(96vw, var(--page-width-narrow));
     }
     .sessions-surface {
       max-height: none;

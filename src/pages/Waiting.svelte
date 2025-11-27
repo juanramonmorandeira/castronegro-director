@@ -425,7 +425,7 @@ import {
   }
 
   .waiting-card {
-    width: min(660px, 94vw);
+    width: min(var(--page-width-main), 95vw);
     margin: 0 auto;
     display: flex;
     flex-direction: column;

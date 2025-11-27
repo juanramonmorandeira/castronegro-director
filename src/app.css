@@ -3,6 +3,12 @@
 @import './styles/utilities.css';
 @import './styles/components.css';
 
+:root {
+  --page-width-narrow: 640px;
+  --page-width-main: 1080px;
+  --page-width-wide: var(--page-width-main);
+}
+
 /* Scrollbar sutil y consistente en toda la app */
 * {
   scrollbar-width: thin;
@@ -91,7 +97,7 @@
 }
 
 .auth-layout {
-  width: min(520px, 92vw);
+  width: min(var(--page-width-narrow), 92vw);
   margin: 0 auto;
 }
 

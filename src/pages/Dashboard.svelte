@@ -267,7 +267,7 @@ async function handleHistoryDelete(event) {
   }
 
   .dashboard > * {
-    width: min(100%, 960px);
+    width: min(var(--page-width-main), 96vw);
   }
 
   .history-anchor {

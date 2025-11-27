@@ -737,7 +737,7 @@
   }
 
   .config-card {
-    width: min(840px, 92vw);
+    width: min(var(--page-width-main), 95vw);
     padding: clamp(1.75rem, 4vw, 2.5rem);
     display: grid;
     gap: 2rem;
