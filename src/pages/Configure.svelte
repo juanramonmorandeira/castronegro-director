@@ -260,7 +260,7 @@
   $: selectionAssistEnabled =
     form.storyteller === 'AI' ||
     (form.storyteller === 'human-AI' && Array.isArray(form.assistTasks) && form.assistTasks.includes('Roles_Selection'));
-  $: distributionTokens = buildDistributionTokens(selectedRoles);
+  $: distributionTokens = buildDistributionTokens(selectedRoles, playerAssignments, playerList);
   $: expectedPlayersCount = clampPlayers(form.players_expected);
   $: allPlayersReady =
     expectedPlayersCount > 0 &&

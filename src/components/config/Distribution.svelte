@@ -250,4 +250,7 @@
 .role-token.category-werewolves .token-circle {
   border-color: var(--color-error-strong);
 }
+.role-token.category-special .token-circle {
+  border-color: var(--color-gold-info);
+}
 </style>

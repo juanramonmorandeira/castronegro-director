@@ -5,7 +5,7 @@ import roleDefinitions from '../../reference-data/datasets/roles.json' with { ty
 
 export const ROLE_CATEGORIES = ['villagers', 'ambiguous', 'loners', 'werewolves'];
 // Roles que admiten múltiples copias (usar slugifyRole)
-export const DUPLICATE_ROLE_NAMES = new Set(['trusted', 'villager', 'werewolf']);
+export const DUPLICATE_ROLE_NAMES = new Set(['trusted', 'villager', 'werewolf', 'brothers', 'sisters']);
 
 export function slugifyRole(name = '') {
   return String(name ?? '')
@@ -44,7 +44,38 @@ export function roleImageSrc(category, role) {
   return `/roles/${category}/${file}.png`;
 }
 
-export function buildDistributionTokens(selection) {
+export function buildDistributionTokens(selection, assignments = {}, players = []) {
+  const assignmentBuckets = {};
+  const seenPlayers = new Set();
+  const cupidHeartPath = '/tokens/cupido-hearts.png';
+  const defenderShieldPath = '/tokens/defender-shield.png';
+  const piperFlutePath = '/tokens/piper-flute.png';
+  const witchHealPath = '/tokens/witch-heal.png';
+  const witchVenomPath = '/tokens/witch-venom.png';
+
+  const pushAssignment = (slug, label) => {
+    if (!slug || !label) return;
+    if (!assignmentBuckets[slug]) assignmentBuckets[slug] = [];
+    assignmentBuckets[slug].push(label);
+  };
+
+  // Keep assignment ordering stable by following the current player list.
+  (players ?? []).forEach((player) => {
+    const data = assignments?.[player.id];
+    if (!data) return;
+    seenPlayers.add(player.id);
+    const slug = data.slug ?? slugifyRole(data.role);
+    pushAssignment(slug, player.alias || player.name || player.id);
+  });
+
+  // Include any leftover assignments not present in the player list.
+  Object.entries(assignments ?? {}).forEach(([playerId, data]) => {
+    if (seenPlayers.has(playerId) || !data) return;
+    const slug = data.slug ?? slugifyRole(data.role);
+    const label = data.alias || data.player || playerId;
+    pushAssignment(slug, label);
+  });
+
   const tokens = [];
   ROLE_CATEGORIES.forEach((category) => {
     const roles = selection?.[category] ?? {};
@@ -56,11 +87,102 @@ export function buildDistributionTokens(selection) {
           role: roleName,
           category,
           image: roleImageSrc(category, roleName),
-          player: null
+          player: (assignmentBuckets[slug] ?? []).shift() ?? null
         });
       }
     });
   });
+
+  // Cupid special tokens: two heart markers per Cupid selected.
+  const cupidCount =
+    Number(
+      selection?.villagers?.cupid ??
+        selection?.villagers?.Cupid ??
+        selection?.villagers?.['The Cupid'] ??
+        0
+    ) || 0;
+  if (cupidCount > 0) {
+    const heartTokens = cupidCount * 2;
+    for (let index = 0; index < heartTokens; index += 1) {
+      tokens.push({
+        id: `special-cupid-heart-${index}`,
+        role: 'Cupid Hearts',
+        category: 'special',
+        image: cupidHeartPath,
+        player: null
+      });
+    }
+  }
+
+  // Piper special tokens: one charm per player (excluding the Piper).
+  const piperCount =
+    Number(
+      selection?.villagers?.piper ??
+        selection?.villagers?.Piper ??
+        selection?.villagers?.['The Piper'] ??
+        0
+    ) || 0;
+  const playerCount = Array.isArray(players) ? players.length : 0;
+  const piperCharms = Math.max(0, playerCount - piperCount);
+  for (let index = 0; index < piperCharms; index += 1) {
+    tokens.push({
+      id: `special-piper-charm-${index}`,
+      role: 'Piper Charm',
+      category: 'special',
+      image: piperFlutePath,
+      player: null
+    });
+  }
+
+  // Defender special token: one shield per Defender selected.
+  const defenderCount =
+    Number(
+      selection?.villagers?.defender ??
+        selection?.villagers?.Defender ??
+        selection?.villagers?.['The Defender'] ??
+        0
+    ) || 0;
+  if (defenderCount > 0) {
+    for (let index = 0; index < defenderCount; index += 1) {
+      tokens.push({
+        id: `special-defender-shield-${index}`,
+        role: 'Defender Shield',
+        category: 'special',
+        image: defenderShieldPath,
+        player: null
+      });
+    }
+  }
+
+  // Witch special tokens: one heal and one venom potion per Witch selected.
+  const witchCount =
+    Number(
+      selection?.villagers?.witch ??
+        selection?.villagers?.Witch ??
+        selection?.villagers?.['The Witch'] ??
+        0
+    ) || 0;
+  if (witchCount > 0) {
+    for (let index = 0; index < witchCount; index += 1) {
+      tokens.push(
+        {
+          id: `special-witch-heal-${index}`,
+          role: 'Witch Heal',
+          category: 'special',
+          image: witchHealPath,
+          player: null
+        },
+        {
+          id: `special-witch-venom-${index}`,
+          role: 'Witch Venom',
+          category: 'special',
+          image: witchVenomPath,
+          player: null
+        }
+      );
+    }
+  }
+
   return tokens;
 }
 

@@ -13,7 +13,7 @@
   export let override = false;
   export let players = 0;
   export let totalLimit = 0;
-  export let duplicates = ['trusted', 'villager', 'werewolf'];
+  export let duplicates = ['trusted', 'villager', 'werewolf', 'brothers', 'sisters'];
   export let mix = null;
 
   const dispatch = createEventDispatcher();
@@ -59,6 +59,67 @@
   const categoryResourceLimit = (category) => {
     const value = resourceLimits?.[category];
     return typeof value === 'number' ? value : null;
+  };
+
+  const normalizedPlayersCount = () => {
+    const playersValue = Number(players) || 0;
+    const totalValue = Number(totalLimit) || 0;
+    return playersValue || totalValue || 0;
+  };
+
+  const allowedCountsForRole = (role) => {
+    const slug = slugify(role);
+    const playerCount = normalizedPlayersCount();
+    if (slug === 'brothers') {
+      if (playerCount >= 13) return [3, 6, 9];
+      if (playerCount >= 10) return [3, 6];
+      if (playerCount >= 5) return [3];
+      return [3];
+    }
+    if (slug === 'sisters') {
+      if (playerCount >= 13) return [2, 4, 6, 8];
+      if (playerCount >= 10) return [2, 4, 6];
+      if (playerCount >= 5) return [2, 4];
+      return [2];
+    }
+    return null;
+  };
+
+  const alignToAllowedCount = (role, candidate) => {
+    const allowed = allowedCountsForRole(role);
+    if (!allowed || !allowed.length) return candidate;
+    const pool = [0, ...allowed].sort((a, b) => a - b);
+    const capped = pool.filter((value) => value <= candidate);
+    if (!capped.length) return 0;
+    return capped[capped.length - 1];
+  };
+
+  const nextAllowedCount = (role, current, delta) => {
+    const allowed = allowedCountsForRole(role);
+    if (!allowed || !allowed.length) {
+      return Math.max(0, current + delta);
+    }
+    const pool = [0, ...allowed].sort((a, b) => a - b);
+    let index = pool.indexOf(current);
+    if (index === -1) {
+      index = pool.findIndex((value) => value > current);
+      if (index === -1) {
+        index = pool.length - 1;
+      } else if (index > 0) {
+        index -= 1;
+      }
+    }
+    const nextIndex = Math.min(
+      pool.length - 1,
+      Math.max(0, index + (delta > 0 ? 1 : -1))
+    );
+    return pool[nextIndex];
+  };
+
+  const initialAllowedCount = (role) => {
+    const allowed = allowedCountsForRole(role);
+    if (!allowed || !allowed.length) return 1;
+    return allowed[0];
   };
 
   let draftOverride = override;
@@ -150,17 +211,15 @@
       const available = Math.max(0, totalCap - othersTotal);
       candidate = Math.min(candidate, available);
     }
-    return candidate;
+    return alignToAllowedCount(role, candidate);
   };
 
-  const canIncrement = (category, increment = 1) => {
-    const totalCap = playersLimit();
-    if (totalCap && totalSelected() + increment > totalCap) {
-      return false;
-    }
-    const limit = categoryLimit(category);
-    if (limit == null) return true;
-    return categoryTotal(category) + increment <= limit;
+  const canIncrement = (category, role = null, increment = 1) => {
+    const current = role ? draftSelections[category]?.[role] ?? 0 : categoryTotal(category);
+    const desired = role ? nextAllowedCount(role, current, increment) : current + increment;
+    if (desired <= current) return false;
+    const final = clampCount(category, role, desired);
+    return final > current;
   };
 
   function setRoleCount(category, role, count) {
@@ -188,16 +247,17 @@
       setRoleCount(category, role, 0);
       return;
     }
-    if (!canIncrement(category)) return;
-    const final = clampCount(category, role, 1);
+    if (!canIncrement(category, role)) return;
+    const base = initialAllowedCount(role);
+    const final = clampCount(category, role, base);
     if (final <= 0) return;
     setRoleCount(category, role, final);
   }
 
   function adjustRole(category, role, delta) {
     const current = draftSelections[category]?.[role] ?? 0;
-    const desired = Math.max(0, current + delta);
-    if (delta > 0 && !canIncrement(category, delta)) {
+    const desired = nextAllowedCount(role, current, delta);
+    if (delta > 0 && !canIncrement(category, role, delta)) {
       return;
     }
     const finalCount = clampCount(category, role, desired);
@@ -280,7 +340,7 @@
                         <button
                           type="button"
                           on:click={() => adjustRole(category, role, 1)}
-                          disabled={!canIncrement(category)}
+                          disabled={!canIncrement(category, role)}
                         >
                           +
                         </button>
@@ -292,7 +352,7 @@
                     type="button"
                     class={`role-card ${draftSelections[category]?.[role] ? 'selected' : ''}`}
                     on:click={() => toggleRole(category, role)}
-                    disabled={!draftSelections[category]?.[role] && !canIncrement(category)}
+                    disabled={!draftSelections[category]?.[role] && !canIncrement(category, role)}
                   >
                     <img src={`/roles/${category}/${slugify(role)}.png`} alt={role} />
                     <span class="card-info">{role}</span>
