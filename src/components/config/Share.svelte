@@ -7,6 +7,7 @@
 
   export let open = false;
   export let gameId = '';
+  export let savedMessage = '';
 
   const dispatch = createEventDispatcher();
 
@@ -27,8 +28,8 @@
     dispatch('cancel');
   }
 
-  function closeShare() {
-    dispatch('close');
+  function saveShare() {
+    dispatch('save');
   }
 
   function resetQr() {
@@ -78,7 +79,7 @@
   open={open}
   title={$t('configure.share_title')}
   description={shareHint}
-  size="sm"
+  size="md"
   on:close={cancelShare}
 >
   <div class="modal-body">
@@ -96,11 +97,12 @@
     </div>
   </div>
 
+  {#if savedMessage}
+    <p class="action-hint" aria-live="polite">{savedMessage}</p>
+  {/if}
+
   <svelte:fragment slot="footer">
-    <Button variant="ghost" type="button" on:click={cancelShare}>
-      {$t('common.actions.cancel')}
-    </Button>
-    <Button variant="primary" type="button" on:click={closeShare}>
+    <Button variant="primary" type="button" on:click={saveShare}>
       {$t('common.actions.save')}
     </Button>
   </svelte:fragment>

@@ -51,58 +51,92 @@
   $: footbarLabel = $t('landing.footbar.aria_label');
 </script>
 
-<footer class="footbar" aria-label={footbarLabel}>
-  <time class="clock" datetime={now.toISOString()}>{fmt(now)}</time>
-  <span class="signature">{signatureText}</span>
+<footer class="footbar app-bar app-bar--bottom" aria-label={footbarLabel}>
+  <div class="footbar__content">
+    <div class="footbar__actions">
+      <slot name="actions" />
+    </div>
+    <div class="footbar__meta">
+      <time class="clock" datetime={now.toISOString()}>{fmt(now)}</time>
+      <span class="signature">{signatureText}</span>
+    </div>
+  </div>
 </footer>
 
 <style>
 .footbar {
   position: fixed;
-  right: 10px;
-  bottom: 8px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  z-index: 8;
+  pointer-events: none;
+  padding: var(--bar-padding);
+  box-sizing: border-box;
+  background: var(--bar-bg-bottom);
+  backdrop-filter: blur(var(--bar-blur));
+  -webkit-backdrop-filter: blur(var(--bar-blur));
+  min-height: var(--bar-height);
+}
+
+.footbar__content {
   display: flex;
-  flex-direction: column;     /* 👉 firma debajo de la hora */
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bar-gap);
+  min-height: var(--bar-height);
+  pointer-events: auto;
+}
+
+.footbar__actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.footbar__meta {
+  display: flex;
+  flex-direction: column;
   align-items: flex-end;
   gap: 0.2rem;
-  padding: 5px 8px;
-  border-radius: 8px;
-  z-index: 6;
-  background: rgba(0,0,0,0.35);
-  border: 1px solid rgba(255,255,255,0.1);
-  backdrop-filter: blur(2px);
-  font-size: 12.5px;
-  line-height: 1;
-  pointer-events: none;
 }
 
 .clock {
-  color: var(--color-white-contrast);             /* 👉 hora en blanco */
-  font-weight: 400;
+  color: var(--color-white-muted);
+  font-weight: 500;
+  font-size: var(--bar-font-size);
   text-shadow: 0 0 4px rgba(255,255,255,0.25);
 }
 
 .signature {
-  color: var(--color-gold-info);             /* 👉 firma en amarillo-naranja */
-  font-weight: 500;
-  opacity: 0.95;
-}
-
-.clock,
-.signature {
-  pointer-events: auto;
+  color: var(--color-gold-info);
+  font-weight: 600;
+  font-size: calc(var(--bar-font-size) + 0.05rem);
 }
 
 @media (min-width: 1440px) {
-  .footbar { font-size: 13px; bottom: 10px; right: 12px; }
+  .footbar { padding-bottom: 0.8rem; }
 }
 
 @media (max-width: 760px) {
   .footbar {
-    font-size: 11px;
-    bottom: 10px;
-    right: 8px;
-    padding: 4px 7px;
+    padding-inline: 12px;
+  }
+  .footbar__content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+  }
+
+  .footbar__meta {
+    align-items: flex-start;
+  }
+
+  .footbar__actions {
+    justify-content: flex-start;
   }
 }
 </style>

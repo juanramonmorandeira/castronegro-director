@@ -41,7 +41,7 @@
     <Button
       variant="primary"
       type="button"
-      className="full-width"
+      class="full-width"
       disabled={connectDisabled || pending}
       on:click={handleSubmit}
     >

@@ -13,10 +13,10 @@
   const dispatch = createEventDispatcher();
 
   const widthMap = {
-    sm: '460px',
-    md: '620px',
-    lg: '860px',
-    xl: '1100px'
+    sm: '480px',
+    md: '680px',
+    lg: '900px',
+    xl: '1080px'
   };
 
   $: panelWidth = widthMap[size] ?? widthMap.md;
@@ -55,10 +55,10 @@
     on:keydown={handleKeydown}
   >
     <div
-      class={`modal-panel modal-panel--${size} ${className}`}
-      style={`width:min(${panelWidth}, 96vw);`}
-      role="document"
-    >
+    class={`modal-panel modal-panel--${size} ${className}`}
+    style={`width:min(${panelWidth}, 96vw);`}
+    role="document"
+  >
       {#if title || $$slots['header-actions'] || showClose}
         <header class="modal-panel__header">
           <div class="modal-panel__heading">
@@ -106,14 +106,14 @@
   .modal-panel {
     background: #04070f;
     border: 1px solid var(--glass-hover);
-    border-radius: 28px;
-    box-shadow: 0 25px 80px rgba(0, 0, 0, 0.65);
+    border-radius: var(--modal-radius, 26px);
+    box-shadow: var(--modal-shadow, 0 25px 80px rgba(0, 0, 0, 0.65));
     color: var(--color-white-contrast);
-    max-height: 92vh;
+    max-height: var(--modal-max-height, 92vh);
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
-    padding: clamp(1.25rem, 3vw, 1.75rem);
+    gap: var(--modal-body-gap, 1.25rem);
+    padding: var(--modal-padding, clamp(1.25rem, 3vw, 1.75rem));
   }
 
   .modal-panel__header {
@@ -151,14 +151,14 @@
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
+    gap: var(--modal-body-gap, 1.25rem);
     padding-right: 0.25rem;
   }
 
   .modal-panel__footer {
     display: flex;
     justify-content: flex-end;
-    gap: 0.75rem;
+    gap: var(--modal-footer-gap, 0.75rem);
     flex-wrap: wrap;
   }
 

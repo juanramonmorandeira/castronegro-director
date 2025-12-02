@@ -18,6 +18,7 @@
   import Profile from './pages/Profile.svelte';
   import Configure from './pages/Configure.svelte';
   import Waiting from './pages/Waiting.svelte';
+  import Session from './pages/Session.svelte';
   import { t } from './lib/i18n.js';
   import { fetchCurrentUserProfile, signOutUser, confirmEmailVerification } from './lib/auth.js';
   import { auth } from './lib/firebase.js';
@@ -26,6 +27,9 @@
 
   let view = APP_VIEWS.LOGIN;
   let currentSessionId = null;
+  let currentSessionTokens = [];
+  let currentSessionSelection = null;
+  let currentSessionPlayers = [];
   let currentRole = null;
   let currentUser = null;
   let previousView = null;
@@ -55,11 +59,17 @@
 
   function goConfigure(sessionId) {
     currentSessionId = sessionId;
+    currentSessionTokens = [];
+    currentSessionSelection = null;
+    currentSessionPlayers = [];
     view = APP_VIEWS.CONFIGURE;
   }
 
-  function goSession(sessionId) {
+  function goSession(sessionId, payload = {}) {
     currentSessionId = sessionId;
+    currentSessionTokens = payload.tokens ?? currentSessionTokens;
+    currentSessionSelection = payload.selection ?? currentSessionSelection;
+    currentSessionPlayers = payload.players ?? currentSessionPlayers;
     view = APP_VIEWS.SESSION;
   }
   async function handleLoginSuccess(payload) {
@@ -335,10 +345,9 @@
       view = APP_VIEWS.LANDING;
     }}
     on:start={(event) => {
-      const targetId = event?.detail?.sessionId ?? currentSessionId;
-      if (targetId) {
-        goSession(targetId);
-      }
+      const detail = event?.detail ?? {};
+      const targetId = detail.sessionId ?? currentSessionId;
+      if (targetId) goSession(targetId, detail);
     }}
     on:profile={openProfile}
     on:logout={handleLogout}
@@ -356,14 +365,17 @@
     sessionIndicator={sessionIndicator}
   />
 {:else if view === APP_VIEWS.SESSION}
-  <!-- Placeholder de la vista de sesión activa -->
-  <div class="page">
-    <div class="card">
-      <h2>{$t('app.placeholders.session_title')}</h2>
-      <p>{$t('app.placeholders.session_id', { id: currentSessionId ?? '—' })}</p>
-      <!-- Aquí se montará la interfaz de partida -->
-    </div>
-  </div>
+  <Session
+    sessionId={currentSessionId}
+    selection={currentSessionSelection}
+    tokens={currentSessionTokens}
+    players={currentSessionPlayers}
+    user={currentUser}
+    showSessionIndicator={showSessionIndicator}
+    sessionIndicator={sessionIndicator}
+    on:logout={handleLogout}
+    on:profile={openProfile}
+  />
 {:else if view === APP_VIEWS.LANDING}
   <Dashboard
     user={currentUser}

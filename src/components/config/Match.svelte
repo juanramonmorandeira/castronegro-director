@@ -8,6 +8,16 @@
   export let players = [];
   export let roles = [];
   export let assignments = {};
+  export let savedMessage = '';
+
+  const shuffle = (list = []) => {
+    const copy = [...list];
+    for (let index = copy.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(Math.random() * (index + 1));
+      [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
+    }
+    return copy;
+  };
 
   const dispatch = createEventDispatcher();
 
@@ -70,7 +80,23 @@
   }
 
   function autoAssign() {
-    dispatch('auto');
+    if (!Array.isArray(players) || !Array.isArray(roles)) return;
+    const pool = [];
+    roles.forEach((role) => {
+      const count = Number(role.count) || 0;
+      const slug = role.slug ?? role.role;
+      for (let index = 0; index < count; index += 1) {
+        if (slug) pool.push(slug);
+      }
+    });
+    if (!pool.length) return;
+    const randomized = shuffle(pool);
+    const next = {};
+    (players ?? []).forEach((player, index) => {
+      const slug = randomized[index];
+      if (slug) next[player.id] = slug;
+    });
+    draftAssignments = next;
   }
 
   function confirm() {
@@ -162,11 +188,14 @@
         {$t('configure.match_auto')}
       </Button>
       <div class="spacer"></div>
-      <Button variant="ghost" type="button" on:click={close}>{$t('common.actions.cancel')}</Button>
       <Button variant="primary" type="button" on:click={confirm} disabled={!hasPlayers || !hasRoles}>
         {$t('common.actions.save')}
       </Button>
     </div>
+
+    {#if savedMessage}
+      <p class="action-hint" aria-live="polite">{savedMessage}</p>
+    {/if}
   </div>
 </Modal>
 

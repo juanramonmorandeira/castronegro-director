@@ -15,6 +15,7 @@
   export let totalLimit = 0;
   export let duplicates = ['trusted', 'villager', 'werewolf', 'brothers', 'sisters'];
   export let mix = null;
+  export let savedMessage = '';
 
   const dispatch = createEventDispatcher();
 
@@ -366,8 +367,11 @@
 
   </div>
 
+  {#if savedMessage}
+    <p class="action-hint" aria-live="polite">{savedMessage}</p>
+  {/if}
+
   <svelte:fragment slot="footer">
-    <Button variant="ghost" type="button" on:click={close}>{$t('common.actions.cancel')}</Button>
     <Button variant="primary" type="button" on:click={save}>{$t('common.actions.save')}</Button>
   </svelte:fragment>
 </Modal>

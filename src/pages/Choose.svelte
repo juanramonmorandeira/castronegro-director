@@ -231,8 +231,5 @@
     .choose-panel {
       width: min(96vw, var(--page-width-narrow));
     }
-    .sessions-surface {
-      max-height: none;
-    }
   }
 </style>

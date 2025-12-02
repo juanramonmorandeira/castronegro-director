@@ -330,6 +330,96 @@ const dictionaries = {
         start_requirements: 'You need {expected} players connected and ready before starting.'
       }
     },
+    session: {
+      title: 'Session',
+      distribution: {
+        label: 'Distribution',
+        title: 'Session #{id}',
+        hint: 'Drag and drop tokens to arrange the table',
+        fullscreen: 'Fullscreen',
+        exit_fullscreen: 'Exit fullscreen'
+      },
+      phases: {
+        label: 'Phase order',
+        preparation: { title: 'Preparation', subtitle: 'Setup and initial roles' },
+        first_night: { title: 'First night', subtitle: 'Opening calls' },
+        each_night: { title: 'Each night', subtitle: 'Standard order' },
+        each_day: { title: 'Each day', subtitle: 'Daytime actions' },
+        steps: {
+          cards_dealt: 'Character cards are dealt',
+          prejudiced_manipulator: 'Village separated for Prejudiced Manipulator',
+          gypsy_cards: 'Gypsy cards (if in play)',
+          town_crier_cards: 'Town Crier cards (if in play)',
+          thief_cards: 'Thief receives extra cards',
+          actor_cards: 'Actor receives three cards',
+          sheriff_election: 'Sheriff election (can be later)',
+          thief: 'The Thief acts',
+          actor: 'The Actor decides their card',
+          cupid: 'Cupid selects lovers',
+          seer: 'The Seer acts',
+          fox: 'The Fox acts',
+          lovers: 'Lovers recognize each other',
+          wandering_judge: 'Wandering Judge sets signal',
+          sisters: 'Two Sisters open eyes',
+          brothers: 'Three Brothers open eyes',
+          wild_child: 'Wild Child chooses a role model',
+          bear_tamer: 'Bear Tamer growls if a werewolf is nearby',
+          scandalmonger: 'Scandalmonger acts',
+          pyromaniac: 'Pyromaniac acts',
+          defender: 'Defender shields a player',
+          werewolves: 'Werewolves act (Little Girl may spy)',
+          baker: 'Baker opens then closes eyes',
+          cursed_wolf_father: 'Cursed Wolf-Father may infect',
+          big_bad_wolf: 'Big Bad Wolf acts',
+          witch: 'Witch decides heal/poison',
+          gypsy: 'Gypsy may choose a Medium',
+          piper: 'Piper charms players',
+          charmed: 'Charmed players act',
+          actor_night: 'The Actor (if cards remain)',
+          white_werewolf: 'White Werewolf acts (every other night)',
+          victims: 'Victims are revealed and resolve effects',
+          bear_grunt: 'Bear’s grunt',
+          medium: 'Medium (chosen by Gypsy)',
+          town_crier: 'Town Crier announces',
+          debate: 'Debate and accusations',
+          vote: 'Vote (check Devoted Servant)',
+          angel: 'Angel may win (if first vote)',
+          second_vote: 'Possible second vote (Wandering Judge)'
+        }
+    },
+    progress: {
+      default_label: 'Progress',
+      phase_label: 'Phase {current}/{total}'
+    },
+    victory: {
+      label: 'Victory conditions',
+      subtitle: '',
+      village: 'Village wins (all Werewolves eliminated)',
+      werewolves: 'Werewolves win (wolves reach parity)',
+      lovers: 'Lovers win (only lovers remain)',
+      piper: 'Piper wins (all charmed)',
+      angel: 'Angel wins (first vote/night elimination)',
+      draw: 'Draw / cancelled'
+    },
+    logbook: {
+      label: 'Logbook',
+      placeholder: 'Write what happens to craft the summary and emails…',
+      add_entry: 'Add entry',
+      empty: 'No entries yet.',
+      entry_label: 'Entry #{num}'
+      },
+      controls: {
+        previous: 'Previous',
+        next: 'Next',
+        close_day: 'Close day',
+        pause: 'Pause',
+        resume: 'Resume',
+        finish: 'Finish',
+        cancel: 'Cancel',
+        fullscreen: 'Fullscreen',
+        exit_fullscreen: 'Exit fullscreen'
+      }
+    },
     verify: {
       title: 'Email verification',
       checking_title: 'Verifying email…',
@@ -915,6 +1005,96 @@ const dictionaries = {
       finished: 'Terminada',
       cancelled: 'Cancelada'
     },
+    session: {
+      title: 'Sesión',
+      distribution: {
+        label: 'Distribución',
+        title: 'Sesión #{id}',
+        hint: 'Arrastra las fichas para organizar la mesa',
+        fullscreen: 'Pantalla completa',
+        exit_fullscreen: 'Salir de pantalla completa'
+      },
+      phases: {
+        label: 'Orden de llamadas',
+        preparation: { title: 'Preparación', subtitle: 'Montaje inicial' },
+        first_night: { title: 'Primera noche', subtitle: 'Llamadas iniciales' },
+        each_night: { title: 'Cada noche', subtitle: 'Orden estándar' },
+        each_day: { title: 'Cada día', subtitle: 'Acciones diurnas' },
+        steps: {
+          cards_dealt: 'Se reparten las cartas de rol',
+          prejudiced_manipulator: 'El pueblo se divide para el Manipulador Prejuicioso',
+          gypsy_cards: 'Cartas de la Gitana (si está en juego)',
+          town_crier_cards: 'Cartas del Pregonero (si está en juego)',
+          thief_cards: 'El Ladrón recibe cartas extra',
+          actor_cards: 'El Actor recibe tres cartas',
+          sheriff_election: 'Elección del Sheriff (puede ser más tarde)',
+          thief: 'Actúa el Ladrón',
+          actor: 'El Actor decide su carta',
+          cupid: 'Cupido elige amantes',
+          seer: 'La Vidente actúa',
+          fox: 'El Zorro actúa',
+          lovers: 'Los amantes se reconocen',
+          wandering_judge: 'El Juez Errante fija señal',
+          sisters: 'Las Dos Hermanas abren los ojos',
+          brothers: 'Los Tres Hermanos abren los ojos',
+          wild_child: 'El Niño Salvaje elige modelo',
+          bear_tamer: 'El Domador gruñe si hay hombre lobo cerca',
+          scandalmonger: 'El Chismoso actúa',
+          pyromaniac: 'El Pirómano actúa',
+          defender: 'El Defensor protege a un jugador',
+          werewolves: 'Actúan los Hombres Lobo (la Niña puede espiar)',
+          baker: 'El Panadero abre y cierra los ojos',
+          cursed_wolf_father: 'El Lobo Embrujado puede infectar',
+          big_bad_wolf: 'El Gran Lobo Feroz actúa',
+          witch: 'La Bruja decide curar/envenenar',
+          gypsy: 'La Gitana puede elegir Médium',
+          piper: 'El Flautista encanta jugadores',
+          charmed: 'Los encantados actúan',
+          actor_night: 'El Actor (si quedan cartas)',
+          white_werewolf: 'El Hombre Lobo Blanco actúa (noches alternas)',
+          victims: 'Se revelan las víctimas y sus efectos',
+          bear_grunt: 'Gruñido del oso',
+          medium: 'Médium (elegido por la Gitana)',
+          town_crier: 'Interviene el Pregonero',
+          debate: 'Debate y acusaciones',
+          vote: 'Votación (revisar Sirviente Devoto)',
+          angel: 'Ángel puede ganar (si cae en la primera votación)',
+          second_vote: 'Posible segunda votación (Juez Errante)'
+        }
+    },
+    progress: {
+      default_label: 'Progreso',
+      phase_label: 'Fase {current}/{total}'
+    },
+    victory: {
+      label: 'Condiciones de victoria',
+      subtitle: 'Marca cuando se cumpla alguna para habilitar Finalizar',
+      village: 'Gana el pueblo (sin Hombres Lobo)',
+      werewolves: 'Ganan los lobos (paridad alcanzada)',
+      lovers: 'Ganan los amantes (solo ellos vivos)',
+      piper: 'Gana el Flautista (todos encantados)',
+      angel: 'Gana el Ángel (eliminado en la primera votación/noche)',
+      draw: 'Empate / cancelada'
+    },
+    logbook: {
+      label: 'Cuaderno de bitácora',
+      placeholder: 'Anota lo que sucede para el resumen y correos…',
+      add_entry: 'Añadir entrada',
+      empty: 'Aún no hay entradas.',
+        entry_label: 'Entrada #{num}'
+      },
+      controls: {
+        previous: 'Anterior',
+        next: 'Siguiente',
+        close_day: 'Cerrar día',
+        pause: 'Pausar',
+        resume: 'Reanudar',
+        finish: 'Finalizar',
+        cancel: 'Cancelar',
+        fullscreen: 'Pantalla completa',
+        exit_fullscreen: 'Salir de pantalla completa'
+      }
+    },
     app: {
       placeholders: {
         configure_title: 'Configuración de partida',
@@ -1371,6 +1551,96 @@ const dictionaries = {
       paused: 'Szünetel',
       finished: 'Befejezve',
       cancelled: 'Törölve'
+    },
+    session: {
+      title: 'Játék',
+      distribution: {
+        label: 'Elhelyezés',
+        title: 'Játék #{id}',
+        hint: 'Húzd a zsetonokat a táblán',
+        fullscreen: 'Teljes képernyő',
+        exit_fullscreen: 'Kilépés a teljes képernyőből'
+      },
+      phases: {
+        label: 'Fázis sorrend',
+        preparation: { title: 'Előkészítés', subtitle: 'Kezdeti lépések' },
+        first_night: { title: 'Első éjszaka', subtitle: 'Első hívások' },
+        each_night: { title: 'Minden éjszaka', subtitle: 'Alap sorrend' },
+        each_day: { title: 'Minden nap', subtitle: 'Nappali akciók' },
+        steps: {
+          cards_dealt: 'Szerepkártyák kiosztása',
+          prejudiced_manipulator: 'Falu kettéosztása az Előítéletes Manipulátorhoz',
+          gypsy_cards: 'Cigány kártyák (ha játékban van)',
+          town_crier_cards: 'Kikiáltó kártyái (ha játékban van)',
+          thief_cards: 'A Tolvaj extra kártyákat kap',
+          actor_cards: 'A Színész három kártyát kap',
+          sheriff_election: 'Seriff választás (lehet később is)',
+          thief: 'A Tolvaj lép',
+          actor: 'A Színész dönt a kártyáról',
+          cupid: 'Ámor szerelmeseket választ',
+          seer: 'A Jósnő lép',
+          fox: 'A Róka lép',
+          lovers: 'A szerelmesek felismerik egymást',
+          wandering_judge: 'A Vándor Bíró jelet ad',
+          sisters: 'A Két Nővér kinyitja a szemét',
+          brothers: 'A Három Fivér kinyitja a szemét',
+          wild_child: 'A Vadgyerek példaképet választ',
+          bear_tamer: 'A Medvetáncoltató morgása',
+          scandalmonger: 'A Pletykafészek lép',
+          pyromaniac: 'A Pirotechnikus lép',
+          defender: 'A Védelmező megóv valakit',
+          werewolves: 'Farkasok lépnek (a Kislány leshet)',
+          baker: 'A Pék kinyitja majd becsukja a szemét',
+          cursed_wolf_father: 'Az Elátkozott Farkasapa megfertőzhet',
+          big_bad_wolf: 'A Nagy Farkas lép',
+          witch: 'A Boszorkány gyógyít/mérgez',
+          gypsy: 'A Cigány Médiumot választhat',
+          piper: 'A Furulyás elbűvöl',
+          charmed: 'Elbűvöltek lépnek',
+          actor_night: 'A Színész (ha maradt kártya)',
+          white_werewolf: 'A Fehér Farkas lép (minden második éjjel)',
+          victims: 'Áldozatok felfedése és hatásaik',
+          bear_grunt: 'Medve morgása',
+          medium: 'Médium (a Cigány választása)',
+          town_crier: 'A Kikiáltó megszólal',
+          debate: 'Vita és vádak',
+          vote: 'Szavazás (ellenőrizd a Hű Szolgát)',
+          angel: 'Az Angyal nyerhet (első szavazásnál)',
+          second_vote: 'Második szavazás lehetséges (Vándor Bíró)'
+        }
+      },
+      progress: {
+        default_label: 'Előrehaladás',
+        phase_label: 'Fázis {current}/{total}'
+      },
+    victory: {
+      label: 'Győzelmi feltételek',
+      subtitle: 'Jelöld, ha teljesül, hogy engedélyezd a befejezést',
+      village: 'Falu nyer (nincs vérfarkas)',
+      werewolves: 'Farkasok nyernek (paritás)',
+      lovers: 'Szerelmesek nyernek (csak ők maradnak)',
+      piper: 'Furulyás nyer (mindenki elbűvölve)',
+      angel: 'Angyal nyer (első szavazás/éj kiesés)',
+        draw: 'Döntetlen / törölve'
+      },
+      logbook: {
+        label: 'Napló',
+        placeholder: 'Írd le, mi történik a kivonathoz és e-mailekhez…',
+        add_entry: 'Bejegyzés hozzáadása',
+        empty: 'Még nincs bejegyzés.',
+        entry_label: 'Bejegyzés #{num}'
+      },
+      controls: {
+        previous: 'Előző',
+        next: 'Következő',
+        close_day: 'Nap lezárása',
+        pause: 'Szünet',
+        resume: 'Folytatás',
+        finish: 'Befejezés',
+        cancel: 'Mégse',
+        fullscreen: 'Teljes képernyő',
+        exit_fullscreen: 'Kilépés a teljes képernyőből'
+      }
     },
     app: {
       placeholders: {

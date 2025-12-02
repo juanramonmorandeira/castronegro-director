@@ -128,6 +128,12 @@
   let loading = true;
   let saving = false;
   let saved = false;
+  let propertiesSavedMessage = '';
+  let selectionSavedMessage = '';
+  let matchSavedMessage = '';
+  let distributionSavedMessage = '';
+  let shareSavedMessage = '';
+  let forceStartHintVisible = false;
   let overrideRoleLimits = false;
   let activeModal = null;
   let connectedCount = 0;
@@ -386,7 +392,19 @@
     dispatch('back');
   }
 
+  function resetModalMessages(target) {
+    const map = target ? [target] : ['properties', 'selection', 'match', 'distribution', 'share'];
+    for (const entry of map) {
+      if (entry === 'properties') propertiesSavedMessage = '';
+      if (entry === 'selection') selectionSavedMessage = '';
+      if (entry === 'match') matchSavedMessage = '';
+      if (entry === 'distribution') distributionSavedMessage = '';
+      if (entry === 'share') shareSavedMessage = '';
+    }
+  }
+
   function openModal(name) {
+    resetModalMessages(name);
     activeModal = name;
   }
 
@@ -415,6 +433,7 @@
 
   function closeModal() {
     activeModal = null;
+    resetModalMessages();
   }
 
   function handleNavIntent(event) {
@@ -426,12 +445,9 @@
 
   function handlePropertiesSave(event) {
     const detail = event?.detail ?? {};
-    if (!detail.value) {
-      closeModal();
-      return;
-    }
+    if (!detail.value) return;
     form = { ...form, ...detail.value };
-    closeModal();
+    propertiesSavedMessage = $t('configure.saved');
   }
 
   function handleSelectionSave(event) {
@@ -444,12 +460,11 @@
     if (typeof detail.override === 'boolean') {
       overrideRoleLimits = detail.override;
     }
-    closeModal();
+    selectionSavedMessage = $t('configure.saved');
   }
 
   function handleMatchAuto() {
     console.info('[configure] auto-assign roles requested');
-    closeModal();
   }
 
   async function handleMatchSave(event) {
@@ -461,7 +476,7 @@
     try {
       await savePlayerRoleAssignments(sessionId, assignments);
       playerAssignments = assignments;
-      closeModal();
+      matchSavedMessage = $t('configure.saved');
     } catch (error) {
       console.error('[configure] unable to save role assignments', error);
       openAlert($t('configure.errors.save_failed'), 'error');
@@ -474,15 +489,15 @@
 
   function handleDistributionSave() {
     console.info('[configure] distribution save requested');
-    closeModal();
+    distributionSavedMessage = $t('configure.saved');
   }
 
   function handleShareClose() {
     closeModal();
   }
 
-  function handleShareDismiss() {
-    closeModal();
+  function handleShareSave() {
+    shareSavedMessage = $t('configure.saved');
   }
 
   async function handleStartOrContinue() {
@@ -499,12 +514,33 @@
       await updateSession(sessionId, { status: nextStatus });
       sessionStatus = nextStatus;
       if (nextStatus === 'in_progress') {
-        dispatch('start', { sessionId });
+        dispatch('start', {
+          sessionId,
+          tokens: distributionTokens,
+          selection: selectedRoles,
+          players: playerList
+        });
       }
     } catch (error) {
       console.error('[configure] unable to update session status', error);
       openAlert($t('configure.errors.start_failed'), 'error');
     }
+  }
+
+  // Botón temporal para bypass de requisitos de inicio (solo para diseño/testing).
+  function handleForceStart() {
+    if (!sessionId) {
+      openAlert($t('configure.errors.missing_session'), 'warning');
+      return;
+    }
+    forceStartHintVisible = true;
+    dispatch('start', {
+      sessionId,
+      force: true,
+      tokens: distributionTokens,
+      selection: selectedRoles,
+      players: playerList
+    });
   }
 </script>
 
@@ -638,6 +674,12 @@
               {$t('configure.start_disabled_hint')}
             </span>
           {/if}
+          <button class="btn danger" type="button" on:click={handleForceStart}>
+            Force start (temp)
+          </button>
+          {#if forceStartHintVisible}
+            <span class="hint start-hint">Modo prueba: inicio forzado habilitado</span>
+          {/if}
           {#if saved}
             <span class="hint saved-hint">{$t('configure.saved')}</span>
           {/if}
@@ -671,6 +713,7 @@
     availableLanguages,
     assistTaskOptions
   }}
+  savedMessage={propertiesSavedMessage}
   on:save={handlePropertiesSave}
   on:cancel={closeModal}
 />
@@ -687,6 +730,7 @@
   mix={playerBreakdown}
   totalLimit={clampPlayers(form.players_expected)}
   duplicates={[...DUPLICATE_ROLE_NAMES]}
+  savedMessage={selectionSavedMessage}
   on:save={handleSelectionSave}
   on:cancel={closeModal}
 />
@@ -696,6 +740,7 @@
   players={playerList}
   roles={roleOptions}
   assignments={playerAssignments}
+  savedMessage={matchSavedMessage}
   on:auto={handleMatchAuto}
   on:save={handleMatchSave}
   on:cancel={closeModal}
@@ -704,6 +749,7 @@
 <DistributionModal
   open={activeModal === 'distribution'}
   tokens={distributionTokens}
+  savedMessage={distributionSavedMessage}
   on:cancel={handleDistributionClose}
   on:save={handleDistributionSave}
 />
@@ -711,8 +757,9 @@
 <ShareModal
   open={activeModal === 'share'}
   gameId={form.game_id}
+  savedMessage={shareSavedMessage}
   on:cancel={handleShareClose}
-  on:close={handleShareDismiss}
+  on:save={handleShareSave}
 />
 
 <AlertPopup

@@ -6,6 +6,7 @@
 
   export let open = false;
   export let tokens = [];
+  export let savedMessage = '';
 
   const dispatch = createEventDispatcher();
   let boardElement;
@@ -136,8 +137,11 @@
     {/if}
   </div>
 
+  {#if savedMessage}
+    <p class="action-hint" aria-live="polite">{savedMessage}</p>
+  {/if}
+
   <svelte:fragment slot="footer">
-    <Button variant="ghost" type="button" on:click={close}>{$t('common.actions.cancel')}</Button>
     <Button variant="primary" type="button" on:click={save}>{$t('common.actions.save')}</Button>
   </svelte:fragment>
 </Modal>

@@ -37,6 +37,7 @@
   let pendingAvatar = avatarURL;
   let customAvatarData = '';
   let customAvatarError = '';
+  let avatarSaveMessage = '';
 
   let loading = false;
   let info = '';
@@ -61,6 +62,7 @@
   function openAvatarModal() {
     pendingAvatar = avatarURL;
     customAvatarError = '';
+    avatarSaveMessage = '';
     if (avatarURL?.startsWith('data:image')) {
       customAvatarData = avatarURL;
     }
@@ -71,6 +73,7 @@
     avatarModalOpen = false;
     pendingAvatar = avatarURL;
     customAvatarError = '';
+    avatarSaveMessage = '';
   }
 
   function selectPendingAvatar(url) {
@@ -101,7 +104,7 @@
 
   function confirmAvatarSelection() {
     avatarURL = pendingAvatar;
-    avatarModalOpen = false;
+    avatarSaveMessage = $t('configure.saved');
     if (avatarURL?.startsWith('data:image')) {
       customAvatarData = avatarURL;
     } else if (!avatarURL) {
@@ -371,10 +374,11 @@
       {/if}
     </div>
 
+    {#if avatarSaveMessage}
+      <p class="action-hint" aria-live="polite">{avatarSaveMessage}</p>
+    {/if}
+
     <svelte:fragment slot="footer">
-      <Button variant="ghost" on:click={closeAvatarModal}>
-        {$t('common.actions.cancel')}
-      </Button>
       <Button variant="primary" on:click={confirmAvatarSelection}>
         {$t('common.actions.save')}
       </Button>

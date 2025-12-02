@@ -123,15 +123,17 @@ export function buildDistributionTokens(selection, assignments = {}, players = [
         0
     ) || 0;
   const playerCount = Array.isArray(players) ? players.length : 0;
-  const piperCharms = Math.max(0, playerCount - piperCount);
-  for (let index = 0; index < piperCharms; index += 1) {
-    tokens.push({
-      id: `special-piper-charm-${index}`,
-      role: 'Piper Charm',
-      category: 'special',
-      image: piperFlutePath,
-      player: null
-    });
+  if (piperCount > 0) {
+    const piperCharms = Math.max(0, playerCount - 1);
+    for (let index = 0; index < piperCharms; index += 1) {
+      tokens.push({
+        id: `special-piper-charm-${index}`,
+        role: 'Piper Charm',
+        category: 'special',
+        image: piperFlutePath,
+        player: null
+      });
+    }
   }
 
   // Defender special token: one shield per Defender selected.

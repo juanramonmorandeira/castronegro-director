@@ -53,6 +53,7 @@ import { NAV_INTENT } from '../lib/navigation.js';
   let pendingAvatar = DEFAULT_AVATAR;
   let customAvatarData = '';
   let customAvatarError = '';
+  let avatarSaveMessage = '';
 
   let currentPassword = '';
   let newPassword = '';
@@ -264,6 +265,7 @@ function closeAlert() {
   function openAvatarModal() {
     pendingAvatar = avatarURL || DEFAULT_AVATAR;
     customAvatarError = '';
+    avatarSaveMessage = '';
     if (avatarURL?.startsWith('data:image')) {
       customAvatarData = avatarURL;
     }
@@ -281,6 +283,7 @@ function closeAlert() {
     avatarModalOpen = false;
     customAvatarError = '';
     pendingAvatar = avatarURL || DEFAULT_AVATAR;
+    avatarSaveMessage = '';
   }
 
   function selectPendingAvatar(url) {
@@ -311,7 +314,7 @@ function closeAlert() {
 
   function confirmAvatarSelection() {
     avatarURL = pendingAvatar || DEFAULT_AVATAR;
-    avatarModalOpen = false;
+    avatarSaveMessage = translate('configure.saved');
     if (avatarURL?.startsWith('data:image')) {
       customAvatarData = avatarURL;
     } else {
@@ -582,10 +585,11 @@ function closeAlert() {
     {/if}
   </div>
 
+  {#if avatarSaveMessage}
+    <p class="action-hint" aria-live="polite">{avatarSaveMessage}</p>
+  {/if}
+
   <svelte:fragment slot="footer">
-    <Button variant="ghost" on:click={closeAvatarModal}>
-      {$t('common.actions.cancel')}
-    </Button>
     <Button variant="primary" on:click={confirmAvatarSelection}>
       {$t('common.actions.save')}
     </Button>
@@ -594,7 +598,6 @@ function closeAlert() {
 
 <Modal
   open={deleteModalOpen}
-  showClose={false}
   title={$t('profile.delete.modal_title')}
   ariaLabel={$t('profile.delete.modal_hint')}
   closeOnBackdrop={false}
@@ -637,9 +640,6 @@ function closeAlert() {
   {/if}
 
   <svelte:fragment slot="footer">
-    <Button variant="ghost" on:click={closeDeleteModal} disabled={deleteLoading}>
-      {$t('common.actions.cancel')}
-    </Button>
     <Button variant="danger" on:click={confirmDeleteAccount} disabled={!deletionMatches || deleteLoading}>
       {deleteLoading ? '…' : $t('profile.delete.confirm_button')}
     </Button>
@@ -656,13 +656,13 @@ function closeAlert() {
 
 <style>
   .profile-card {
-    width: min(520px, 92vw);
+    width: min(var(--page-width-narrow), 92vw);
     margin: 0 auto;
     gap: var(--space-4);
   }
 
   .danger-card {
-    width: min(520px, 92vw);
+    width: min(var(--page-width-narrow), 92vw);
     margin: var(--space-5) auto 0;
     gap: var(--space-3);
     display: flex;
