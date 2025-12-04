@@ -52,6 +52,8 @@ export function buildDistributionTokens(selection, assignments = {}, players = [
   const piperFlutePath = '/tokens/piper-flute.png';
   const witchHealPath = '/tokens/witch-heal.png';
   const witchVenomPath = '/tokens/witch-venom.png';
+  const werewolvesClawPath = '/tokens/werewolves-claw.png';
+  const fatherBitePath = '/tokens/father-bite.png';
 
   const pushAssignment = (slug, label) => {
     if (!slug || !label) return;
@@ -183,6 +185,37 @@ export function buildDistributionTokens(selection, assignments = {}, players = [
         }
       );
     }
+  }
+
+  // Werewolves claws: always at least one, +1 if Big Bad Wolf ("bad") is in play.
+  const wolfCount =
+    Number(selection?.werewolves?.werewolf ?? selection?.werewolves?.Werewolf ?? 0) +
+    Number(selection?.werewolves?.bad ?? selection?.werewolves?.Bad ?? 0);
+  if (wolfCount > 0) {
+    const claws = 1 + (Number(selection?.werewolves?.bad ?? selection?.werewolves?.Bad ?? 0) > 0 ? 1 : 0);
+    for (let index = 0; index < claws; index += 1) {
+      tokens.push({
+        id: `special-werewolves-claws-${index}`,
+        role: 'Werewolves Claws',
+        category: 'special',
+        image: werewolvesClawPath,
+        player: null
+      });
+    }
+  }
+
+  // Cursed Wolf-Father infection marker.
+  const fatherCount =
+    Number(selection?.werewolves?.father ?? selection?.werewolves?.Father ?? 0) +
+    Number(selection?.werewolves?.['Cursed Wolf Father'] ?? 0);
+  if (fatherCount > 0) {
+    tokens.push({
+      id: 'special-father-bite-0',
+      role: 'Cursed Wolf Father',
+      category: 'special',
+      image: fatherBitePath,
+      player: null
+    });
   }
 
   return tokens;

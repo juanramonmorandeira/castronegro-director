@@ -26,25 +26,55 @@
   let activePointerId = null;
   let boardRect = null;
   let pointerOffset = { x: 0, y: 0 };
-  let victoryExpanded = false;
-  let victoryStates = {
-    village: false,
-    werewolves: false,
-    lovers: false,
-    piper: false,
-    angel: false,
-    draw: false
-  };
   let finishEnabled = false;
+  let loversLinks = [];
+  let protectedTargets = [];
+  let pendingDeaths = [];
+  let infectedTargets = [];
+  let consumedSpecialIds = [];
+  let deadCharacters = [];
+  let victoryResult = {};
+  $: loverSet = new Set(loversLinks.flat?.() ?? loversLinks.reduce((acc, pair) => acc.concat(pair), []));
+  $: deadSet = new Set(deadCharacters);
+
+  const roleAliases = {
+    // Canonical aliases to catch variants/translation leftovers in selections and steps
+    bad: 'bad',
+    big_bad_wolf: 'bad',
+    wolf_hound: 'hound',
+    white_werewolf: 'white',
+    cursed_wolf_father: 'father',
+    wandering_judge: 'judge',
+    judge: 'judge',
+    the_judge: 'judge',
+    the_wandering_judge: 'judge',
+    bear_tamer: 'tamer',
+    wild_child: 'child',
+    two_sisters: 'sisters',
+    three_brothers: 'brothers',
+    prejudiced_manipulator: 'manipulator'
+  };
+
+  const normalizeRoleSlug = (slug = '') => {
+    const normalized = slugifyRole(slug);
+    return roleAliases[normalized] ?? normalized;
+  };
 
   $: roleSet = (() => {
     const set = new Set();
     if (!selection) return set;
     Object.values(selection ?? {}).forEach((category) => {
-      Object.keys(category ?? {}).forEach((role) => set.add(slugifyRole(role)));
+      Object.keys(category ?? {}).forEach((role) => {
+        const normalized = slugifyRole(role);
+        set.add(normalized);
+        set.add(normalizeRoleSlug(normalized));
+      });
     });
     return set;
   })();
+
+  $: specialTokens = tokens?.filter((token) => token.category === 'special') ?? [];
+  $: characterTokens = tokens?.filter((token) => token.category !== 'special') ?? [];
 
   const phaseBlocks = [
     {
@@ -70,7 +100,7 @@
         { key: 'seer', requires: ['seer'] },
         { key: 'fox', requires: ['fox'] },
         { key: 'lovers', requires: ['cupid'] },
-        { key: 'wandering_judge', requires: ['wandering_judge'] },
+        { key: 'wandering_judge', requires: ['wandering_judge', 'judge', 'the_judge'] },
         { key: 'sisters', requires: ['two_sisters', 'sisters'] },
         { key: 'brothers', requires: ['three_brothers', 'brothers'] },
         { key: 'wild_child', requires: ['wild_child'] },
@@ -98,11 +128,11 @@
         { key: 'scandalmonger', requires: ['scandalmonger'] },
         { key: 'pyromaniac', requires: ['pyromaniac'] },
         { key: 'defender', requires: ['defender'] },
-        { key: 'werewolves', requires: ['werewolf', 'wolf_hound', 'wild_child', 'cursed_wolf_father', 'white_werewolf', 'big_bad_wolf'] },
+        { key: 'werewolves', requires: ['werewolf', 'wolf_hound', 'wild_child', 'cursed_wolf_father', 'white_werewolf', 'big_bad_wolf', 'bad'] },
         { key: 'baker', requires: ['baker'] },
         { key: 'white_werewolf', requires: ['white_werewolf'] },
         { key: 'cursed_wolf_father', requires: ['cursed_wolf_father'] },
-        { key: 'big_bad_wolf', requires: ['big_bad_wolf'] },
+        { key: 'big_bad_wolf', requires: ['big_bad_wolf', 'bad'] },
         { key: 'witch', requires: ['witch'] },
         { key: 'gypsy', requires: ['gypsy'] },
         { key: 'piper', requires: ['piper'] },
@@ -125,11 +155,19 @@
     }
   ];
 
+  const hasAnyRole = (required = []) =>
+    required.some((slug) => {
+      const normalized = slugifyRole(slug);
+      if (roleSet.has(normalized)) return true;
+      const alias = normalizeRoleSlug(normalized);
+      return alias ? roleSet.has(alias) : false;
+    });
+
   $: phases = phaseBlocks
     .map((phase) => {
       const steps = phase.steps.filter((step) => {
         if (!step.requires || step.requires.length === 0) return true;
-        return step.requires.some((slug) => roleSet.has(slug));
+        return hasAnyRole(step.requires);
       });
       return { ...phase, steps };
     })
@@ -137,7 +175,7 @@
   $: if (currentPhaseIndex >= phases.length) {
     currentPhaseIndex = Math.max(0, phases.length - 1);
   }
-  $: finishEnabled = Object.values(victoryStates).some(Boolean);
+  $: finishEnabled = sessionStatus === 'finished' || Object.values(victoryResult).some(Boolean);
 
   const phaseLabel = () => $t(phases[currentPhaseIndex]?.titleKey ?? '') || '—';
   const subphaseLabel = () => $t(phases[currentPhaseIndex]?.subtitleKey ?? '') || '';
@@ -158,21 +196,37 @@
 
   function syncPositions() {
     if (!tokens) return;
-    const columns = Math.max(1, Math.ceil(Math.sqrt(tokens.length || 1)));
-    const rows = Math.max(1, Math.ceil((tokens.length || 1) / columns));
+    const characters = tokens.filter((token) => token.category !== 'special');
+    const specials = tokens.filter((token) => token.category === 'special');
+
+    const columns = Math.max(1, Math.ceil(Math.sqrt(characters.length || 1)));
+    const rows = Math.max(1, Math.ceil((characters.length || 1) / columns));
+    const xRange = characterArea.xMax - characterArea.xMin;
+    const yRange = characterArea.yMax - characterArea.yMin;
+
     const next = {};
-    tokens.forEach((token, index) => {
+
+    characters.forEach((token, index) => {
       if (positions[token.id]) {
         next[token.id] = positions[token.id];
       } else {
         const col = index % columns;
         const row = Math.floor(index / columns);
         next[token.id] = {
-          x: ((col + 1) / (columns + 1)) * 100,
-          y: ((row + 1) / (rows + 1)) * 100
+          x: characterArea.xMin + ((col + 1) / (columns + 1)) * xRange,
+          y: characterArea.yMin + ((row + 1) / (rows + 1)) * yRange
         };
       }
     });
+
+    specials.forEach((token, index) => {
+      if (positions[token.id]) {
+        next[token.id] = positions[token.id];
+      } else {
+        next[token.id] = palettePosition(index, specials.length);
+      }
+    });
+
     positions = next;
   }
 
@@ -193,8 +247,8 @@
     if (!boardRect || !activeId) return;
     const relativeX = ((clientX - boardRect.left) / boardRect.width) * 100 - pointerOffset.x;
     const relativeY = ((clientY - boardRect.top) / boardRect.height) * 100 - pointerOffset.y;
-    const x = Math.min(95, Math.max(5, relativeX));
-    const y = Math.min(95, Math.max(5, relativeY));
+    const x = Math.min(characterArea.xMax, Math.max(characterArea.xMin, relativeX));
+    const y = Math.min(characterArea.yMax, Math.max(characterArea.yMin, relativeY));
     positions = { ...positions, [activeId]: { x, y } };
   }
 
@@ -235,6 +289,8 @@
   }
 
   function closeDay() {
+    resolveBoardEffects();
+    resetSpecialPositions();
     lockedThroughIndex = Math.max(lockedThroughIndex, currentPhaseIndex);
   }
 
@@ -250,17 +306,207 @@
     sessionStatus = 'cancelled';
   }
 
-  const victoryChecklist = [
-    { id: 'village', key: 'session.victory.village' },
-    { id: 'werewolves', key: 'session.victory.werewolves' },
-    { id: 'lovers', key: 'session.victory.lovers' },
-    { id: 'piper', key: 'session.victory.piper' },
-    { id: 'angel', key: 'session.victory.angel' },
-    { id: 'draw', key: 'session.victory.draw' }
-  ];
+  const TARGET_SNAP_DISTANCE = 8; // percentage distance threshold to consider a token placed on a character
 
-  function toggleVictory(id) {
-    victoryStates = { ...victoryStates, [id]: !victoryStates[id] };
+  const uniqueList = (list = []) => Array.from(new Set(list));
+  const addToSet = (existing = [], items = []) => {
+    const set = new Set(existing);
+    items.forEach((item) => item && set.add(item));
+    return Array.from(set);
+  };
+
+  const getTokenById = (id) => tokens.find((token) => token.id === id);
+
+  const nameForToken = (tokenId) => {
+    const token = getTokenById(tokenId);
+    if (!token) return tokenId;
+    const baseName = token.player ? `${token.role} (${token.player})` : token.role;
+    return baseName || tokenId;
+  };
+
+  function resolveBoardEffects() {
+    if (!tokens?.length) return;
+    const characters = tokens.filter((token) => token.category !== 'special');
+    const specials = tokens.filter((token) => token.category === 'special');
+
+    const specialPlacements = [];
+
+    const findCharacterTarget = (special) => {
+      const origin = positions[special.id];
+      if (!origin) return null;
+      let best = null;
+      let bestDistance = TARGET_SNAP_DISTANCE;
+      characters.forEach((character) => {
+        const pos = positions[character.id];
+        if (!pos) return;
+        const dx = pos.x - origin.x;
+        const dy = pos.y - origin.y;
+        const distance = Math.hypot(dx, dy);
+        if (distance <= bestDistance) {
+          bestDistance = distance;
+          best = character.id;
+        }
+      });
+      return best;
+    };
+
+    const specialTargets = specials.reduce((acc, special) => {
+      const target = findCharacterTarget(special);
+      if (!target) return acc;
+      const key = slugifyRole(special.role);
+      const record = { targetId: target, tokenId: special.id };
+      acc[key] = acc[key] ?? [];
+      acc[key].push(record);
+      specialPlacements.push(record);
+      return acc;
+    }, {});
+
+    const cupidEntries = specialTargets.cupid_hearts ?? [];
+    const cupidTargets = uniqueList(cupidEntries.map((entry) => entry.targetId));
+    const defenderTargets = uniqueList((specialTargets.defender_shield ?? []).map((entry) => entry.targetId));
+    const healTargets = uniqueList((specialTargets.witch_heal ?? []).map((entry) => entry.targetId));
+    const venomTargets = uniqueList((specialTargets.witch_venom ?? []).map((entry) => entry.targetId));
+    const wolfTargets = uniqueList((specialTargets.werewolves_claws ?? []).map((entry) => entry.targetId));
+    const infectionTargets = uniqueList(
+      [...(specialTargets.cursed_wolf_father ?? []), ...(specialTargets.father_bite ?? [])].map((entry) => entry.targetId)
+    );
+    const usedPotionIds = [
+      ...(specialTargets.witch_heal ?? []).map((entry) => entry.tokenId),
+      ...(specialTargets.witch_venom ?? []).map((entry) => entry.tokenId)
+    ];
+    const usedCupidIds = cupidEntries.map((entry) => entry.tokenId);
+
+    const loversSet = new Set(loversLinks.map((pair) => pair.join('|')));
+    if (cupidTargets.length >= 2) {
+      const [first, second] = cupidTargets;
+      const pair = [first, second].sort();
+      const key = pair.join('|');
+      if (!loversSet.has(key)) loversSet.add(key);
+    }
+    const lovers = Array.from(loversSet).map((pair) => pair.split('|'));
+
+    const deaths = new Set([...wolfTargets, ...venomTargets]);
+    healTargets.forEach((id) => deaths.delete(id));
+    defenderTargets.forEach((id) => deaths.delete(id));
+
+    deadCharacters.forEach((id) => deaths.add(id)); // keep previous deaths
+
+    lovers.forEach(([a, b]) => {
+      if (deaths.has(a)) deaths.add(b);
+      if (deaths.has(b)) deaths.add(a);
+    });
+
+    const isFirstNight =
+      phases[currentPhaseIndex]?.titleKey === 'session.phases.first_night.title' ||
+      phases[currentPhaseIndex]?.subtitleKey === 'session.phases.first_night.subtitle';
+    const angelId = characters.find((token) => slugifyRole(token.role) === 'angel')?.id;
+    const angelFalls = angelId && deaths.has(angelId) && isFirstNight;
+
+    const summary = [];
+    const loversNames = lovers.map(([a, b]) => `${nameForToken(a)} ❤️ ${nameForToken(b)}`);
+    if (loversNames.length) summary.push(`${$t('session.phases.steps.lovers')}: ${loversNames.join(', ')}`);
+    if (defenderTargets.length) summary.push(`${$t('session.phases.steps.defender')}: ${defenderTargets.map(nameForToken).join(', ')}`);
+    if (healTargets.length) summary.push(`${$t('session.phases.steps.witch')} (heal): ${healTargets.map(nameForToken).join(', ')}`);
+    if (venomTargets.length) summary.push(`${$t('session.phases.steps.witch')} (venom): ${venomTargets.map(nameForToken).join(', ')}`);
+    if (wolfTargets.length) summary.push(`${$t('session.phases.steps.werewolves')}: ${wolfTargets.map(nameForToken).join(', ')}`);
+    if (infectionTargets.length) summary.push(`${$t('session.phases.steps.cursed_wolf_father')}: ${infectionTargets.map(nameForToken).join(', ')}`);
+    if (deaths.size) summary.push(`${$t('session.victory.werewolves') || 'Eliminations'}: ${Array.from(deaths).map(nameForToken).join(', ')}`);
+    if (angelFalls) summary.push(`${$t('session.victory.angel') || 'Angel wins'} — ${$t('session.controls.finish')}`);
+
+    if (summary.length) {
+      const stamp = new Date().toLocaleTimeString();
+      logEntries = [{ text: summary.join(' | '), stamp }, ...logEntries];
+    }
+
+    loversLinks = lovers;
+    protectedTargets = defenderTargets;
+    pendingDeaths = Array.from(deaths);
+    deadCharacters = addToSet(deadCharacters, Array.from(deaths));
+    infectedTargets = infectionTargets;
+    consumedSpecialIds = addToSet(consumedSpecialIds, [...usedPotionIds, ...usedCupidIds]);
+    victoryResult = evaluateVictory(characters, deadCharacters, lovers);
+
+    if (angelFalls) {
+      sessionStatus = 'finished';
+    }
+  }
+
+  function evaluateVictory(characters = [], deadList = [], lovers = []) {
+    const dead = new Set(deadList);
+    const alive = characters.filter((token) => !dead.has(token.id));
+    const aliveWolves = alive.filter((token) => token.category === 'werewolves').length;
+    const aliveOthers = alive.length - aliveWolves;
+    const villageWins = alive.length > 0 && aliveWolves === 0;
+    const werewolvesWin = aliveWolves > 0 && aliveWolves >= aliveOthers;
+
+    let loversWin = false;
+    if (lovers.length) {
+      const loverIds = new Set(lovers.flat());
+      const aliveIds = new Set(alive.map((token) => token.id));
+      const allAliveAreLovers = alive.every((token) => loverIds.has(token.id));
+      const allLoversAlive = Array.from(loverIds).every((id) => aliveIds.has(id));
+      loversWin = loverIds.size > 0 && allAliveAreLovers && allLoversAlive;
+    }
+
+    return {
+      village: villageWins,
+      werewolves: werewolvesWin,
+      lovers: loversWin,
+      piper: false,
+      angel: false,
+      draw: false
+    };
+  }
+
+  const paletteArea = {
+    startX: 6.5,
+    endX: 21.5,
+    startY: 15,
+    endY: 85,
+    columns: 2
+  };
+
+  const characterArea = {
+    xMin: 30,
+    xMax: 95,
+    yMin: 8,
+    yMax: 92
+  };
+
+  const palettePosition = (index, total) => {
+    const cols = Math.min(paletteArea.columns, Math.max(1, total));
+    const rows = Math.max(1, Math.ceil(total / cols));
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    const xPad = 1.6;
+    const yPad = 1.1;
+    const xMin = paletteArea.startX + xPad;
+    const xMax = paletteArea.endX - xPad;
+    const yMin = paletteArea.startY + yPad;
+    const yMax = paletteArea.endY - yPad;
+    const idealStep = cols > 1 ? (xMax - xMin) / (cols - 1) : (xMax - xMin) / 2;
+    const yStepRaw = rows > 1 ? (yMax - yMin) / (rows - 1) : (yMax - yMin) / 2;
+    const step = Math.min(idealStep, yStepRaw);
+
+    const gridWidth = step * (cols - 1);
+    const gridHeight = step * (rows - 1);
+    const xStart = cols > 1 ? (xMin + xMax - gridWidth) / 2 : (xMin + xMax) / 2;
+    const yStart = rows > 1 ? (yMin + yMax - gridHeight) / 2 : (yMin + yMax) / 2;
+
+    return {
+      x: xStart + col * step,
+      y: yStart + row * step
+    };
+  };
+
+  function resetSpecialPositions() {
+    if (!tokens?.length) return;
+    const specials = tokens.filter((token) => token.category === 'special');
+    const next = { ...positions };
+    specials.forEach((token, index) => {
+      next[token.id] = palettePosition(index, specials.length);
+    });
+    positions = next;
   }
 
 </script>
@@ -298,15 +544,40 @@
         on:pointerup={handlePointerUp}
         on:pointerleave={handlePointerLeave}
       >
-        {#if tokens.length === 0}
-          <p class="board-empty">{$t('configure.role_preview_empty')}</p>
-        {:else}
-          {#each tokens as token}
+        <div class="token-palette" aria-hidden={specialTokens.length === 0}>
+          {#each specialTokens as token}
             <button
               type="button"
-              class={`role-token category-${token.category}`}
+              class={`role-token category-${token.category} token-action ${consumedSpecialIds.includes(token.id) ? 'token-consumed' : ''} ${activeId !== token.id ? 'palette-item' : ''}`}
               style={`--x:${positions[token.id]?.x ?? 50}%; --y:${positions[token.id]?.y ?? 50}%;`}
               title={token.role}
+              disabled={consumedSpecialIds.includes(token.id)}
+              on:pointerdown={(event) => handlePointerDown(token, event)}
+            >
+              <span class="token-player token-player--placeholder"></span>
+              <span class="token-circle">
+                {#if token.image}
+                  <img src={token.image} alt={token.role} draggable="false" />
+                {:else}
+                  <span class="token-initials">{token.role?.[0] ?? '?'}</span>
+                {/if}
+              </span>
+              <span class="token-role" aria-hidden="true">{token.role}</span>
+              <span class="sr-only">{token.role}</span>
+            </button>
+          {/each}
+        </div>
+
+        {#if characterTokens.length === 0}
+          <p class="board-empty">{$t('configure.role_preview_empty')}</p>
+        {:else}
+          {#each characterTokens as token}
+            <button
+              type="button"
+              class={`role-token category-${token.category} ${consumedSpecialIds.includes(token.id) ? 'token-consumed' : ''} ${loverSet.has(token.id) ? 'token-lover' : ''} ${deadSet.has(token.id) ? 'token-dead' : ''}`}
+              style={`--x:${positions[token.id]?.x ?? 50}%; --y:${positions[token.id]?.y ?? 50}%;`}
+              title={token.role}
+              disabled={consumedSpecialIds.includes(token.id)}
               on:pointerdown={(event) => handlePointerDown(token, event)}
             >
               {#if token.player}
@@ -323,6 +594,12 @@
               </span>
               <span class="token-role" aria-hidden="true">{token.role}</span>
               <span class="sr-only">{token.role}</span>
+              {#if loverSet.has(token.id)}
+                <span class="token-badge token-badge--lover" aria-hidden="true">♥</span>
+              {/if}
+              {#if deadSet.has(token.id)}
+                <span class="token-badge token-badge--dead" aria-hidden="true">✖</span>
+              {/if}
             </button>
           {/each}
         {/if}
@@ -380,35 +657,6 @@
       {/if}
     </section>
 
-    <section class={`panel victory-panel ${victoryExpanded ? 'expanded' : 'collapsed'}`}>
-      <header
-        class="panel__header collapsible"
-        role="button"
-        tabindex="0"
-        on:click={() => (victoryExpanded = !victoryExpanded)}
-        on:keydown={(event) => (event.key === 'Enter' || event.key === ' ') && (victoryExpanded = !victoryExpanded)}
-      >
-        <div>
-          <p class="eyebrow">{$t('session.victory.label')}</p>
-          <h2>{$t('session.victory.subtitle')}</h2>
-        </div>
-        <span class="caret">{victoryExpanded ? '˄' : '˅'}</span>
-      </header>
-      {#if victoryExpanded}
-        <div class="victory-grid">
-          {#each victoryChecklist as item}
-            <label class="victory-item">
-              <input
-                type="checkbox"
-                checked={victoryStates[item.id]}
-                on:change={() => toggleVictory(item.id)}
-              />
-              <span>{$t(item.key)}</span>
-            </label>
-          {/each}
-        </div>
-      {/if}
-    </section>
   </main>
 
   <Footbar>
@@ -495,6 +743,7 @@
 
   .distribution-panel {
     position: relative;
+    grid-template-rows: auto 1fr;
   }
 
 .distribution-panel.fullscreen {
@@ -506,19 +755,22 @@
   display: grid;
   grid-template-rows: auto 1fr;
 }
-
-.distribution-board {
-  flex: 1;
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
-  position: relative;
-  overflow: hidden;
-  min-height: 420px;
-  margin-top: 0.5rem;
-  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.04), transparent 60%);
-  touch-action: none;
-  height: 100%;
+.distribution-panel.fullscreen .distribution-board {
+  min-height: calc(100vh - (var(--bar-height) * 2) - 3rem);
 }
+
+  .distribution-board {
+    flex: 1;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-lg);
+    position: relative;
+    overflow: hidden;
+    min-height: 520px;
+    margin-top: 0;
+    background: radial-gradient(circle at center, rgba(255, 255, 255, 0.04), transparent 60%);
+    touch-action: none;
+    height: 100%;
+  }
 
   .board-empty {
     position: absolute;
@@ -594,6 +846,101 @@
     text-align: center;
   }
 
+  .token-action {
+    width: 68px;
+    padding: 0.05rem 0.05rem 0.15rem;
+  }
+
+  .token-action .token-circle {
+    width: 52px;
+    height: 52px;
+    border-radius: 10px;
+    aspect-ratio: 1 / 1;
+  }
+
+  .token-action .token-initials {
+    font-size: 1.05rem;
+  }
+
+  .token-action .token-role {
+    display: none;
+  }
+
+  .palette-item {
+    position: static;
+    transform: none;
+    left: auto;
+    top: auto;
+    width: 100%;
+    justify-self: center;
+  }
+
+  .token-consumed {
+    opacity: 0.45;
+    filter: grayscale(0.9);
+    cursor: not-allowed;
+  }
+
+  .token-consumed .token-circle {
+    border-style: dashed;
+  }
+
+  .token-lover::after {
+    content: '♥';
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    font-size: 0.95rem;
+    color: #ff6fa2;
+    text-shadow: 0 0 6px rgba(255, 111, 162, 0.7);
+    pointer-events: none;
+  }
+
+  .token-dead {
+    opacity: 0.55;
+    filter: grayscale(0.85);
+  }
+
+  .token-dead .token-circle {
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .token-badge {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    font-weight: 800;
+    color: var(--color-white-contrast);
+    text-shadow: 0 0 6px rgba(0, 0, 0, 0.65);
+  }
+
+  .token-badge--dead {
+    font-size: 1.2rem;
+  }
+
+  .token-palette {
+    position: absolute;
+    top: 6%;
+    bottom: 6%;
+    left: 3%;
+    width: 17%;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-lg);
+    padding: var(--space-2);
+    pointer-events: auto;
+    background: rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(8px);
+    box-shadow: none;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    place-content: center;
+    align-content: center;
+  }
+
   .phase-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -649,20 +996,6 @@
     color: var(--color-white-muted);
     font-size: 0.9rem;
     margin-bottom: 0.25rem;
-  }
-
-  .victory-panel .victory-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 0.5rem 1rem;
-  }
-
-  .victory-item {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-weight: 600;
-    color: var(--color-white-contrast);
   }
 
   .status-pill {
