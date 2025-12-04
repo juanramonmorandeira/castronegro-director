@@ -750,6 +750,7 @@
   open={activeModal === 'distribution'}
   tokens={distributionTokens}
   savedMessage={distributionSavedMessage}
+  sessionId={form.game_id || 'default'}
   on:cancel={handleDistributionClose}
   on:save={handleDistributionSave}
 />

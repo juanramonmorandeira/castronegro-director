@@ -41,7 +41,7 @@
     <Button
       variant="primary"
       type="button"
-      class="full-width"
+      className="full-width"
       disabled={connectDisabled || pending}
       on:click={handleSubmit}
     >
@@ -69,12 +69,12 @@
     width: 100%;
   }
 
-  .connect-row {
-    display: flex;
-    flex-direction: column;
-  }
+.connect-row {
+  display: flex;
+  flex-direction: column;
+}
 
-  .full-width {
-    width: 100%;
-  }
+.full-width {
+  width: 100%;
+}
 </style>

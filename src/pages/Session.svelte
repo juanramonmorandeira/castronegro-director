@@ -4,6 +4,8 @@
   import BackgroundLayer from '../components/common/BackgroundLayer.svelte';
   import { t } from '../lib/i18n.js';
   import { slugifyRole } from '../lib/roles.js';
+  import { createEventDispatcher } from 'svelte';
+  import { getSessionPositions, setRolePosition } from '../lib/stores/rolePositions.js';
 
   export let sessionId = null;
   export let selection = null;
@@ -34,8 +36,13 @@
   let consumedSpecialIds = [];
   let deadCharacters = [];
   let victoryResult = {};
+  $: sessionKey = sessionId ?? 'default';
+  let activeSpecialIds = [];
+  $: activeSpecialTokens = (specialTokens ?? []).filter((token) => activeSpecialIds.includes(token.id));
   $: loverSet = new Set(loversLinks.flat?.() ?? loversLinks.reduce((acc, pair) => acc.concat(pair), []));
   $: deadSet = new Set(deadCharacters);
+
+  const dispatch = createEventDispatcher();
 
   const roleAliases = {
     // Canonical aliases to catch variants/translation leftovers in selections and steps
@@ -196,8 +203,9 @@
 
   function syncPositions() {
     if (!tokens) return;
-    const characters = tokens.filter((token) => token.category !== 'special');
-    const specials = tokens.filter((token) => token.category === 'special');
+    const characters = characterTokens;
+    const specials = specialTokens;
+    const savedPositions = getSessionPositions(sessionKey);
 
     const columns = Math.max(1, Math.ceil(Math.sqrt(characters.length || 1)));
     const rows = Math.max(1, Math.ceil((characters.length || 1) / columns));
@@ -209,6 +217,8 @@
     characters.forEach((token, index) => {
       if (positions[token.id]) {
         next[token.id] = positions[token.id];
+      } else if (savedPositions[token.id]) {
+        next[token.id] = savedPositions[token.id];
       } else {
         const col = index % columns;
         const row = Math.floor(index / columns);
@@ -250,6 +260,10 @@
     const x = Math.min(characterArea.xMax, Math.max(characterArea.xMin, relativeX));
     const y = Math.min(characterArea.yMax, Math.max(characterArea.yMin, relativeY));
     positions = { ...positions, [activeId]: { x, y } };
+    const token = getTokenById(activeId);
+    if (token && token.category !== 'special') {
+      setRolePosition(sessionKey, activeId, { x, y });
+    }
   }
 
   function handlePointerMove(event) {
@@ -306,6 +320,10 @@
     sessionStatus = 'cancelled';
   }
 
+  function goToConfigure() {
+    dispatch('configure', { sessionId });
+  }
+
   const TARGET_SNAP_DISTANCE = 8; // percentage distance threshold to consider a token placed on a character
 
   const uniqueList = (list = []) => Array.from(new Set(list));
@@ -316,6 +334,15 @@
   };
 
   const getTokenById = (id) => tokens.find((token) => token.id === id);
+
+  function deploySpecialToken(token) {
+    if (!token || token.category !== 'special') return;
+    if (consumedSpecialIds.includes(token.id) || activeSpecialIds.includes(token.id)) return;
+    const index = activeSpecialIds.length;
+    const pos = deployedPosition(index);
+    positions = { ...positions, [token.id]: pos };
+    activeSpecialIds = [...activeSpecialIds, token.id];
+  }
 
   const nameForToken = (tokenId) => {
     const token = getTokenById(tokenId);
@@ -499,12 +526,31 @@
     };
   };
 
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+  const deployedPosition = (index = 0) => {
+    const col = index % 2;
+    const row = Math.floor(index / 2);
+    const baseX = paletteArea.endX + 4;
+    const baseY = paletteArea.startY + 8;
+    const xStep = 7;
+    const yStep = 12;
+    return {
+      x: clamp(baseX + col * xStep, characterArea.xMin, characterArea.xMax),
+      y: clamp(baseY + row * yStep, characterArea.yMin, characterArea.yMax)
+    };
+  };
+
   function resetSpecialPositions() {
     if (!tokens?.length) return;
     const specials = tokens.filter((token) => token.category === 'special');
     const next = { ...positions };
     specials.forEach((token, index) => {
-      next[token.id] = palettePosition(index, specials.length);
+      if (activeSpecialIds.includes(token.id) && positions[token.id]) {
+        next[token.id] = positions[token.id];
+      } else {
+        next[token.id] = palettePosition(index, specials.length);
+      }
     });
     positions = next;
   }
@@ -548,27 +594,24 @@
           {#each specialTokens as token}
             <button
               type="button"
-              class={`role-token category-${token.category} token-action ${consumedSpecialIds.includes(token.id) ? 'token-consumed' : ''} ${activeId !== token.id ? 'palette-item' : ''}`}
-              style={`--x:${positions[token.id]?.x ?? 50}%; --y:${positions[token.id]?.y ?? 50}%;`}
+              class={`palette-token ${consumedSpecialIds.includes(token.id) ? 'token-consumed' : ''}`}
               title={token.role}
-              disabled={consumedSpecialIds.includes(token.id)}
-              on:pointerdown={(event) => handlePointerDown(token, event)}
+              disabled={consumedSpecialIds.includes(token.id) || activeSpecialIds.includes(token.id)}
+              on:click={() => deploySpecialToken(token)}
             >
-              <span class="token-player token-player--placeholder"></span>
-              <span class="token-circle">
+              <span class="palette-token__circle">
                 {#if token.image}
                   <img src={token.image} alt={token.role} draggable="false" />
                 {:else}
                   <span class="token-initials">{token.role?.[0] ?? '?'}</span>
                 {/if}
               </span>
-              <span class="token-role" aria-hidden="true">{token.role}</span>
               <span class="sr-only">{token.role}</span>
             </button>
           {/each}
         </div>
 
-        {#if characterTokens.length === 0}
+        {#if characterTokens.length === 0 && activeSpecialTokens.length === 0}
           <p class="board-empty">{$t('configure.role_preview_empty')}</p>
         {:else}
           {#each characterTokens as token}
@@ -600,6 +643,27 @@
               {#if deadSet.has(token.id)}
                 <span class="token-badge token-badge--dead" aria-hidden="true">✖</span>
               {/if}
+            </button>
+          {/each}
+          {#each activeSpecialTokens as token}
+            <button
+              type="button"
+              class={`role-token category-${token.category} token-action ${consumedSpecialIds.includes(token.id) ? 'token-consumed' : ''}`}
+              style={`--x:${positions[token.id]?.x ?? 50}%; --y:${positions[token.id]?.y ?? 50}%;`}
+              title={token.role}
+              disabled={consumedSpecialIds.includes(token.id)}
+              on:pointerdown={(event) => handlePointerDown(token, event)}
+            >
+              <span class="token-player token-player--placeholder"></span>
+              <span class="token-circle">
+                {#if token.image}
+                  <img src={token.image} alt={token.role} draggable="false" />
+                {:else}
+                  <span class="token-initials">{token.role?.[0] ?? '?'}</span>
+                {/if}
+              </span>
+              <span class="token-role" aria-hidden="true">{token.role}</span>
+              <span class="sr-only">{token.role}</span>
             </button>
           {/each}
         {/if}
@@ -669,8 +733,7 @@
         {/if}
       </div>
       <div class="dock-controls">
-        <button class="btn secondary btn--size-sm" type="button" on:click={prevPhase} disabled={currentPhaseIndex <= lockedThroughIndex}>{$t('session.controls.previous')}</button>
-        <button class="btn secondary btn--size-sm" type="button" on:click={nextPhase} disabled={currentPhaseIndex >= phases.length - 1}>{$t('session.controls.next')}</button>
+        <button class="btn secondary btn--size-sm" type="button" on:click={goToConfigure}>Configure</button>
         <button class="btn ghost btn--size-sm" type="button" on:click={closeDay}>{$t('session.controls.close_day')}</button>
         <button class="btn ghost btn--size-sm" type="button" on:click={pauseSession}>{sessionStatus === 'paused' ? $t('session.controls.resume') : $t('session.controls.pause')}</button>
         <button class="btn danger btn--size-sm" type="button" on:click={finishSession} disabled={!finishEnabled}>{$t('session.controls.finish')}</button>
@@ -798,6 +861,7 @@
     cursor: grab;
     background: transparent;
     border: none;
+    z-index: 1;
   }
 
   .role-token:active {
@@ -809,9 +873,7 @@
     color: var(--color-white-muted);
     min-height: 1em;
     max-width: 100%;
-    text-overflow: ellipsis;
-    overflow: hidden;
-    white-space: nowrap;
+    text-align: center;
   }
 
   .token-player--placeholder {
@@ -819,31 +881,43 @@
   }
 
   .token-circle {
-    width: 90px;
-    height: 90px;
+    width: 92px;
+    height: 92px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.04);
-    display: grid;
-    place-items: center;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 3px solid rgba(255, 255, 255, 0.35);
+    background: rgba(3, 6, 14, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
     overflow: hidden;
+    box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.45);
+    pointer-events: none;
   }
 
   .token-circle img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
+    width: 72px;
+    height: 72px;
+    object-fit: contain;
+    border-radius: 50%;
     pointer-events: none;
+    user-select: none;
   }
 
   .token-initials {
     font-size: 1.6rem;
     font-weight: 700;
+    letter-spacing: 0.08em;
   }
 
   .token-role {
-    font-size: 0.85rem;
+    width: 110px;
     text-align: center;
+    font-family: var(--font-body);
+    font-size: 0.98rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    color: var(--color-white-muted);
+    margin-top: 8px;
   }
 
   .token-action {
@@ -856,6 +930,7 @@
     height: 52px;
     border-radius: 10px;
     aspect-ratio: 1 / 1;
+    pointer-events: none;
   }
 
   .token-action .token-initials {
@@ -866,13 +941,20 @@
     display: none;
   }
 
-  .palette-item {
-    position: static;
-    transform: none;
-    left: auto;
-    top: auto;
-    width: 100%;
-    justify-self: center;
+  .role-token.category-villagers .token-circle {
+    border-color: var(--color-green-cta--primary);
+  }
+  .role-token.category-ambiguous .token-circle {
+    border-color: var(--color-gold-info);
+  }
+  .role-token.category-loners .token-circle {
+    border-color: var(--color-white-contrast);
+  }
+  .role-token.category-werewolves .token-circle {
+    border-color: var(--color-error-strong);
+  }
+  .role-token.category-special .token-circle {
+    border-color: var(--color-gold-info);
   }
 
   .token-consumed {
@@ -939,6 +1021,34 @@
     gap: 12px;
     place-content: center;
     align-content: center;
+  }
+
+  .palette-token {
+    display: grid;
+    place-items: center;
+    gap: 0.15rem;
+    padding: 0.35rem;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+  }
+
+  .palette-token__circle {
+    width: 52px;
+    height: 52px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    overflow: hidden;
+  }
+
+  .palette-token__circle img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
   }
 
   .phase-grid {

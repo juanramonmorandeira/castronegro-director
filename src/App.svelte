@@ -375,6 +375,7 @@
     sessionIndicator={sessionIndicator}
     on:logout={handleLogout}
     on:profile={openProfile}
+    on:configure={() => goConfigure(currentSessionId)}
   />
 {:else if view === APP_VIEWS.LANDING}
   <Dashboard

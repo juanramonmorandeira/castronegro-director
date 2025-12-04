@@ -3,10 +3,12 @@
   import { t } from '../../lib/i18n.js';
   import Modal from '../ui/Modal.svelte';
   import Button from '../ui/Button.svelte';
+  import { getSessionPositions, setRolePosition } from '../../lib/stores/rolePositions.js';
 
   export let open = false;
   export let tokens = [];
   export let savedMessage = '';
+  export let sessionId = 'default';
 
   const dispatch = createEventDispatcher();
   let boardElement;
@@ -16,16 +18,21 @@
   let boardRect = null;
   let pointerOffset = { x: 0, y: 0 };
 
+  $: displayTokens = (tokens ?? []).filter((token) => token.category !== 'special');
+  $: sessionKey = sessionId ?? 'default';
   $: syncPositions();
 
   function syncPositions() {
-    if (!tokens) return;
-    const columns = Math.max(1, Math.ceil(Math.sqrt(tokens.length || 1)));
-    const rows = Math.max(1, Math.ceil((tokens.length || 1) / columns));
+    if (!displayTokens) return;
+    const savedPositions = getSessionPositions(sessionKey);
+    const columns = Math.max(1, Math.ceil(Math.sqrt(displayTokens.length || 1)));
+    const rows = Math.max(1, Math.ceil((displayTokens.length || 1) / columns));
     const next = {};
-    tokens.forEach((token, index) => {
+    displayTokens.forEach((token, index) => {
       if (positions[token.id]) {
         next[token.id] = positions[token.id];
+      } else if (savedPositions[token.id]) {
+        next[token.id] = savedPositions[token.id];
       } else {
         const col = index % columns;
         const row = Math.floor(index / columns);
@@ -71,6 +78,7 @@
     const x = Math.min(95, Math.max(5, relativeX));
     const y = Math.min(95, Math.max(5, relativeY));
     positions = { ...positions, [activeId]: { x, y } };
+    setRolePosition(sessionKey, activeId, { x, y });
   }
 
   function handlePointerMove(event) {
@@ -107,10 +115,10 @@
     on:pointerup={handlePointerUp}
     on:pointerleave={handlePointerLeave}
   >
-    {#if tokens.length === 0}
+    {#if displayTokens.length === 0}
       <p class="board-empty">{$t('configure.role_preview_empty')}</p>
     {:else}
-      {#each tokens as token}
+      {#each displayTokens as token}
         <button
           type="button"
           class={`role-token category-${token.category}`}
