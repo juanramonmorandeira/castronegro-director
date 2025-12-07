@@ -116,17 +116,17 @@ export function buildDistributionTokens(selection, assignments = {}, players = [
     }
   }
 
-  // Piper special tokens: one charm per player (excluding the Piper).
+  // Piper special tokens: charms the Piper can use each night (at least 2, or one per other player).
   const piperCount =
     Number(
-      selection?.villagers?.piper ??
-        selection?.villagers?.Piper ??
-        selection?.villagers?.['The Piper'] ??
+      selection?.loners?.piper ??
+        selection?.loners?.Piper ??
+        selection?.loners?.['The Piper'] ??
         0
     ) || 0;
   const playerCount = Array.isArray(players) ? players.length : 0;
   if (piperCount > 0) {
-    const piperCharms = Math.max(0, playerCount - 1);
+    const piperCharms = Math.max(2, playerCount - 1); // mínimo 2 fichas por noche
     for (let index = 0; index < piperCharms; index += 1) {
       tokens.push({
         id: `special-piper-charm-${index}`,
@@ -188,11 +188,12 @@ export function buildDistributionTokens(selection, assignments = {}, players = [
   }
 
   // Werewolves claws: always at least one, +1 if Big Bad Wolf ("bad") is in play.
-  const wolfCount =
-    Number(selection?.werewolves?.werewolf ?? selection?.werewolves?.Werewolf ?? 0) +
-    Number(selection?.werewolves?.bad ?? selection?.werewolves?.Bad ?? 0);
-  if (wolfCount > 0) {
-    const claws = 1 + (Number(selection?.werewolves?.bad ?? selection?.werewolves?.Bad ?? 0) > 0 ? 1 : 0);
+  // Werewolves claws: always at least one if any werewolf-aligned role is present.
+  const werewolfEntries = Object.values(selection?.werewolves ?? {}).map((val) => Number(val) || 0);
+  const totalWerewolves = werewolfEntries.reduce((sum, val) => sum + val, 0);
+  const badCount = Number(selection?.werewolves?.bad ?? selection?.werewolves?.Bad ?? 0) || 0;
+  if (totalWerewolves > 0) {
+    const claws = 1 + (badCount > 0 ? 1 : 0);
     for (let index = 0; index < claws; index += 1) {
       tokens.push({
         id: `special-werewolves-claws-${index}`,

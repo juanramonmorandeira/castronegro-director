@@ -3,7 +3,7 @@
   import Footbar from '../components/common/Footbar.svelte';
   import BackgroundLayer from '../components/common/BackgroundLayer.svelte';
   import { t } from '../lib/i18n.js';
-  import { slugifyRole } from '../lib/roles.js';
+  import { slugifyRole, roleImageSrc } from '../lib/roles.js';
   import { createEventDispatcher } from 'svelte';
   import { getSessionPositions, setRolePosition } from '../lib/stores/rolePositions.js';
 
@@ -33,14 +33,18 @@
   let protectedTargets = [];
   let pendingDeaths = [];
   let infectedTargets = [];
+  let charmedTargets = [];
   let consumedSpecialIds = [];
   let deadCharacters = [];
   let victoryResult = {};
   $: sessionKey = sessionId ?? 'default';
+  let lastProtectedTargets = [];
   let activeSpecialIds = [];
   $: activeSpecialTokens = (specialTokens ?? []).filter((token) => activeSpecialIds.includes(token.id));
   $: loverSet = new Set(loversLinks.flat?.() ?? loversLinks.reduce((acc, pair) => acc.concat(pair), []));
+  $: loverIdsSet = new Set(loverSet);
   $: deadSet = new Set(deadCharacters);
+  $: infectedIdSet = new Set(infectedTargets);
 
   const dispatch = createEventDispatcher();
 
@@ -335,6 +339,27 @@
 
   const getTokenById = (id) => tokens.find((token) => token.id === id);
 
+  function convertAngelToVillager(angelId) {
+    tokens = tokens.map((token) => {
+      if (token.id !== angelId) return token;
+      return {
+        ...token,
+        role: 'Villager',
+        category: 'villagers',
+        image: roleImageSrc('villagers', 'villager')
+      };
+    });
+  }
+
+  const infectedImageFor = (token) => {
+    const baseCategory = token.category;
+    const slug = slugifyRole(token.role);
+    return `/roles/infected/${baseCategory}/wolf-${slug}.png`;
+  };
+
+  const displayCategory = (token) => (infectedIdSet.has(token.id) ? 'werewolves' : token.category);
+  const displayImage = (token) => (infectedIdSet.has(token.id) ? infectedImageFor(token) : token.image);
+
   function deploySpecialToken(token) {
     if (!token || token.category !== 'special') return;
     if (consumedSpecialIds.includes(token.id) || activeSpecialIds.includes(token.id)) return;
@@ -390,18 +415,26 @@
 
     const cupidEntries = specialTargets.cupid_hearts ?? [];
     const cupidTargets = uniqueList(cupidEntries.map((entry) => entry.targetId));
-    const defenderTargets = uniqueList((specialTargets.defender_shield ?? []).map((entry) => entry.targetId));
+    const defenderEntries = specialTargets.defender_shield ?? [];
+    const defenderTargetsRaw = defenderEntries.map((entry) => entry.targetId);
+    const defenderTargets = uniqueList(defenderTargetsRaw);
     const healTargets = uniqueList((specialTargets.witch_heal ?? []).map((entry) => entry.targetId));
     const venomTargets = uniqueList((specialTargets.witch_venom ?? []).map((entry) => entry.targetId));
     const wolfTargets = uniqueList((specialTargets.werewolves_claws ?? []).map((entry) => entry.targetId));
     const infectionTargets = uniqueList(
       [...(specialTargets.cursed_wolf_father ?? []), ...(specialTargets.father_bite ?? [])].map((entry) => entry.targetId)
     );
+    const piperTargets = uniqueList((specialTargets.piper_charm ?? []).map((entry) => entry.targetId));
     const usedPotionIds = [
       ...(specialTargets.witch_heal ?? []).map((entry) => entry.tokenId),
       ...(specialTargets.witch_venom ?? []).map((entry) => entry.tokenId)
     ];
     const usedCupidIds = cupidEntries.map((entry) => entry.tokenId);
+    const usedPiperIds = (specialTargets.piper_charm ?? []).map((entry) => entry.tokenId);
+    const usedFatherIds = [
+      ...(specialTargets.cursed_wolf_father ?? []).map((entry) => entry.tokenId),
+      ...(specialTargets.father_bite ?? []).map((entry) => entry.tokenId)
+    ];
 
     const loversSet = new Set(loversLinks.map((pair) => pair.join('|')));
     if (cupidTargets.length >= 2) {
@@ -409,12 +442,17 @@
       const pair = [first, second].sort();
       const key = pair.join('|');
       if (!loversSet.has(key)) loversSet.add(key);
+    } else {
+      // No pareja completa: no consumimos corazones ni marcamos amantes
+      cupidEntries.length = 0;
     }
     const lovers = Array.from(loversSet).map((pair) => pair.split('|'));
+    const loverIds = new Set(lovers.flat());
 
     const deaths = new Set([...wolfTargets, ...venomTargets]);
     healTargets.forEach((id) => deaths.delete(id));
-    defenderTargets.forEach((id) => deaths.delete(id));
+    const effectiveDefenders = defenderTargets.filter((id) => !lastProtectedTargets.includes(id));
+    effectiveDefenders.forEach((id) => deaths.delete(id));
 
     deadCharacters.forEach((id) => deaths.add(id)); // keep previous deaths
 
@@ -428,15 +466,21 @@
       phases[currentPhaseIndex]?.subtitleKey === 'session.phases.first_night.subtitle';
     const angelId = characters.find((token) => slugifyRole(token.role) === 'angel')?.id;
     const angelFalls = angelId && deaths.has(angelId) && isFirstNight;
+    if (isFirstNight && angelId && !deaths.has(angelId)) {
+      convertAngelToVillager(angelId);
+    }
 
     const summary = [];
     const loversNames = lovers.map(([a, b]) => `${nameForToken(a)} ❤️ ${nameForToken(b)}`);
     if (loversNames.length) summary.push(`${$t('session.phases.steps.lovers')}: ${loversNames.join(', ')}`);
-    if (defenderTargets.length) summary.push(`${$t('session.phases.steps.defender')}: ${defenderTargets.map(nameForToken).join(', ')}`);
+    const failedDefenders = defenderTargets.filter((id) => lastProtectedTargets.includes(id));
+    if (effectiveDefenders.length) summary.push(`${$t('session.phases.steps.defender')}: ${effectiveDefenders.map(nameForToken).join(', ')}`);
+    if (failedDefenders.length) summary.push(`${$t('session.phases.steps.defender')}: ${failedDefenders.map(nameForToken).join(', ')} (${ $t('session.phases.steps.defender') } failed)`);
     if (healTargets.length) summary.push(`${$t('session.phases.steps.witch')} (heal): ${healTargets.map(nameForToken).join(', ')}`);
     if (venomTargets.length) summary.push(`${$t('session.phases.steps.witch')} (venom): ${venomTargets.map(nameForToken).join(', ')}`);
     if (wolfTargets.length) summary.push(`${$t('session.phases.steps.werewolves')}: ${wolfTargets.map(nameForToken).join(', ')}`);
     if (infectionTargets.length) summary.push(`${$t('session.phases.steps.cursed_wolf_father')}: ${infectionTargets.map(nameForToken).join(', ')}`);
+    if (piperTargets.length) summary.push(`${$t('session.phases.steps.piper') || 'Piper charms'}: ${piperTargets.map(nameForToken).join(', ')}`);
     if (deaths.size) summary.push(`${$t('session.victory.werewolves') || 'Eliminations'}: ${Array.from(deaths).map(nameForToken).join(', ')}`);
     if (angelFalls) summary.push(`${$t('session.victory.angel') || 'Angel wins'} — ${$t('session.controls.finish')}`);
 
@@ -450,19 +494,27 @@
     pendingDeaths = Array.from(deaths);
     deadCharacters = addToSet(deadCharacters, Array.from(deaths));
     infectedTargets = infectionTargets;
-    consumedSpecialIds = addToSet(consumedSpecialIds, [...usedPotionIds, ...usedCupidIds]);
-    victoryResult = evaluateVictory(characters, deadCharacters, lovers);
+    charmedTargets = addToSet(charmedTargets, piperTargets);
+    const cupidConsumption = cupidTargets.length >= 2 ? usedCupidIds : [];
+    consumedSpecialIds = addToSet(consumedSpecialIds, [...usedPotionIds, ...cupidConsumption, ...usedFatherIds]);
+    victoryResult = evaluateVictory(characters, deadCharacters, lovers, infectedTargets);
+    lastProtectedTargets = defenderTargets;
+
+    // reset tokens de acción al panel lateral
+    activeSpecialIds = [];
+    resetSpecialPositions();
 
     if (angelFalls) {
       sessionStatus = 'finished';
     }
   }
 
-  function evaluateVictory(characters = [], deadList = [], lovers = []) {
+  function evaluateVictory(characters = [], deadList = [], lovers = [], infectedList = []) {
     const dead = new Set(deadList);
     const alive = characters.filter((token) => !dead.has(token.id));
-    const aliveWolves = alive.filter((token) => token.category === 'werewolves').length;
-    const aliveOthers = alive.length - aliveWolves;
+    const infectedSet = new Set(infectedList);
+    const aliveWolves = alive.filter((token) => token.category === 'werewolves' || infectedSet.has(token.id)).length;
+    const aliveOthers = alive.filter((token) => token.category !== 'werewolves' && !infectedSet.has(token.id)).length;
     const villageWins = alive.length > 0 && aliveWolves === 0;
     const werewolvesWin = aliveWolves > 0 && aliveWolves >= aliveOthers;
 
@@ -617,7 +669,7 @@
           {#each characterTokens as token}
             <button
               type="button"
-              class={`role-token category-${token.category} ${consumedSpecialIds.includes(token.id) ? 'token-consumed' : ''} ${loverSet.has(token.id) ? 'token-lover' : ''} ${deadSet.has(token.id) ? 'token-dead' : ''}`}
+              class={`role-token category-${displayCategory(token)} ${consumedSpecialIds.includes(token.id) ? 'token-consumed' : ''} ${loverIdsSet?.has(token.id) ? 'token-lover' : ''} ${deadSet.has(token.id) ? 'token-dead' : ''} ${infectedTargets.includes(token.id) ? 'token-infected' : ''}`}
               style={`--x:${positions[token.id]?.x ?? 50}%; --y:${positions[token.id]?.y ?? 50}%;`}
               title={token.role}
               disabled={consumedSpecialIds.includes(token.id)}
@@ -629,19 +681,28 @@
                 <span class="token-player token-player--placeholder"></span>
               {/if}
               <span class="token-circle">
-                {#if token.image}
-                  <img src={token.image} alt={token.role} draggable="false" />
+                {#if displayImage(token)}
+                  <img src={displayImage(token)} alt={token.role} draggable="false" />
                 {:else}
                   <span class="token-initials">{token.role?.[0] ?? '?'}</span>
                 {/if}
               </span>
               <span class="token-role" aria-hidden="true">{token.role}</span>
               <span class="sr-only">{token.role}</span>
-              {#if loverSet.has(token.id)}
-                <span class="token-badge token-badge--lover" aria-hidden="true">♥</span>
-              {/if}
               {#if deadSet.has(token.id)}
                 <span class="token-badge token-badge--dead" aria-hidden="true">✖</span>
+              {/if}
+              {#if charmedTargets?.includes(token.id)}
+                <span class="token-badge token-badge--charmed" aria-hidden="true">♪</span>
+              {/if}
+              {#if lastProtectedTargets?.includes(token.id)}
+                <span class="token-badge token-badge--protected" aria-hidden="true">🛡</span>
+              {/if}
+              {#if loverIdsSet?.has(token.id)}
+                <span class="token-badge token-badge--lover" aria-hidden="true">♥</span>
+              {/if}
+              {#if charmedTargets?.includes(token.id)}
+                <span class="token-badge token-badge--charmed" aria-hidden="true">♪</span>
               {/if}
             </button>
           {/each}
@@ -987,6 +1048,20 @@
     border-color: rgba(255, 255, 255, 0.2);
   }
 
+  .token-infected .token-circle {
+    border-color: var(--color-error-strong);
+    background: radial-gradient(circle at 50% 50%, rgba(64, 0, 0, 0.35), rgba(3, 6, 14, 0.9));
+    position: relative;
+  }
+
+  .token-infected .token-circle::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to right, rgba(255, 50, 50, 0.45) 0 50%, transparent 50% 100%);
+    pointer-events: none;
+  }
+
   .token-badge {
     position: absolute;
     inset: 0;
@@ -1002,6 +1077,26 @@
   .token-badge--dead {
     font-size: 1.2rem;
   }
+  .token-badge--charmed {
+    font-size: 1.2rem;
+    color: var(--color-gold-info);
+    text-shadow: 0 0 8px rgba(0, 0, 0, 0.65);
+    top: 4px;
+    left: 4px;
+    right: auto;
+    bottom: auto;
+  }
+  .token-badge--protected {
+    font-size: 1rem;
+    color: var(--color-white-contrast);
+    text-shadow: 0 0 6px rgba(0, 0, 0, 0.55);
+    bottom: 4px;
+    right: 6px;
+    left: auto;
+    top: auto;
+  }
+  .token-badge--lover { top: 4px; right: 6px; left: auto; bottom: auto; }
+  .token-badge--dead { top: 50%; left: 50%; right: auto; bottom: auto; transform: translate(-50%, -50%); }
 
   .token-palette {
     position: absolute;

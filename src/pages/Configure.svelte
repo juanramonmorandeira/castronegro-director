@@ -159,6 +159,8 @@
 
   let selectedRoles = createEmptyRoleSelection();
   let rolesCustomized = false;
+  let selectedActorRoles = [];
+  let selectedThiefRoles = [];
   let autoSeedKey = '';
   let alertOpen = false;
   let alertMessage = '';
@@ -457,6 +459,12 @@
       rolesCustomized = true;
       autoSeedKey = `${form.rulesets}|${form.players_expected}`;
     }
+    if (Array.isArray(detail.actorRoles)) {
+      selectedActorRoles = detail.actorRoles;
+    }
+    if (Array.isArray(detail.thiefRoles)) {
+      selectedThiefRoles = detail.thiefRoles;
+    }
     if (typeof detail.override === 'boolean') {
       overrideRoleLimits = detail.override;
     }
@@ -718,13 +726,15 @@
   on:cancel={closeModal}
 />
 
-<SelectionModal
-  open={activeModal === 'selection'}
-  categories={ROLE_BREAKDOWN_ORDER}
-  roles={rulesetRoles}
-  selected={selectedRoles}
-  limits={roleLimits}
-  resourceLimits={resourceLimits}
+  <SelectionModal
+    open={activeModal === 'selection'}
+    categories={ROLE_BREAKDOWN_ORDER}
+    roles={rulesetRoles}
+    selected={selectedRoles}
+    actorRoles={selectedActorRoles}
+    thiefRoles={selectedThiefRoles}
+    limits={roleLimits}
+    resourceLimits={resourceLimits}
   override={overrideRoleLimits}
   players={form.players_expected}
   mix={playerBreakdown}
