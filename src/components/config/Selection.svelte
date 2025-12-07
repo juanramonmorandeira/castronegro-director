@@ -104,6 +104,7 @@
   let wasOpen = false;
   let actorChoices = ['', '', ''];
   let thiefChoices = ['', ''];
+  let actorActive = false;
   let pickerOpen = false;
   let pickerType = null; // 'actor' | 'thief'
   let pickerIndex = 0;
@@ -124,12 +125,14 @@
     wasOpen = false;
   }
 
-  function hasRoleSelected(slug) {
+  const hasRoleSelected = (slug) => {
     const target = slugify(slug);
     return Object.values(draftSelections ?? {}).some((category) =>
-      Object.entries(category ?? {}).some(([role, count]) => slugify(role) === target && count > 0)
+      Object.entries(category ?? {}).some(
+        ([role, count]) => slugify(role) === target && Number(count) > 0
+      )
     );
-  }
+  };
 
   const categoryLimit = (category) => {
     if (draftOverride) return categoryResourceLimit(category);
@@ -202,15 +205,33 @@
     setRoleCount(category, role, finalCount);
   }
 
-  const actorActive = hasRoleSelected('actor') || actorChoices.some(Boolean);
-  const thiefActive = hasRoleSelected('thief') || thiefChoices.some(Boolean);
+$: hasActorRole = hasRoleSelected('actor');
+$: actorActive =
+  hasActorRole ||
+  actorChoices.some(Boolean) ||
+  Boolean(draftSelections?.Ambiguous?.actor ?? draftSelections?.ambiguous?.actor);
+const thiefActive = hasRoleSelected('thief') || thiefChoices.some(Boolean);
+$: console.warn('[selection] actor state', {
+  actorActive,
+  hasActorRole,
+  actorChoices,
+  ambiguous: draftSelections?.ambiguous,
+  draftKeys: Object.keys(draftSelections || {}),
+  ambiguousKeys: Object.keys(draftSelections?.ambiguous || draftSelections?.Ambiguous || {})
+});
 
-  $: if (!hasRoleSelected('actor') && actorChoices.some(Boolean)) {
-    actorChoices = ['', '', ''];
-  }
-  $: if (!hasRoleSelected('thief') && thiefChoices.some(Boolean)) {
-    thiefChoices = ['', ''];
-  }
+$: if (!hasRoleSelected('actor') && actorChoices.some(Boolean)) {
+  actorChoices = ['', '', ''];
+}
+$: if (!hasRoleSelected('thief') && thiefChoices.some(Boolean)) {
+  thiefChoices = ['', ''];
+}
+
+$: console.debug('[selection] actorActive', actorActive, {
+  hasActorRole,
+  actorChoices,
+  ambiguous: draftSelections?.ambiguous
+});
 
   $: actorSelectedSlugs = new Set(actorChoices.filter(Boolean).map((role) => slugify(role)));
   $: thiefSelectedSlugs = new Set(thiefChoices.filter(Boolean).map((role) => slugify(role)));
@@ -230,6 +251,13 @@
     const selectedInVillagers = (draftSelections?.villagers?.[role] ?? 0) > 0;
     return !selectedInVillagers && !actorSelectedSlugs.has(slug) && !thiefSelectedSlugs.has(slug);
   });
+
+  const isActorReserved = (role) => {
+    const slug = slugify(role);
+    return actorSelectedSlugs.has(slug) && !duplicateSet.has(slug);
+  };
+
+  const isBlockedByActor = (role) => isActorReserved(role);
 
   const allRoleCategory = (() => {
     const map = new Map();
@@ -402,8 +430,9 @@
               {:else}
                 <button
                   type="button"
-                  class={`role-card ${draftSelections[category]?.[role] ? 'selected' : ''}`}
+                  class={`role-card ${draftSelections[category]?.[role] ? 'selected' : ''} ${isBlockedByActor(role) ? 'blocked-by-actor' : ''}`}
                   on:click={() => toggleRole(category, role)}
+                  disabled={isBlockedByActor(role)}
                 >
                   <img src={`/roles/${category}/${slugify(role)}.png`} alt={role} />
                   <span class="card-info">{role}</span>
@@ -412,6 +441,7 @@
             {/each}
           </div>
         </section>
+
       {/each}
 
       {#if actorActive}
@@ -669,6 +699,21 @@
   .role-card.duplicable {
     justify-content: space-between;
   }
+
+  .role-card.blocked-by-actor {
+    filter: grayscale(1);
+    opacity: 0.55;
+    cursor: not-allowed;
+    position: relative;
+  }
+
+  .role-card.blocked-by-actor:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: var(--glass-border);
+  }
+
+  /* badge removed per request */
 
   .counter {
     display: flex;
