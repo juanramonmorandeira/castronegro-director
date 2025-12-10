@@ -6,6 +6,7 @@
   import { slugifyRole, roleImageSrc } from '../lib/roles.js';
   import { createEventDispatcher } from 'svelte';
   import { getSessionPositions, setRolePosition } from '../lib/stores/rolePositions.js';
+  import Modal from '../components/ui/Modal.svelte';
 
   export let sessionId = null;
   export let selection = null;
@@ -43,6 +44,8 @@
   let preparationResolved = false;
   let nightNumber = 0;
   let dayNumber = 0;
+  let previewOpen = false;
+  let previewToken = null;
   $: sessionKey = sessionId ?? 'default';
   let lastProtectedTargets = [];
   let activeSpecialIds = [];
@@ -500,6 +503,15 @@
   const isSheriffToken = (token) => slugifyRole(token?.role) === 'sheriff_badge';
   const sheriffPhaseEligible = () =>
     !sheriffDisabled && (isPreparationPhase || isFirstDayPhase || isEachDayPhase);
+  const openPreview = (token) => {
+    if (!token || token.category === 'special') return;
+    previewToken = token;
+    previewOpen = true;
+  };
+  const closePreview = () => {
+    previewToken = null;
+    previewOpen = false;
+  };
 
   function deploySpecialToken(token) {
     if (!token || token.category !== 'special') return;
@@ -1023,6 +1035,17 @@
               {#if sheriffHolderId === token.id}
                 <span class="token-badge token-badge--sheriff" aria-hidden="true">★</span>
               {/if}
+              <span
+                class="token-preview-btn"
+                role="button"
+                tabindex="0"
+                on:click|stopPropagation={() => openPreview(token)}
+                on:pointerdown|stopPropagation
+                on:keydown|stopPropagation={(event) => (event.key === 'Enter' || event.key === ' ') && openPreview(token)}
+                aria-label={$t('session.preview.view_role')}
+              >
+                <img src="/tokens/seer-eye.png" alt="" aria-hidden="true" />
+              </span>
             </button>
           {/each}
           {#each activeSpecialTokens as token}
@@ -1116,6 +1139,24 @@
       </div>
     </div>
   </Footbar>
+
+  <Modal
+    open={previewOpen}
+    title={previewToken ? previewToken.role : ''}
+    size="xl"
+    closeOnBackdrop={true}
+    on:close={closePreview}
+  >
+    {#if previewToken}
+      <div class="preview-wrapper">
+        <img src={displayImage(previewToken)} alt={previewToken.role} class="preview-image" />
+        <p class="preview-caption">{previewToken.player ? `${previewToken.role} (${previewToken.player})` : previewToken.role}</p>
+      </div>
+    {/if}
+    <svelte:fragment slot="footer">
+      <button class="btn primary" type="button" on:click={closePreview}>{$t('common.actions.close')}</button>
+    </svelte:fragment>
+  </Modal>
 </div>
 
 <style>
@@ -1406,6 +1447,52 @@
     color: #111;
     border: 1px solid rgba(0, 0, 0, 0.45);
     box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.15);
+  }
+
+  .token-preview-btn {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    border: none;
+    background: rgba(0, 0, 0, 0.65);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    padding: 2px;
+    transition: transform 120ms ease, background 120ms ease;
+  }
+
+  .token-preview-btn img {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+  }
+
+  .token-preview-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    transform: scale(1.05);
+  }
+
+  .preview-wrapper {
+    display: grid;
+    place-items: center;
+    gap: 1rem;
+    padding: 1rem;
+  }
+
+  .preview-image {
+    max-width: min(420px, 80vw);
+    max-height: 70vh;
+    object-fit: contain;
+  }
+
+  .preview-caption {
+    margin: 0;
+    color: var(--color-white-muted);
+    font-weight: 600;
   }
 
   .token-palette {
