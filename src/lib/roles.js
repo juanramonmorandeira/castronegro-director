@@ -54,6 +54,8 @@ export function buildDistributionTokens(selection, assignments = {}, players = [
   const witchVenomPath = '/tokens/witch-venom.png';
   const werewolvesClawPath = '/tokens/werewolves-claw.png';
   const fatherBitePath = '/tokens/father-bite.png';
+  const sheriffBadgePath = '/badge/sheriff.png';
+  const villagersEliminationPath = '/tokens/villagers-elimination.png';
 
   const pushAssignment = (slug, label) => {
     if (!slug || !label) return;
@@ -218,6 +220,24 @@ export function buildDistributionTokens(selection, assignments = {}, players = [
       player: null
     });
   }
+
+  // Sheriff badge is always available for the preparation phase.
+  tokens.push({
+    id: 'special-sheriff-badge-0',
+    role: 'Sheriff Badge',
+    category: 'special',
+    image: sheriffBadgePath,
+    player: null
+  });
+
+  // Villagers elimination marker for daytime resolutions.
+  tokens.push({
+    id: 'special-villagers-elimination-0',
+    role: 'Villagers Elimination',
+    category: 'special',
+    image: villagersEliminationPath,
+    player: null
+  });
 
   return tokens;
 }

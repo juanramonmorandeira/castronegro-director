@@ -341,8 +341,10 @@ const dictionaries = {
       },
       phases: {
         label: 'Phase order',
+        current: 'Current phase',
         preparation: { title: 'Preparation', subtitle: 'Setup and initial roles' },
         first_night: { title: 'First night', subtitle: 'Opening calls' },
+        first_day: { title: 'First day', subtitle: 'First daylight' },
         each_night: { title: 'Each night', subtitle: 'Standard order' },
         each_day: { title: 'Each day', subtitle: 'Daytime actions' },
         steps: {
@@ -411,13 +413,15 @@ const dictionaries = {
       controls: {
         previous: 'Previous',
         next: 'Next',
-        close_day: 'Close day',
-        pause: 'Pause',
-        resume: 'Resume',
+        evaluate_phase: 'Evaluate phase',
         finish: 'Finish',
         cancel: 'Cancel',
         fullscreen: 'Fullscreen',
         exit_fullscreen: 'Exit fullscreen'
+      },
+      sheriff: {
+        assigned: 'Sheriff assigned',
+        lost: 'Sheriff badge lost'
       }
     },
     verify: {
@@ -1016,8 +1020,10 @@ const dictionaries = {
       },
       phases: {
         label: 'Orden de llamadas',
+        current: 'Fase actual',
         preparation: { title: 'Preparación', subtitle: 'Montaje inicial' },
         first_night: { title: 'Primera noche', subtitle: 'Llamadas iniciales' },
+        first_day: { title: 'Primer día', subtitle: 'Primera jornada' },
         each_night: { title: 'Cada noche', subtitle: 'Orden estándar' },
         each_day: { title: 'Cada día', subtitle: 'Acciones diurnas' },
         steps: {
@@ -1086,13 +1092,15 @@ const dictionaries = {
       controls: {
         previous: 'Anterior',
         next: 'Siguiente',
-        close_day: 'Cerrar día',
-        pause: 'Pausar',
-        resume: 'Reanudar',
+        evaluate_phase: 'Evaluar fase',
         finish: 'Finalizar',
         cancel: 'Cancelar',
         fullscreen: 'Pantalla completa',
         exit_fullscreen: 'Salir de pantalla completa'
+      },
+      sheriff: {
+        assigned: 'Alguacil asignado',
+        lost: 'Insignia del Alguacil perdida'
       }
     },
     app: {
@@ -1563,8 +1571,10 @@ const dictionaries = {
       },
       phases: {
         label: 'Fázis sorrend',
+        current: 'Aktuális fázis',
         preparation: { title: 'Előkészítés', subtitle: 'Kezdeti lépések' },
         first_night: { title: 'Első éjszaka', subtitle: 'Első hívások' },
+        first_day: { title: 'Első nap', subtitle: 'Első nappali kör' },
         each_night: { title: 'Minden éjszaka', subtitle: 'Alap sorrend' },
         each_day: { title: 'Minden nap', subtitle: 'Nappali akciók' },
         steps: {
@@ -1633,13 +1643,15 @@ const dictionaries = {
       controls: {
         previous: 'Előző',
         next: 'Következő',
-        close_day: 'Nap lezárása',
-        pause: 'Szünet',
-        resume: 'Folytatás',
+        evaluate_phase: 'Fázis kiértékelése',
         finish: 'Befejezés',
         cancel: 'Mégse',
         fullscreen: 'Teljes képernyő',
         exit_fullscreen: 'Kilépés a teljes képernyőből'
+      },
+      sheriff: {
+        assigned: 'Seriff kijelölve',
+        lost: 'Seriff jelvény elveszett'
       }
     },
     app: {

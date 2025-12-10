@@ -221,12 +221,6 @@
     color: var(--color-white-contrast);
   }
 
-  .section-subheading {
-    margin: 0.15rem 0 0;
-    font-size: 0.9rem;
-    color: var(--color-text-muted);
-  }
-
   @media (max-width: 640px) {
     .choose-panel {
       width: min(96vw, var(--page-width-narrow));

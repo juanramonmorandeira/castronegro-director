@@ -414,18 +414,4 @@
     z-index: 1;
   }
 /* Estilo simple de tarjeta para placeholders */
-  .card {
-    margin: 2rem auto;
-    padding: 1rem 1.5rem;
-    width: min(90%, 700px);
-    border-radius: 12px;
-    background-color: rgba(0, 0, 0, 0.4);
-    color: var(--color-white-contrast);
-    backdrop-filter: blur(5px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-  }
-
-  h2 {
-    margin-top: 0;
-  }
 </style>

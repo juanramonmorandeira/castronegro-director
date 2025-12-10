@@ -165,7 +165,7 @@ async function handleHistoryDelete(event) {
     openAlert(deleteForbiddenMessage, 'warning', $t('landing.history.title'));
     return;
   }
-  const viewer = getViewerContext();
+  const viewer = getViewerContext(user);
   if (!viewer) {
     openAlert(deleteForbiddenMessage, 'warning', $t('landing.history.title'));
     return;

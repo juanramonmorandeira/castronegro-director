@@ -41,7 +41,6 @@
     <Button
       variant="primary"
       type="button"
-      className="full-width"
       disabled={connectDisabled || pending}
       on:click={handleSubmit}
     >
@@ -74,7 +73,7 @@
   flex-direction: column;
 }
 
-.full-width {
+.connect-row :global(.btn) {
   width: 100%;
 }
 </style>
