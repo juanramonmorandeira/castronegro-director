@@ -15,7 +15,6 @@
   export let totalLimit = 0;
   export let duplicates = ['trusted', 'villager', 'werewolf', 'brothers', 'sisters'];
   export let mix = null;
-  export let savedMessage = '';
   export let actorRoles = [];
   export let thiefRoles = [];
 
@@ -125,11 +124,16 @@
     wasOpen = false;
   }
 
+  const canonicalSlug = (value) => {
+    const base = slugify(value);
+    return base.startsWith('the_') ? base.slice(4) : base;
+  };
+
   const hasRoleSelected = (slug) => {
-    const target = slugify(slug);
+    const target = canonicalSlug(slug);
     return Object.values(draftSelections ?? {}).some((category) =>
       Object.entries(category ?? {}).some(
-        ([role, count]) => slugify(role) === target && Number(count) > 0
+        ([role, count]) => canonicalSlug(role) === target && Number(count) > 0
       )
     );
   };
@@ -352,6 +356,7 @@ $: console.debug('[selection] actorActive', actorActive, {
   }
 
   const selectionDescription = $t('configure.selection_hint');
+
 </script>
 
 <Modal
@@ -517,10 +522,6 @@ $: console.debug('[selection] actorActive', actorActive, {
       {/if}
     </div>
   </div>
-
-  {#if savedMessage}
-    <p class="action-hint" aria-live="polite">{savedMessage}</p>
-  {/if}
 
   <svelte:fragment slot="footer">
     <Button variant="primary" type="button" on:click={save}>{$t('common.actions.save')}</Button>

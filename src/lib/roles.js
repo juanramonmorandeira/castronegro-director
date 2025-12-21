@@ -54,8 +54,9 @@ export function buildDistributionTokens(selection, assignments = {}, players = [
   const witchVenomPath = '/tokens/witch-venom.png';
   const werewolvesClawPath = '/tokens/werewolves-claw.png';
   const fatherBitePath = '/tokens/father-bite.png';
+  const hunterBulletPath = '/tokens/hunter-bullet.png';
   const sheriffBadgePath = '/badge/sheriff.png';
-  const villagersEliminationPath = '/tokens/villagers-elimination.png';
+  const villagersEliminationPath = '/tokens/villagers-guillotine.png';
 
   const pushAssignment = (slug, label) => {
     if (!slug || !label) return;
@@ -221,6 +222,26 @@ export function buildDistributionTokens(selection, assignments = {}, players = [
     });
   }
 
+  // Hunter bullet: one shot available per Hunter, usable when the Hunter dies.
+  const hunterCount =
+    Number(
+      selection?.villagers?.hunter ??
+        selection?.villagers?.Hunter ??
+        selection?.villagers?.['The Hunter'] ??
+        0
+    ) || 0;
+  if (hunterCount > 0) {
+    for (let index = 0; index < hunterCount; index += 1) {
+      tokens.push({
+        id: `special-hunter-bullet-${index}`,
+        role: 'Hunter Bullet',
+        category: 'special',
+        image: hunterBulletPath,
+        player: null
+      });
+    }
+  }
+
   // Sheriff badge is always available for the preparation phase.
   tokens.push({
     id: 'special-sheriff-badge-0',
@@ -232,8 +253,8 @@ export function buildDistributionTokens(selection, assignments = {}, players = [
 
   // Villagers elimination marker for daytime resolutions.
   tokens.push({
-    id: 'special-villagers-elimination-0',
-    role: 'Villagers Elimination',
+    id: 'special-villagers-guillotine-0',
+    role: 'Villagers Guillotine',
     category: 'special',
     image: villagersEliminationPath,
     player: null

@@ -6,9 +6,9 @@
 
   export let open = false;
   export let players = [];
+  export let testPlayers = [];
   export let roles = [];
   export let assignments = {};
-  export let savedMessage = '';
 
   const shuffle = (list = []) => {
     const copy = [...list];
@@ -23,6 +23,8 @@
 
   let draftAssignments = {};
   let lastOpenState = false;
+  let draftTestPlayers = [];
+  let newPlayerName = '';
 
   function normalizeAssignments(source = {}) {
     const result = {};
@@ -40,6 +42,8 @@
 
   $: if (open && !lastOpenState) {
     draftAssignments = normalizeAssignments(assignments);
+    draftTestPlayers = Array.isArray(testPlayers) ? [...testPlayers] : [];
+    newPlayerName = '';
   }
 
   $: lastOpenState = open;
@@ -55,6 +59,8 @@
     acc[slug] = (acc[slug] ?? 0) + 1;
     return acc;
   }, {});
+
+  $: matchPlayers = [...(players ?? []), ...(draftTestPlayers ?? [])];
 
   function remainingFor(slug, currentSelection) {
     if (!slug) return 0;
@@ -75,12 +81,46 @@
     draftAssignments = next;
   }
 
+  function createTestPlayer(name) {
+    const slug = name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '') || 'player';
+    const suffix = Math.floor(Math.random() * 10000);
+    return {
+      id: `test-${slug}-${Date.now()}-${suffix}`,
+      alias: name.trim(),
+      ready: true
+    };
+  }
+
+  function addTestPlayer() {
+    const trimmed = newPlayerName.trim();
+    if (!trimmed) return;
+    if (draftTestPlayers.some((player) => player.alias.toLowerCase() === trimmed.toLowerCase())) {
+      newPlayerName = '';
+      return;
+    }
+    draftTestPlayers = [...draftTestPlayers, createTestPlayer(trimmed)];
+    newPlayerName = '';
+  }
+
+  function removeTestPlayer(id) {
+    draftTestPlayers = draftTestPlayers.filter((player) => player.id !== id);
+    if (draftAssignments[id]) {
+      const next = { ...draftAssignments };
+      delete next[id];
+      draftAssignments = next;
+    }
+  }
+
   function close() {
     dispatch('cancel');
   }
 
   function autoAssign() {
-    if (!Array.isArray(players) || !Array.isArray(roles)) return;
+    if (!Array.isArray(matchPlayers) || !Array.isArray(roles)) return;
     const pool = [];
     roles.forEach((role) => {
       const count = Number(role.count) || 0;
@@ -92,7 +132,7 @@
     if (!pool.length) return;
     const randomized = shuffle(pool);
     const next = {};
-    (players ?? []).forEach((player, index) => {
+    (matchPlayers ?? []).forEach((player, index) => {
       const slug = randomized[index];
       if (slug) next[player.id] = slug;
     });
@@ -101,7 +141,7 @@
 
   function confirm() {
     const payload = {};
-    (players ?? []).forEach((player) => {
+    (matchPlayers ?? []).forEach((player) => {
       const slug = draftAssignments[player.id];
       if (!slug) return;
       const role = (roles ?? []).find((item) => item.slug === slug);
@@ -109,13 +149,14 @@
       payload[player.id] = {
         role: role.role,
         slug: role.slug,
-        category: role.category
+        category: role.category,
+        alias: player.alias ?? player.name ?? player.id
       };
     });
-    dispatch('save', { assignments: payload });
+    dispatch('save', { assignments: payload, testPlayers: draftTestPlayers });
   }
 
-  $: hasPlayers = Array.isArray(players) && players.length > 0;
+  $: hasPlayers = Array.isArray(matchPlayers) && matchPlayers.length > 0;
   $: hasRoles = Array.isArray(roles) && roles.length > 0;
   const hint = $t('configure.match_hint');
 </script>
@@ -128,6 +169,39 @@
   on:close={close}
 >
   <div class="match-body">
+    <div class="test-players">
+      <label class="section-label" for="test-player-input">Añadir jugadores de prueba</label>
+      <div class="test-input-row">
+        <input
+          id="test-player-input"
+          class="test-input"
+          placeholder="Nombre o alias"
+          bind:value={newPlayerName}
+          on:keydown={(event) => event.key === 'Enter' && addTestPlayer()}
+        />
+        <Button variant="secondary" type="button" on:click={addTestPlayer}>
+          Añadir
+        </Button>
+      </div>
+      {#if draftTestPlayers.length}
+        <div class="test-chip-list" aria-live="polite">
+          {#each draftTestPlayers as player}
+            <span class="test-chip">
+              {player.alias}
+              <button
+                type="button"
+                class="chip-remove"
+                aria-label={`Eliminar ${player.alias}`}
+                on:click={() => removeTestPlayer(player.id)}
+              >
+                ×
+              </button>
+            </span>
+          {/each}
+        </div>
+      {/if}
+    </div>
+
     {#if !hasPlayers}
       <p class="match-empty">{$t('configure.match_no_players')}</p>
     {:else if !hasRoles}
@@ -141,7 +215,7 @@
           </tr>
         </thead>
         <tbody>
-          {#each players as player}
+          {#each matchPlayers as player}
             <tr>
               <td>
                 <div class="player-info">
@@ -182,21 +256,26 @@
         </tbody>
       </table>
     {/if}
-
-    <div class="match-actions">
-      <Button variant="ghost" type="button" on:click={autoAssign} disabled={!hasPlayers || !hasRoles}>
-        {$t('configure.match_auto')}
-      </Button>
-      <div class="spacer"></div>
-      <Button variant="primary" type="button" on:click={confirm} disabled={!hasPlayers || !hasRoles}>
-        {$t('common.actions.save')}
-      </Button>
-    </div>
-
-    {#if savedMessage}
-      <p class="action-hint" aria-live="polite">{savedMessage}</p>
-    {/if}
   </div>
+
+  <svelte:fragment slot="footer">
+    <Button
+      variant="ghost"
+      type="button"
+      on:click={autoAssign}
+      disabled={!hasPlayers || !hasRoles}
+    >
+      {$t('configure.match_auto')}
+    </Button>
+    <Button
+      variant="primary"
+      type="button"
+      on:click={confirm}
+      disabled={!hasPlayers || !hasRoles}
+    >
+      {$t('common.actions.save')}
+    </Button>
+  </svelte:fragment>
 </Modal>
 
 <style>
@@ -204,6 +283,56 @@
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
+  }
+
+  .test-players {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .section-label {
+    font-weight: 600;
+    color: var(--color-white-muted);
+  }
+
+  .test-input-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .test-input {
+    flex: 1;
+    background: var(--surface-input);
+    border: 1px solid var(--glass-border-strong);
+    border-radius: 0.65rem;
+    padding: 0.5rem 0.75rem;
+    color: var(--color-white-contrast);
+  }
+
+  .test-chip-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .test-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.65rem;
+    background: var(--glass-hover);
+    border: 1px solid var(--glass-border);
+    border-radius: 999px;
+  }
+
+  .chip-remove {
+    background: transparent;
+    border: none;
+    color: var(--color-white-muted);
+    cursor: pointer;
+    line-height: 1;
   }
 
   .match-empty {
@@ -273,17 +402,4 @@
     color: var(--color-white-contrast);
   }
 
-  .match-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-  }
-
-  .match-actions .spacer {
-    flex: 1;
-  }
-
-  .btn {
-    min-width: 120px;
-  }
 </style>

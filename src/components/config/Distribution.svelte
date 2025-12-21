@@ -7,7 +7,6 @@
 
   export let open = false;
   export let tokens = [];
-  export let savedMessage = '';
   export let sessionId = 'default';
 
   const dispatch = createEventDispatcher();
@@ -144,10 +143,6 @@
       {/each}
     {/if}
   </div>
-
-  {#if savedMessage}
-    <p class="action-hint" aria-live="polite">{savedMessage}</p>
-  {/if}
 
   <svelte:fragment slot="footer">
     <Button variant="primary" type="button" on:click={save}>{$t('common.actions.save')}</Button>

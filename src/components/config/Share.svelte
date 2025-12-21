@@ -7,7 +7,6 @@
 
   export let open = false;
   export let gameId = '';
-  export let savedMessage = '';
 
   const dispatch = createEventDispatcher();
 
@@ -96,10 +95,6 @@
       {/if}
     </div>
   </div>
-
-  {#if savedMessage}
-    <p class="action-hint" aria-live="polite">{savedMessage}</p>
-  {/if}
 
   <svelte:fragment slot="footer">
     <Button variant="primary" type="button" on:click={saveShare}>

@@ -1,5 +1,6 @@
 <script>
   import { createEventDispatcher } from 'svelte';
+  import Button from './Button.svelte';
 
   export let open = false;
   export let title = '';
@@ -59,7 +60,7 @@
     style={`width:min(${panelWidth}, 96vw);`}
     role="document"
   >
-      {#if title || $$slots['header-actions'] || showClose}
+      {#if title || $$slots['header-actions']}
         <header class="modal-panel__header">
           <div class="modal-panel__heading">
             {#if title}
@@ -70,11 +71,6 @@
             {/if}
           </div>
           <slot name="header-actions" />
-          {#if showClose}
-            <button class="modal-panel__close" type="button" on:click={close} aria-label="Close dialog">
-              ×
-            </button>
-          {/if}
         </header>
       {/if}
 
@@ -82,8 +78,20 @@
         <slot />
       </div>
 
-      {#if $$slots.footer}
+      {#if $$slots.footer || showClose}
         <footer class="modal-panel__footer">
+          {#if showClose}
+            <Button
+              variant="ghost"
+              size="md"
+              className="modal-panel__close"
+              type="button"
+              on:click={close}
+              aria-label="Close dialog"
+            >
+              Close
+            </Button>
+          {/if}
           <slot name="footer" />
         </footer>
       {/if}
@@ -118,15 +126,17 @@
 
   .modal-panel__header {
     display: flex;
-    justify-content: space-between;
     align-items: flex-start;
-    gap: 1rem;
+    gap: 0.75rem;
   }
 
   .modal-panel__heading h2 {
     margin: 0;
     font-size: 1.35rem;
     font-weight: 600;
+  }
+  .modal-panel__heading {
+    flex: 1;
   }
 
   .modal-panel__description {
@@ -136,14 +146,7 @@
   }
 
   .modal-panel__close {
-    border: none;
-    border-radius: 999px;
-    width: 34px;
-    height: 34px;
-    background: var(--glass-hover);
-    color: var(--color-white-contrast);
-    font-size: 1.2rem;
-    cursor: pointer;
+    align-self: center;
   }
 
   .modal-panel__body {

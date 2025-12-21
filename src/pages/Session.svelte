@@ -3,10 +3,18 @@
   import Footbar from '../components/common/Footbar.svelte';
   import BackgroundLayer from '../components/common/BackgroundLayer.svelte';
   import { t } from '../lib/i18n.js';
-  import { slugifyRole, roleImageSrc } from '../lib/roles.js';
-  import { createEventDispatcher } from 'svelte';
+  import {
+    slugifyRole,
+    roleImageSrc,
+    getRoleDefinition,
+    createEmptyRoleSelection,
+    buildDistributionTokens,
+    getRoleName
+  } from '../lib/roles.js';
+  import { createEventDispatcher, onMount } from 'svelte';
   import { getSessionPositions, setRolePosition } from '../lib/stores/rolePositions.js';
   import Modal from '../components/ui/Modal.svelte';
+  import { getSessionById, updateSession } from '../lib/db.js';
 
   export let sessionId = null;
   export let selection = null;
@@ -14,12 +22,42 @@
   export let user = null;
   export let showSessionIndicator = false;
   export let sessionIndicator = null;
+  export let actorRoles = [];
+
+  const PHASE_KEY_PREPARATION = 'session.phases.preparation.title';
+  const PHASE_KEY_FIRST_NIGHT = 'session.phases.first_night.title';
+  const PHASE_KEY_FIRST_DAY = 'session.phases.first_day.title';
+  const PHASE_KEY_EACH_NIGHT = 'session.phases.each_night.title';
+  const PHASE_KEY_EACH_DAY = 'session.phases.each_day.title';
+  const PHASE_KEY_HUNTER = 'session.phases.hunter.title';
+  const PHASE_KEY_SHERIFF = 'session.phases.sheriff.title';
+  const PHASE_KEY_END = 'session.phases.end.title';
+  const BASE_PHASE_SEQUENCE = [
+    PHASE_KEY_PREPARATION,
+    PHASE_KEY_FIRST_NIGHT,
+    PHASE_KEY_FIRST_DAY,
+    PHASE_KEY_EACH_NIGHT,
+    PHASE_KEY_EACH_DAY
+  ];
+  const ALL_PHASE_KEYS = new Set([
+    ...BASE_PHASE_SEQUENCE,
+    PHASE_KEY_HUNTER,
+    PHASE_KEY_SHERIFF,
+    PHASE_KEY_END
+  ]);
+
+  const normalizePhaseKey = (key) => (ALL_PHASE_KEYS.has(key) ? key : PHASE_KEY_PREPARATION);
 
   let logEntries = [];
   let draftNote = '';
   let sessionStatus = 'in_progress';
-  let currentPhaseIndex = 0;
-  let lockedThroughIndex = -1;
+  let phaseState = {
+    previous: null,
+    current: PHASE_KEY_PREPARATION,
+    next: PHASE_KEY_FIRST_NIGHT,
+    pendingInterphases: [],
+    baseIndex: 0
+  };
   let phaseExpanded = true;
   let logExpanded = true;
   let boardFullscreen = false;
@@ -44,8 +82,18 @@
   let preparationResolved = false;
   let nightNumber = 0;
   let dayNumber = 0;
+  let resetLoading = false;
   let previewOpen = false;
   let previewToken = null;
+  let pendingHunterShot = false;
+  let pendingSheriffSuccession = false;
+  let actorModalOpen = false;
+  let actorSelection = null;
+  let actorTempSpecialIds = [];
+  let actorCurrentRoleSlug = null;
+  let actorState = { available: [], consumed: [], currentNightChoice: null };
+  let actorBaseTokenId = null;
+  let actorOriginalToken = null;
   $: sessionKey = sessionId ?? 'default';
   let lastProtectedTargets = [];
   let activeSpecialIds = [];
@@ -55,12 +103,95 @@
   $: deadSet = new Set(deadCharacters);
   $: infectedIdSet = new Set(infectedTargets);
   $: console.info('[session] infected state', { infectedTargets, infectedIdSet: Array.from(infectedIdSet) });
+  $: aliveRoleSet = (() => {
+    const set = new Set();
+    (characterTokens ?? []).forEach((token) => {
+      if (deadSet.has(token.id)) return;
+      const slug = normalizeRoleSlug(slugifyRole(token.role));
+      set.add(slug);
+      // Infectados cuentan como hombres lobo para usos de fichas de acción.
+      if (infectedIdSet.has(token.id)) {
+        set.add('werewolf');
+        set.add('werewolves');
+      }
+    });
+    return set;
+  })();
+  $: seerActive = aliveRoleSet.has('seer');
   let elderResilience = new Set();
+  const currentLocale = typeof navigator !== 'undefined' ? navigator.language : 'en';
+
+  const sanitizeActorRoles = (list = []) => {
+    if (!Array.isArray(list)) return [];
+    const clean = list
+      .map((role) => (typeof role === 'string' ? role : role?.role ?? ''))
+      .filter(Boolean)
+      .slice(0, 3);
+    const seen = new Set();
+    return clean.filter((role) => {
+      const slug = slugifyRole(role);
+      if (seen.has(slug)) return false;
+      seen.add(slug);
+      return slug;
+    });
+  };
+
+  $: if ((!actorState?.available || actorState.available.length === 0) && Array.isArray(actorRoles) && actorRoles.length) {
+    actorState = { ...actorState, available: sanitizeActorRoles(actorRoles) };
+  }
+
+  onMount(() => {
+    const bootstrap = async () => {
+      if (!sessionId) {
+        actorState = { available: sanitizeActorRoles(actorRoles), consumed: [], currentNightChoice: null };
+        return;
+      }
+      try {
+        const session = await getSessionById(sessionId);
+        const settings = session?.settings ?? {};
+        const phasesRemote = session?.game_phases ?? {};
+        const remoteState = session?.actor_state ?? {};
+        const available = sanitizeActorRoles(settings.actor_roles ?? actorRoles);
+        actorState = {
+          available,
+          consumed: Array.isArray(remoteState.consumed) ? remoteState.consumed.map((item) => slugifyRole(item)).filter(Boolean) : [],
+          currentNightChoice: remoteState.currentNightChoice ?? null
+        };
+        const normalizedCurrent = normalizePhaseKey(phasesRemote.current ?? PHASE_KEY_PREPARATION);
+        const remoteBase = BASE_PHASE_SEQUENCE.indexOf(normalizedCurrent);
+        const safeBaseIndex = remoteBase >= 0 ? remoteBase : 0;
+        phaseState = {
+          previous: phasesRemote.previous ?? null,
+          current: normalizedCurrent,
+          next: normalizePhaseKey(phasesRemote.next ?? PHASE_KEY_FIRST_NIGHT),
+          pendingInterphases: phasesRemote.pending_interphases ?? [],
+          baseIndex: phasesRemote.base_index ?? safeBaseIndex
+        };
+      } catch (error) {
+        console.error('[session] unable to load actor state', error);
+        actorState = { available: sanitizeActorRoles(actorRoles), consumed: [], currentNightChoice: null };
+        phaseState = {
+          previous: null,
+          current: PHASE_KEY_PREPARATION,
+          next: PHASE_KEY_FIRST_NIGHT,
+          pendingInterphases: [],
+          baseIndex: 0
+        };
+      }
+    };
+    bootstrap();
+    return () => {};
+  });
 
   const dispatch = createEventDispatcher();
 
   const roleAliases = {
     // Canonical aliases to catch variants/translation leftovers in selections and steps
+    the_actor: 'actor',
+    actor: 'actor',
+    el_comediante: 'actor',
+    comediante: 'actor',
+    comedian: 'actor',
     bad: 'bad',
     big_bad_wolf: 'bad',
     wolf_hound: 'hound',
@@ -88,19 +219,6 @@
     the_seer: 'seer',
     seer: 'seer'
   };
-
-  const PHASE_KEY_PREPARATION = 'session.phases.preparation.title';
-  const PHASE_KEY_FIRST_NIGHT = 'session.phases.first_night.title';
-  const PHASE_KEY_FIRST_DAY = 'session.phases.first_day.title';
-  const PHASE_KEY_EACH_NIGHT = 'session.phases.each_night.title';
-  const PHASE_KEY_EACH_DAY = 'session.phases.each_day.title';
-  const PHASE_ORDER_KEYS = [
-    PHASE_KEY_PREPARATION,
-    PHASE_KEY_FIRST_NIGHT,
-    PHASE_KEY_FIRST_DAY,
-    PHASE_KEY_EACH_NIGHT,
-    PHASE_KEY_EACH_DAY
-  ];
 
   const canonicalInfectedSlug = (slug = '') => {
     if (!slug) return '';
@@ -133,6 +251,42 @@
 
   $: specialTokens = tokens?.filter((token) => token.category === 'special') ?? [];
   $: characterTokens = tokens?.filter((token) => token.category !== 'special') ?? [];
+  $: actorToken =
+    characterTokens.find((token) => normalizeRoleSlug(slugifyRole(token.role)) === 'actor') ?? null;
+  $: actorBaseTokenId = actorToken?.id ?? actorBaseTokenId;
+  $: actorAvailable = (actorState?.available ?? []).slice(0, 3);
+  $: actorConsumed = new Set(actorState?.consumed ?? []);
+  $: actorRemaining = actorAvailable.filter((role) => !actorConsumed.has(slugifyRole(role)));
+  $: actorAlive = actorToken ? !deadSet.has(actorToken.id) : false;
+  $: actorExhausted = actorRemaining.length === 0 && !actorState.currentNightChoice;
+  const ACTOR_TOKEN_ID = 'special-actor-cards';
+  $: actorActionToken =
+    actorAlive
+      ? {
+          id: ACTOR_TOKEN_ID,
+          role: 'actor_cards',
+          category: 'special',
+          image: '/tokens/actor-cards.png'
+        }
+      : null;
+  $: paletteSpecialTokens = actorActionToken ? [...specialTokens, actorActionToken] : specialTokens;
+  $: actorActionDisabled =
+    !actorAlive ||
+    (actorRemaining.length === 0 && !actorState.currentNightChoice) ||
+    (!isNightPhase && !actorState.currentNightChoice);
+  $: console.info('[actor] state', {
+    actorAlive,
+    actorBaseTokenId,
+    actorToken,
+    actorAvailable,
+    actorConsumed: Array.from(actorConsumed),
+    actorRemaining,
+    actorCurrentRoleSlug,
+    actorActionToken,
+    actorActionDisabled,
+    isNightPhase,
+    currentPhaseKeyValue
+  });
 
   const dayPhaseSteps = [
     { key: 'victims' },
@@ -235,22 +389,20 @@
     });
     return { ...phase, steps };
   });
-  $: if (currentPhaseIndex >= phases.length) {
-    currentPhaseIndex = Math.max(0, phases.length - 1);
-  }
   $: finishEnabled = sessionStatus === 'finished' || Object.values(victoryResult).some(Boolean);
 
-  $: currentPhaseKeyValue = PHASE_ORDER_KEYS[Math.min(currentPhaseIndex, PHASE_ORDER_KEYS.length - 1)];
+  $: currentPhaseKeyValue = phaseState.current;
+  $: normalizedPhaseKey = normalizePhaseKey(currentPhaseKeyValue);
   $: currentPhaseLabel = (() => {
-    const key = currentPhaseKeyValue;
+    const key = normalizedPhaseKey;
     if (!key) return '—';
     return $t(key) || '—';
   })();
   $: console.info('[session] phase reactive', {
-    currentPhaseIndex,
+    phaseState,
     currentPhaseKeyValue,
-    currentPhaseLabel,
-    phasesKeys: phases.map((p) => p.titleKey)
+    normalizedPhaseKey,
+    currentPhaseLabel
   });
 
   function togglePhase() {
@@ -270,7 +422,7 @@
   function syncPositions() {
     if (!tokens) return;
     const characters = characterTokens;
-    const specials = specialTokens;
+    const specials = paletteSpecialTokens;
     const savedPositions = getSessionPositions(sessionKey);
 
     const columns = Math.max(1, Math.ceil(Math.sqrt(characters.length || 1)));
@@ -357,14 +509,211 @@
     draftNote = '';
   }
 
+  const persistActorState = async () => {
+    if (!sessionId) return;
+    try {
+      await updateSession(sessionId, {
+        actor_state: {
+          available: actorState.available,
+          consumed: actorState.consumed,
+          currentNightChoice: actorState.currentNightChoice
+        }
+      });
+    } catch (error) {
+      console.error('[session] unable to persist actor state', error);
+    }
+  };
+
+  const persistPhaseState = async () => {
+    if (!sessionId) return;
+    try {
+      await updateSession(sessionId, {
+        game_phases: {
+          previous: normalizePhaseKey(phaseState.previous),
+          current: normalizePhaseKey(phaseState.current),
+          next: normalizePhaseKey(phaseState.next),
+          phase_summary: [], // extend if needed
+          pending_interphases: phaseState.pendingInterphases,
+          base_index: phaseState.baseIndex
+        }
+      });
+    } catch (error) {
+      console.error('[session] unable to persist phase state', error);
+    }
+  };
+
+  const actorRoleLabel = (slug) => getRoleName(slug, currentLocale) || slug;
+
+  function addActorLogEntry(selectedSlug) {
+    const text =
+      $t?.('session.logbook.actor_becomes', { role: actorRoleLabel(selectedSlug) }) ??
+      `Actor becomes ${actorRoleLabel(selectedSlug)} for this night`;
+    const stamp = new Date().toLocaleTimeString();
+    logEntries = [{ text, stamp }, ...logEntries];
+  }
+
+  function removeActorTempSpecialTokens() {
+    if (!actorTempSpecialIds.length) return;
+    tokens = tokens.filter((token) => !actorTempSpecialIds.includes(token.id));
+    activeSpecialIds = activeSpecialIds.filter((id) => !actorTempSpecialIds.includes(id));
+    consumedSpecialIds = consumedSpecialIds.filter((id) => !actorTempSpecialIds.includes(id));
+    const nextPositions = { ...positions };
+    actorTempSpecialIds.forEach((id) => delete nextPositions[id]);
+    positions = nextPositions;
+    actorTempSpecialIds = [];
+  }
+
+  function buildActorSpecialTokens(roleSlug) {
+    const slug = normalizeRoleSlug(slugifyRole(roleSlug));
+    const specials = [];
+    const add = (opts) => specials.push(opts);
+
+    if (slug === 'cupid') {
+      for (let i = 0; i < 2; i += 1) {
+        add({
+          id: `actor-${slug}-heart-${i}`,
+          role: 'Cupid Hearts',
+          category: 'special',
+          image: '/tokens/cupido-hearts.png',
+          actorRole: slug
+        });
+      }
+    }
+
+    if (slug === 'defender') {
+      add({
+        id: `actor-${slug}-shield-0`,
+        role: 'defender_shield',
+        category: 'special',
+        image: '/tokens/defender-shield.png',
+        actorRole: slug
+      });
+    }
+
+    if (slug === 'witch') {
+      add({
+        id: `actor-${slug}-heal-0`,
+        role: 'witch_heal',
+        category: 'special',
+        image: '/tokens/witch-heal.png',
+        actorRole: slug
+      });
+      add({
+        id: `actor-${slug}-venom-0`,
+        role: 'witch_venom',
+        category: 'special',
+        image: '/tokens/witch-venom.png',
+        actorRole: slug
+      });
+    }
+
+    if (slug === 'hunter') {
+      add({
+        id: `actor-${slug}-bullet-0`,
+        role: 'hunter_bullet',
+        category: 'special',
+        image: '/tokens/hunter-bullet.png',
+        actorRole: slug
+      });
+    }
+
+    // Otros roles de aldeanos sin tokens especiales => no añadimos nada.
+    return specials;
+  }
+
+  function transformActorToken(roleSlug) {
+    if (!actorBaseTokenId) {
+      const actorToken = characterTokens.find((token) => slugifyRole(token.role) === 'actor');
+      actorBaseTokenId = actorToken?.id ?? null;
+    }
+    if (!actorBaseTokenId) return;
+    const definition = getRoleDefinition(roleSlug);
+    const category = definition?.category ?? 'villagers';
+    const canonical = normalizeRoleSlug(roleSlug);
+    const image = roleImageSrc(category, canonical);
+    tokens = tokens.map((token) => {
+      if (token.id !== actorBaseTokenId) return token;
+      actorOriginalToken = actorOriginalToken ?? token;
+      return {
+        ...token,
+        role: canonical,
+        category,
+        image
+      };
+    });
+  }
+
+  function injectActorRole(roleSlug, { silent = false, persist = true } = {}) {
+    if (!roleSlug) return;
+    const slug = normalizeRoleSlug(roleSlug);
+    if (!slug) return;
+    if (actorConsumed.has(slug)) return;
+
+    // Update actor state
+    const consumed = Array.from(new Set([...(actorState.consumed ?? []), slug]));
+    actorState = { ...actorState, consumed, currentNightChoice: slug };
+    actorCurrentRoleSlug = slug;
+
+    // Apply visual/logic changes
+    transformActorToken(slug);
+    removeActorTempSpecialTokens();
+    const specials = buildActorSpecialTokens(slug);
+    actorTempSpecialIds = specials.map((token) => token.id);
+    tokens = [...tokens, ...specials];
+
+    if (!silent) {
+      addActorLogEntry(slug);
+    }
+    if (persist) {
+      persistActorState();
+    }
+  }
+
+  function revertActorIdentity() {
+    if (actorCurrentRoleSlug && actorOriginalToken && actorBaseTokenId) {
+      tokens = tokens.map((token) => (token.id === actorBaseTokenId ? actorOriginalToken : token));
+    }
+    actorCurrentRoleSlug = null;
+    actorState = { ...actorState, currentNightChoice: null };
+    removeActorTempSpecialTokens();
+    persistActorState();
+  }
+
+  function openActorModal() {
+    if (!actorAlive) return;
+    actorSelection = actorState.currentNightChoice ?? actorRemaining[0] ?? null;
+    actorModalOpen = true;
+  }
+
+  function closeActorModal() {
+    actorModalOpen = false;
+    actorSelection = actorState.currentNightChoice ?? null;
+  }
+
+  function confirmActorSelection() {
+    if (!actorSelection) {
+      closeActorModal();
+      return;
+    }
+    injectActorRole(actorSelection, { silent: false });
+    actorModalOpen = false;
+  }
+
+  $: if (actorState.currentNightChoice && actorCurrentRoleSlug !== actorState.currentNightChoice) {
+    injectActorRole(actorState.currentNightChoice, { silent: true, persist: false });
+  }
+
   const phaseIndexByKey = (key) => phases.findIndex((phase) => phase.titleKey === key);
-  $: isPreparationPhase = currentPhaseKeyValue === PHASE_KEY_PREPARATION;
-  $: isFirstNightPhase = currentPhaseKeyValue === PHASE_KEY_FIRST_NIGHT;
-  $: isEachNightPhase = currentPhaseKeyValue === PHASE_KEY_EACH_NIGHT;
+  $: isPreparationPhase = normalizedPhaseKey === PHASE_KEY_PREPARATION;
+  $: isFirstNightPhase = normalizedPhaseKey === PHASE_KEY_FIRST_NIGHT;
+  $: isEachNightPhase = normalizedPhaseKey === PHASE_KEY_EACH_NIGHT;
   $: isNightPhase = isFirstNightPhase || isEachNightPhase;
-  $: isFirstDayPhase = currentPhaseKeyValue === PHASE_KEY_FIRST_DAY;
-  $: isEachDayPhase = currentPhaseKeyValue === PHASE_KEY_EACH_DAY;
+  $: isFirstDayPhase = normalizedPhaseKey === PHASE_KEY_FIRST_DAY;
+  $: isEachDayPhase = normalizedPhaseKey === PHASE_KEY_EACH_DAY;
   $: isDayPhase = isFirstDayPhase || isEachDayPhase;
+  $: isHunterInterphase = normalizedPhaseKey === PHASE_KEY_HUNTER;
+  $: isSheriffInterphase = normalizedPhaseKey === PHASE_KEY_SHERIFF;
+  $: isEndPhase = normalizedPhaseKey === PHASE_KEY_END;
   $: console.info('[session] phase flags', {
     isPreparationPhase,
     isFirstNightPhase,
@@ -375,34 +724,75 @@
     isDayPhase
   });
 
-  function advancePhase(currentKey = currentPhaseKey()) {
-    if (currentPhaseIndex < phases.length - 1) {
-      currentPhaseIndex += 1;
-      console.info('[session] advancePhase', {
-        from: currentKey,
-        toIndex: currentPhaseIndex,
-        toKey: PHASE_ORDER_KEYS[Math.min(currentPhaseIndex, PHASE_ORDER_KEYS.length - 1)],
-        phases: phases.map((p) => p.titleKey),
-        orderKeys: PHASE_ORDER_KEYS
-      });
-    }
-  }
+  const nextBaseIndex = (index) => {
+    if (index < 0) return 0;
+    if (index >= BASE_PHASE_SEQUENCE.length - 1) return 3; // loop to each_night
+    return index + 1;
+  };
 
   function evaluatePhase() {
-    const phaseKeyNow = PHASE_ORDER_KEYS[Math.min(currentPhaseIndex, PHASE_ORDER_KEYS.length - 1)];
+    const phaseKeyNow = normalizePhaseKey(phaseState.current);
     console.info('[session] evaluatePhase', {
       phaseKeyNow,
-      currentIndex: currentPhaseIndex,
-      phases: phases.map((p) => p.titleKey),
-      orderKeys: PHASE_ORDER_KEYS,
+      phaseState,
       nightNumber,
       dayNumber,
       isPreparationPhase,
       isNightPhase,
-      isDayPhase
+      isDayPhase,
+      pendingInterphases: phaseState.pendingInterphases
     });
     resolveBoardEffects(phaseKeyNow);
-    lockedThroughIndex = Math.max(lockedThroughIndex, currentPhaseIndex);
+    if (actorState.currentNightChoice && !isEndPhase) {
+      revertActorIdentity();
+    }
+    const sheriffToken = specialTokens.find((token) => slugifyRole(token.role) === 'sheriff_badge');
+    const sheriffTokenId = sheriffToken?.id;
+    if (pendingSheriffSuccession && !sheriffHolderId && !sheriffTokenId) {
+      pendingSheriffSuccession = false;
+    }
+    const interphaseQueue = [...(phaseState.pendingInterphases ?? [])];
+    // Victory check triggers end phase
+    if (Object.values(victoryResult).some(Boolean)) {
+      phaseState = { ...phaseState, previous: phaseKeyNow, current: PHASE_KEY_END, next: PHASE_KEY_END, pendingInterphases: [] };
+      persistPhaseState();
+      return;
+    }
+    // Identify new interphases to enqueue
+    const newInterphases = [];
+    if (pendingHunterShot && !interphaseQueue.includes(PHASE_KEY_HUNTER)) newInterphases.push(PHASE_KEY_HUNTER);
+    if (pendingSheriffSuccession && !interphaseQueue.includes(PHASE_KEY_SHERIFF)) newInterphases.push(PHASE_KEY_SHERIFF);
+    const mergedQueue = [...interphaseQueue, ...newInterphases].filter(Boolean);
+    // enforce Hunter -> Sheriff order
+    const orderedQueue = [];
+    if (mergedQueue.includes(PHASE_KEY_HUNTER)) orderedQueue.push(PHASE_KEY_HUNTER);
+    if (mergedQueue.includes(PHASE_KEY_SHERIFF)) orderedQueue.push(PHASE_KEY_SHERIFF);
+
+    const advanceBaseIndex = () => {
+      const nextIndex = nextBaseIndex(phaseState.baseIndex);
+      phaseState = { ...phaseState, baseIndex: nextIndex };
+      return nextIndex;
+    };
+
+    const setNextPhase = (nextKey) => {
+      phaseState = { ...phaseState, previous: phaseKeyNow, current: nextKey, next: null, pendingInterphases: orderedQueue.slice(1) };
+    };
+
+    // If resolving an interphase, drop it and move to next interphase or base phase
+    if (phaseKeyNow === PHASE_KEY_HUNTER || phaseKeyNow === PHASE_KEY_SHERIFF) {
+      const remainingQueue = orderedQueue.filter((key) => key !== phaseKeyNow);
+      if (remainingQueue.length) {
+        phaseState = { ...phaseState, previous: phaseKeyNow, current: remainingQueue[0], next: null, pendingInterphases: remainingQueue.slice(1) };
+      } else {
+        const nextIndex = phaseState.baseIndex;
+        const nextBase = BASE_PHASE_SEQUENCE[nextIndex] ?? PHASE_KEY_EACH_NIGHT;
+        phaseState = { ...phaseState, previous: phaseKeyNow, current: nextBase, next: null, pendingInterphases: [] };
+      }
+      persistPhaseState();
+      return;
+    }
+
+    // Base phase bookkeeping
     if (phaseKeyNow === PHASE_KEY_PREPARATION) {
       preparationResolved = true;
     }
@@ -416,18 +806,30 @@
     } else if (phaseKeyNow === PHASE_KEY_EACH_DAY) {
       dayNumber = Math.max(1, dayNumber + 1);
     }
-    advancePhase(phaseKeyNow);
-  }
 
-  function nextPhase() {
-    if (currentPhaseIndex < phases.length - 1) {
-      currentPhaseIndex += 1;
+    // Decide next phase
+    if (orderedQueue.length) {
+      phaseState = {
+        ...phaseState,
+        previous: phaseKeyNow,
+        current: orderedQueue[0],
+        next: null,
+        pendingInterphases: orderedQueue.slice(1),
+        baseIndex: nextBaseIndex(BASE_PHASE_SEQUENCE.indexOf(phaseKeyNow))
+      };
+    } else {
+      const nextIndex = nextBaseIndex(BASE_PHASE_SEQUENCE.indexOf(phaseKeyNow));
+      const nextBase = BASE_PHASE_SEQUENCE[nextIndex] ?? PHASE_KEY_EACH_NIGHT;
+      phaseState = {
+        ...phaseState,
+        previous: phaseKeyNow,
+        current: nextBase,
+        next: null,
+        baseIndex: nextIndex,
+        pendingInterphases: []
+      };
     }
-  }
-
-  function prevPhase() {
-    if (currentPhaseIndex <= lockedThroughIndex) return;
-    if (currentPhaseIndex > 0) currentPhaseIndex -= 1;
+    persistPhaseState();
   }
 
   function finishSession() {
@@ -440,6 +842,68 @@
 
   function goToConfigure() {
     dispatch('configure', { sessionId });
+  }
+
+  async function resetSessionStateTemp() {
+    if (!sessionId) return;
+    resetLoading = true;
+    // Local resets
+    deadCharacters = [];
+    pendingDeaths = [];
+    infectedTargets = [];
+    charmedTargets = [];
+    consumedSpecialIds = [];
+    activeSpecialIds = [];
+    loversLinks = [];
+    protectedTargets = [];
+    victoryResult = {};
+    sheriffHolderId = null;
+    sheriffAvailable = true;
+    sheriffDisabled = false;
+    pendingSheriffSuccession = false;
+    pendingHunterShot = false;
+    preparationResolved = false;
+    nightNumber = 0;
+    dayNumber = 0;
+    actorOriginalToken = null;
+    actorCurrentRoleSlug = null;
+    actorTempSpecialIds = [];
+    actorState = { available: sanitizeActorRoles(actorRoles), consumed: [], currentNightChoice: null };
+    tokens = tokens.map((token) => {
+      if (token.id === actorBaseTokenId && actorToken) {
+        return actorToken;
+      }
+      return token;
+    });
+    // Reset phase state
+    phaseState = {
+      previous: null,
+      current: PHASE_KEY_PREPARATION,
+      next: PHASE_KEY_FIRST_NIGHT,
+      pendingInterphases: [],
+      baseIndex: 0
+    };
+    try {
+      await updateSession(sessionId, {
+        game_phases: {
+          previous: null,
+          current: PHASE_KEY_PREPARATION,
+          next: PHASE_KEY_FIRST_NIGHT,
+          phase_summary: [],
+          pending_interphases: [],
+          base_index: 0
+        },
+        actor_state: {
+          available: sanitizeActorRoles(actorRoles),
+          consumed: [],
+          currentNightChoice: null
+        }
+      });
+    } catch (error) {
+      console.error('[session] reset failed', error);
+    } finally {
+      resetLoading = false;
+    }
   }
 
   const TARGET_SNAP_DISTANCE = 14; // percentage distance threshold to consider a token placed on a character
@@ -500,11 +964,118 @@
     }
     return token.image;
   };
+  const markerAssets = {
+    charmed: '/markers/charmed-flute.png',
+    protected: '/markers/defended-shield.png',
+    lover: '/markers/lovers-heart.png',
+    sheriff: '/markers/sheriff-star.png',
+    seer: '/markers/seer-eye.png'
+  };
+  const MARKER_START_ANGLE = 45; // arranque en abajo-derecha
+  const MARKER_MAX_SPREAD = 210;
+  const MARKER_MIN_STEP = 28;
+  const MARKER_RADIUS = 52;
+  const statusMarkersFor = (token) => {
+    const markers = [];
+    if (charmedTargets?.includes(token.id)) {
+      markers.push({ type: 'charmed', icon: markerAssets.charmed, title: 'Charmed' });
+    }
+    if (lastProtectedTargets?.includes(token.id)) {
+      markers.push({ type: 'protected', icon: markerAssets.protected, title: 'Protected' });
+    }
+    if (loverIdsSet?.has(token.id)) {
+      markers.push({ type: 'lover', icon: markerAssets.lover, title: 'Lover' });
+    }
+    if (sheriffHolderId === token.id) {
+      markers.push({ type: 'sheriff', icon: markerAssets.sheriff, title: 'Sheriff' });
+    }
+    return markers;
+  };
+  const markerPlacementsFor = (token) => {
+    const markers = [
+      { type: 'seer', icon: markerAssets.seer, title: $t?.('session.preview.view_role') || 'View role', action: true, disabled: !seerActive },
+      ...statusMarkersFor(token)
+    ];
+    if (!markers.length) return [];
+    const count = markers.length;
+    const spread = Math.min(MARKER_MAX_SPREAD, Math.max(MARKER_MIN_STEP * (count - 1), 0));
+    const step = count > 1 ? spread / (count - 1) : 0;
+    return markers.map((marker, index) => ({
+      ...marker,
+      angle: MARKER_START_ANGLE - step * index
+    }));
+  };
   const isSheriffToken = (token) => slugifyRole(token?.role) === 'sheriff_badge';
+  const ownerSlugForSpecial = (slug) => {
+    switch (slug) {
+      case 'cupid_hearts':
+        return 'cupid';
+      case 'piper_charm':
+        return 'piper';
+      case 'defender_shield':
+        return 'defender';
+      case 'witch_heal':
+      case 'witch_venom':
+        return 'witch';
+      case 'hunter_bullet':
+        return 'hunter';
+      case 'werewolves_claws':
+        return 'werewolf';
+      case 'cursed_wolf_father':
+      case 'father_bite':
+        return 'cursed_wolf_father';
+      default:
+        return null;
+    }
+  };
+  const isWerewolfAligned = (id) => {
+    const token = getTokenById(id);
+    if (!token) return false;
+    if (infectedIdSet.has(id)) return true;
+    if (token.category === 'werewolves') return true;
+    const slug = normalizeRoleSlug(slugifyRole(token.role));
+    return (
+      slug === 'werewolf' ||
+      slug === 'bad' || // alias de Big Bad Wolf
+      slug === 'big_bad_wolf' ||
+      slug === 'white_werewolf' ||
+      slug === 'cursed_wolf_father' ||
+      slug === 'father' ||
+      slug === 'wolf_hound' ||
+      slug === 'wild_child'
+    );
+  };
+  const anyWerewolfAlignedAlive = () =>
+    characterTokens.some((token) => !deadSet.has(token.id) && isWerewolfAligned(token.id));
+  const specialOwnerAlive = (token) => {
+    if (!token || token.category !== 'special') return true;
+    const slug = slugifyRole(token.role);
+    const ownerSlug = ownerSlugForSpecial(slug);
+    if (!ownerSlug) return true; // ficha no vinculada a rol concreto
+    const canonical = normalizeRoleSlug(ownerSlug);
+    if (canonical === 'werewolf') {
+      return (
+        aliveRoleSet.has('werewolf') ||
+        aliveRoleSet.has('werewolves') ||
+        aliveRoleSet.has('bad') || // alias para Big Bad Wolf
+        anyWerewolfAlignedAlive()
+      );
+    }
+    if (canonical === 'hunter') {
+      return tokens.some((t) => {
+        if (t.category === 'special') return false;
+        const isHunter = slugifyRole(t.role) === 'hunter';
+        if (!isHunter) return false;
+        return deadSet.has(t.id) || pendingDeaths.includes(t.id);
+      });
+    }
+    return aliveRoleSet.has(canonical);
+  };
   const sheriffPhaseEligible = () =>
-    !sheriffDisabled && (isPreparationPhase || isFirstDayPhase || isEachDayPhase);
+    !sheriffDisabled && (isPreparationPhase || isFirstDayPhase || isEachDayPhase || isSheriffInterphase);
   const openPreview = (token) => {
     if (!token || token.category === 'special') return;
+    if (!seerActive) return;
     previewToken = token;
     previewOpen = true;
   };
@@ -513,19 +1084,28 @@
     previewOpen = false;
   };
 
+  const isPaletteDisabled = (token) => {
+    if (!token || token.category !== 'special') return true;
+    if (!specialOwnerAlive(token)) return true;
+    const slug = slugifyRole(token.role);
+    if (sheriffDisabled && slug === 'sheriff_badge') return true;
+    if (isHunterInterphase) return slug !== 'hunter_bullet';
+    if (isSheriffInterphase) return !isSheriffToken(token);
+    if (isEndPhase) return true;
+    if (isPreparationPhase) return slug !== 'sheriff_badge';
+    if (isNightPhase) return slug === 'sheriff_badge' || slug === 'villagers_guillotine' || slug === 'hunter_bullet';
+    if (isDayPhase) return slug !== 'villagers_guillotine';
+    if (isSheriffToken(token) && !sheriffPhaseEligible()) return true;
+    return false;
+  };
+
   function deploySpecialToken(token) {
     if (!token || token.category !== 'special') return;
+    if (!specialOwnerAlive(token)) return;
     const slug = slugifyRole(token.role);
     if (sheriffDisabled && slug === 'sheriff_badge') return;
     // Phase gating
-    if (isPreparationPhase) {
-      if (slug !== 'sheriff_badge') return;
-    } else if (isNightPhase) {
-      if (slug === 'sheriff_badge' || slug === 'villagers_elimination') return;
-    } else if (isDayPhase) {
-      if (slug !== 'villagers_elimination') return;
-    }
-    if (slug === 'sheriff_badge' && !sheriffPhaseEligible()) return;
+    if (isPaletteDisabled(token)) return;
     // Father bite auto-target: attach to the current werewolf claws target if present.
     if (slug === 'cursed_wolf_father' || slug === 'father_bite') {
       const clawsId = activeSpecialIds.find((id) => slugifyRole(getTokenById(id)?.role) === 'werewolves_claws');
@@ -552,11 +1132,14 @@
     return baseName || tokenId;
   };
 
-  function resolveBoardEffects(currentPhaseKeyValue = currentPhaseKey()) {
+  function resolveBoardEffects(currentPhaseKeyValue = normalizePhaseKey(phaseState.current)) {
     if (!tokens?.length) return;
     const characters = tokens.filter((token) => token.category !== 'special');
     const specials = tokens.filter((token) => token.category === 'special');
     const phaseKeyNow = currentPhaseKeyValue || currentPhaseKey();
+    const isPreparationKey = phaseKeyNow === PHASE_KEY_PREPARATION;
+    const isNightKey = phaseKeyNow === PHASE_KEY_FIRST_NIGHT || phaseKeyNow === PHASE_KEY_EACH_NIGHT;
+    const isDayKey = phaseKeyNow === PHASE_KEY_FIRST_DAY || phaseKeyNow === PHASE_KEY_EACH_DAY;
     const isFirstNight = phaseKeyNow === PHASE_KEY_FIRST_NIGHT && nightNumber === 0;
     const isFirstDay = phaseKeyNow === PHASE_KEY_FIRST_DAY && dayNumber === 0;
     const previousSheriff = sheriffHolderId;
@@ -566,16 +1149,21 @@
     const sheriffTokenId = sheriffToken?.id;
     const allowedSpecials = specials.filter((token) => {
       const slug = slugifyRole(token.role);
-      if (isPreparationPhase) return slug === 'sheriff_badge';
-      if (isNightPhase) return slug !== 'sheriff_badge' && slug !== 'villagers_elimination';
-      if (isDayPhase) return slug === 'villagers_elimination' || slug === 'sheriff_badge';
+      if (!specialOwnerAlive(token)) return false;
+      if (phaseKeyNow === PHASE_KEY_HUNTER) return slug === 'hunter_bullet';
+      if (phaseKeyNow === PHASE_KEY_SHERIFF) return slug === 'sheriff_badge';
+      if (phaseKeyNow === PHASE_KEY_END) return false;
+      if (pendingSheriffSuccession && slug === 'sheriff_badge') return true;
+      if (isPreparationKey) return slug === 'sheriff_badge';
+      if (isNightKey) return !['sheriff_badge', 'villagers_guillotine', 'hunter_bullet'].includes(slug);
+      if (isDayKey) return ['villagers_guillotine'].includes(slug);
       return true;
     });
     console.info('[session] specials filter', {
       phaseKeyNow,
-      isPreparationPhase,
-      isNightPhase,
-      isDayPhase,
+      isPreparationPhase: isPreparationKey,
+      isNightPhase: isNightKey,
+      isDayPhase: isDayKey,
       allowed: allowedSpecials.map((t) => slugifyRole(t.role))
     });
 
@@ -616,8 +1204,12 @@
     const defenderTargets = uniqueList(defenderTargetsRaw);
     const healTargets = uniqueList((specialTargets.witch_heal ?? []).map((entry) => entry.targetId));
     const venomTargets = uniqueList((specialTargets.witch_venom ?? []).map((entry) => entry.targetId));
-    const wolfTargets = uniqueList((specialTargets.werewolves_claws ?? []).map((entry) => entry.targetId));
-    const eliminationTargets = uniqueList((specialTargets.villagers_elimination ?? []).map((entry) => entry.targetId));
+    const wolfTargets = uniqueList(
+      (specialTargets.werewolves_claws ?? []).map((entry) => entry.targetId)
+    ).filter((id) => !isWerewolfAligned(id)); // los lobos no pueden eliminar a roles alineados con ellos
+    const eliminationTargets = uniqueList((specialTargets.villagers_guillotine ?? []).map((entry) => entry.targetId));
+    const hunterShotEntries = specialTargets.hunter_bullet ?? [];
+    const hunterShotTargets = uniqueList(hunterShotEntries.map((entry) => entry.targetId));
     const infectionTargetsCurrent = uniqueList(
       [...(specialTargets.cursed_wolf_father ?? []), ...(specialTargets.father_bite ?? [])].map((entry) => entry.targetId)
     );
@@ -652,6 +1244,7 @@
       ...(specialTargets.witch_heal ?? []).map((entry) => entry.tokenId),
       ...(specialTargets.witch_venom ?? []).map((entry) => entry.tokenId)
     ];
+    const usedHunterBulletIds = hunterShotEntries.map((entry) => entry.tokenId);
     const usedCupidIds = cupidEntries.map((entry) => entry.tokenId);
     const usedPiperIds = (specialTargets.piper_charm ?? []).map((entry) => entry.tokenId);
     const usedFatherIds = [
@@ -673,9 +1266,12 @@
     const loverIds = new Set(lovers.flat());
 
     const deaths = new Set([...wolfTargets, ...venomTargets, ...eliminationTargets]);
+    hunterShotTargets.forEach((id) => deaths.add(id));
     healTargets.forEach((id) => deaths.delete(id));
+    // Defender: solo protege de garras y solo si no fue protegido la noche anterior.
     const effectiveDefenders = defenderTargets.filter((id) => !lastProtectedTargets.includes(id));
-    effectiveDefenders.forEach((id) => deaths.delete(id));
+    const defendedWolfTargets = wolfTargets.filter((id) => effectiveDefenders.includes(id));
+    defendedWolfTargets.forEach((id) => deaths.delete(id));
     // Infection overrides death for targets hit by wolves and marked by father bite.
     const isElder = (id) => canonicalInfectedSlug(getTokenById(id)?.role) === 'elder';
 
@@ -725,7 +1321,7 @@
       (phaseKeyNow === PHASE_KEY_FIRST_NIGHT ? 1 : phaseKeyNow === PHASE_KEY_EACH_NIGHT ? 1 : 0);
     const nextDayNumber =
       dayNumber + (phaseKeyNow === PHASE_KEY_FIRST_DAY ? 1 : phaseKeyNow === PHASE_KEY_EACH_DAY ? 1 : 0);
-    const angelFallsNight = angelId && (deaths.has(angelId) || infectionSet.has(angelId)) && isFirstNight;
+    const angelFallsNight = angelId && deaths.has(angelId) && isFirstNight;
     let angelWin = false;
     if (angelFallsNight) {
       angelWin = true;
@@ -749,6 +1345,18 @@
     if (healTargets.length) summary.push(`${$t('session.phases.steps.witch')} (heal): ${healTargets.map(nameForToken).join(', ')}`);
     if (venomTargets.length) summary.push(`${$t('session.phases.steps.witch')} (venom): ${venomTargets.map(nameForToken).join(', ')}`);
     if (wolfTargets.length) summary.push(`${$t('session.phases.steps.werewolves')}: ${wolfTargets.map(nameForToken).join(', ')}`);
+    if (hunterShotTargets.length) summary.push(`Hunter: ${hunterShotTargets.map(nameForToken).join(', ')}`);
+    const idiotSurvivors = [];
+    if (isDayPhase) {
+      // El tonto del pueblo sobrevive si es ejecutado de día, pero pierde voto.
+      const idiotDeaths = Array.from(deaths).filter(
+        (id) => normalizeRoleSlug(slugifyRole(getTokenById(id)?.role)) === 'idiot'
+      );
+      if (idiotDeaths.length) {
+        idiotDeaths.forEach((id) => deaths.delete(id));
+        idiotSurvivors.push(...idiotDeaths);
+      }
+    }
     if ((angelWin && infectionsToApply.length) || (!angelWin && appliedInfections.length)) {
       const list = angelWin ? infectionsToApply : appliedInfections;
       summary.push(`${$t('session.phases.steps.cursed_wolf_father')}: ${list.map(nameForToken).join(', ')}`);
@@ -781,6 +1389,7 @@
       if (previousSheriff !== sheriffTarget) {
         sheriffNotes.push(`${$t('session.sheriff.assigned')}: ${nameForToken(sheriffTarget)}`);
       }
+      pendingSheriffSuccession = false;
     }
 
     const sheriffRoleSlug = sheriffHolderId ? slugifyRole(getTokenById(sheriffHolderId)?.role) : null;
@@ -792,6 +1401,7 @@
         sheriffDisabled = true;
         sheriffAvailable = false;
         sheriffNotes.push(`${$t('session.sheriff.lost')}: ${lostName} — badge retired`);
+        pendingSheriffSuccession = false;
       } else {
         sheriffDisabled = false;
         sheriffAvailable = true;
@@ -799,6 +1409,7 @@
         if (sheriffTokenId) {
           consumedSpecialIds = consumedSpecialIds.filter((id) => id !== sheriffTokenId);
         }
+        pendingSheriffSuccession = true;
       }
     }
 
@@ -817,11 +1428,34 @@
     deadCharacters = addToSet(deadCharacters, Array.from(deaths));
     infectedTargets = addToSet(infectedTargets, infectionsToApply);
     charmedTargets = addToSet(charmedTargets, piperTargets);
+    // Idiot pierde el voto si sobrevivió al ajusticiamiento.
+    if (idiotSurvivors.length) {
+      const stamp = new Date().toLocaleTimeString();
+      logEntries = [
+        { text: `${$t('session.phases.steps.idiot') || 'Idiot'} survives the vote and loses voting rights`, stamp },
+        ...logEntries
+      ];
+    }
     const cupidConsumption = cupidTargets.length >= 2 ? usedCupidIds : [];
-    consumedSpecialIds = addToSet(consumedSpecialIds, [...usedPotionIds, ...cupidConsumption, ...usedFatherIds]);
+    consumedSpecialIds = addToSet(consumedSpecialIds, [
+      ...usedPotionIds,
+      ...cupidConsumption,
+      ...usedFatherIds,
+      ...usedHunterBulletIds
+    ]);
+    const deadHunters = characters
+      .filter((token) => slugifyRole(token.role) === 'hunter')
+      .map((token) => token.id)
+      .filter((id) => deaths.has(id));
+    const availableHunterBullets = specials.filter(
+      (token) => slugifyRole(token.role) === 'hunter_bullet' && !consumedSpecialIds.includes(token.id)
+    );
+    pendingHunterShot = deadHunters.length > 0 && availableHunterBullets.length > 0;
     const computedVictory = evaluateVictory(characters, deadCharacters, lovers, infectedTargets);
     victoryResult = { ...computedVictory, angel: angelWin || computedVictory.angel };
-    lastProtectedTargets = defenderTargets;
+    if (isNightKey) {
+      lastProtectedTargets = defenderTargets;
+    }
 
     // reset tokens de acción al panel lateral
     activeSpecialIds = sheriffHolderId && sheriffTokenId ? [] : [];
@@ -963,21 +1597,26 @@
         on:pointerup={handlePointerUp}
         on:pointerleave={handlePointerLeave}
       >
-        <div class="token-palette" aria-hidden={specialTokens.length === 0}>
-          {#each specialTokens as token}
+        <div class="token-palette" aria-hidden={paletteSpecialTokens.length === 0}>
+          {#each paletteSpecialTokens as token}
             <button
               type="button"
-              class={`palette-token ${consumedSpecialIds.includes(token.id) ? 'token-consumed' : ''}`}
+              class={`palette-token ${consumedSpecialIds.includes(token.id) ? 'token-consumed' : ''} ${token.id === ACTOR_TOKEN_ID && actorExhausted ? 'token-consumed' : ''} ${!consumedSpecialIds.includes(token.id) && !activeSpecialIds.includes(token.id) && !isPaletteDisabled(token) ? 'palette-token--highlight' : ''}`}
               title={token.role}
               disabled={
+                (token.id === ACTOR_TOKEN_ID && (actorActionDisabled || isPreparationPhase)) ||
                 consumedSpecialIds.includes(token.id) ||
                 activeSpecialIds.includes(token.id) ||
-                (isPreparationPhase && !isSheriffToken(token)) ||
-                (isNightPhase && (isSheriffToken(token) || slugifyRole(token.role) === 'villagers_elimination')) ||
-                (isDayPhase && slugifyRole(token.role) !== 'villagers_elimination') ||
-                (isSheriffToken(token) && (!sheriffPhaseEligible() || sheriffDisabled))
+                isPaletteDisabled(token)
               }
-              on:click={() => deploySpecialToken(token)}
+              on:click={() => {
+                if (token.id === ACTOR_TOKEN_ID) {
+                  console.info('[actor] click actor token', { actorActionDisabled, isNightPhase, actorRemaining });
+                  if (!actorActionDisabled) openActorModal();
+                } else {
+                  deploySpecialToken(token);
+                }
+              }}
             >
               <span class="palette-token__circle">
                 {#if token.image}
@@ -997,7 +1636,7 @@
           {#each characterTokens as token (token.id + (infectedIdSet.has(token.id) ? '-infected' : '-clean'))}
             <button
               type="button"
-              class={`role-token category-${displayCategory(token)} ${consumedSpecialIds.includes(token.id) ? 'token-consumed' : ''} ${loverIdsSet?.has(token.id) ? 'token-lover' : ''} ${deadSet.has(token.id) ? 'token-dead' : ''} ${infectedTargets.includes(token.id) ? 'token-infected' : ''}`}
+              class={`role-token category-${displayCategory(token)} ${consumedSpecialIds.includes(token.id) ? 'token-consumed' : ''} ${deadSet.has(token.id) ? 'token-dead' : ''} ${infectedTargets.includes(token.id) ? 'token-infected' : ''}`}
               style={`--x:${positions[token.id]?.x ?? 50}%; --y:${positions[token.id]?.y ?? 50}%;`}
               title={token.role}
               disabled={consumedSpecialIds.includes(token.id)}
@@ -1008,44 +1647,51 @@
               {:else}
                 <span class="token-player token-player--placeholder"></span>
               {/if}
-              <span class="token-circle">
-                {#if displayImage(token)}
-                  <img src={displayImage(token)} alt={token.role} draggable="false" />
-                {:else}
-                  <span class="token-initials">{token.role?.[0] ?? '?'}</span>
-                {/if}
+              <span class="token-circle-wrapper">
+                <span class="token-circle">
+                  {#if displayImage(token)}
+                    <img src={displayImage(token)} alt={token.role} draggable="false" />
+                  {:else}
+                    <span class="token-initials">{token.role?.[0] ?? '?'}</span>
+                  {/if}
+                </span>
+                <div class="token-markers">
+                  {#each markerPlacementsFor(token) as marker (marker.type)}
+                    {#if marker.action}
+                      <div
+                        class="token-marker token-marker--action"
+                        style={`--marker-angle:${marker.angle}deg; --marker-radius:${MARKER_RADIUS}px;`}
+                        aria-label={marker.title}
+                        role="button"
+                        tabindex="0"
+                        aria-disabled={marker.disabled}
+                        on:click|stopPropagation={() => !marker.disabled && openPreview(token)}
+                        on:pointerdown|stopPropagation
+                        on:keydown|stopPropagation={(event) => {
+                          if (marker.disabled) return;
+                          if (event.key === 'Enter' || event.key === ' ') openPreview(token);
+                        }}
+                      >
+                        <img src={marker.icon} alt="" aria-hidden="true" />
+                      </div>
+                    {:else}
+                      <span
+                        class="token-marker"
+                        style={`--marker-angle:${marker.angle}deg; --marker-radius:${MARKER_RADIUS}px;`}
+                        title={marker.title}
+                        aria-hidden="true"
+                      >
+                        <img src={marker.icon} alt="" />
+                      </span>
+                    {/if}
+                  {/each}
+                </div>
               </span>
               <span class="token-role" aria-hidden="true">{token.role}</span>
               <span class="sr-only">{token.role}</span>
               {#if deadSet.has(token.id)}
                 <span class="token-badge token-badge--dead" aria-hidden="true">✖</span>
               {/if}
-              {#if charmedTargets?.includes(token.id)}
-                <span class="token-badge token-badge--charmed" aria-hidden="true">♪</span>
-              {/if}
-              {#if lastProtectedTargets?.includes(token.id)}
-                <span class="token-badge token-badge--protected" aria-hidden="true">🛡</span>
-              {/if}
-              {#if loverIdsSet?.has(token.id)}
-                <span class="token-badge token-badge--lover" aria-hidden="true">♥</span>
-              {/if}
-              {#if charmedTargets?.includes(token.id)}
-                <span class="token-badge token-badge--charmed" aria-hidden="true">♪</span>
-              {/if}
-              {#if sheriffHolderId === token.id}
-                <span class="token-badge token-badge--sheriff" aria-hidden="true">★</span>
-              {/if}
-              <span
-                class="token-preview-btn"
-                role="button"
-                tabindex="0"
-                on:click|stopPropagation={() => openPreview(token)}
-                on:pointerdown|stopPropagation
-                on:keydown|stopPropagation={(event) => (event.key === 'Enter' || event.key === ' ') && openPreview(token)}
-                aria-label={$t('session.preview.view_role')}
-              >
-                <img src="/tokens/seer-eye.png" alt="" aria-hidden="true" />
-              </span>
             </button>
           {/each}
           {#each activeSpecialTokens as token}
@@ -1133,18 +1779,70 @@
       </div>
       <div class="dock-controls">
         <button class="btn secondary btn--size-sm" type="button" on:click={goToConfigure}>Configure</button>
-        <button class="btn ghost btn--size-sm" type="button" on:click={evaluatePhase}>{$t('session.controls.evaluate_phase')}</button>
-        <button class="btn danger btn--size-sm" type="button" on:click={finishSession} disabled={!finishEnabled}>{$t('session.controls.finish')}</button>
+        <button class="btn ghost btn--size-sm" type="button" on:click={evaluatePhase} disabled={finishEnabled || isEndPhase}>
+          {$t('session.controls.evaluate_phase')}
+        </button>
+        <button class="btn danger btn--size-sm" type="button" on:click={resetSessionStateTemp} disabled={resetLoading}>
+          Reset (temp)
+        </button>
+        <button class="btn danger btn--size-sm" type="button" on:click={finishSession} disabled={!finishEnabled}>
+          {$t('session.controls.finish')}
+        </button>
         <button class="btn danger btn--size-sm" type="button" on:click={cancelSession}>{$t('session.controls.cancel')}</button>
       </div>
     </div>
   </Footbar>
 
   <Modal
+    open={actorModalOpen}
+    title={$t?.('session.phases.steps.actor') ?? 'Select role for Actor'}
+    size="lg"
+    closeOnBackdrop={true}
+    showClose={false}
+    on:close={closeActorModal}
+  >
+    <div class="actor-modal-body">
+      {#if actorAvailable.length === 0}
+        <p class="hint">{$t?.('configure.role_preview_empty') ?? 'No roles available'}</p>
+      {:else}
+        <div class="actor-modal-grid">
+          {#each actorAvailable as role}
+            {#if actorConsumed.has(slugifyRole(role))}
+              <button class="actor-card consumed" type="button" disabled>
+                <img src={roleImageSrc(getRoleDefinition(role)?.category ?? 'villagers', slugifyRole(role))} alt={role} />
+                <span>{actorRoleLabel(role)}</span>
+              </button>
+            {:else}
+              <button
+                class={`actor-card ${actorSelection === slugifyRole(role) ? 'selected' : ''}`}
+                type="button"
+                on:click={() => (actorSelection = slugifyRole(role))}
+                aria-pressed={actorSelection === slugifyRole(role)}
+              >
+                <img src={roleImageSrc(getRoleDefinition(role)?.category ?? 'villagers', slugifyRole(role))} alt={role} />
+                <span>{actorRoleLabel(role)}</span>
+              </button>
+            {/if}
+          {/each}
+        </div>
+      {/if}
+    </div>
+    <svelte:fragment slot="footer">
+      <button class="btn ghost" type="button" on:click={closeActorModal}>
+        {$t?.('common.actions.cancel') ?? 'Cancel'}
+      </button>
+      <button class="btn primary" type="button" on:click={confirmActorSelection} disabled={!actorSelection || actorConsumed.has(actorSelection)}>
+        {$t?.('common.actions.done') ?? 'Done'}
+      </button>
+    </svelte:fragment>
+  </Modal>
+
+  <Modal
     open={previewOpen}
     title={previewToken ? previewToken.role : ''}
     size="xl"
     closeOnBackdrop={true}
+    showClose={false}
     on:close={closePreview}
   >
     {#if previewToken}
@@ -1297,6 +1995,7 @@
   }
 
   .token-circle {
+    position: relative;
     width: 92px;
     height: 92px;
     border-radius: 50%;
@@ -1308,6 +2007,15 @@
     overflow: hidden;
     box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.45);
     pointer-events: none;
+  }
+
+  .token-circle-wrapper {
+    position: relative;
+    width: 92px;
+    height: 92px;
+    display: grid;
+    place-items: center;
+    overflow: visible;
   }
 
   .token-circle img {
@@ -1383,17 +2091,6 @@
     border-style: dashed;
   }
 
-  .token-lover::after {
-    content: '♥';
-    position: absolute;
-    top: 4px;
-    right: 6px;
-    font-size: 0.95rem;
-    color: #ff6fa2;
-    text-shadow: 0 0 6px rgba(255, 111, 162, 0.7);
-    pointer-events: none;
-  }
-
   .token-dead {
     opacity: 0.55;
     filter: grayscale(0.85);
@@ -1413,6 +2110,7 @@
     font-weight: 800;
     color: var(--color-white-contrast);
     text-shadow: 0 0 6px rgba(0, 0, 0, 0.65);
+    z-index: 2;
   }
 
   .token-badge--dead {
@@ -1432,48 +2130,70 @@
     color: var(--color-white-contrast);
     text-shadow: 0 0 6px rgba(0, 0, 0, 0.55);
     bottom: 4px;
-    right: 6px;
+    right: 36px;
     left: auto;
     top: auto;
   }
   .token-badge--lover { top: 4px; right: 6px; left: auto; bottom: auto; }
   .token-badge--dead { top: 50%; left: 50%; right: auto; bottom: auto; transform: translate(-50%, -50%); }
-  .token-badge--sheriff {
-    bottom: 4px;
-    left: 6px;
-    right: auto;
-    top: auto;
-    background: linear-gradient(135deg, #f6c744, #d48a0d);
-    color: #111;
-    border: 1px solid rgba(0, 0, 0, 0.45);
-    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.15);
+
+  .token-markers {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
   }
 
-  .token-preview-btn {
+  .token-marker {
     position: absolute;
-    bottom: 6px;
-    right: 6px;
+    top: 50%;
+    left: 50%;
     width: 28px;
     height: 28px;
-    border-radius: 999px;
-    border: none;
+    border-radius: 50%;
     background: rgba(0, 0, 0, 0.65);
     display: grid;
     place-items: center;
-    cursor: pointer;
-    padding: 2px;
-    transition: transform 120ms ease, background 120ms ease;
+    transform: translate(-50%, -50%)
+      rotate(var(--marker-angle, 0deg))
+      translate(var(--marker-radius, 56px))
+      rotate(calc(var(--marker-angle, 0deg) * -1));
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    pointer-events: none;
   }
 
-  .token-preview-btn img {
-    width: 20px;
-    height: 20px;
+  .token-marker img {
+    width: 22px;
+    height: 22px;
     object-fit: contain;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
   }
 
-  .token-preview-btn:hover {
+  .token-marker--action {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 0;
+    background: rgba(0, 0, 0, 0.65);
+    cursor: pointer;
+    pointer-events: auto;
+    transition: transform 120ms ease, background 120ms ease, box-shadow 120ms ease;
+  }
+
+  .token-marker--action:focus-visible {
+    outline: 2px solid var(--color-gold-info);
+    outline-offset: 2px;
+  }
+
+  .token-marker--action:hover {
     background: rgba(255, 255, 255, 0.12);
-    transform: scale(1.05);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+  }
+
+  .token-marker--action:disabled,
+  .token-marker--action[aria-disabled='true'] {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: none;
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
   }
 
   .preview-wrapper {
@@ -1523,6 +2243,11 @@
     background: transparent;
     border: none;
     cursor: pointer;
+  }
+
+  .palette-token--highlight .palette-token__circle {
+    border-color: var(--color-gold-brand);
+    box-shadow: 0 0 0 1px rgba(217, 179, 108, 0.5);
   }
 
   .palette-token__circle {
@@ -1598,6 +2323,51 @@
     color: var(--color-white-muted);
     font-size: 0.9rem;
     margin-bottom: 0.25rem;
+  }
+
+  .actor-modal-body {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .actor-modal-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.75rem;
+  }
+
+  .actor-card {
+    background: rgba(8, 12, 20, 0.9);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    padding: 0.9rem;
+    display: grid;
+    gap: 0.65rem;
+    justify-items: center;
+    cursor: pointer;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+    color: var(--color-white-contrast);
+  }
+
+  .actor-card img {
+    width: 88px;
+    height: 88px;
+    object-fit: cover;
+    border-radius: 50%;
+    background: #0d1320;
+    border: 1px solid var(--glass-hover);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
+  }
+
+  .actor-card.selected {
+    border-color: var(--color-gold-brand);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+  }
+
+  .actor-card.consumed {
+    cursor: not-allowed;
+    opacity: 0.35;
+    filter: grayscale(1);
   }
 
   .phase-pill {

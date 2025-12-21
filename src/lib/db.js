@@ -282,10 +282,18 @@ export async function savePlayerRoleAssignments(sessionId, assignments = {}) {
   if (assignments && typeof assignments === 'object') {
     Object.entries(assignments).forEach(([playerId, roleInfo]) => {
       if (!playerId || !roleInfo || !roleInfo.role) return;
+      const alias =
+        typeof roleInfo.alias === 'string'
+          ? roleInfo.alias.trim()
+          : typeof roleInfo.player === 'string'
+            ? roleInfo.player.trim()
+            : null;
       normalized[playerId] = {
         role: roleInfo.role,
         slug: slugifyRole(roleInfo.role),
         category: roleInfo.category ?? null,
+        alias: alias || null,
+        player: alias || roleInfo.player || null,
         updated_at: serverTimestamp()
       };
     });
@@ -425,8 +433,11 @@ export async function createSessionDraft({ title, language, creatorUid } = {}) {
     },
     players: {},
     game_phases: {
+      previous: null,
       current: gamePhaseDefault,
-      phase_summary: []
+      next: 'undetermined',
+      phase_summary: [],
+      pending_interphases: []
     },
     logs: [],
     meta: gamesMetadata?.meta ?? { version: 1, schema: 'game_schema' },

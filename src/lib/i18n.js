@@ -27,7 +27,8 @@ const dictionaries = {
         delete: 'Delete',
         cancel: 'Cancel',
         save: 'Save',
-        close: 'Close'
+        close: 'Close',
+        done: 'Done'
       },
       alerts: {
         default_title: 'Please review the information'
@@ -347,6 +348,9 @@ const dictionaries = {
         first_day: { title: 'First day', subtitle: 'First daylight' },
         each_night: { title: 'Each night', subtitle: 'Standard order' },
         each_day: { title: 'Each day', subtitle: 'Daytime actions' },
+        hunter: { title: 'Hunter', subtitle: '' },
+        sheriff: { title: 'Sheriff', subtitle: '' },
+        end: { title: 'End', subtitle: '' },
         steps: {
           cards_dealt: 'Character cards are dealt',
           prejudiced_manipulator: 'Village separated for Prejudiced Manipulator',
@@ -408,7 +412,8 @@ const dictionaries = {
       placeholder: 'Write what happens to craft the summary and emails…',
       add_entry: 'Add entry',
       empty: 'No entries yet.',
-      entry_label: 'Entry #{num}'
+      entry_label: 'Entry #{num}',
+      actor_becomes: 'Actor becomes {role} for this night'
       },
       controls: {
         previous: 'Previous',
@@ -578,7 +583,8 @@ const dictionaries = {
         delete: 'Eliminar',
         cancel: 'Cancelar',
         save: 'Guardar',
-        close: 'Cerrar'
+        close: 'Cerrar',
+        done: 'Aceptar'
       },
       alerts: {
         default_title: 'Revisa la información'
@@ -1026,6 +1032,9 @@ const dictionaries = {
         first_day: { title: 'Primer día', subtitle: 'Primera jornada' },
         each_night: { title: 'Cada noche', subtitle: 'Orden estándar' },
         each_day: { title: 'Cada día', subtitle: 'Acciones diurnas' },
+        hunter: { title: 'Cazador', subtitle: '' },
+        sheriff: { title: 'Alguacil', subtitle: '' },
+        end: { title: 'Fin', subtitle: '' },
         steps: {
           cards_dealt: 'Se reparten las cartas de rol',
           prejudiced_manipulator: 'El pueblo se divide para el Manipulador Prejuicioso',
@@ -1087,7 +1096,8 @@ const dictionaries = {
       placeholder: 'Anota lo que sucede para el resumen y correos…',
       add_entry: 'Añadir entrada',
       empty: 'Aún no hay entradas.',
-        entry_label: 'Entrada #{num}'
+      entry_label: 'Entrada #{num}',
+      actor_becomes: 'El Comediante se convierte en {role} esta noche'
       },
       controls: {
         previous: 'Anterior',
@@ -1129,7 +1139,8 @@ const dictionaries = {
         delete: 'Törlés',
         cancel: 'Mégse',
         save: 'Mentés',
-        close: 'Bezárás'
+        close: 'Bezárás',
+        done: 'Kész'
       },
       alerts: {
         default_title: 'Ellenőrizd az adatokat'
@@ -1577,6 +1588,9 @@ const dictionaries = {
         first_day: { title: 'Első nap', subtitle: 'Első nappali kör' },
         each_night: { title: 'Minden éjszaka', subtitle: 'Alap sorrend' },
         each_day: { title: 'Minden nap', subtitle: 'Nappali akciók' },
+        hunter: { title: 'Vadász', subtitle: '' },
+        sheriff: { title: 'Seriff', subtitle: '' },
+        end: { title: 'Vége', subtitle: '' },
         steps: {
           cards_dealt: 'Szerepkártyák kiosztása',
           prejudiced_manipulator: 'Falu kettéosztása az Előítéletes Manipulátorhoz',
@@ -1638,7 +1652,8 @@ const dictionaries = {
         placeholder: 'Írd le, mi történik a kivonathoz és e-mailekhez…',
         add_entry: 'Bejegyzés hozzáadása',
         empty: 'Még nincs bejegyzés.',
-        entry_label: 'Bejegyzés #{num}'
+        entry_label: 'Bejegyzés #{num}',
+        actor_becomes: 'A Komikus ma éjjel {role} szerepébe lép'
       },
       controls: {
         previous: 'Előző',

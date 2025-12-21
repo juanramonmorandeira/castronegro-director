@@ -39,7 +39,6 @@
     availableLanguages: ['en'],
     assistTaskOptions: []
   };
-  export let savedMessage = '';
 
   const dispatch = createEventDispatcher();
 
@@ -134,6 +133,7 @@
     dispatch('save', { value: { ...draft } });
   }
   const modalDescription = $t('configure.intro');
+
 </script>
 
 <Modal
@@ -244,10 +244,6 @@
           </div>
         {/if}
   </section>
-
-  {#if savedMessage}
-    <p class="action-hint" aria-live="polite">{savedMessage}</p>
-  {/if}
 
   <svelte:fragment slot="footer">
     <Button variant="primary" type="button" on:click={save}>{$t('common.actions.save')}</Button>

@@ -6,11 +6,11 @@
   import PropertiesModal from '../components/config/Properties.svelte';
   import SelectionModal from '../components/config/Selection.svelte';
   import MatchModal from '../components/config/Match.svelte';
-  import DistributionModal from '../components/config/Distribution.svelte';
   import ShareModal from '../components/config/Share.svelte';
   import NavActions from '../components/ui/NavActions.svelte';
   import AlertPopup from '../components/ui/AlertPopup.svelte';
   import { NAV_INTENT } from '../lib/navigation.js';
+  import { showToast } from '../lib/toast.js';
   import { t } from '../lib/i18n.js';
   import { getSessionById, updateSession, subscribeToSession, savePlayerRoleAssignments } from '../lib/db.js';
   import { getGamesMetadata, getAssistTasks, getBalanceTable, getResourcesTable } from '../lib/gameMetadata.js';
@@ -127,12 +127,6 @@
 
   let loading = true;
   let saving = false;
-  let saved = false;
-  let propertiesSavedMessage = '';
-  let selectionSavedMessage = '';
-  let matchSavedMessage = '';
-  let distributionSavedMessage = '';
-  let shareSavedMessage = '';
   let forceStartHintVisible = false;
   let overrideRoleLimits = false;
   let activeModal = null;
@@ -169,6 +163,9 @@
   let livePlayers = {};
   let playerList = [];
   let playerAssignments = {};
+  let distributionTokens = [];
+  let testPlayers = [];
+  let matchPlayers = [];
   let sessionUnsubscribe = null;
 
   const countEntries = (value) => {
@@ -176,6 +173,29 @@
     if (value && typeof value === 'object') return Object.keys(value).length;
     if (typeof value === 'number' && Number.isFinite(value)) return value;
     return 0;
+  };
+
+  const prettifyTestAlias = (playerId) => {
+    if (typeof playerId !== 'string' || !playerId.startsWith('test-')) return null;
+    const parts = playerId.split('-').slice(1); // remove "test"
+    // Remove trailing numeric parts (timestamp + random suffix).
+    while (parts.length && /^\d+$/.test(parts[parts.length - 1])) {
+      parts.pop();
+    }
+    const name = parts.join(' ');
+    if (!name) return null;
+    return name.replace(/\b\w/g, (char) => char.toUpperCase());
+  };
+
+  const deriveTestPlayers = (assignments = {}, knownPlayers = []) => {
+    const knownIds = new Set((knownPlayers ?? []).map((player) => player.id));
+    return Object.entries(assignments ?? {})
+      .filter(([playerId]) => !knownIds.has(playerId))
+      .map(([playerId, data]) => ({
+        id: playerId,
+        alias: data?.alias || data?.player || prettifyTestAlias(playerId) || playerId,
+        ready: true
+      }));
   };
 
   function updatePlayerStats(players = {}, legacyReadySource = null) {
@@ -202,6 +222,12 @@
       snapshot.playersReady ??
       null;
     updatePlayerStats(snapshot.players ?? {}, legacyReadySource);
+    if (!testPlayers.length) {
+      const derived = deriveTestPlayers(playerAssignments, playerList);
+      if (derived.length) {
+        testPlayers = derived;
+      }
+    }
   }
 
   $: derivedAssistEnabled =
@@ -268,13 +294,14 @@
   $: selectionAssistEnabled =
     form.storyteller === 'AI' ||
     (form.storyteller === 'human-AI' && Array.isArray(form.assistTasks) && form.assistTasks.includes('Roles_Selection'));
-  $: distributionTokens = buildDistributionTokens(selectedRoles, playerAssignments, playerList);
   $: expectedPlayersCount = clampPlayers(form.players_expected);
   $: allPlayersReady =
     expectedPlayersCount > 0 &&
     connectedCount >= expectedPlayersCount &&
     readyCount >= expectedPlayersCount;
   $: startActionDisabled = sessionStatus !== 'paused' && !allPlayersReady;
+  $: distributionTokens = buildDistributionTokens(selectedRoles, playerAssignments, playerList);
+  $: matchPlayers = [...playerList, ...testPlayers];
   $: if (sessionId && !loading) {
     dispatch('session-stats', {
       expected: expectedPlayersCount,
@@ -305,26 +332,29 @@
         if (session) {
           handleSessionSnapshot(session);
           const settings = session.settings ?? {};
-          form = {
-            name: session.title ?? settings.name ?? '',
-            game_id: session.game_id ?? '',
-            description: settings.description ?? form.description,
-            rulesets: settings.rulesets ?? form.rulesets,
-            players_expected: clampPlayers(settings.players_expected ?? form.players_expected),
-            storyteller: settings.storyteller ?? form.storyteller,
-            language: settings.language ?? form.language,
-            assistEnabled: !!settings.assist_enabled,
-            assistTasks: Array.isArray(settings.assist_tasks)
-              ? settings.assist_tasks.filter((task) => assistTaskOptions.includes(task))
-              : []
-          };
-          if (settings.roles) {
-            selectedRoles = normalizeRoleSelection(settings.roles);
-            rolesCustomized = true;
-          }
-          if (form.storyteller === 'human') {
-            form.assistEnabled = false;
-            form.assistTasks = [];
+        form = {
+          name: session.title ?? settings.name ?? '',
+          game_id: session.game_id ?? '',
+          description: settings.description ?? form.description,
+          rulesets: settings.rulesets ?? form.rulesets,
+          players_expected: clampPlayers(settings.players_expected ?? form.players_expected),
+          storyteller: settings.storyteller ?? form.storyteller,
+          language: settings.language ?? form.language,
+          assistEnabled: !!settings.assist_enabled,
+          assistTasks: Array.isArray(settings.assist_tasks)
+            ? settings.assist_tasks.filter((task) => assistTaskOptions.includes(task))
+            : []
+        };
+        if (settings.roles) {
+          selectedRoles = normalizeRoleSelection(settings.roles);
+          rolesCustomized = true;
+        }
+        if (Array.isArray(settings.actor_roles)) {
+          selectedActorRoles = settings.actor_roles.slice(0, 3);
+        }
+        if (form.storyteller === 'human') {
+          form.assistEnabled = false;
+          form.assistTasks = [];
           } else if (form.storyteller === 'AI' && !form.assistTasks.length && assistTaskOptions.length) {
             form.assistEnabled = true;
             form.assistTasks = [...assistTaskOptions];
@@ -376,12 +406,12 @@
         'settings.assist_enabled': assistEnabled,
         'settings.assist_tasks': assistEnabled ? form.assistTasks : [],
         'settings.roles': selectedRoles,
+        'settings.actor_roles': selectedActorRoles,
         status: nextStatus
       };
 
       await updateSession(sessionId, payload);
-      saved = true;
-      setTimeout(() => (saved = false), 2000);
+      showToast({ message: $t('configure.saved'), variant: 'success' });
     } catch (error) {
       console.error('[configure] unable to save session', error);
       openAlert($t('configure.errors.save_failed'), 'error');
@@ -394,19 +424,7 @@
     dispatch('back');
   }
 
-  function resetModalMessages(target) {
-    const map = target ? [target] : ['properties', 'selection', 'match', 'distribution', 'share'];
-    for (const entry of map) {
-      if (entry === 'properties') propertiesSavedMessage = '';
-      if (entry === 'selection') selectionSavedMessage = '';
-      if (entry === 'match') matchSavedMessage = '';
-      if (entry === 'distribution') distributionSavedMessage = '';
-      if (entry === 'share') shareSavedMessage = '';
-    }
-  }
-
   function openModal(name) {
-    resetModalMessages(name);
     activeModal = name;
   }
 
@@ -435,7 +453,6 @@
 
   function closeModal() {
     activeModal = null;
-    resetModalMessages();
   }
 
   function handleNavIntent(event) {
@@ -449,7 +466,7 @@
     const detail = event?.detail ?? {};
     if (!detail.value) return;
     form = { ...form, ...detail.value };
-    propertiesSavedMessage = $t('configure.saved');
+    showToast({ message: $t('configure.saved'), variant: 'success' });
   }
 
   function handleSelectionSave(event) {
@@ -460,7 +477,7 @@
       autoSeedKey = `${form.rulesets}|${form.players_expected}`;
     }
     if (Array.isArray(detail.actorRoles)) {
-      selectedActorRoles = detail.actorRoles;
+      selectedActorRoles = detail.actorRoles.slice(0, 3);
     }
     if (Array.isArray(detail.thiefRoles)) {
       selectedThiefRoles = detail.thiefRoles;
@@ -468,7 +485,7 @@
     if (typeof detail.override === 'boolean') {
       overrideRoleLimits = detail.override;
     }
-    selectionSavedMessage = $t('configure.saved');
+    showToast({ message: $t('configure.saved'), variant: 'success' });
   }
 
   function handleMatchAuto() {
@@ -481,23 +498,16 @@
       return;
     }
     const assignments = event?.detail?.assignments ?? {};
+    const manualPlayers = Array.isArray(event?.detail?.testPlayers) ? event.detail.testPlayers : testPlayers;
+    testPlayers = manualPlayers;
     try {
       await savePlayerRoleAssignments(sessionId, assignments);
       playerAssignments = assignments;
-      matchSavedMessage = $t('configure.saved');
+      showToast({ message: $t('configure.saved'), variant: 'success' });
     } catch (error) {
       console.error('[configure] unable to save role assignments', error);
       openAlert($t('configure.errors.save_failed'), 'error');
     }
-  }
-
-  function handleDistributionClose() {
-    closeModal();
-  }
-
-  function handleDistributionSave() {
-    console.info('[configure] distribution save requested');
-    distributionSavedMessage = $t('configure.saved');
   }
 
   function handleShareClose() {
@@ -505,7 +515,7 @@
   }
 
   function handleShareSave() {
-    shareSavedMessage = $t('configure.saved');
+    showToast({ message: $t('configure.saved'), variant: 'success' });
   }
 
   async function handleStartOrContinue() {
@@ -526,7 +536,8 @@
           sessionId,
           tokens: distributionTokens,
           selection: selectedRoles,
-          players: playerList
+          players: playerList,
+          actorRoles: selectedActorRoles
         });
       }
     } catch (error) {
@@ -547,7 +558,8 @@
       force: true,
       tokens: distributionTokens,
       selection: selectedRoles,
-      players: playerList
+      players: playerList,
+      actorRoles: selectedActorRoles
     });
   }
 </script>
@@ -611,9 +623,6 @@
           </button>
           <button class="pill-btn" type="button" on:click={() => openModal('match')} disabled={!matchEnabled}>
             {$t('configure.btn_match')}
-          </button>
-          <button class="pill-btn" type="button" on:click={() => openModal('distribution')}>
-            {$t('configure.btn_distribution')}
           </button>
           <button class="pill-btn" type="button" on:click={shareSession} disabled={!form.game_id || !canShareSession}>
             {$t('configure.btn_share')}
@@ -688,9 +697,6 @@
           {#if forceStartHintVisible}
             <span class="hint start-hint">Modo prueba: inicio forzado habilitado</span>
           {/if}
-          {#if saved}
-            <span class="hint saved-hint">{$t('configure.saved')}</span>
-          {/if}
         </footer>
       </section>
     {/if}
@@ -721,7 +727,6 @@
     availableLanguages,
     assistTaskOptions
   }}
-  savedMessage={propertiesSavedMessage}
   on:save={handlePropertiesSave}
   on:cancel={closeModal}
 />
@@ -740,35 +745,24 @@
   mix={playerBreakdown}
   totalLimit={clampPlayers(form.players_expected)}
   duplicates={[...DUPLICATE_ROLE_NAMES]}
-  savedMessage={selectionSavedMessage}
   on:save={handleSelectionSave}
   on:cancel={closeModal}
 />
 
 <MatchModal
   open={activeModal === 'match'}
-  players={playerList}
+  players={matchPlayers}
+  testPlayers={testPlayers}
   roles={roleOptions}
   assignments={playerAssignments}
-  savedMessage={matchSavedMessage}
   on:auto={handleMatchAuto}
   on:save={handleMatchSave}
   on:cancel={closeModal}
 />
 
-<DistributionModal
-  open={activeModal === 'distribution'}
-  tokens={distributionTokens}
-  savedMessage={distributionSavedMessage}
-  sessionId={form.game_id || 'default'}
-  on:cancel={handleDistributionClose}
-  on:save={handleDistributionSave}
-/>
-
 <ShareModal
   open={activeModal === 'share'}
   gameId={form.game_id}
-  savedMessage={shareSavedMessage}
   on:cancel={handleShareClose}
   on:save={handleShareSave}
 />
@@ -1005,10 +999,6 @@
 
   .save-btn {
     min-width: 150px;
-  }
-
-  .saved-hint {
-    color: var(--color-green-accent);
   }
 
   @media (max-width: 720px) {

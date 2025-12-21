@@ -19,6 +19,7 @@
   import Configure from './pages/Configure.svelte';
   import Waiting from './pages/Waiting.svelte';
   import Session from './pages/Session.svelte';
+  import ToastHost from './components/ui/ToastHost.svelte';
   import { t } from './lib/i18n.js';
   import { fetchCurrentUserProfile, signOutUser, confirmEmailVerification } from './lib/auth.js';
   import { auth } from './lib/firebase.js';
@@ -30,6 +31,7 @@
   let currentSessionTokens = [];
   let currentSessionSelection = null;
   let currentSessionPlayers = [];
+  let currentActorRoles = [];
   let currentRole = null;
   let currentUser = null;
   let previousView = null;
@@ -70,6 +72,7 @@
     currentSessionTokens = payload.tokens ?? currentSessionTokens;
     currentSessionSelection = payload.selection ?? currentSessionSelection;
     currentSessionPlayers = payload.players ?? currentSessionPlayers;
+    currentActorRoles = payload.actorRoles ?? currentActorRoles ?? [];
     view = APP_VIEWS.SESSION;
   }
   async function handleLoginSuccess(payload) {
@@ -370,6 +373,7 @@
     selection={currentSessionSelection}
     tokens={currentSessionTokens}
     players={currentSessionPlayers}
+    actorRoles={currentActorRoles}
     user={currentUser}
     showSessionIndicator={showSessionIndicator}
     sessionIndicator={sessionIndicator}
@@ -400,6 +404,8 @@
     sessionIndicator={sessionIndicator}
   />
 {/if}
+
+<ToastHost />
 
 <style>
     /* ─────────────────────────────────────────────────────────────
