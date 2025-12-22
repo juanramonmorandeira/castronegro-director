@@ -57,6 +57,7 @@ export function buildDistributionTokens(selection, assignments = {}, players = [
   const hunterBulletPath = '/tokens/hunter-bullet.png';
   const sheriffBadgePath = '/badge/sheriff.png';
   const villagersEliminationPath = '/tokens/villagers-guillotine.png';
+  const foxSensesPath = '/tokens/fox-senses.png';
 
   const pushAssignment = (slug, label) => {
     if (!slug || !label) return;
@@ -187,6 +188,26 @@ export function buildDistributionTokens(selection, assignments = {}, players = [
           player: null
         }
       );
+    }
+  }
+
+  // Fox special token: one sensing token per Fox selected.
+  const foxCount =
+    Number(
+      selection?.villagers?.fox ??
+        selection?.villagers?.Fox ??
+        selection?.villagers?.['The Fox'] ??
+        0
+    ) || 0;
+  if (foxCount > 0) {
+    for (let index = 0; index < foxCount; index += 1) {
+      tokens.push({
+        id: `special-fox-senses-${index}`,
+        role: 'Fox Senses',
+        category: 'special',
+        image: foxSensesPath,
+        player: null
+      });
     }
   }
 

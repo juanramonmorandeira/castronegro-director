@@ -94,6 +94,12 @@
   let actorState = { available: [], consumed: [], currentNightChoice: null };
   let actorBaseTokenId = null;
   let actorOriginalToken = null;
+  let foxModalOpen = false;
+  let foxSelection = null;
+  let foxReveal = null; // { role: 'werewolf'|'villager', image: string }
+  let foxState = { lastResult: null, available: true, lastNightUsed: null, lastNightUsedKey: null };
+  let foxSpecialId = null;
+  let foxBaseTokenId = null;
   $: sessionKey = sessionId ?? 'default';
   let lastProtectedTargets = [];
   let activeSpecialIds = [];
@@ -118,6 +124,9 @@
     return set;
   })();
   $: seerActive = aliveRoleSet.has('seer');
+  $: foxBaseTokenId = characterTokens.find((token) => slugifyRole(token.role) === 'fox')?.id ?? null;
+  $: foxSpecialId = specialTokens.find((token) => slugifyRole(token.role) === 'fox_senses')?.id ?? null;
+  $: foxAlive = foxBaseTokenId && !deadSet.has(foxBaseTokenId) && !infectedIdSet.has(foxBaseTokenId);
   let elderResilience = new Set();
   const currentLocale = typeof navigator !== 'undefined' ? navigator.language : 'en';
 
@@ -151,11 +160,18 @@
         const settings = session?.settings ?? {};
         const phasesRemote = session?.game_phases ?? {};
         const remoteState = session?.actor_state ?? {};
+        const remoteFox = session?.fox_state ?? {};
         const available = sanitizeActorRoles(settings.actor_roles ?? actorRoles);
         actorState = {
           available,
           consumed: Array.isArray(remoteState.consumed) ? remoteState.consumed.map((item) => slugifyRole(item)).filter(Boolean) : [],
           currentNightChoice: remoteState.currentNightChoice ?? null
+        };
+        foxState = {
+          lastResult: remoteFox.lastResult ?? null,
+          available: remoteFox.available ?? true,
+          lastNightUsed: remoteFox.lastNightUsed ?? null,
+          lastNightUsedKey: remoteFox.lastNightUsedKey ?? null
         };
         const normalizedCurrent = normalizePhaseKey(phasesRemote.current ?? PHASE_KEY_PREPARATION);
         const remoteBase = BASE_PHASE_SEQUENCE.indexOf(normalizedCurrent);
@@ -170,6 +186,7 @@
       } catch (error) {
         console.error('[session] unable to load actor state', error);
         actorState = { available: sanitizeActorRoles(actorRoles), consumed: [], currentNightChoice: null };
+        foxState = { lastResult: null, available: true, lastNightUsed: null, lastNightUsedKey: null };
         phaseState = {
           previous: null,
           current: PHASE_KEY_PREPARATION,
@@ -524,6 +541,22 @@
     }
   };
 
+  const persistFoxState = async () => {
+    if (!sessionId) return;
+    try {
+      await updateSession(sessionId, {
+        fox_state: {
+          lastResult: foxState.lastResult,
+          available: foxState.available,
+          lastNightUsed: foxState.lastNightUsed,
+          lastNightUsedKey: foxState.lastNightUsedKey
+        }
+      });
+    } catch (error) {
+      console.error('[session] unable to persist fox state', error);
+    }
+  };
+
   const persistPhaseState = async () => {
     if (!sessionId) return;
     try {
@@ -549,6 +582,20 @@
       $t?.('session.logbook.actor_becomes', { role: actorRoleLabel(selectedSlug) }) ??
       `Actor becomes ${actorRoleLabel(selectedSlug)} for this night`;
     const stamp = new Date().toLocaleTimeString();
+    logEntries = [{ text, stamp }, ...logEntries];
+  }
+
+  const foxOptions = [
+    { key: 'werewolf', image: roleImageSrc('werewolves', 'werewolf') },
+    { key: 'villager', image: roleImageSrc('villagers', 'villager') }
+  ];
+
+  function addFoxLogEntry(result) {
+    const stamp = new Date().toLocaleTimeString();
+    const text =
+      result === 'werewolf'
+        ? $t?.('session.fox.log.werewolf') ?? 'Fox senses a werewolf nearby'
+        : $t?.('session.fox.log.villager') ?? 'Fox senses no werewolves';
     logEntries = [{ text, stamp }, ...logEntries];
   }
 
@@ -679,6 +726,47 @@
     persistActorState();
   }
 
+  function closeFoxModal() {
+    foxModalOpen = false;
+    foxSelection = null;
+  }
+
+  function foxRevealToken(result) {
+    if (result === 'werewolf') {
+      return {
+        role: $t?.('session.fox.option.werewolf') ?? 'Werewolf',
+        category: 'werewolves',
+        image: roleImageSrc('werewolves', 'werewolf')
+      };
+    }
+    return {
+      role: $t?.('session.fox.option.villager') ?? 'Villager',
+      category: 'villagers',
+      image: roleImageSrc('villagers', 'villager')
+    };
+  }
+
+  async function confirmFoxSelection() {
+    if (!foxSelection) return;
+    foxModalOpen = false;
+    const currentNight = isNightPhase ? currentNightCounter || nightNumber || 0 : nightNumber || 0;
+    foxState = {
+      ...foxState,
+      lastResult: foxSelection,
+      available: false,
+      lastNightUsed: currentNight,
+      lastNightUsedKey: normalizedPhaseKey
+    };
+    if (foxSpecialId && !consumedSpecialIds.includes(foxSpecialId)) {
+      consumedSpecialIds = [...consumedSpecialIds, foxSpecialId];
+      activeSpecialIds = activeSpecialIds.filter((id) => id !== foxSpecialId);
+    }
+    addFoxLogEntry(foxSelection);
+    await persistFoxState();
+    previewToken = foxRevealToken(foxSelection);
+    previewOpen = true;
+  }
+
   function openActorModal() {
     if (!actorAlive) return;
     actorSelection = actorState.currentNightChoice ?? actorRemaining[0] ?? null;
@@ -723,6 +811,20 @@
     isEachDayPhase,
     isDayPhase
   });
+  $: currentNightCounter = isFirstNightPhase ? 1 : isEachNightPhase ? Math.max(1, nightNumber || 1) : nightNumber;
+  $: if (
+    isNightPhase &&
+    foxAlive &&
+    foxState.lastResult === 'werewolf' &&
+    !foxState.available &&
+    foxState.lastNightUsedKey !== normalizedPhaseKey
+  ) {
+    foxState = { ...foxState, available: true };
+    if (foxSpecialId) {
+      consumedSpecialIds = consumedSpecialIds.filter((id) => id !== foxSpecialId);
+    }
+    persistFoxState();
+  }
 
   const nextBaseIndex = (index) => {
     if (index < 0) return 0;
@@ -869,6 +971,7 @@
     actorCurrentRoleSlug = null;
     actorTempSpecialIds = [];
     actorState = { available: sanitizeActorRoles(actorRoles), consumed: [], currentNightChoice: null };
+    foxState = { lastResult: null, available: true, lastNightUsed: null, lastNightUsedKey: null };
     tokens = tokens.map((token) => {
       if (token.id === actorBaseTokenId && actorToken) {
         return actorToken;
@@ -897,6 +1000,11 @@
           available: sanitizeActorRoles(actorRoles),
           consumed: [],
           currentNightChoice: null
+        },
+        fox_state: {
+          lastResult: null,
+          available: true,
+          lastNightUsed: null
         }
       });
     } catch (error) {
@@ -1021,6 +1129,8 @@
         return 'hunter';
       case 'werewolves_claws':
         return 'werewolf';
+      case 'fox_senses':
+        return 'fox';
       case 'cursed_wolf_father':
       case 'father_bite':
         return 'cursed_wolf_father';
@@ -1088,6 +1198,11 @@
     if (!token || token.category !== 'special') return true;
     if (!specialOwnerAlive(token)) return true;
     const slug = slugifyRole(token.role);
+    if (slug === 'fox_senses') {
+      if (!foxAlive) return true;
+      if (!isNightPhase) return true;
+      if (!foxState.available) return true;
+    }
     if (sheriffDisabled && slug === 'sheriff_badge') return true;
     if (isHunterInterphase) return slug !== 'hunter_bullet';
     if (isSheriffInterphase) return !isSheriffToken(token);
@@ -1451,8 +1566,13 @@
       (token) => slugifyRole(token.role) === 'hunter_bullet' && !consumedSpecialIds.includes(token.id)
     );
     pendingHunterShot = deadHunters.length > 0 && availableHunterBullets.length > 0;
-    const computedVictory = evaluateVictory(characters, deadCharacters, lovers, infectedTargets);
+    const computedVictory = evaluateVictory(characters, deadCharacters, lovers, infectedTargets, charmedTargets);
     victoryResult = { ...computedVictory, angel: angelWin || computedVictory.angel };
+    if (Object.values(victoryResult).some(Boolean)) {
+      phaseState = { ...phaseState, previous: phaseKeyNow, current: PHASE_KEY_END, next: PHASE_KEY_END, pendingInterphases: [] };
+      persistPhaseState();
+      return;
+    }
     if (isNightKey) {
       lastProtectedTargets = defenderTargets;
     }
@@ -1462,10 +1582,11 @@
     resetSpecialPositions();
   }
 
-  function evaluateVictory(characters = [], deadList = [], lovers = [], infectedList = []) {
+  function evaluateVictory(characters = [], deadList = [], lovers = [], infectedList = [], charmedList = []) {
     const dead = new Set(deadList);
     const alive = characters.filter((token) => !dead.has(token.id));
     const infectedSet = new Set(infectedList);
+    const charmedSet = new Set(charmedList);
     const aliveWolves = alive.filter((token) => token.category === 'werewolves' || infectedSet.has(token.id)).length;
     const aliveOthers = alive.filter((token) => token.category !== 'werewolves' && !infectedSet.has(token.id)).length;
     const villageWins = alive.length > 0 && aliveWolves === 0;
@@ -1480,11 +1601,19 @@
       loversWin = loverIds.size > 0 && allAliveAreLovers && allLoversAlive;
     }
 
+    const piperToken = characters.find((token) => slugifyRole(token.role) === 'piper');
+    const piperAlive = piperToken && !dead.has(piperToken.id);
+    const piperWin =
+      piperAlive &&
+      alive
+        .filter((token) => slugifyRole(token.role) !== 'piper')
+        .every((token) => charmedSet.has(token.id));
+
     return {
       village: villageWins,
       werewolves: werewolvesWin,
       lovers: loversWin,
-      piper: false,
+      piper: piperWin,
       angel: false,
       draw: false
     };
@@ -1613,6 +1742,11 @@
                 if (token.id === ACTOR_TOKEN_ID) {
                   console.info('[actor] click actor token', { actorActionDisabled, isNightPhase, actorRemaining });
                   if (!actorActionDisabled) openActorModal();
+                } else if (slugifyRole(token.role) === 'fox_senses') {
+                  if (foxAlive && foxState.available && isNightPhase) {
+                    foxSelection = null;
+                    foxModalOpen = true;
+                  }
                 } else {
                   deploySpecialToken(token);
                 }
@@ -1832,6 +1966,39 @@
         {$t?.('common.actions.cancel') ?? 'Cancel'}
       </button>
       <button class="btn primary" type="button" on:click={confirmActorSelection} disabled={!actorSelection || actorConsumed.has(actorSelection)}>
+        {$t?.('common.actions.done') ?? 'Done'}
+      </button>
+    </svelte:fragment>
+  </Modal>
+
+  <Modal
+    open={foxModalOpen}
+    title={$t?.('session.fox.modal_title') ?? 'Fox senses…'}
+    size="md"
+    closeOnBackdrop={true}
+    showClose={false}
+    on:close={closeFoxModal}
+  >
+    <div class="actor-modal-body">
+      <div class="actor-modal-grid">
+        {#each foxOptions as option}
+          <button
+            class={`actor-card ${foxSelection === option.key ? 'selected' : ''}`}
+            type="button"
+            on:click={() => (foxSelection = option.key)}
+            aria-pressed={foxSelection === option.key}
+          >
+            <img src={option.image} alt={option.key} />
+            <span>{$t?.(`session.fox.option.${option.key}`) ?? option.key}</span>
+          </button>
+        {/each}
+      </div>
+    </div>
+    <svelte:fragment slot="footer">
+      <button class="btn ghost" type="button" on:click={closeFoxModal}>
+        {$t?.('common.actions.cancel') ?? 'Cancel'}
+      </button>
+      <button class="btn primary" type="button" on:click={confirmFoxSelection} disabled={!foxSelection}>
         {$t?.('common.actions.done') ?? 'Done'}
       </button>
     </svelte:fragment>

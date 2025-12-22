@@ -427,6 +427,17 @@ const dictionaries = {
       sheriff: {
         assigned: 'Sheriff assigned',
         lost: 'Sheriff badge lost'
+      },
+      fox: {
+        modal_title: 'Fox senses…',
+        option: {
+          werewolf: 'Werewolf',
+          villager: 'Villager'
+        },
+        log: {
+          werewolf: 'Fox senses a werewolf nearby',
+          villager: 'Fox senses no werewolves'
+        }
       }
     },
     verify: {
@@ -1111,6 +1122,17 @@ const dictionaries = {
       sheriff: {
         assigned: 'Alguacil asignado',
         lost: 'Insignia del Alguacil perdida'
+      },
+      fox: {
+        modal_title: 'El Zorro detecta…',
+        option: {
+          werewolf: 'Hombre lobo',
+          villager: 'Aldeano'
+        },
+        log: {
+          werewolf: 'El Zorro detecta a un hombre lobo cercano',
+          villager: 'El Zorro no detecta hombres lobo'
+        }
       }
     },
     app: {
@@ -1667,6 +1689,17 @@ const dictionaries = {
       sheriff: {
         assigned: 'Seriff kijelölve',
         lost: 'Seriff jelvény elveszett'
+      },
+      fox: {
+        modal_title: 'A Róka szimatol…',
+        option: {
+          werewolf: 'Vérfarkas',
+          villager: 'Falusi'
+        },
+        log: {
+          werewolf: 'A Róka vérfarkast érez a közelben',
+          villager: 'A Róka nem érez vérfarkast'
+        }
       }
     },
     app: {

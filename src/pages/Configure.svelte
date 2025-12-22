@@ -420,7 +420,10 @@
     }
   }
 
-  function goBack() {
+  async function goBack() {
+    if (!ensureTitlePresent()) return;
+    const persisted = await persistTitleDescription();
+    if (!persisted) return;
     dispatch('back');
   }
 
@@ -455,21 +458,71 @@
     activeModal = null;
   }
 
-  function handleNavIntent(event) {
+  async function handleNavIntent(event) {
     const intent = event?.detail?.intent;
     if (intent === NAV_INTENT.BACK_TO_DASHBOARD) {
-      goBack();
+      await goBack();
     }
   }
 
-  function handlePropertiesSave(event) {
+  const ensureTitlePresent = () => {
+    const trimmed = form.name?.trim() ?? '';
+    if (trimmed) return true;
+    showToast({ message: $t('configure.errors.missing_title'), variant: 'error' });
+    return false;
+  };
+
+  async function persistTitleDescription() {
+    if (!sessionId) return false;
+    const trimmedName = form.name?.trim() ?? '';
+    if (!trimmedName) {
+      showToast({ message: $t('configure.errors.missing_title'), variant: 'error' });
+      return false;
+    }
+    const trimmedDescription = form.description?.trim() ?? '';
+    try {
+      await updateSession(sessionId, {
+        title: trimmedName,
+        'settings.description': trimmedDescription
+      });
+      return true;
+    } catch (error) {
+      console.error('[configure] unable to save title/description', error);
+      openAlert($t('configure.errors.save_failed'), 'error');
+      return false;
+    }
+  }
+
+  async function handlePropertiesSave(event) {
     const detail = event?.detail ?? {};
     if (!detail.value) return;
     form = { ...form, ...detail.value };
-    showToast({ message: $t('configure.saved'), variant: 'success' });
+    if (!ensureTitlePresent()) return;
+    const trimmedName = form.name.trim();
+    const trimmedDescription = form.description?.trim() ?? '';
+    const languageValue = form.storyteller === 'human' ? defaultLanguage : form.language;
+    const assistEnabled = derivedAssistEnabled;
+    const payload = {
+      title: trimmedName,
+      'settings.description': trimmedDescription,
+      'settings.rulesets': form.rulesets,
+      'settings.players_expected': clampPlayers(form.players_expected),
+      'settings.storyteller': form.storyteller,
+      'settings.language': languageValue,
+      'settings.assist_enabled': assistEnabled,
+      'settings.assist_tasks': assistEnabled ? form.assistTasks : [],
+      'settings.actor_roles': selectedActorRoles
+    };
+    try {
+      await updateSession(sessionId, payload);
+      showToast({ message: $t('configure.saved'), variant: 'success' });
+    } catch (error) {
+      console.error('[configure] unable to save properties', error);
+      openAlert($t('configure.errors.save_failed'), 'error');
+    }
   }
 
-  function handleSelectionSave(event) {
+  async function handleSelectionSave(event) {
     const detail = event?.detail ?? {};
     if (detail.selections) {
       selectedRoles = normalizeRoleSelection(detail.selections);
@@ -485,7 +538,21 @@
     if (typeof detail.override === 'boolean') {
       overrideRoleLimits = detail.override;
     }
-    showToast({ message: $t('configure.saved'), variant: 'success' });
+    if (!sessionId) {
+      showToast({ message: $t('configure.errors.missing_session'), variant: 'error' });
+      return;
+    }
+    try {
+      await updateSession(sessionId, {
+        'settings.roles': selectedRoles,
+        'settings.actor_roles': selectedActorRoles,
+        'settings.override_limits': overrideRoleLimits
+      });
+      showToast({ message: $t('configure.saved'), variant: 'success' });
+    } catch (error) {
+      console.error('[configure] unable to save selection', error);
+      openAlert($t('configure.errors.save_failed'), 'error');
+    }
   }
 
   function handleMatchAuto() {
@@ -523,6 +590,9 @@
       openAlert($t('configure.errors.missing_session'), 'warning');
       return;
     }
+    if (!ensureTitlePresent()) return;
+    const persisted = await persistTitleDescription();
+    if (!persisted) return;
     if (sessionStatus !== 'paused' && startActionDisabled) {
       openAlert($t('configure.errors.start_requirements', { expected: expectedPlayersCount }), 'warning');
       return;
@@ -552,14 +622,18 @@
       openAlert($t('configure.errors.missing_session'), 'warning');
       return;
     }
-    forceStartHintVisible = true;
-    dispatch('start', {
-      sessionId,
-      force: true,
-      tokens: distributionTokens,
-      selection: selectedRoles,
-      players: playerList,
-      actorRoles: selectedActorRoles
+    if (!ensureTitlePresent()) return;
+    persistTitleDescription().then((ok) => {
+      if (!ok) return;
+      forceStartHintVisible = true;
+      dispatch('start', {
+        sessionId,
+        force: true,
+        tokens: distributionTokens,
+        selection: selectedRoles,
+        players: playerList,
+        actorRoles: selectedActorRoles
+      });
     });
   }
 </script>
@@ -672,9 +746,6 @@
             />
           </div>
           <div class="right-actions">
-            <button class="btn primary save-btn" type="button" on:click={saveConfig} disabled={saving}>
-              {saving ? '…' : $t('configure.save')}
-            </button>
             <button
               class={`btn ${sessionStatus === 'paused' ? 'primary' : 'start'}`}
               type="button"
