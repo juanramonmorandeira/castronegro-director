@@ -100,6 +100,8 @@
   let foxState = { lastResult: null, available: true, lastNightUsed: null, lastNightUsedKey: null };
   let foxSpecialId = null;
   let foxBaseTokenId = null;
+  let whiteBaseTokenId = null;
+  let whiteSoloActive = false;
   $: sessionKey = sessionId ?? 'default';
   let lastProtectedTargets = [];
   let activeSpecialIds = [];
@@ -127,6 +129,14 @@
   $: foxBaseTokenId = characterTokens.find((token) => slugifyRole(token.role) === 'fox')?.id ?? null;
   $: foxSpecialId = specialTokens.find((token) => slugifyRole(token.role) === 'fox_senses')?.id ?? null;
   $: foxAlive = foxBaseTokenId && !deadSet.has(foxBaseTokenId) && !infectedIdSet.has(foxBaseTokenId);
+  $: whiteBaseTokenId = characterTokens.find((token) => normalizeRoleSlug(slugifyRole(token.role)) === 'white')?.id ?? null;
+  $: whiteAlive = whiteBaseTokenId ? !deadSet.has(whiteBaseTokenId) : false;
+  $: whiteNightIndex = isFirstNightPhase
+    ? 1
+    : isEachNightPhase
+      ? Math.max(1, nightNumber || 1)
+      : nightNumber || 0;
+  $: whiteClawActive = isNightPhase && whiteAlive && whiteNightIndex >= 2 && whiteNightIndex % 2 === 0;
   let elderResilience = new Set();
   const currentLocale = typeof navigator !== 'undefined' ? navigator.language : 'en';
 
@@ -1129,6 +1139,8 @@
         return 'hunter';
       case 'werewolves_claws':
         return 'werewolf';
+      case 'white_claw':
+        return 'white';
       case 'fox_senses':
         return 'fox';
       case 'cursed_wolf_father':
@@ -1148,6 +1160,7 @@
       slug === 'werewolf' ||
       slug === 'bad' || // alias de Big Bad Wolf
       slug === 'big_bad_wolf' ||
+      slug === 'white' ||
       slug === 'white_werewolf' ||
       slug === 'cursed_wolf_father' ||
       slug === 'father' ||
@@ -1202,6 +1215,11 @@
       if (!foxAlive) return true;
       if (!isNightPhase) return true;
       if (!foxState.available) return true;
+    }
+    if (slug === 'white_claw') {
+      if (!isNightPhase) return true;
+      if (!whiteAlive) return true;
+      if (!whiteClawActive) return true;
     }
     if (sheriffDisabled && slug === 'sheriff_badge') return true;
     if (isHunterInterphase) return slug !== 'hunter_bullet';
@@ -1265,6 +1283,7 @@
     const allowedSpecials = specials.filter((token) => {
       const slug = slugifyRole(token.role);
       if (!specialOwnerAlive(token)) return false;
+      if (slug === 'white_claw' && !whiteClawActive) return false;
       if (phaseKeyNow === PHASE_KEY_HUNTER) return slug === 'hunter_bullet';
       if (phaseKeyNow === PHASE_KEY_SHERIFF) return slug === 'sheriff_badge';
       if (phaseKeyNow === PHASE_KEY_END) return false;
@@ -1352,6 +1371,10 @@
         return token?.category && token.category !== 'werewolves';
       })
     );
+    const whiteClawEntries = specialTargets.white_claw ?? [];
+    const whiteClawTargets = uniqueList(whiteClawEntries.map((entry) => entry.targetId)).filter(
+      (id) => id && isWerewolfAligned(id) && (!whiteBaseTokenId || id !== whiteBaseTokenId)
+    );
     const sheriffAssignments = specialTargets.sheriff_badge ?? [];
     const sheriffTarget = sheriffAssignments[0]?.targetId ?? null;
     const piperTargets = uniqueList((specialTargets.piper_charm ?? []).map((entry) => entry.targetId));
@@ -1396,6 +1419,7 @@
         deaths.delete(id);
       }
     });
+    const whiteClawKills = new Set(whiteClawTargets);
 
     // Elder: primer impacto (garras y/o infección en la misma noche) se ignora por completo.
     const elderSkip = new Set();
@@ -1421,6 +1445,12 @@
       infectionSet: Array.from(new Set(appliedInfections)),
       wolfTargets,
       deaths: Array.from(deaths)
+    });
+
+    // White claw kills are unstoppable (no heal/defense) and only affect wolf-aligned targets.
+    whiteClawKills.forEach((id) => {
+      deaths.add(id);
+      infectionSet.delete(id);
     });
 
     deadCharacters.forEach((id) => deaths.add(id)); // keep previous deaths
@@ -1460,6 +1490,7 @@
     if (healTargets.length) summary.push(`${$t('session.phases.steps.witch')} (heal): ${healTargets.map(nameForToken).join(', ')}`);
     if (venomTargets.length) summary.push(`${$t('session.phases.steps.witch')} (venom): ${venomTargets.map(nameForToken).join(', ')}`);
     if (wolfTargets.length) summary.push(`${$t('session.phases.steps.werewolves')}: ${wolfTargets.map(nameForToken).join(', ')}`);
+    if (whiteClawTargets.length) summary.push(`White claw: ${whiteClawTargets.map(nameForToken).join(', ')}`);
     if (hunterShotTargets.length) summary.push(`Hunter: ${hunterShotTargets.map(nameForToken).join(', ')}`);
     const idiotSurvivors = [];
     if (isDayPhase) {
@@ -1567,6 +1598,21 @@
     );
     pendingHunterShot = deadHunters.length > 0 && availableHunterBullets.length > 0;
     const computedVictory = evaluateVictory(characters, deadCharacters, lovers, infectedTargets, charmedTargets);
+    if (computedVictory.whiteSolo && !whiteSoloActive) {
+      const stamp = new Date().toLocaleTimeString();
+      logEntries = [
+        {
+          text: 'White se queda como único lobo: los hombres lobo ya no pueden ganar; White debe eliminar a todos los demás para vencer.',
+          stamp
+        },
+        ...logEntries
+      ];
+    }
+    whiteSoloActive = computedVictory.whiteSolo;
+    if (computedVictory.white) {
+      const stamp = new Date().toLocaleTimeString();
+      logEntries = [{ text: 'White wins — finish', stamp }, ...logEntries];
+    }
     victoryResult = { ...computedVictory, angel: angelWin || computedVictory.angel };
     if (Object.values(victoryResult).some(Boolean)) {
       phaseState = { ...phaseState, previous: phaseKeyNow, current: PHASE_KEY_END, next: PHASE_KEY_END, pendingInterphases: [] };
@@ -1587,10 +1633,34 @@
     const alive = characters.filter((token) => !dead.has(token.id));
     const infectedSet = new Set(infectedList);
     const charmedSet = new Set(charmedList);
-    const aliveWolves = alive.filter((token) => token.category === 'werewolves' || infectedSet.has(token.id)).length;
-    const aliveOthers = alive.filter((token) => token.category !== 'werewolves' && !infectedSet.has(token.id)).length;
-    const villageWins = alive.length > 0 && aliveWolves === 0;
-    const werewolvesWin = aliveWolves > 0 && aliveWolves >= aliveOthers;
+    const isWolfAligned = (token) => {
+      if (infectedSet.has(token.id)) return true;
+      if (token.category === 'werewolves') return true;
+      const slug = normalizeRoleSlug(slugifyRole(token.role));
+      return (
+        slug === 'werewolf' ||
+        slug === 'bad' ||
+        slug === 'big_bad_wolf' ||
+        slug === 'white' ||
+        slug === 'white_werewolf' ||
+        slug === 'cursed_wolf_father' ||
+        slug === 'father' ||
+        slug === 'wolf_hound' ||
+        slug === 'wild_child'
+      );
+    };
+    const whiteAlive = alive.some(
+      (token) => normalizeRoleSlug(slugifyRole(token.role)) === 'white' && !infectedSet.has(token.id)
+    );
+    const aliveWolvesAll = alive.filter(isWolfAligned);
+    const otherAliveWolves = aliveWolvesAll.filter(
+      (token) => normalizeRoleSlug(slugifyRole(token.role)) !== 'white'
+    );
+    const whiteSoloMode = whiteAlive && otherAliveWolves.length === 0;
+    const aliveOthers = alive.length - aliveWolvesAll.length;
+    const whiteSoloWin = whiteSoloMode && alive.length === 1;
+    const villageWins = !whiteAlive && otherAliveWolves.length === 0;
+    const werewolvesWin = !whiteSoloMode && aliveWolvesAll.length > 0 && aliveWolvesAll.length >= aliveOthers;
 
     let loversWin = false;
     if (lovers.length) {
@@ -1614,6 +1684,8 @@
       werewolves: werewolvesWin,
       lovers: loversWin,
       piper: piperWin,
+      white: whiteSoloWin,
+      whiteSolo: whiteSoloMode,
       angel: false,
       draw: false
     };

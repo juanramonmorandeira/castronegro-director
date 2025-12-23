@@ -703,41 +703,6 @@
           </button>
         </div>
 
-        <section class="role-selection-preview">
-          <div class="preview-header">
-            <h3 class="section-label">{$t('configure.role_selector_label')}</h3>
-          </div>
-          <div class="role-preview-grid">
-            {#each ROLE_BREAKDOWN_ORDER as category}
-              <div class="role-preview-column">
-                <div class="preview-column-header">
-                  <span>{$t(`configure.balance_roles.${category}`)}</span>
-                  {#if playerBreakdown}
-                    <span>{categoryTotal(category)} / {playerBreakdown[category] ?? '—'}</span>
-                  {:else}
-                    <span>{categoryTotal(category)}</span>
-                  {/if}
-                </div>
-                <div class="role-chip-grid">
-                  {#if Object.keys(selectedRoles?.[category] ?? {}).length === 0}
-                    <div class="role-chip empty">{$t('configure.role_preview_empty')}</div>
-                  {:else}
-                    {#each Object.entries(selectedRoles?.[category] ?? {}) as [roleName, count]}
-                      <div class="role-chip">
-                        <img src={roleImageSrc(category, roleName)} alt={roleName} />
-                        <span>{roleName}</span>
-                        {#if count > 1}
-                          <span class="chip-badge">×{count}</span>
-                        {/if}
-                      </div>
-                    {/each}
-                  {/if}
-                </div>
-              </div>
-            {/each}
-          </div>
-        </section>
-
         <footer class="actions">
           <div class="left-actions">
             <NavActions
@@ -953,83 +918,6 @@
 
   .start-hint {
     width: 100%;
-  }
-
-  .role-selection-preview {
-    display: grid;
-    gap: 0.75rem;
-  }
-
-  .preview-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .role-preview-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 1rem;
-  }
-
-  .role-preview-column {
-    border: 1px solid var(--glass-border);
-    border-radius: 1rem;
-    padding: 0.85rem;
-    display: grid;
-    gap: 0.6rem;
-  }
-
-  .preview-column-header {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.9rem;
-    color: var(--color-white-muted);
-  }
-
-  .role-chip-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    align-self: flex-start;
-    justify-self: flex-start;
-    width: auto;
-  }
-
-  .role-chip {
-    position: relative;
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 0.85rem;
-    padding: 0.35rem 0.6rem;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    background: rgba(255, 255, 255, 0.03);
-  }
-
-  .role-chip img {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: var(--surface-chip);
-    padding: 0.2rem;
-  }
-
-  .role-chip.empty {
-    border-style: dashed;
-    color: var(--color-white-muted);
-    justify-content: center;
-  }
-
-  .chip-badge {
-    position: absolute;
-    top: -8px;
-    right: -8px;
-    background: rgba(15, 15, 15, 0.8);
-    border-radius: 999px;
-    padding: 0.1rem 0.4rem;
-    font-size: 0.75rem;
-    color: var(--color-gold-info);
   }
 
   .input {

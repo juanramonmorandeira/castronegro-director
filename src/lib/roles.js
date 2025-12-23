@@ -53,6 +53,7 @@ export function buildDistributionTokens(selection, assignments = {}, players = [
   const witchHealPath = '/tokens/witch-heal.png';
   const witchVenomPath = '/tokens/witch-venom.png';
   const werewolvesClawPath = '/tokens/werewolves-claw.png';
+  const whiteClawPath = '/tokens/white-claw.png';
   const fatherBitePath = '/tokens/father-bite.png';
   const hunterBulletPath = '/tokens/hunter-bullet.png';
   const sheriffBadgePath = '/badge/sheriff.png';
@@ -239,6 +240,20 @@ export function buildDistributionTokens(selection, assignments = {}, players = [
       role: 'Cursed Wolf Father',
       category: 'special',
       image: fatherBitePath,
+      player: null
+    });
+  }
+
+  // White Werewolf special token: one white-claw tied to White (uses nights in alternation starting inactive).
+  const whiteCount =
+    Number(selection?.loners?.white ?? selection?.loners?.White ?? selection?.loners?.['The White Werewolf'] ?? 0) ||
+    0;
+  if (whiteCount > 0) {
+    tokens.push({
+      id: 'special-white-claw-0',
+      role: 'White Claw',
+      category: 'special',
+      image: whiteClawPath,
       player: null
     });
   }
