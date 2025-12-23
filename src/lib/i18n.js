@@ -368,6 +368,8 @@ const dictionaries = {
           wandering_judge: 'Wandering Judge sets signal',
           sisters: 'Two Sisters open eyes',
           brothers: 'Three Brothers open eyes',
+          sisters_each: 'The Two Sisters (every other night)',
+          brothers_each: 'The Three Brothers (every other night)',
           wild_child: 'Wild Child chooses a role model',
           bear_tamer: 'Bear Tamer growls if a werewolf is nearby',
           scandalmonger: 'Scandalmonger acts',
@@ -413,7 +415,8 @@ const dictionaries = {
       add_entry: 'Add entry',
       empty: 'No entries yet.',
       entry_label: 'Entry #{num}',
-      actor_becomes: 'Actor becomes {role} for this night'
+      actor_becomes: 'Actor becomes {role} for this night',
+      judge_extra_day: 'Judge calls an extra day phase'
       },
       controls: {
         previous: 'Previous',
@@ -438,6 +441,10 @@ const dictionaries = {
           werewolf: 'Fox senses a werewolf nearby',
           villager: 'Fox senses no werewolves'
         }
+      },
+      judge: {
+        modal_title: 'Use the Judge’s deck?',
+        modal_body: 'Adds an extra day phase immediately after this one. Single use.'
       }
     },
     verify: {
@@ -1063,6 +1070,8 @@ const dictionaries = {
           wandering_judge: 'El Juez Errante fija señal',
           sisters: 'Las Dos Hermanas abren los ojos',
           brothers: 'Los Tres Hermanos abren los ojos',
+          sisters_each: 'Las Dos Hermanas (cada dos noches)',
+          brothers_each: 'Los Tres Hermanos (cada dos noches)',
           wild_child: 'El Niño Salvaje elige modelo',
           bear_tamer: 'El Domador gruñe si hay hombre lobo cerca',
           scandalmonger: 'El Chismoso actúa',
@@ -1108,7 +1117,8 @@ const dictionaries = {
       add_entry: 'Añadir entrada',
       empty: 'Aún no hay entradas.',
       entry_label: 'Entrada #{num}',
-      actor_becomes: 'El Comediante se convierte en {role} esta noche'
+      actor_becomes: 'El Comediante se convierte en {role} esta noche',
+      judge_extra_day: 'El Juez añade una fase de día extra'
       },
       controls: {
         previous: 'Anterior',
@@ -1133,6 +1143,10 @@ const dictionaries = {
           werewolf: 'El Zorro detecta a un hombre lobo cercano',
           villager: 'El Zorro no detecta hombres lobo'
         }
+      },
+      judge: {
+        modal_title: '¿Usar el mazo del Juez?',
+        modal_body: 'Añade una fase de día extra inmediatamente después de esta. Uso único.'
       }
     },
     app: {
@@ -1630,6 +1644,8 @@ const dictionaries = {
           wandering_judge: 'A Vándor Bíró jelet ad',
           sisters: 'A Két Nővér kinyitja a szemét',
           brothers: 'A Három Fivér kinyitja a szemét',
+          sisters_each: 'A Két Nővér (minden második éjszaka)',
+          brothers_each: 'A Három Fivér (minden második éjszaka)',
           wild_child: 'A Vadgyerek példaképet választ',
           bear_tamer: 'A Medvetáncoltató morgása',
           scandalmonger: 'A Pletykafészek lép',
@@ -1675,7 +1691,8 @@ const dictionaries = {
         add_entry: 'Bejegyzés hozzáadása',
         empty: 'Még nincs bejegyzés.',
         entry_label: 'Bejegyzés #{num}',
-        actor_becomes: 'A Komikus ma éjjel {role} szerepébe lép'
+        actor_becomes: 'A Komikus ma éjjel {role} szerepébe lép',
+        judge_extra_day: 'A Bíró extra nappali fázist rendel el'
       },
       controls: {
         previous: 'Előző',
@@ -1700,6 +1717,10 @@ const dictionaries = {
           werewolf: 'A Róka vérfarkast érez a közelben',
           villager: 'A Róka nem érez vérfarkast'
         }
+      },
+      judge: {
+        modal_title: 'Használod a Bíró pakliját?',
+        modal_body: 'Azonnal hozzáad egy extra nappali fázist ehhez a körhöz. Egyszer használható.'
       }
     },
     app: {

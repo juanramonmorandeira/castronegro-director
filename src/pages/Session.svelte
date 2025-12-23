@@ -102,6 +102,9 @@
   let foxBaseTokenId = null;
   let whiteBaseTokenId = null;
   let whiteSoloActive = false;
+  let judgeModalOpen = false;
+  let judgeTokenId = null;
+  let pendingJudgeExtraDay = false;
   $: sessionKey = sessionId ?? 'default';
   let lastProtectedTargets = [];
   let activeSpecialIds = [];
@@ -137,6 +140,11 @@
       ? Math.max(1, nightNumber || 1)
       : nightNumber || 0;
   $: whiteClawActive = isNightPhase && whiteAlive && whiteNightIndex >= 2 && whiteNightIndex % 2 === 0;
+  $: judgeTokenId = specialTokens.find((token) => slugifyRole(token.role) === 'judge_maze')?.id ?? null;
+  $: judgeAlive = characterTokens.some(
+    (token) =>
+      !deadSet.has(token.id) && ['judge', 'wandering_judge', 'the_judge'].includes(normalizeRoleSlug(slugifyRole(token.role)))
+  );
   let elderResilience = new Set();
   const currentLocale = typeof navigator !== 'undefined' ? navigator.language : 'en';
 
@@ -380,6 +388,8 @@
         { key: 'actor_night', requires: ['actor'] },
         { key: 'seer', requires: ['seer'] },
         { key: 'fox', requires: ['fox'] },
+        { key: 'sisters_each', requires: ['two_sisters', 'sisters'], each: true },
+        { key: 'brothers_each', requires: ['three_brothers', 'brothers'], each: true },
         { key: 'scandalmonger', requires: ['scandalmonger'] },
         { key: 'pyromaniac', requires: ['pyromaniac'] },
         { key: 'defender', requires: ['defender'] },
@@ -409,10 +419,29 @@
       return alias ? roleSet.has(alias) : false;
     });
 
+  const isEvenEachNight = () => {
+    if (!isEachNightPhase) return false;
+    const current = Math.max(1, nightNumber || 1);
+    return current % 2 === 0;
+  };
+
+  const sistersAlive = () =>
+    characterTokens.filter(
+      (token) => !deadSet.has(token.id) && ['two_sisters', 'sisters'].includes(normalizeRoleSlug(slugifyRole(token.role)))
+    );
+  const brothersAlive = () =>
+    characterTokens.filter(
+      (token) => !deadSet.has(token.id) && ['three_brothers', 'brothers'].includes(normalizeRoleSlug(slugifyRole(token.role)))
+    );
+
   $: phases = phaseBlocks.map((phase) => {
     const steps = phase.steps.filter((step) => {
+      if (step.each && !isEvenEachNight()) return false;
       if (!step.requires || step.requires.length === 0) return true;
-      return hasAnyRole(step.requires);
+      if (!hasAnyRole(step.requires)) return false;
+      if (step.key === 'sisters_each' && sistersAlive().length < 2) return false;
+      if (step.key === 'brothers_each' && brothersAlive().length < 2) return false;
+      return true;
     });
     return { ...phase, steps };
   });
@@ -874,11 +903,16 @@
     const newInterphases = [];
     if (pendingHunterShot && !interphaseQueue.includes(PHASE_KEY_HUNTER)) newInterphases.push(PHASE_KEY_HUNTER);
     if (pendingSheriffSuccession && !interphaseQueue.includes(PHASE_KEY_SHERIFF)) newInterphases.push(PHASE_KEY_SHERIFF);
+    if (pendingJudgeExtraDay && !interphaseQueue.includes(PHASE_KEY_EACH_DAY)) newInterphases.push(PHASE_KEY_EACH_DAY);
     const mergedQueue = [...interphaseQueue, ...newInterphases].filter(Boolean);
+    if (newInterphases.includes(PHASE_KEY_EACH_DAY)) {
+      pendingJudgeExtraDay = false;
+    }
     // enforce Hunter -> Sheriff order
     const orderedQueue = [];
     if (mergedQueue.includes(PHASE_KEY_HUNTER)) orderedQueue.push(PHASE_KEY_HUNTER);
     if (mergedQueue.includes(PHASE_KEY_SHERIFF)) orderedQueue.push(PHASE_KEY_SHERIFF);
+    if (mergedQueue.includes(PHASE_KEY_EACH_DAY)) orderedQueue.push(PHASE_KEY_EACH_DAY);
 
     const advanceBaseIndex = () => {
       const nextIndex = nextBaseIndex(phaseState.baseIndex);
@@ -973,6 +1007,8 @@
     sheriffAvailable = true;
     sheriffDisabled = false;
     pendingSheriffSuccession = false;
+    pendingJudgeExtraDay = false;
+    judgeModalOpen = false;
     pendingHunterShot = false;
     preparationResolved = false;
     nightNumber = 0;
@@ -1139,6 +1175,8 @@
         return 'hunter';
       case 'werewolves_claws':
         return 'werewolf';
+      case 'judge_maze':
+        return 'judge';
       case 'white_claw':
         return 'white';
       case 'fox_senses':
@@ -1215,6 +1253,11 @@
       if (!foxAlive) return true;
       if (!isNightPhase) return true;
       if (!foxState.available) return true;
+    }
+    if (slug === 'judge_maze') {
+      if (!judgeAlive) return true;
+      if (consumedSpecialIds.includes(token.id)) return true;
+      if (!isDayPhase) return true;
     }
     if (slug === 'white_claw') {
       if (!isNightPhase) return true;
@@ -1819,6 +1862,8 @@
                     foxSelection = null;
                     foxModalOpen = true;
                   }
+                } else if (slugifyRole(token.role) === 'judge_maze') {
+                  judgeModalOpen = true;
                 } else {
                   deploySpecialToken(token);
                 }
@@ -2072,6 +2117,40 @@
       </button>
       <button class="btn primary" type="button" on:click={confirmFoxSelection} disabled={!foxSelection}>
         {$t?.('common.actions.done') ?? 'Done'}
+      </button>
+    </svelte:fragment>
+  </Modal>
+
+  <Modal
+    open={judgeModalOpen}
+    title={$t?.('session.judge.modal_title') ?? 'Use the Judge’s deck?'}
+    size="md"
+    closeOnBackdrop={true}
+    showClose={false}
+    on:close={() => (judgeModalOpen = false)}
+  >
+    <p class="hint">{$t?.('session.judge.modal_body') ?? 'Adds an extra day phase immediately after this one. Single use.'}</p>
+    <svelte:fragment slot="footer">
+      <button class="btn ghost" type="button" on:click={() => (judgeModalOpen = false)}>
+        {$t?.('common.actions.cancel') ?? 'Cancel'}
+      </button>
+      <button
+        class="btn primary"
+        type="button"
+        on:click={() => {
+          if (!judgeTokenId) return;
+          pendingJudgeExtraDay = true;
+          judgeModalOpen = false;
+          consumedSpecialIds = addToSet(consumedSpecialIds, [judgeTokenId]);
+          activeSpecialIds = activeSpecialIds.filter((id) => id !== judgeTokenId);
+          const stamp = new Date().toLocaleTimeString();
+          logEntries = [
+            { text: $t?.('session.logbook.judge_extra_day') ?? 'Judge calls an extra day phase.', stamp },
+            ...logEntries
+          ];
+        }}
+      >
+        {$t?.('common.actions.done') ?? 'Confirm'}
       </button>
     </svelte:fragment>
   </Modal>

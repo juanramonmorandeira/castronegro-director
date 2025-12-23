@@ -39,6 +39,8 @@ Each night:
 - The Actor. (if there are any cards left).
 - The Seer.
 - The Fox.
+- The Two Sisters. (every other night).
+- The Three Brothers. (every other night).
 - The Scandalmonger.
 - The Pyromaniac.
 - The Defender.

@@ -56,6 +56,7 @@ export function buildDistributionTokens(selection, assignments = {}, players = [
   const whiteClawPath = '/tokens/white-claw.png';
   const fatherBitePath = '/tokens/father-bite.png';
   const hunterBulletPath = '/tokens/hunter-bullet.png';
+  const judgeMazePath = '/tokens/judge-maze.png';
   const sheriffBadgePath = '/badge/sheriff.png';
   const villagersEliminationPath = '/tokens/villagers-guillotine.png';
   const foxSensesPath = '/tokens/fox-senses.png';
@@ -254,6 +255,20 @@ export function buildDistributionTokens(selection, assignments = {}, players = [
       role: 'White Claw',
       category: 'special',
       image: whiteClawPath,
+      player: null
+    });
+  }
+
+  // Wandering Judge special token: one judge-maze per Judge.
+  const judgeCount =
+    Number(selection?.villagers?.judge ?? selection?.villagers?.Judge ?? selection?.villagers?.['The Wandering Judge'] ?? 0) ||
+    0;
+  if (judgeCount > 0) {
+    tokens.push({
+      id: 'special-judge-maze-0',
+      role: 'Judge Maze',
+      category: 'special',
+      image: judgeMazePath,
       player: null
     });
   }
