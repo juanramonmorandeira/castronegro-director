@@ -409,14 +409,22 @@ const dictionaries = {
       angel: 'Angel wins (first vote/night elimination)',
       draw: 'Draw / cancelled'
     },
-    logbook: {
-      label: 'Logbook',
-      placeholder: 'Write what happens to craft the summary and emails…',
-      add_entry: 'Add entry',
-      empty: 'No entries yet.',
-      entry_label: 'Entry #{num}',
-      actor_becomes: 'Actor becomes {role} for this night',
-      judge_extra_day: 'Judge calls an extra day phase'
+      logbook: {
+        label: 'Logbook',
+        placeholder: 'Write what happens to craft the summary and emails…',
+        add_entry: 'Add entry',
+        empty: 'No entries yet.',
+        entry_label: 'Entry #{num}',
+        actor_becomes: 'Actor becomes {role} for this night',
+        judge_extra_day: 'Judge calls an extra day phase',
+        child_model_chosen: 'Wild Child chooses {model} as role model',
+        child_turns_wolf: 'Wild Child becomes a Werewolf',
+        hound_joined_wolves: 'Wolf-Hound joins the werewolves',
+        hound_remains_villager: 'Wolf-Hound stays with the villagers'
+      },
+      errors: {
+        child_model_required: 'The Wild Child must choose a role model before advancing.',
+        hound_alignment_required: 'The Wolf-Hound must choose alignment before advancing.'
       },
       controls: {
         previous: 'Previous',
@@ -444,7 +452,13 @@ const dictionaries = {
       },
       judge: {
         modal_title: 'Use the Judge’s deck?',
-        modal_body: 'Adds an extra day phase immediately after this one. Single use.'
+        modal_body: 'Villagers will vote again right after this to eliminate a second suspect. Single use.'
+      },
+      hound: {
+        modal_title: 'Did the Wolf-Hound join the wolves?',
+        modal_body: 'Choose whether the Wolf-Hound sides with the wolves or stays with the villagers. Single use.',
+        choice_wolves: 'Joins the wolves',
+        choice_village: 'Stays villager'
       }
     },
     verify: {
@@ -1111,14 +1125,22 @@ const dictionaries = {
       angel: 'Gana el Ángel (eliminado en la primera votación/noche)',
       draw: 'Empate / cancelada'
     },
-    logbook: {
-      label: 'Cuaderno de bitácora',
-      placeholder: 'Anota lo que sucede para el resumen y correos…',
-      add_entry: 'Añadir entrada',
-      empty: 'Aún no hay entradas.',
-      entry_label: 'Entrada #{num}',
-      actor_becomes: 'El Comediante se convierte en {role} esta noche',
-      judge_extra_day: 'El Juez añade una fase de día extra'
+      logbook: {
+        label: 'Cuaderno de bitácora',
+        placeholder: 'Anota lo que sucede para el resumen y correos…',
+        add_entry: 'Añadir entrada',
+        empty: 'Aún no hay entradas.',
+        entry_label: 'Entrada #{num}',
+        actor_becomes: 'El Comediante se convierte en {role} esta noche',
+        judge_extra_day: 'El Juez añade una fase de día extra',
+        child_model_chosen: 'El Niño Salvaje elige como modelo a {model}',
+        child_turns_wolf: 'El Niño Salvaje se convierte en Hombre Lobo',
+        hound_joined_wolves: 'El Perro Lobo se une a los Hombres Lobo',
+        hound_remains_villager: 'El Perro Lobo se queda con los aldeanos'
+      },
+      errors: {
+        child_model_required: 'El Niño Salvaje debe elegir modelo antes de avanzar.',
+        hound_alignment_required: 'El Perro Lobo debe escoger alineación antes de avanzar.'
       },
       controls: {
         previous: 'Anterior',
@@ -1146,7 +1168,13 @@ const dictionaries = {
       },
       judge: {
         modal_title: '¿Usar el mazo del Juez?',
-        modal_body: 'Añade una fase de día extra inmediatamente después de esta. Uso único.'
+        modal_body: 'El pueblo votará de inmediato una segunda vez para eliminar a otro sospechoso. Uso único.'
+      },
+      hound: {
+        modal_title: '¿El Perro Lobo se ha unido a los lobos?',
+        modal_body: 'Elige si el Perro Lobo se pone del lado de los lobos o permanece como aldeano. Uso único.',
+        choice_wolves: 'Se une a los lobos',
+        choice_village: 'Sigue como aldeano'
       }
     },
     app: {
@@ -1692,7 +1720,15 @@ const dictionaries = {
         empty: 'Még nincs bejegyzés.',
         entry_label: 'Bejegyzés #{num}',
         actor_becomes: 'A Komikus ma éjjel {role} szerepébe lép',
-        judge_extra_day: 'A Bíró extra nappali fázist rendel el'
+        judge_extra_day: 'A Bíró extra nappali fázist rendel el',
+        child_model_chosen: 'A Vadgyerek példaként választja: {model}',
+        child_turns_wolf: 'A Vadgyerek vérfarkassá változik',
+        hound_joined_wolves: 'A Farkaskutya csatlakozik a vérfarkasokhoz',
+        hound_remains_villager: 'A Farkaskutya a falusiakhoz marad'
+      },
+      errors: {
+        child_model_required: 'A Vadgyereknek előbb példaképet kell választania.',
+        hound_alignment_required: 'A Farkaskutyának előbb választania kell oldalt.'
       },
       controls: {
         previous: 'Előző',
@@ -1720,7 +1756,13 @@ const dictionaries = {
       },
       judge: {
         modal_title: 'Használod a Bíró pakliját?',
-        modal_body: 'Azonnal hozzáad egy extra nappali fázist ehhez a körhöz. Egyszer használható.'
+        modal_body: 'A falusiak azonnal újraszavaznak, és kiiktatnak még egy játékost. Egyszer használható.'
+      },
+      hound: {
+        modal_title: 'A Farkaskutya csatlakozott a farkasokhoz?',
+        modal_body: 'Válaszd ki, hogy a Farkaskutya a farkasok oldalára áll vagy falusi marad. Egyszer használható.',
+        choice_wolves: 'Csatlakozik a farkasokhoz',
+        choice_village: 'Falusi marad'
       }
     },
     app: {

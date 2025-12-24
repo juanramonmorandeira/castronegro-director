@@ -11,6 +11,7 @@
     buildDistributionTokens,
     getRoleName
   } from '../lib/roles.js';
+  import { showToast } from '../lib/toast.js';
   import { createEventDispatcher, onMount } from 'svelte';
   import { getSessionPositions, setRolePosition } from '../lib/stores/rolePositions.js';
   import Modal from '../components/ui/Modal.svelte';
@@ -105,6 +106,12 @@
   let judgeModalOpen = false;
   let judgeTokenId = null;
   let pendingJudgeExtraDay = false;
+  let childModelTarget = null;
+  let childConversionPending = false;
+  let houndModalOpen = false;
+  let houndTokenId = null;
+  let houndChoice = null; // 'wolves' | 'village'
+  let houndSelection = null;
   $: sessionKey = sessionId ?? 'default';
   let lastProtectedTargets = [];
   let activeSpecialIds = [];
@@ -114,6 +121,7 @@
   $: deadSet = new Set(deadCharacters);
   $: infectedIdSet = new Set(infectedTargets);
   $: console.info('[session] infected state', { infectedTargets, infectedIdSet: Array.from(infectedIdSet) });
+  $: seerPresent = characterTokens.some((token) => normalizeRoleSlug(slugifyRole(token.role)) === 'seer');
   $: aliveRoleSet = (() => {
     const set = new Set();
     (characterTokens ?? []).forEach((token) => {
@@ -128,7 +136,7 @@
     });
     return set;
   })();
-  $: seerActive = aliveRoleSet.has('seer');
+  $: seerActive = seerPresent && aliveRoleSet.has('seer');
   $: foxBaseTokenId = characterTokens.find((token) => slugifyRole(token.role) === 'fox')?.id ?? null;
   $: foxSpecialId = specialTokens.find((token) => slugifyRole(token.role) === 'fox_senses')?.id ?? null;
   $: foxAlive = foxBaseTokenId && !deadSet.has(foxBaseTokenId) && !infectedIdSet.has(foxBaseTokenId);
@@ -145,6 +153,12 @@
     (token) =>
       !deadSet.has(token.id) && ['judge', 'wandering_judge', 'the_judge'].includes(normalizeRoleSlug(slugifyRole(token.role)))
   );
+  $: childTokenId = characterTokens.find((token) => normalizeRoleSlug(slugifyRole(token.role)) === 'child')?.id ?? null;
+  $: childAlive = childTokenId ? !deadSet.has(childTokenId) : false;
+  $: childSpecialId = specialTokens.find((token) => slugifyRole(token.role) === 'child_lighthouse')?.id ?? null;
+  $: houndTokenId = characterTokens.find((token) => normalizeRoleSlug(slugifyRole(token.role)) === 'hound')?.id ?? null;
+  $: houndAlive = houndTokenId ? !deadSet.has(houndTokenId) : false;
+  $: houndSpecialId = specialTokens.find((token) => slugifyRole(token.role) === 'hound_choice')?.id ?? null;
   let elderResilience = new Set();
   const currentLocale = typeof navigator !== 'undefined' ? navigator.language : 'en';
 
@@ -883,7 +897,8 @@
       isDayPhase,
       pendingInterphases: phaseState.pendingInterphases
     });
-    resolveBoardEffects(phaseKeyNow);
+    const resolutionOk = resolveBoardEffects(phaseKeyNow);
+    if (resolutionOk === false) return;
     if (actorState.currentNightChoice && !isEndPhase) {
       revertActorIdentity();
     }
@@ -1009,6 +1024,7 @@
     pendingSheriffSuccession = false;
     pendingJudgeExtraDay = false;
     judgeModalOpen = false;
+    childModelTarget = null;
     pendingHunterShot = false;
     preparationResolved = false;
     nightNumber = 0;
@@ -1018,6 +1034,11 @@
     actorTempSpecialIds = [];
     actorState = { available: sanitizeActorRoles(actorRoles), consumed: [], currentNightChoice: null };
     foxState = { lastResult: null, available: true, lastNightUsed: null, lastNightUsedKey: null };
+    childModelTarget = null;
+    childConversionPending = false;
+    houndChoice = null;
+    houndSelection = null;
+    houndModalOpen = false;
     tokens = tokens.map((token) => {
       if (token.id === actorBaseTokenId && actorToken) {
         return actorToken;
@@ -1123,8 +1144,21 @@
     protected: '/markers/defended-shield.png',
     lover: '/markers/lovers-heart.png',
     sheriff: '/markers/sheriff-star.png',
-    seer: '/markers/seer-eye.png'
+    seer: '/markers/seer-eye.png',
+    model: '/markers/model-lantern.png'
   };
+  const houndOptions = [
+    {
+      key: 'wolves',
+      labelKey: 'session.hound.choice_wolves',
+      image: roleImageSrc('werewolves', 'werewolf')
+    },
+    {
+      key: 'village',
+      labelKey: 'session.hound.choice_village',
+      image: roleImageSrc('villagers', 'villager')
+    }
+  ];
   const MARKER_START_ANGLE = 45; // arranque en abajo-derecha
   const MARKER_MAX_SPREAD = 210;
   const MARKER_MIN_STEP = 28;
@@ -1143,13 +1177,23 @@
     if (sheriffHolderId === token.id) {
       markers.push({ type: 'sheriff', icon: markerAssets.sheriff, title: 'Sheriff' });
     }
+    if (childModelTarget && token.id === childModelTarget) {
+      markers.push({ type: 'model', icon: markerAssets.model, title: 'Model' });
+    }
     return markers;
   };
   const markerPlacementsFor = (token) => {
-    const markers = [
-      { type: 'seer', icon: markerAssets.seer, title: $t?.('session.preview.view_role') || 'View role', action: true, disabled: !seerActive },
-      ...statusMarkersFor(token)
-    ];
+    const markers = [];
+    if (seerPresent) {
+      markers.push({
+        type: 'seer',
+        icon: markerAssets.seer,
+        title: $t?.('session.preview.view_role') || 'View role',
+        action: true,
+        disabled: !seerActive
+      });
+    }
+    markers.push(...statusMarkersFor(token));
     if (!markers.length) return [];
     const count = markers.length;
     const spread = Math.min(MARKER_MAX_SPREAD, Math.max(MARKER_MIN_STEP * (count - 1), 0));
@@ -1179,6 +1223,8 @@
         return 'judge';
       case 'white_claw':
         return 'white';
+      case 'child_lighthouse':
+        return 'child';
       case 'fox_senses':
         return 'fox';
       case 'cursed_wolf_father':
@@ -1259,6 +1305,16 @@
       if (consumedSpecialIds.includes(token.id)) return true;
       if (!isDayPhase) return true;
     }
+    if (slug === 'child_lighthouse') {
+      if (!childAlive) return true;
+      if (!isFirstNightPhase) return true;
+      if (consumedSpecialIds.includes(token.id)) return true;
+    }
+    if (slug === 'hound_choice') {
+      if (!houndAlive) return true;
+      if (!isFirstNightPhase) return true;
+      if (consumedSpecialIds.includes(token.id)) return true;
+    }
     if (slug === 'white_claw') {
       if (!isNightPhase) return true;
       if (!whiteAlive) return true;
@@ -1270,7 +1326,7 @@
     if (isEndPhase) return true;
     if (isPreparationPhase) return slug !== 'sheriff_badge';
     if (isNightPhase) return slug === 'sheriff_badge' || slug === 'villagers_guillotine' || slug === 'hunter_bullet';
-    if (isDayPhase) return slug !== 'villagers_guillotine';
+    if (isDayPhase) return !['villagers_guillotine', 'judge_maze'].includes(slug);
     if (isSheriffToken(token) && !sheriffPhaseEligible()) return true;
     return false;
   };
@@ -1387,9 +1443,40 @@
     const eliminationTargets = uniqueList((specialTargets.villagers_guillotine ?? []).map((entry) => entry.targetId));
     const hunterShotEntries = specialTargets.hunter_bullet ?? [];
     const hunterShotTargets = uniqueList(hunterShotEntries.map((entry) => entry.targetId));
+    const childModelEntries = specialTargets.child_lighthouse ?? [];
+    const childModelTargetResolved = childModelEntries[0]?.targetId ?? null;
+    const houndChoiceEntries = specialTargets.hound_choice ?? [];
+    const houndAnswered = houndChoiceEntries.length > 0 || houndChoice;
     const infectionTargetsCurrent = uniqueList(
       [...(specialTargets.cursed_wolf_father ?? []), ...(specialTargets.father_bite ?? [])].map((entry) => entry.targetId)
     );
+    if (
+      phaseKeyNow === PHASE_KEY_FIRST_NIGHT &&
+      childAlive &&
+      childSpecialId &&
+      !consumedSpecialIds.includes(childSpecialId) &&
+      !childModelTargetResolved &&
+      !childModelTarget
+    ) {
+      showToast({
+        message: $t?.('session.errors.child_model_required') ?? 'The Wild Child must choose a role model before advancing.',
+        variant: 'error'
+      });
+      return false;
+    }
+    if (
+      phaseKeyNow === PHASE_KEY_FIRST_NIGHT &&
+      houndAlive &&
+      houndSpecialId &&
+      !consumedSpecialIds.includes(houndSpecialId) &&
+      !houndAnswered
+    ) {
+      showToast({
+        message: $t?.('session.errors.hound_alignment_required') ?? 'The Wolf-Hound must choose alignment before advancing.',
+        variant: 'error'
+      });
+      return false;
+    }
     // Ensure Father infection tracks the same target as the werewolves claws token.
     const specialsBySlug = (slug) =>
       specials.filter((token) => slugifyRole(token.role) === slug).map((token) => token.id);
@@ -1432,6 +1519,8 @@
       ...(specialTargets.cursed_wolf_father ?? []).map((entry) => entry.tokenId),
       ...(specialTargets.father_bite ?? []).map((entry) => entry.tokenId)
     ];
+    const usedChildIds = (specialTargets.child_lighthouse ?? []).map((entry) => entry.tokenId);
+    const usedHoundIds = (specialTargets.hound_choice ?? []).map((entry) => entry.tokenId);
 
     const loversSet = new Set(loversLinks.map((pair) => pair.join('|')));
     if (cupidTargets.length >= 2) {
@@ -1445,6 +1534,12 @@
     }
     const lovers = Array.from(loversSet).map((pair) => pair.split('|'));
     const loverIds = new Set(lovers.flat());
+    if (childModelTargetResolved) {
+      childModelTarget = childModelTargetResolved;
+    }
+    if (houndChoiceEntries.length && !houndChoice) {
+      houndChoice = houndChoiceEntries[0]?.targetId === 'wolves' ? 'wolves' : 'village';
+    }
 
     const deaths = new Set([...wolfTargets, ...venomTargets, ...eliminationTargets]);
     hunterShotTargets.forEach((id) => deaths.add(id));
@@ -1463,6 +1558,15 @@
       }
     });
     const whiteClawKills = new Set(whiteClawTargets);
+
+    if (childModelTargetResolved && childTokenId) {
+      const stamp = new Date().toLocaleTimeString();
+      const modelName = nameForToken(childModelTargetResolved);
+      logEntries = [
+        { text: ($t?.('session.logbook.child_model_chosen', { model: modelName }) ?? `Wild Child chooses ${modelName} as model`), stamp },
+        ...logEntries
+      ];
+    }
 
     // Elder: primer impacto (garras y/o infección en la misma noche) se ignora por completo.
     const elderSkip = new Set();
@@ -1568,6 +1672,60 @@
       victoryResult = { ...victoryResult, angel: true };
     }
 
+    // Wild Child conversion if model dies and child survives this phase.
+    const childToken = childTokenId ? getTokenById(childTokenId) : null;
+    const childAlreadyWolf = normalizeRoleSlug(slugifyRole(childToken?.role)) === 'werewolf';
+    if (
+      childToken &&
+      !childAlreadyWolf &&
+      childModelTarget &&
+      (deaths.has(childModelTarget) || deadSet.has(childModelTarget)) &&
+      !deaths.has(childTokenId)
+    ) {
+      tokens = tokens.map((token) =>
+        token.id === childTokenId
+          ? {
+              ...token,
+              role: 'werewolf',
+              category: 'werewolves',
+              image: roleImageSrc('werewolves', 'werewolf')
+            }
+          : token
+      );
+      const stamp = new Date().toLocaleTimeString();
+      logEntries = [
+        { text: ($t?.('session.logbook.child_turns_wolf') ?? 'Wild Child becomes a Werewolf'), stamp },
+        ...logEntries
+      ];
+    }
+
+    // Wolf-Hound alignment application (only matters if still alive).
+    const houndToken = houndTokenId ? getTokenById(houndTokenId) : null;
+    if (houndToken && !deaths.has(houndTokenId) && houndChoice) {
+      const becomesWolf = houndChoice === 'wolves';
+      tokens = tokens.map((token) =>
+        token.id === houndTokenId
+          ? {
+              ...token,
+              role: becomesWolf ? 'werewolf' : 'villager',
+              category: becomesWolf ? 'werewolves' : 'villagers',
+              image: roleImageSrc(becomesWolf ? 'werewolves' : 'villagers', becomesWolf ? 'werewolf' : 'villager')
+            }
+          : token
+      );
+      const stamp = new Date().toLocaleTimeString();
+      logEntries = [
+        {
+          text:
+            becomesWolf
+              ? $t?.('session.logbook.hound_joined_wolves') ?? 'Wolf-Hound joins the werewolves'
+              : $t?.('session.logbook.hound_remains_villager') ?? 'Wolf-Hound stays with the villagers',
+          stamp
+        },
+        ...logEntries
+      ];
+    }
+
     if (sheriffTarget) {
       sheriffHolderId = sheriffTarget;
       sheriffAvailable = false;
@@ -1630,7 +1788,9 @@
       ...usedPotionIds,
       ...cupidConsumption,
       ...usedFatherIds,
-      ...usedHunterBulletIds
+      ...usedHunterBulletIds,
+      ...usedChildIds,
+      ...usedHoundIds
     ]);
     const deadHunters = characters
       .filter((token) => slugifyRole(token.role) === 'hunter')
@@ -1669,6 +1829,7 @@
     // reset tokens de acción al panel lateral
     activeSpecialIds = sheriffHolderId && sheriffTokenId ? [] : [];
     resetSpecialPositions();
+    return true;
   }
 
   function evaluateVictory(characters = [], deadList = [], lovers = [], infectedList = [], charmedList = []) {
@@ -1864,6 +2025,9 @@
                   }
                 } else if (slugifyRole(token.role) === 'judge_maze') {
                   judgeModalOpen = true;
+                } else if (slugifyRole(token.role) === 'hound_choice') {
+                  houndSelection = houndChoice;
+                  houndModalOpen = true;
                 } else {
                   deploySpecialToken(token);
                 }
@@ -2151,6 +2315,51 @@
         }}
       >
         {$t?.('common.actions.done') ?? 'Confirm'}
+      </button>
+    </svelte:fragment>
+  </Modal>
+
+  <Modal
+    open={houndModalOpen}
+    title={$t?.('session.hound.modal_title') ?? 'Did the Wolf-Hound join the wolves?'}
+    size="md"
+    closeOnBackdrop={true}
+    showClose={false}
+    on:close={() => (houndModalOpen = false)}
+  >
+    <p class="hint">{$t?.('session.hound.modal_body') ?? 'Choose whether the Wolf-Hound sides with the wolves or stays with the villagers. Single use.'}</p>
+    <div class="actor-modal-body">
+      <div class="actor-modal-grid">
+        {#each houndOptions as option}
+          <button
+            class={`actor-card ${houndSelection === option.key ? 'selected' : ''}`}
+            type="button"
+            on:click={() => (houndSelection = option.key)}
+            aria-pressed={houndSelection === option.key}
+          >
+            <img src={option.image} alt={option.key} />
+            <span>{$t?.(option.labelKey) ?? option.key}</span>
+          </button>
+        {/each}
+      </div>
+    </div>
+    <svelte:fragment slot="footer">
+      <button class="btn ghost" type="button" on:click={() => (houndModalOpen = false)}>
+        {$t?.('common.actions.cancel') ?? 'Cancel'}
+      </button>
+      <button
+        class="btn primary"
+        type="button"
+        disabled={!houndSelection}
+        on:click={() => {
+          if (!houndSpecialId || !houndSelection) return;
+          houndChoice = houndSelection;
+          consumedSpecialIds = addToSet(consumedSpecialIds, [houndSpecialId]);
+          activeSpecialIds = activeSpecialIds.filter((id) => id !== houndSpecialId);
+          houndModalOpen = false;
+        }}
+      >
+        {$t?.('common.actions.done') ?? 'Done'}
       </button>
     </svelte:fragment>
   </Modal>

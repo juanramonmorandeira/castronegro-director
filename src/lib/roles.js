@@ -57,6 +57,8 @@ export function buildDistributionTokens(selection, assignments = {}, players = [
   const fatherBitePath = '/tokens/father-bite.png';
   const hunterBulletPath = '/tokens/hunter-bullet.png';
   const judgeMazePath = '/tokens/judge-maze.png';
+  const childLighthousePath = '/tokens/child-lighthouse.png';
+  const houndChoicePath = '/tokens/hound-choice.png';
   const sheriffBadgePath = '/badge/sheriff.png';
   const villagersEliminationPath = '/tokens/villagers-guillotine.png';
   const foxSensesPath = '/tokens/fox-senses.png';
@@ -269,6 +271,34 @@ export function buildDistributionTokens(selection, assignments = {}, players = [
       role: 'Judge Maze',
       category: 'special',
       image: judgeMazePath,
+      player: null
+    });
+  }
+
+  // Wild Child beacon: one lighthouse to choose a role model on the first night.
+  const childCount =
+    Number(selection?.ambiguous?.child ?? selection?.ambiguous?.Child ?? selection?.ambiguous?.['The Wild Child'] ?? 0) ||
+    0;
+  if (childCount > 0) {
+    tokens.push({
+      id: 'special-child-lighthouse-0',
+      role: 'Child Lighthouse',
+      category: 'special',
+      image: childLighthousePath,
+      player: null
+    });
+  }
+
+  // Wolf-Hound allegiance choice on first night.
+  const houndCount =
+    Number(selection?.ambiguous?.hound ?? selection?.ambiguous?.Hound ?? selection?.ambiguous?.['The Wolf-Hound'] ?? 0) ||
+    0;
+  if (houndCount > 0) {
+    tokens.push({
+      id: 'special-hound-choice-0',
+      role: 'Hound Choice',
+      category: 'special',
+      image: houndChoicePath,
       player: null
     });
   }
