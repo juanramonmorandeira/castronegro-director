@@ -11,6 +11,7 @@
     buildDistributionTokens,
     getRoleName
   } from '../lib/roles.js';
+  import roleDefinitions from '../../reference-data/datasets/roles.json' with { type: 'json' };
   import { showToast } from '../lib/toast.js';
   import { createEventDispatcher, onMount } from 'svelte';
   import { getSessionPositions, setRolePosition } from '../lib/stores/rolePositions.js';
@@ -24,6 +25,8 @@
   export let showSessionIndicator = false;
   export let sessionIndicator = null;
   export let actorRoles = [];
+  export let thiefRoles = [];
+  export let exclusionList = [];
 
   const PHASE_KEY_PREPARATION = 'session.phases.preparation.title';
   const PHASE_KEY_FIRST_NIGHT = 'session.phases.first_night.title';
@@ -34,6 +37,17 @@
   const PHASE_KEY_KNIGHT = 'session.phases.knight.title';
   const PHASE_KEY_SHERIFF = 'session.phases.sheriff.title';
   const PHASE_KEY_END = 'session.phases.end.title';
+  const PREPARATION_PHASES = [
+    'prep_characters',
+    'prep_buildings',
+    'prep_manipulator',
+    'prep_gypsy',
+    'prep_town_crier_cards',
+    'prep_actor',
+    'prep_thief',
+    'prep_sheriff',
+    'prep_town_crier'
+  ];
   const BASE_PHASE_SEQUENCE = [
     PHASE_KEY_PREPARATION,
     PHASE_KEY_FIRST_NIGHT,
@@ -45,10 +59,19 @@
     ...BASE_PHASE_SEQUENCE,
     PHASE_KEY_HUNTER,
     PHASE_KEY_SHERIFF,
-    PHASE_KEY_END
+    PHASE_KEY_END,
+    ...PREPARATION_PHASES
   ]);
 
-  const normalizePhaseKey = (key) => (ALL_PHASE_KEYS.has(key) ? key : PHASE_KEY_PREPARATION);
+  const normalizePhaseKey = (key) => {
+    if (!key) return PHASE_KEY_END;
+    const aliases = {
+      sheriff: PHASE_KEY_SHERIFF,
+      sheriff_interphase: PHASE_KEY_SHERIFF
+    };
+    const mapped = aliases[key] ?? key;
+    return ALL_PHASE_KEYS.has(mapped) ? mapped : PHASE_KEY_END;
+  };
 
   let logEntries = [];
   let draftNote = '';
@@ -58,6 +81,7 @@
     current: PHASE_KEY_PREPARATION,
     next: PHASE_KEY_FIRST_NIGHT,
     pendingInterphases: [],
+    pendingPreparation: [],
     baseIndex: 0
   };
   let phaseExpanded = true;
@@ -81,6 +105,7 @@
   let sheriffHolderId = null;
   let sheriffAvailable = true;
   let sheriffDisabled = false;
+  let includeTownCrier = true;
   let preparationResolved = false;
   let nightNumber = 0;
   let dayNumber = 0;
@@ -118,6 +143,12 @@
   let knightTokenId = null;
   let woundedQueue = []; // [{ id, dueNight, resolved?: boolean }]
   let knightTargetId = null;
+  let thiefModalOpen = false;
+  let thiefOffer = [];
+  let thiefChoice = null;
+  let thiefSpecialId = null;
+  let thiefBaseTokenId = null;
+  let thiefAlive = false;
   $: sessionKey = sessionId ?? 'default';
   let lastProtectedTargets = [];
   let activeSpecialIds = [];
@@ -167,6 +198,7 @@
   $: houndSpecialId = specialTokens.find((token) => slugifyRole(token.role) === 'hound_choice')?.id ?? null;
   $: knightTokenId = characterTokens.find((token) => normalizeRoleSlug(slugifyRole(token.role)) === 'knight')?.id ?? null;
   $: knightAlive = knightTokenId ? !deadSet.has(knightTokenId) : false;
+  $: thiefSpecialId = specialTokens.find((token) => slugifyRole(token.role) === 'thief_mask')?.id ?? null;
   const woundedIdsSet = () => new Set(woundedQueue.map((entry) => entry.id));
   let elderResilience = new Set();
   const currentLocale = typeof navigator !== 'undefined' ? navigator.language : 'en';
@@ -204,7 +236,16 @@
         const remoteFox = session?.fox_state ?? {};
         const available = sanitizeActorRoles(settings.actor_roles ?? actorRoles);
         includeSheriff = settings.include_sheriff ?? true;
+        includeTownCrier = settings.include_town_crier ?? true;
         sheriffAvailable = includeSheriff;
+        thiefRoles = Array.isArray(settings.thief_roles) ? settings.thief_roles.slice(0, 2) : thiefRoles;
+        exclusionList = Array.isArray(settings.exclusion_list)
+          ? settings.exclusion_list.map((slug) => slugifyRole(slug))
+          : Array.isArray(settings.thief_exclusions)
+            ? settings.thief_exclusions.map((slug) => slugifyRole(slug))
+            : exclusionList;
+        const prepRemote = phasesRemote.pending_preparation ?? null;
+        const prepQueue = Array.isArray(prepRemote) ? prepRemote : buildPreparationQueue();
         actorState = {
           available,
           consumed: Array.isArray(remoteState.consumed) ? remoteState.consumed.map((item) => slugifyRole(item)).filter(Boolean) : [],
@@ -216,7 +257,7 @@
           lastNightUsed: remoteFox.lastNightUsed ?? null,
           lastNightUsedKey: remoteFox.lastNightUsedKey ?? null
         };
-        const normalizedCurrent = normalizePhaseKey(phasesRemote.current ?? PHASE_KEY_PREPARATION);
+        const normalizedCurrent = normalizePhaseKey(phasesRemote.current ?? (prepQueue[0] ?? PHASE_KEY_FIRST_NIGHT));
         const remoteBase = BASE_PHASE_SEQUENCE.indexOf(normalizedCurrent);
         const safeBaseIndex = remoteBase >= 0 ? remoteBase : 0;
         phaseState = {
@@ -224,6 +265,7 @@
           current: normalizedCurrent,
           next: normalizePhaseKey(phasesRemote.next ?? PHASE_KEY_FIRST_NIGHT),
           pendingInterphases: phasesRemote.pending_interphases ?? [],
+          pendingPreparation: prepQueue,
           baseIndex: phasesRemote.base_index ?? safeBaseIndex
         };
       } catch (error) {
@@ -232,9 +274,10 @@
         foxState = { lastResult: null, available: true, lastNightUsed: null, lastNightUsedKey: null };
         phaseState = {
           previous: null,
-          current: PHASE_KEY_PREPARATION,
+          current: (buildPreparationQueue()[0] ?? PHASE_KEY_FIRST_NIGHT),
           next: PHASE_KEY_FIRST_NIGHT,
           pendingInterphases: [],
+          pendingPreparation: buildPreparationQueue(),
           baseIndex: 0
         };
       }
@@ -256,6 +299,7 @@
     big_bad_wolf: 'bad',
     wolf_hound: 'hound',
     white_werewolf: 'white',
+    the_white_werewolf: 'white',
     cursed_wolf_father: 'father',
     wandering_judge: 'judge',
     judge: 'judge',
@@ -295,6 +339,217 @@
     const normalized = slugifyRole(slug);
     return roleAliases[normalized] ?? normalized;
   };
+  const allRolesList = Object.entries(roleDefinitions ?? {}).map(([slug, def]) => ({
+    slug,
+    category: def?.category ?? 'villagers'
+  }));
+  const multiPlayerRoles = new Set(['brothers', 'sisters']);
+  const duplicableThiefRoles = new Set(['trusted', 'villager', 'werewolf']);
+  const wolfAlignedSlugs = new Set(['werewolf', 'bad', 'father', 'white']);
+  const exclusionSet = () => new Set((exclusionList ?? []).map((item) => slugifyRole(item)));
+
+  const shuffleArray = (list = []) => list.map((item) => ({ sort: Math.random(), item })).sort((a, b) => a.sort - b.sort).map((entry) => entry.item);
+
+  const roleCategoryFor = (slug) => {
+    const normalized = normalizeRoleSlug(slug);
+    const entry = roleDefinitions?.[normalized];
+    return entry?.category ?? 'villagers';
+  };
+  const isPrepPhaseKey = (key) => typeof key === 'string' && key.startsWith('prep_');
+
+  const thiefPoolAvailable = (respectExclusions = true) => {
+    const inPlay = new Set(characterTokens.map((token) => normalizeRoleSlug(slugifyRole(token.role))));
+    const excluded = respectExclusions ? exclusionSet() : new Set();
+    return allRolesList
+      .map(({ slug }) => normalizeRoleSlug(slug))
+      .filter((slug) => {
+        if (!slug) return false;
+        if (slug === 'thief') return false;
+        if (multiPlayerRoles.has(slug)) return false;
+        if (respectExclusions && excluded.has(slug)) return false;
+        if (!duplicableThiefRoles.has(slug) && inPlay.has(slug)) return false;
+        return true;
+      });
+  };
+
+  const buildThiefOffer = () => {
+    const manual = Array.isArray(thiefRoles) ? thiefRoles.map((role) => normalizeRoleSlug(role)).filter(Boolean) : [];
+    const validManual = manual.filter((slug) => thiefPoolAvailable(false).includes(slug));
+    const offer = [...validManual];
+    const pool = shuffleArray(thiefPoolAvailable(true));
+    for (const slug of pool) {
+      if (offer.length >= 2) break;
+      if (offer.includes(slug)) continue;
+      offer.push(slug);
+    }
+    while (offer.length < 2 && thiefPoolAvailable(false).length) {
+      const fallback = thiefPoolAvailable(false).find((slug) => !offer.includes(slug));
+      if (!fallback) break;
+      offer.push(fallback);
+    }
+    return offer.slice(0, 2);
+  };
+
+  const isWolfAlignedSlug = (slug) => wolfAlignedSlugs.has(normalizeRoleSlug(slug));
+  const deriveRoleSpecialTokens = (roleSlug) => {
+    const slug = normalizeRoleSlug(roleSlug);
+    const templates = [
+      {
+        roles: ['cupid'],
+        create: () => [
+          { role: 'Cupid Hearts', image: '/tokens/cupido-hearts.png' },
+          { role: 'Cupid Hearts', image: '/tokens/cupido-hearts.png' }
+        ]
+      },
+      {
+        roles: ['defender'],
+        create: () => [{ role: 'defender_shield', image: '/tokens/defender-shield.png' }]
+      },
+      {
+        roles: ['witch'],
+        create: () => [
+          { role: 'witch_heal', image: '/tokens/witch-heal.png' },
+          { role: 'witch_venom', image: '/tokens/witch-venom.png' }
+        ]
+      },
+      {
+        roles: ['hunter'],
+        create: () => [{ role: 'hunter_bullet', image: '/tokens/hunter-bullet.png' }]
+      },
+      {
+        roles: ['piper'],
+        create: () => [
+          { role: 'piper_charm', image: '/tokens/piper-flute.png' },
+          { role: 'piper_charm', image: '/tokens/piper-flute.png' }
+        ]
+      },
+      {
+        roles: ['white'],
+        create: () => [{ role: 'white_claw', image: '/tokens/white-claw.png' }]
+      },
+      {
+        roles: ['werewolf', 'bad', 'father'],
+        create: () => [{ role: 'werewolves_claws', image: '/tokens/werewolves-claw.png' }]
+      },
+      {
+        roles: ['father'],
+        create: () => [{ role: 'father_bite', image: '/tokens/father-bite.png' }]
+      },
+      {
+        roles: ['judge'],
+        create: () => [{ role: 'judge_maze', image: '/tokens/judge-maze.png' }]
+      },
+      {
+        roles: ['child'],
+        create: () => [{ role: 'child_lighthouse', image: '/tokens/child-lighthouse.png' }]
+      },
+      {
+        roles: ['hound'],
+        create: () => [{ role: 'hound_choice', image: '/tokens/hound-choice.png' }]
+      },
+      {
+        roles: ['knight'],
+        create: () => [{ role: 'knight_sword', image: '/tokens/knight-sword.png' }]
+      }
+    ];
+    const matching = templates.find((entry) => entry.roles.includes(slug));
+    if (!matching) return [];
+    return matching.create().map((tpl, index) => ({
+      id: `special-${slugifyRole(tpl.role)}-converted-${Date.now()}-${index}`,
+      role: tpl.role,
+      category: 'special',
+      image: tpl.image,
+      owner: slug
+    }));
+  };
+
+  const ensureRoleSpecialTokens = (roleSlug) => {
+    const slug = normalizeRoleSlug(roleSlug);
+    const extras = deriveRoleSpecialTokens(slug).filter(
+      (extra) => !specialTokens.some((token) => slugifyRole(token.role) === slugifyRole(extra.role))
+    );
+    return extras;
+  };
+
+  const actorPoolAvailable = () => {
+    const inPlay = new Set(characterTokens.map((token) => normalizeRoleSlug(slugifyRole(token.role))));
+    const excluded = exclusionSet();
+    return allRolesList
+      .filter(({ category }) => category === 'villagers')
+      .map(({ slug }) => normalizeRoleSlug(slug))
+      .filter((slug) => {
+        if (!slug) return false;
+        if (multiPlayerRoles.has(slug)) return false;
+        if (['trusted', 'villager', 'werewolf'].includes(slug)) return false; // sin poderes o no permitidos
+        if (excluded.has(slug)) return false;
+        if (inPlay.has(slug)) return false;
+        return true;
+      });
+  };
+
+  const ensureActorAvailable = () => {
+    if (!actorAlive) return;
+    if (actorAvailable.length > 0) return;
+    const pool = actorPoolAvailable();
+    const shuffled = shuffleArray(pool).slice(0, 3);
+    if (shuffled.length) {
+      actorState = { ...actorState, available: shuffled };
+    }
+  };
+
+  const openThiefModal = (tokenId = null) => {
+    thiefSpecialId = tokenId ?? thiefSpecialId;
+    thiefOffer = buildThiefOffer();
+    thiefChoice = null;
+    thiefModalOpen = true;
+  };
+
+  const applyThiefChoice = () => {
+    const forcedWolf = thiefOffer.length === 2 && thiefOffer.every((slug) => isWolfAlignedSlug(slug));
+    if (!thiefChoice && forcedWolf) {
+      showToast({
+        message: $t?.('session.errors.thief_must_choose_wolf') ?? 'The Thief must choose one of the wolf roles.',
+        variant: 'error'
+      });
+      return;
+    }
+    const targetSlug = thiefChoice || null;
+    const targetDefinition = targetSlug ? getRoleDefinition(targetSlug) : null;
+    const targetCategory = targetDefinition?.category ?? 'villagers';
+    const targetRoleName = targetSlug ? targetDefinition?.names?.en ?? targetSlug : 'villager';
+    if (thiefBaseTokenId) {
+      tokens = tokens.map((token) =>
+        token.id === thiefBaseTokenId
+          ? {
+              ...token,
+              role: targetRoleName,
+              category: targetCategory,
+              image: roleImageSrc(targetCategory, targetSlug || 'villager')
+            }
+          : token
+      );
+    }
+    const extraSpecials = targetSlug ? ensureRoleSpecialTokens(targetSlug) : [];
+    if (extraSpecials.length) {
+      tokens = [...tokens, ...extraSpecials];
+    }
+    if (thiefSpecialId) {
+      consumedSpecialIds = addToSet(consumedSpecialIds, [thiefSpecialId]);
+      activeSpecialIds = activeSpecialIds.filter((id) => id !== thiefSpecialId);
+    }
+    const stamp = new Date().toLocaleTimeString();
+    logEntries = [
+      {
+        text: thiefChoice
+          ? $t?.('session.logbook.thief_adopts_role', { role: getRoleName(targetSlug, currentLocale) }) ??
+            `Thief adopts ${getRoleName(targetSlug, currentLocale)}`
+          : $t?.('session.logbook.thief_becomes_villager') ?? 'Thief becomes a Villager',
+        stamp
+      },
+      ...logEntries
+    ];
+    thiefModalOpen = false;
+  };
 
   $: roleSet = (() => {
     const set = new Set();
@@ -308,6 +563,20 @@
     });
     return set;
   })();
+  const buildPreparationQueue = () => {
+    const queue = [];
+    queue.push('prep_characters');
+    queue.push('prep_buildings');
+    const hasRole = (slug) => roleSet.has(normalizeRoleSlug(slug));
+    if (hasRole('manipulator')) queue.push('prep_manipulator');
+    if (hasRole('gypsy')) queue.push('prep_gypsy');
+    if (includeTownCrier && hasRole('town_crier')) queue.push('prep_town_crier_cards');
+    if (hasRole('actor')) queue.push('prep_actor');
+    if (hasRole('thief')) queue.push('prep_thief');
+    if (includeSheriff) queue.push('prep_sheriff');
+    if (includeTownCrier && hasRole('town_crier')) queue.push('prep_town_crier');
+    return queue;
+  };
 
   $: effectiveTokens =
     includeSheriff || !Array.isArray(tokens)
@@ -318,12 +587,16 @@
   $: actorToken =
     characterTokens.find((token) => normalizeRoleSlug(slugifyRole(token.role)) === 'actor') ?? null;
   $: actorBaseTokenId = actorToken?.id ?? actorBaseTokenId;
+  $: thiefBaseTokenId =
+    characterTokens.find((token) => normalizeRoleSlug(slugifyRole(token.role)) === 'thief')?.id ?? null;
+  $: thiefAlive = thiefBaseTokenId ? !deadSet.has(thiefBaseTokenId) : false;
   $: actorAvailable = (actorState?.available ?? []).slice(0, 3);
   $: actorConsumed = new Set(actorState?.consumed ?? []);
   $: actorRemaining = actorAvailable.filter((role) => !actorConsumed.has(slugifyRole(role)));
   $: actorAlive = actorToken ? !deadSet.has(actorToken.id) : false;
   $: actorExhausted = actorRemaining.length === 0 && !actorState.currentNightChoice;
   const ACTOR_TOKEN_ID = 'special-actor-cards';
+  $: ensureActorAvailable();
   $: actorActionToken =
     actorAlive
       ? {
@@ -336,7 +609,6 @@
   $: paletteSpecialTokens = actorActionToken ? [...specialTokens, actorActionToken] : specialTokens;
   $: actorActionDisabled =
     !actorAlive ||
-    (actorRemaining.length === 0 && !actorState.currentNightChoice) ||
     (!isNightPhase && !actorState.currentNightChoice);
   $: console.info('[actor] state', {
     actorAlive,
@@ -479,11 +751,35 @@
 
   $: currentPhaseKeyValue = phaseState.current;
   $: normalizedPhaseKey = normalizePhaseKey(currentPhaseKeyValue);
+  const prettyPrepLabel = (slug) => {
+    const map = {
+      prep_characters: $t('session.phases.preparation.title'),
+      prep_buildings: $t('session.prep.buildings') ?? 'Buildings',
+      prep_manipulator: $t('session.prep.manipulator') ?? 'Manipulator',
+      prep_gypsy: $t('session.prep.gypsy') ?? 'Gypsy',
+      prep_town_crier_cards: $t('session.prep.town_crier_cards') ?? 'Town Crier Cards',
+      prep_actor: $t('session.prep.actor') ?? 'Actor',
+      prep_thief: $t('session.prep.thief') ?? 'Thief',
+      prep_sheriff: $t('session.phases.sheriff.title'),
+      prep_town_crier: $t('session.prep.town_crier') ?? 'Town Crier'
+    };
+    return map[slug] ?? slug;
+  };
   $: currentPhaseLabel = (() => {
     const key = normalizedPhaseKey;
     if (!key) return '—';
+    if (key.startsWith('prep_')) {
+      const step = prettyPrepLabel(key);
+      const base = $t(PHASE_KEY_PREPARATION) || 'Preparation';
+      return `${base} (${step})`;
+    }
     return $t(key) || '—';
   })();
+  $: thiefOfferData = thiefOffer.map((slug) => ({
+    slug,
+    name: getRoleName(slug, currentLocale),
+    category: roleCategoryFor(slug)
+  }));
   $: console.info('[session] phase reactive', {
     phaseState,
     currentPhaseKeyValue,
@@ -636,6 +932,7 @@
           next: normalizePhaseKey(phaseState.next),
           phase_summary: [], // extend if needed
           pending_interphases: phaseState.pendingInterphases,
+          pending_preparation: phaseState.pendingPreparation,
           base_index: phaseState.baseIndex
         }
       });
@@ -684,56 +981,8 @@
     const specials = [];
     const add = (opts) => specials.push(opts);
 
-    if (slug === 'cupid') {
-      for (let i = 0; i < 2; i += 1) {
-        add({
-          id: `actor-${slug}-heart-${i}`,
-          role: 'Cupid Hearts',
-          category: 'special',
-          image: '/tokens/cupido-hearts.png',
-          actorRole: slug
-        });
-      }
-    }
-
-    if (slug === 'defender') {
-      add({
-        id: `actor-${slug}-shield-0`,
-        role: 'defender_shield',
-        category: 'special',
-        image: '/tokens/defender-shield.png',
-        actorRole: slug
-      });
-    }
-
-    if (slug === 'witch') {
-      add({
-        id: `actor-${slug}-heal-0`,
-        role: 'witch_heal',
-        category: 'special',
-        image: '/tokens/witch-heal.png',
-        actorRole: slug
-      });
-      add({
-        id: `actor-${slug}-venom-0`,
-        role: 'witch_venom',
-        category: 'special',
-        image: '/tokens/witch-venom.png',
-        actorRole: slug
-      });
-    }
-
-    if (slug === 'hunter') {
-      add({
-        id: `actor-${slug}-bullet-0`,
-        role: 'hunter_bullet',
-        category: 'special',
-        image: '/tokens/hunter-bullet.png',
-        actorRole: slug
-      });
-    }
-
-    // Otros roles de aldeanos sin tokens especiales => no añadimos nada.
+    const derived = deriveRoleSpecialTokens(slug).map((tpl) => ({ ...tpl, actorRole: slug }));
+    specials.push(...derived);
     return specials;
   }
 
@@ -822,7 +1071,7 @@
     foxState = {
       ...foxState,
       lastResult: foxSelection,
-      available: false,
+      available: foxSelection !== 'villager',
       lastNightUsed: currentNight,
       lastNightUsedKey: normalizedPhaseKey
     };
@@ -838,7 +1087,17 @@
 
   function openActorModal() {
     if (!actorAlive) return;
-    actorSelection = actorState.currentNightChoice ?? actorRemaining[0] ?? null;
+    if (actorRemaining.length === 0 && !actorState.currentNightChoice) {
+      const pool = actorPoolAvailable();
+      const auto = shuffleArray(pool).slice(0, 3);
+      if (auto.length) {
+        actorState = { ...actorState, available: auto };
+      }
+    }
+    const nextRemaining = actorState.available
+      ? actorState.available.filter((role) => !actorConsumed.has(slugifyRole(role)))
+      : actorRemaining;
+    actorSelection = actorState.currentNightChoice ?? nextRemaining[0] ?? null;
     actorModalOpen = true;
   }
 
@@ -924,6 +1183,45 @@
       pendingSheriffSuccession = false;
     }
     const interphaseQueue = [...(phaseState.pendingInterphases ?? [])];
+    const prepQueue = [...(phaseState.pendingPreparation ?? [])];
+    if (!isPrepPhaseKey(phaseKeyNow) && prepQueue.length) {
+      phaseState = {
+        ...phaseState,
+        previous: phaseKeyNow,
+        current: prepQueue[0],
+        next: null,
+        pendingPreparation: prepQueue.slice(1)
+      };
+      persistPhaseState();
+      return;
+    }
+    if (isPrepPhaseKey(phaseKeyNow)) {
+      const remainingPrep = prepQueue.filter((slug) => slug !== phaseKeyNow);
+      if (remainingPrep.length) {
+        phaseState = {
+          ...phaseState,
+          previous: phaseKeyNow,
+          current: remainingPrep[0],
+          next: null,
+          pendingPreparation: remainingPrep.slice(1)
+        };
+      } else {
+        phaseState = {
+          ...phaseState,
+          previous: phaseKeyNow,
+          current: PHASE_KEY_FIRST_NIGHT,
+          next: PHASE_KEY_FIRST_DAY,
+          pendingPreparation: [],
+          baseIndex: 1
+        };
+      }
+      persistPhaseState();
+      return;
+    }
+    if (phaseKeyNow === PHASE_KEY_KNIGHT) {
+      // La inter-fase de Knight ya se está resolviendo; no reencolarla.
+      knightPending = false;
+    }
     // Victory check triggers end phase
     if (Object.values(victoryResult).some(Boolean)) {
       phaseState = { ...phaseState, previous: phaseKeyNow, current: PHASE_KEY_END, next: PHASE_KEY_END, pendingInterphases: [] };
@@ -932,16 +1230,13 @@
     }
     // Identify new interphases to enqueue
     const newInterphases = [];
-    if (pendingHunterShot && !interphaseQueue.includes(PHASE_KEY_HUNTER)) newInterphases.push(PHASE_KEY_HUNTER);
-    if (knightPending && !interphaseQueue.includes(PHASE_KEY_KNIGHT)) newInterphases.push(PHASE_KEY_KNIGHT);
-    if (includeSheriff && pendingSheriffSuccession && !interphaseQueue.includes(PHASE_KEY_SHERIFF)) newInterphases.push(PHASE_KEY_SHERIFF);
-    if (pendingJudgeExtraDay && !interphaseQueue.includes(PHASE_KEY_EACH_DAY)) newInterphases.push(PHASE_KEY_EACH_DAY);
+    if (pendingHunterShot) newInterphases.push(PHASE_KEY_HUNTER);
+    if (knightPending) newInterphases.push(PHASE_KEY_KNIGHT);
+    if (includeSheriff && pendingSheriffSuccession) newInterphases.push(PHASE_KEY_SHERIFF);
+    if (pendingJudgeExtraDay) newInterphases.push(PHASE_KEY_EACH_DAY);
     const mergedQueue = [...interphaseQueue, ...newInterphases].filter(Boolean);
     if (newInterphases.includes(PHASE_KEY_EACH_DAY)) {
       pendingJudgeExtraDay = false;
-    }
-    if (newInterphases.includes(PHASE_KEY_KNIGHT)) {
-      knightPending = false;
     }
     // enforce Hunter -> Sheriff order
     const orderedQueue = [];
@@ -1070,21 +1365,24 @@
       return token;
     });
     // Reset phase state
+    const prepQueue = buildPreparationQueue();
     phaseState = {
       previous: null,
-      current: PHASE_KEY_PREPARATION,
+      current: prepQueue[0] ?? PHASE_KEY_FIRST_NIGHT,
       next: PHASE_KEY_FIRST_NIGHT,
       pendingInterphases: [],
+      pendingPreparation: prepQueue.slice(1),
       baseIndex: 0
     };
     try {
       await updateSession(sessionId, {
         game_phases: {
           previous: null,
-          current: PHASE_KEY_PREPARATION,
+          current: prepQueue[0] ?? PHASE_KEY_FIRST_NIGHT,
           next: PHASE_KEY_FIRST_NIGHT,
           phase_summary: [],
           pending_interphases: [],
+          pending_preparation: prepQueue.slice(1),
           base_index: 0
         },
         actor_state: {
@@ -1163,6 +1461,7 @@
     }
     return token.image;
   };
+  const shortRoleLabel = (token) => normalizeRoleSlug(slugifyRole(token?.role ?? ''));
   const markerAssets = {
     charmed: '/markers/charmed-flute.png',
     protected: '/markers/defended-shield.png',
@@ -1245,6 +1544,8 @@
         return 'witch';
       case 'hunter_bullet':
         return 'hunter';
+      case 'thief_mask':
+        return 'thief';
       case 'knight_sword':
         return 'knight';
       case 'werewolves_claws':
@@ -1336,6 +1637,7 @@
     if (slug === 'fox_senses') {
       if (!foxAlive) return true;
       if (!isNightPhase) return true;
+      if (foxState.lastResult === 'villagers') return true;
       if (!foxState.available) return true;
     }
     if (slug === 'judge_maze') {
@@ -1344,12 +1646,15 @@
       if (!isDayPhase) return true;
     }
     if (slug === 'child_lighthouse') {
-      if (!childAlive) return true;
       if (!isFirstNightPhase) return true;
       if (consumedSpecialIds.includes(token.id)) return true;
     }
     if (slug === 'hound_choice') {
-      if (!houndAlive) return true;
+      if (!isFirstNightPhase) return true;
+      if (consumedSpecialIds.includes(token.id)) return true;
+    }
+    if (slug === 'thief_mask') {
+      if (!thiefAlive) return true;
       if (!isFirstNightPhase) return true;
       if (consumedSpecialIds.includes(token.id)) return true;
     }
@@ -1430,11 +1735,10 @@
       if (phaseKeyNow === PHASE_KEY_KNIGHT) return slug === 'knight_sword';
       if (phaseKeyNow === PHASE_KEY_SHERIFF) return includeSheriff && slug === 'sheriff_badge';
       if (phaseKeyNow === PHASE_KEY_END) return false;
-      if (!includeSheriff && slug === 'sheriff_badge') return false;
       if (pendingSheriffSuccession && slug === 'sheriff_badge') return true;
       if (isPreparationKey) return slug === 'sheriff_badge';
       if (isNightKey) return !['sheriff_badge', 'villagers_guillotine', 'hunter_bullet'].includes(slug);
-      if (isDayKey) return ['villagers_guillotine'].includes(slug);
+      if (isDayKey) return ['villagers_guillotine', 'judge_maze'].includes(slug);
       return true;
     });
     console.info('[session] specials filter', {
@@ -2104,7 +2408,7 @@
           {#each paletteSpecialTokens as token}
             <button
               type="button"
-              class={`palette-token ${consumedSpecialIds.includes(token.id) ? 'token-consumed' : ''} ${token.id === ACTOR_TOKEN_ID && actorExhausted ? 'token-consumed' : ''} ${!consumedSpecialIds.includes(token.id) && !activeSpecialIds.includes(token.id) && !isPaletteDisabled(token) ? 'palette-token--highlight' : ''}`}
+              class={`palette-token ${consumedSpecialIds.includes(token.id) ? 'token-consumed' : ''} ${!consumedSpecialIds.includes(token.id) && !activeSpecialIds.includes(token.id) && !isPaletteDisabled(token) ? 'palette-token--highlight' : ''}`}
               title={token.role}
               disabled={
                 (token.id === ACTOR_TOKEN_ID && (actorActionDisabled || isPreparationPhase)) ||
@@ -2126,6 +2430,8 @@
                 } else if (slugifyRole(token.role) === 'hound_choice') {
                   houndSelection = houndChoice;
                   houndModalOpen = true;
+                } else if (slugifyRole(token.role) === 'thief_mask') {
+                  openThiefModal(token.id);
                 } else {
                   deploySpecialToken(token);
                 }
@@ -2200,8 +2506,8 @@
                   {/each}
                 </div>
               </span>
-              <span class="token-role" aria-hidden="true">{token.role}</span>
-              <span class="sr-only">{token.role}</span>
+              <span class="token-role" aria-hidden="true">{shortRoleLabel(token)}</span>
+              <span class="sr-only">{shortRoleLabel(token)}</span>
               {#if deadSet.has(token.id)}
                 <span class="token-badge token-badge--dead" aria-hidden="true">✖</span>
               {/if}
@@ -2456,6 +2762,55 @@
           activeSpecialIds = activeSpecialIds.filter((id) => id !== houndSpecialId);
           houndModalOpen = false;
         }}
+      >
+        {$t?.('common.actions.done') ?? 'Done'}
+      </button>
+    </svelte:fragment>
+  </Modal>
+
+  <Modal
+    open={thiefModalOpen}
+    title={$t?.('session.thief.modal_title') ?? 'Thief chooses a new role'}
+    size="md"
+    closeOnBackdrop={true}
+    showClose={false}
+    on:close={() => (thiefModalOpen = false)}
+  >
+    <p class="hint">
+      {$t?.('session.thief.modal_body') ??
+      'Select one of the two roles. If both are wolf-aligned, the Thief must choose one of them. Single use.'}
+    </p>
+    {#if thiefOfferData.length === 0}
+      <p class="empty-exclusions">{$t?.('session.thief.no_roles') ?? 'No roles available for the Thief.'}</p>
+    {:else}
+      <div class="actor-modal-body">
+        <div class="actor-modal-grid">
+          {#each thiefOfferData as option}
+            <button
+              class={`actor-card ${thiefChoice === option.slug ? 'selected' : ''}`}
+              type="button"
+              on:click={() => (thiefChoice = option.slug)}
+              aria-pressed={thiefChoice === option.slug}
+            >
+              <img src={roleImageSrc(option.category, option.slug)} alt={option.name} />
+              <span>{option.name}</span>
+            </button>
+          {/each}
+        </div>
+      </div>
+    {/if}
+    <svelte:fragment slot="footer">
+      <button class="btn ghost" type="button" on:click={() => (thiefModalOpen = false)}>
+        {$t?.('common.actions.cancel') ?? 'Cancel'}
+      </button>
+      <button
+        class="btn primary"
+        type="button"
+        disabled={
+          thiefOfferData.length === 0 ||
+          (thiefOffer.length === 2 && thiefOffer.every((slug) => isWolfAlignedSlug(slug)) && !thiefChoice)
+        }
+        on:click={applyThiefChoice}
       >
         {$t?.('common.actions.done') ?? 'Done'}
       </button>

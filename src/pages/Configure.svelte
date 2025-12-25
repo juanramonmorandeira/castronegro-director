@@ -141,6 +141,7 @@ let saving = false;
 let forceStartHintVisible = false;
 let overrideRoleLimits = false;
 let includeSheriff = true;
+let includeTownCrier = true;
 let tweakRoleMix = false;
 let roleMixOverride = null;
 let basePlayerBreakdown = null;
@@ -158,7 +159,8 @@ let activeModal = null;
     language: metadata?.defaults?.language ?? defaultLanguage,
     assistEnabled: metadata?.defaults?.assist_enabled ?? false,
     assistTasks: [],
-    include_sheriff: true
+    include_sheriff: true,
+    include_town_crier: true
   };
 
   if (form.storyteller === 'AI' || form.storyteller === 'human-AI') {
@@ -364,10 +366,12 @@ let autoSeedKey = '';
           assistTasks: Array.isArray(settings.assist_tasks)
             ? settings.assist_tasks.filter((task) => assistTaskOptions.includes(task))
             : [],
-          include_sheriff: settings.include_sheriff ?? true
+          include_sheriff: settings.include_sheriff ?? true,
+          include_town_crier: settings.include_town_crier ?? true
         };
         overrideRoleLimits = settings.override_limits ?? false;
         includeSheriff = form.include_sheriff;
+        includeTownCrier = form.include_town_crier;
         tweakRoleMix = settings.tweak_role_mix ?? false;
         roleMixOverride = normalizeMixOverride(settings.role_mix_override);
         if (settings.roles) {
@@ -548,7 +552,8 @@ let autoSeedKey = '';
       'settings.assist_enabled': assistEnabled,
       'settings.assist_tasks': assistEnabled ? form.assistTasks : [],
       'settings.actor_roles': selectedActorRoles,
-      'settings.include_sheriff': includeSheriff
+      'settings.include_sheriff': includeSheriff,
+      'settings.include_town_crier': includeTownCrier
     };
     try {
       await updateSession(sessionId, payload);
@@ -590,6 +595,10 @@ let autoSeedKey = '';
       includeSheriff = detail.includeSheriff;
       form.include_sheriff = includeSheriff;
     }
+    if (typeof detail.includeTownCrier === 'boolean') {
+      includeTownCrier = detail.includeTownCrier;
+      form.include_town_crier = includeTownCrier;
+    }
     if (!sessionId) {
       showToast({ message: $t('configure.errors.missing_session'), variant: 'error' });
       return;
@@ -602,6 +611,7 @@ let autoSeedKey = '';
         'settings.exclusion_list': selectedExclusionList,
         'settings.override_limits': overrideRoleLimits,
         'settings.include_sheriff': includeSheriff,
+        'settings.include_town_crier': includeTownCrier,
         'settings.tweak_role_mix': tweakRoleMix,
         'settings.role_mix_override': roleMixOverride
       });
@@ -836,6 +846,7 @@ let autoSeedKey = '';
     resourceLimits={resourceLimits}
     override={overrideRoleLimits}
     includeSheriff={includeSheriff}
+    includeTownCrier={includeTownCrier}
     players={form.players_expected}
     mix={playerBreakdown}
     totalLimit={clampPlayers(form.players_expected)}

@@ -1,5 +1,18 @@
 // src/lib/i18n.js
-import { writable, derived, get } from 'svelte/store';
+import { writable,       prep: {
+        buildings: 'Épületek',
+        manipulator: 'Előítéletes manipulátor',
+        gypsy: 'Cigánylány',
+        town_crier_cards: 'Kürtös lapjai',
+        actor: 'Komédiás',
+        thief: 'Tolvaj',
+        town_crier: 'Kürtös',
+        modal_empty_title: 'Vannak üres helyek. Folytatod?',
+        modal_empty_cancel: 'Mégse',
+        modal_empty_confirm: 'Megerősítés',
+        modal_empty_autofill: 'Automatikus kitöltés'
+      },
+derived, get } from 'svelte/store';
 
 // Idioma por defecto (EN). Podrías leer de localStorage si lo deseas.
 const initial = 'en';
@@ -276,6 +289,7 @@ const dictionaries = {
       exclusions_group_newmoon: 'Exclude “New Moon”',
       exclusions_group_ambiguous: 'Exclude all Ambiguous roles',
       exclusions_group_loners: 'Exclude all Loners',
+      exclusions_group_multiplayer: 'Exclude multi-player roles (brothers, sisters)',
       exclusions_group_werewolves: 'Exclude Werewolves',
       exclusions_group_no_power_villagers: 'Exclude villagers without powers',
       exclusions_current: 'Current exclusions:',
@@ -337,6 +351,8 @@ const dictionaries = {
       saved: 'Saved!',
       sheriff_include_label: 'Include Sheriff',
       sheriff_include_hint: 'This controls whether the honorary Sheriff role is in play.',
+      towncrier_include_label: 'Include Town Crier',
+      towncrier_include_hint: 'This controls whether the Town Crier role is in play.',
       loading: 'Loading configuration…',
       errors: {
         missing_title: 'Please enter a session title before saving.',
@@ -352,6 +368,32 @@ const dictionaries = {
     },
     session: {
       title: 'Session',
+      prep: {
+        buildings: 'Buildings',
+        manipulator: 'Manipulator',
+        gypsy: 'Gypsy',
+        town_crier_cards: 'Town Crier Cards',
+        actor: 'Actor',
+        thief: 'Thief',
+        town_crier: 'Town Crier',
+        modal_empty_title: 'Some slots are empty. Continue?',
+        modal_empty_cancel: 'Cancel',
+        modal_empty_confirm: 'Confirm',
+        modal_empty_autofill: 'Autofill'
+      },
+      prep: {
+        buildings: 'Buildings',
+        manipulator: 'Manipulator',
+        gypsy: 'Gypsy',
+        town_crier_cards: 'Town Crier Cards',
+        actor: 'Actor',
+        thief: 'Thief',
+        town_crier: 'Town Crier',
+        modal_empty_title: 'Some slots are empty. Continue?',
+        modal_empty_cancel: 'Cancel',
+        modal_empty_confirm: 'Confirm',
+        modal_empty_autofill: 'Autofill'
+      },
       distribution: {
         label: 'Distribution',
         title: 'Session #{id}',
@@ -886,6 +928,7 @@ const dictionaries = {
       exclusions_group_newmoon: 'Excluir “Luna Nueva”',
       exclusions_group_ambiguous: 'Excluir todos los Ambiguous',
       exclusions_group_loners: 'Excluir todos los Loners',
+      exclusions_group_multiplayer: 'Excluir roles multi-jugador (brothers, sisters)',
       exclusions_group_werewolves: 'Excluir Hombres Lobo',
       exclusions_group_no_power_villagers: 'Excluir aldeanos sin poder',
       exclusions_current: 'Exclusiones actuales:',
@@ -947,6 +990,8 @@ const dictionaries = {
       saved: 'Guardado',
       sheriff_include_label: 'Incluir Alguacil',
       sheriff_include_hint: 'Esta opción determina si el cargo honorífico del Alguacil estará en juego o no.',
+      towncrier_include_label: 'Incluir Pregonero',
+      towncrier_include_hint: 'Esta opción determina si el Pregonero estará en juego o no.',
       loading: 'Cargando configuración…',
       errors: {
         missing_title: 'Escribe un título para la sesión.',
@@ -1090,6 +1135,19 @@ const dictionaries = {
     },
     session: {
       title: 'Sesión',
+      prep: {
+        buildings: 'Edificios',
+        manipulator: 'Manipulador prejuicioso',
+        gypsy: 'Gitana',
+        town_crier_cards: 'Cartas de Pregonero',
+        actor: 'Comediante',
+        thief: 'Ladrón',
+        town_crier: 'Pregonero',
+        modal_empty_title: 'Hay huecos vacíos. ¿Continuar?',
+        modal_empty_cancel: 'Cancelar',
+        modal_empty_confirm: 'Confirmar',
+        modal_empty_autofill: 'Autocompletar'
+      },
       distribution: {
         label: 'Distribución',
         title: 'Sesión #{id}',
@@ -1496,6 +1554,7 @@ const dictionaries = {
       exclusions_group_newmoon: '„Újhold” kizárása',
       exclusions_group_ambiguous: 'Összes átmeneti szerep kizárása',
       exclusions_group_loners: 'Összes kívülálló kizárása',
+      exclusions_group_multiplayer: 'Többjátékos szerepek kizárása (brothers, sisters)',
       exclusions_group_werewolves: 'Farkasok kizárása',
       exclusions_group_no_power_villagers: 'Képesség nélküli falusiak kizárása',
       exclusions_current: 'Aktív kizárások:',
@@ -1557,6 +1616,8 @@ const dictionaries = {
       saved: 'Mentve!',
       sheriff_include_label: 'Seriff szerep használata',
       sheriff_include_hint: 'Beállítja, hogy a seriff tisztség játékban van-e.',
+      towncrier_include_label: 'Bírói Kürt szerep használata',
+      towncrier_include_hint: 'Beállítja, hogy a Kürtös szerep játékban van-e.',
       loading: 'Konfiguráció betöltése…',
       errors: {
         missing_title: 'Add meg a játék címét.',

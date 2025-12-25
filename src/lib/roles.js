@@ -61,6 +61,7 @@ export function buildDistributionTokens(selection, assignments = {}, players = [
   const childLighthousePath = '/tokens/child-lighthouse.png';
   const houndChoicePath = '/tokens/hound-choice.png';
   const knightSwordPath = '/tokens/knight-sword.png';
+  const thiefMaskPath = '/tokens/thief-mask.png';
   const sheriffBadgePath = '/badge/sheriff.png';
   const villagersEliminationPath = '/tokens/villagers-guillotine.png';
   const foxSensesPath = '/tokens/fox-senses.png';
@@ -315,6 +316,19 @@ export function buildDistributionTokens(selection, assignments = {}, players = [
       role: 'Knight Sword',
       category: 'special',
       image: knightSwordPath,
+      player: null
+    });
+  }
+
+  // Thief action token (mask), one per Thief.
+  const thiefCount =
+    Number(selection?.ambiguous?.thief ?? selection?.ambiguous?.Thief ?? selection?.ambiguous?.['The Thief'] ?? 0) || 0;
+  if (thiefCount > 0) {
+    tokens.push({
+      id: 'special-thief-mask-0',
+      role: 'Thief Mask',
+      category: 'special',
+      image: thiefMaskPath,
       player: null
     });
   }
