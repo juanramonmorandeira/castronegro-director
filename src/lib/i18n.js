@@ -260,9 +260,26 @@ const dictionaries = {
       },
       role_selector_label: 'Role selection',
       role_override_label: 'Override limits',
+      tweak_mix_label: 'Tweak role mix',
       role_limit: 'Max {count}',
       role_limit_unset: 'No limit',
-      role_override_active: 'Override enabled',
+      role_override_active: 'Overrides limitations on roles selection.',
+      tweak_mix_hint: 'Enable manual adjustment of the group counts.',
+      thief_exclusions_label: 'Exclusion List',
+      thief_exclusions_hint: 'Select roles that cannot appear in random picks.',
+      thief_exclusions_empty: 'No available roles to exclude.',
+      thief_exclusions_disabled: 'Add the Thief to configure exclusions.',
+      exclusions_toggle_label: 'Modify exclusion list',
+      exclusions_toggle_hint: 'Enable editing of roles to exclude from random picks for the Thief and the Actor.',
+      exclusions_hint: 'Select the roles or groups you want to exclude from random choices.',
+      exclusions_group_village: 'Exclude “The Village”',
+      exclusions_group_newmoon: 'Exclude “New Moon”',
+      exclusions_group_ambiguous: 'Exclude all Ambiguous roles',
+      exclusions_group_loners: 'Exclude all Loners',
+      exclusions_group_werewolves: 'Exclude Werewolves',
+      exclusions_group_no_power_villagers: 'Exclude villagers without powers',
+      exclusions_current: 'Current exclusions:',
+      exclusions_none: 'No roles excluded.',
       role_constraints: {
         ruleset: 'Rule set: {value}',
         mix: 'Suggested mix for {value} players'
@@ -318,6 +335,8 @@ const dictionaries = {
       back: 'Back to dashboard',
       save: 'Save',
       saved: 'Saved!',
+      sheriff_include_label: 'Include Sheriff',
+      sheriff_include_hint: 'This controls whether the honorary Sheriff role is in play.',
       loading: 'Loading configuration…',
       errors: {
         missing_title: 'Please enter a session title before saving.',
@@ -349,6 +368,7 @@ const dictionaries = {
         each_night: { title: 'Each night', subtitle: 'Standard order' },
         each_day: { title: 'Each day', subtitle: 'Daytime actions' },
         hunter: { title: 'Hunter', subtitle: '' },
+        knight: { title: 'Knight', subtitle: 'Retaliation phase' },
         sheriff: { title: 'Sheriff', subtitle: '' },
         end: { title: 'End', subtitle: '' },
         steps: {
@@ -420,11 +440,13 @@ const dictionaries = {
         child_model_chosen: 'Wild Child chooses {model} as role model',
         child_turns_wolf: 'Wild Child becomes a Werewolf',
         hound_joined_wolves: 'Wolf-Hound joins the werewolves',
-        hound_remains_villager: 'Wolf-Hound stays with the villagers'
+        hound_remains_villager: 'Wolf-Hound stays with the villagers',
+        knight_retaliates: 'The Knight strikes back against {target}'
       },
       errors: {
         child_model_required: 'The Wild Child must choose a role model before advancing.',
-        hound_alignment_required: 'The Wolf-Hound must choose alignment before advancing.'
+        hound_alignment_required: 'The Wolf-Hound must choose alignment before advancing.',
+        knight_target_required: 'You must mark the wounded werewolf for the Knight.'
       },
       controls: {
         previous: 'Previous',
@@ -848,9 +870,26 @@ const dictionaries = {
       },
       role_selector_label: 'Selector de roles',
       role_override_label: 'Ignorar límites',
+      tweak_mix_label: 'Ajustar mezcla de roles',
       role_limit: 'Máx. {count}',
       role_limit_unset: 'Sin límite',
-      role_override_active: 'Ignorando límites',
+      role_override_active: 'Permite saltarse los límites en la selección de roles.',
+      tweak_mix_hint: 'Permite ajustar manualmente las cantidades por grupo.',
+      thief_exclusions_label: 'Lista de exclusión',
+      thief_exclusions_hint: 'Selecciona los roles que no pueden salir en los sorteos.',
+      thief_exclusions_empty: 'No hay roles disponibles para excluir.',
+      thief_exclusions_disabled: 'Añade al Ladrón para configurar exclusiones.',
+      exclusions_toggle_label: 'Modificar lista de exclusiones',
+      exclusions_toggle_hint: 'Activa la edición de roles a excluir de los sorteos del Ladrón y del Comediante.',
+      exclusions_hint: 'Marca los roles o grupos que quieras excluir de las selecciones aleatorias.',
+      exclusions_group_village: 'Excluir “La Aldea”',
+      exclusions_group_newmoon: 'Excluir “Luna Nueva”',
+      exclusions_group_ambiguous: 'Excluir todos los Ambiguous',
+      exclusions_group_loners: 'Excluir todos los Loners',
+      exclusions_group_werewolves: 'Excluir Hombres Lobo',
+      exclusions_group_no_power_villagers: 'Excluir aldeanos sin poder',
+      exclusions_current: 'Exclusiones actuales:',
+      exclusions_none: 'No hay roles excluidos.',
       role_constraints: {
         ruleset: 'Reglas: {value}',
         mix: 'Mezcla sugerida para {value} jugadores'
@@ -906,6 +945,8 @@ const dictionaries = {
       back: 'Volver al panel',
       save: 'Guardar',
       saved: 'Guardado',
+      sheriff_include_label: 'Incluir Alguacil',
+      sheriff_include_hint: 'Esta opción determina si el cargo honorífico del Alguacil estará en juego o no.',
       loading: 'Cargando configuración…',
       errors: {
         missing_title: 'Escribe un título para la sesión.',
@@ -1065,6 +1106,7 @@ const dictionaries = {
         each_night: { title: 'Cada noche', subtitle: 'Orden estándar' },
         each_day: { title: 'Cada día', subtitle: 'Acciones diurnas' },
         hunter: { title: 'Cazador', subtitle: '' },
+        knight: { title: 'Caballero', subtitle: 'Fase de represalia' },
         sheriff: { title: 'Alguacil', subtitle: '' },
         end: { title: 'Fin', subtitle: '' },
         steps: {
@@ -1136,11 +1178,13 @@ const dictionaries = {
         child_model_chosen: 'El Niño Salvaje elige como modelo a {model}',
         child_turns_wolf: 'El Niño Salvaje se convierte en Hombre Lobo',
         hound_joined_wolves: 'El Perro Lobo se une a los Hombres Lobo',
-        hound_remains_villager: 'El Perro Lobo se queda con los aldeanos'
+        hound_remains_villager: 'El Perro Lobo se queda con los aldeanos',
+        knight_retaliates: 'El Caballero hiere a {target}'
       },
       errors: {
         child_model_required: 'El Niño Salvaje debe elegir modelo antes de avanzar.',
-        hound_alignment_required: 'El Perro Lobo debe escoger alineación antes de avanzar.'
+        hound_alignment_required: 'El Perro Lobo debe escoger alineación antes de avanzar.',
+        knight_target_required: 'Hay que marcar al hombre lobo herido por el Caballero.'
       },
       controls: {
         previous: 'Anterior',
@@ -1436,9 +1480,26 @@ const dictionaries = {
       },
       role_selector_label: 'Szerepek kiosztása',
       role_override_label: 'Korlátok feloldása',
+      tweak_mix_label: 'Szereparány finomhangolása',
       role_limit: 'Max. {count}',
       role_limit_unset: 'Nincs limit',
-      role_override_active: 'Feloldva',
+      role_override_active: 'Feloldja a szerepválasztási korlátokat.',
+      tweak_mix_hint: 'Engedélyezi a csoportlétszámok kézi állítását.',
+      thief_exclusions_label: 'Kizárási lista',
+      thief_exclusions_hint: 'Válaszd ki, mely szerepek nem jelenhetnek meg a sorsolásokban.',
+      thief_exclusions_empty: 'Nincs kizárható szerep.',
+      thief_exclusions_disabled: 'Add hozzá a Tolvajt, hogy kizárásokat állíts be.',
+      exclusions_toggle_label: 'Kizárási lista szerkesztése',
+      exclusions_toggle_hint: 'Kapcsold be a Tolvaj és az Actor sorsolásából kizárt szerepek szerkesztéséhez.',
+      exclusions_hint: 'Jelöld be, mely szerepeket vagy csoportokat szeretnéd kizárni a véletlen választásokból.',
+      exclusions_group_village: '„A falu” kizárása',
+      exclusions_group_newmoon: '„Újhold” kizárása',
+      exclusions_group_ambiguous: 'Összes átmeneti szerep kizárása',
+      exclusions_group_loners: 'Összes kívülálló kizárása',
+      exclusions_group_werewolves: 'Farkasok kizárása',
+      exclusions_group_no_power_villagers: 'Képesség nélküli falusiak kizárása',
+      exclusions_current: 'Aktív kizárások:',
+      exclusions_none: 'Nincsenek kizárt szerepek.',
       role_constraints: {
         ruleset: 'Szabálykészlet: {value}',
         mix: 'Ajánlott mix {value} játékoshoz'
@@ -1494,6 +1555,8 @@ const dictionaries = {
       back: 'Vissza a vezérlőpultra',
       save: 'Mentés',
       saved: 'Mentve!',
+      sheriff_include_label: 'Seriff szerep használata',
+      sheriff_include_hint: 'Beállítja, hogy a seriff tisztség játékban van-e.',
       loading: 'Konfiguráció betöltése…',
       errors: {
         missing_title: 'Add meg a játék címét.',
@@ -1653,6 +1716,7 @@ const dictionaries = {
         each_night: { title: 'Minden éjszaka', subtitle: 'Alap sorrend' },
         each_day: { title: 'Minden nap', subtitle: 'Nappali akciók' },
         hunter: { title: 'Vadász', subtitle: '' },
+        knight: { title: 'Lovag', subtitle: 'Bosszú fázis' },
         sheriff: { title: 'Seriff', subtitle: '' },
         end: { title: 'Vége', subtitle: '' },
         steps: {
@@ -1724,11 +1788,13 @@ const dictionaries = {
         child_model_chosen: 'A Vadgyerek példaként választja: {model}',
         child_turns_wolf: 'A Vadgyerek vérfarkassá változik',
         hound_joined_wolves: 'A Farkaskutya csatlakozik a vérfarkasokhoz',
-        hound_remains_villager: 'A Farkaskutya a falusiakhoz marad'
+        hound_remains_villager: 'A Farkaskutya a falusiakhoz marad',
+        knight_retaliates: 'A Lovag megsebesíti {target} célpontot'
       },
       errors: {
         child_model_required: 'A Vadgyereknek előbb példaképet kell választania.',
-        hound_alignment_required: 'A Farkaskutyának előbb választania kell oldalt.'
+        hound_alignment_required: 'A Farkaskutyának előbb választania kell oldalt.',
+        knight_target_required: 'Meg kell jelölni a Lovag által sebesített vérfarkast.'
       },
       controls: {
         previous: 'Előző',

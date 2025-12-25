@@ -6,9 +6,8 @@
   import Footbar from '../components/common/Footbar.svelte';
   import AlertPopup from '../components/ui/AlertPopup.svelte';
   import { locale as localeStore, t } from '../lib/i18n.js';
-  import {
-    APP_VIEWS
-  } from '../lib/navigation.js';
+  import { APP_VIEWS } from '../lib/navigation.js';
+  import { normalizeStatus } from '../lib/utils.js';
   import {
     resolveViewTarget,
     getViewerContext,
@@ -59,10 +58,11 @@ let alertTitle = '';
   $: deleteFailedMessage = $t('landing.history.delete_failed');
   $: viewForbiddenMessage = $t('landing.current.view_forbidden');
   $: viewerContext = getViewerContext(user);
-  $: currentStatus = current ? current.status : null;
+  $: currentStatus = normalizeStatus(current?.status);
   $: currentViewTarget = resolveViewTarget(currentStatus);
   $: currentOwnedByViewer = sessionOwnedByViewer(current, viewerContext);
-  $: canOpenCurrent = !!(current && currentViewTarget && currentOwnedByViewer);
+  $: currentShared = current?.status === 'shared';
+  $: canOpenCurrent = !!(current && currentViewTarget && (currentOwnedByViewer || currentShared));
 
   $: historyItems = (historyDocs ?? []).map((doc) => normalizeHistoryDoc(doc, user));
 
@@ -141,7 +141,7 @@ async function createAndGo() {
 
   function launchCurrentSession() {
     if (!current || !current.id) return;
-    if (!currentOwnedByViewer) {
+    if (!currentOwnedByViewer && !currentShared) {
       openAlert(viewForbiddenMessage, 'warning', $t('landing.current.heading'));
       return;
     }

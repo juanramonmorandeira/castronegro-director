@@ -44,7 +44,8 @@ export function roleImageSrc(category, role) {
   return `/roles/${category}/${file}.png`;
 }
 
-export function buildDistributionTokens(selection, assignments = {}, players = []) {
+export function buildDistributionTokens(selection, assignments = {}, players = [], options = {}) {
+  const includeSheriff = options.includeSheriff !== false;
   const assignmentBuckets = {};
   const seenPlayers = new Set();
   const cupidHeartPath = '/tokens/cupido-hearts.png';
@@ -59,6 +60,7 @@ export function buildDistributionTokens(selection, assignments = {}, players = [
   const judgeMazePath = '/tokens/judge-maze.png';
   const childLighthousePath = '/tokens/child-lighthouse.png';
   const houndChoicePath = '/tokens/hound-choice.png';
+  const knightSwordPath = '/tokens/knight-sword.png';
   const sheriffBadgePath = '/badge/sheriff.png';
   const villagersEliminationPath = '/tokens/villagers-guillotine.png';
   const foxSensesPath = '/tokens/fox-senses.png';
@@ -303,6 +305,20 @@ export function buildDistributionTokens(selection, assignments = {}, players = [
     });
   }
 
+  // Knight retaliation token (only used if killed by wolves).
+  const knightCount =
+    Number(selection?.villagers?.knight ?? selection?.villagers?.Knight ?? selection?.villagers?.['The Knight'] ?? 0) ||
+    0;
+  if (knightCount > 0) {
+    tokens.push({
+      id: 'special-knight-sword-0',
+      role: 'Knight Sword',
+      category: 'special',
+      image: knightSwordPath,
+      player: null
+    });
+  }
+
   // Hunter bullet: one shot available per Hunter, usable when the Hunter dies.
   const hunterCount =
     Number(
@@ -323,14 +339,16 @@ export function buildDistributionTokens(selection, assignments = {}, players = [
     }
   }
 
-  // Sheriff badge is always available for the preparation phase.
-  tokens.push({
-    id: 'special-sheriff-badge-0',
-    role: 'Sheriff Badge',
-    category: 'special',
-    image: sheriffBadgePath,
-    player: null
-  });
+  // Sheriff badge is always available for the preparation phase (unless disabled).
+  if (includeSheriff) {
+    tokens.push({
+      id: 'special-sheriff-badge-0',
+      role: 'Sheriff Badge',
+      category: 'special',
+      image: sheriffBadgePath,
+      player: null
+    });
+  }
 
   // Villagers elimination marker for daytime resolutions.
   tokens.push({

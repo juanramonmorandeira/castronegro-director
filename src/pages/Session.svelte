@@ -31,6 +31,7 @@
   const PHASE_KEY_EACH_NIGHT = 'session.phases.each_night.title';
   const PHASE_KEY_EACH_DAY = 'session.phases.each_day.title';
   const PHASE_KEY_HUNTER = 'session.phases.hunter.title';
+  const PHASE_KEY_KNIGHT = 'session.phases.knight.title';
   const PHASE_KEY_SHERIFF = 'session.phases.sheriff.title';
   const PHASE_KEY_END = 'session.phases.end.title';
   const BASE_PHASE_SEQUENCE = [
@@ -88,6 +89,7 @@
   let previewToken = null;
   let pendingHunterShot = false;
   let pendingSheriffSuccession = false;
+  let includeSheriff = true;
   let actorModalOpen = false;
   let actorSelection = null;
   let actorTempSpecialIds = [];
@@ -112,6 +114,10 @@
   let houndTokenId = null;
   let houndChoice = null; // 'wolves' | 'village'
   let houndSelection = null;
+  let knightPending = false;
+  let knightTokenId = null;
+  let woundedQueue = []; // [{ id, dueNight, resolved?: boolean }]
+  let knightTargetId = null;
   $: sessionKey = sessionId ?? 'default';
   let lastProtectedTargets = [];
   let activeSpecialIds = [];
@@ -159,6 +165,9 @@
   $: houndTokenId = characterTokens.find((token) => normalizeRoleSlug(slugifyRole(token.role)) === 'hound')?.id ?? null;
   $: houndAlive = houndTokenId ? !deadSet.has(houndTokenId) : false;
   $: houndSpecialId = specialTokens.find((token) => slugifyRole(token.role) === 'hound_choice')?.id ?? null;
+  $: knightTokenId = characterTokens.find((token) => normalizeRoleSlug(slugifyRole(token.role)) === 'knight')?.id ?? null;
+  $: knightAlive = knightTokenId ? !deadSet.has(knightTokenId) : false;
+  const woundedIdsSet = () => new Set(woundedQueue.map((entry) => entry.id));
   let elderResilience = new Set();
   const currentLocale = typeof navigator !== 'undefined' ? navigator.language : 'en';
 
@@ -194,6 +203,8 @@
         const remoteState = session?.actor_state ?? {};
         const remoteFox = session?.fox_state ?? {};
         const available = sanitizeActorRoles(settings.actor_roles ?? actorRoles);
+        includeSheriff = settings.include_sheriff ?? true;
+        sheriffAvailable = includeSheriff;
         actorState = {
           available,
           consumed: Array.isArray(remoteState.consumed) ? remoteState.consumed.map((item) => slugifyRole(item)).filter(Boolean) : [],
@@ -298,8 +309,12 @@
     return set;
   })();
 
-  $: specialTokens = tokens?.filter((token) => token.category === 'special') ?? [];
-  $: characterTokens = tokens?.filter((token) => token.category !== 'special') ?? [];
+  $: effectiveTokens =
+    includeSheriff || !Array.isArray(tokens)
+      ? tokens
+      : tokens.filter((token) => slugifyRole(token.role) !== 'sheriff_badge');
+  $: specialTokens = effectiveTokens?.filter((token) => token.category === 'special') ?? [];
+  $: characterTokens = effectiveTokens?.filter((token) => token.category !== 'special') ?? [];
   $: actorToken =
     characterTokens.find((token) => normalizeRoleSlug(slugifyRole(token.role)) === 'actor') ?? null;
   $: actorBaseTokenId = actorToken?.id ?? actorBaseTokenId;
@@ -451,6 +466,7 @@
   $: phases = phaseBlocks.map((phase) => {
     const steps = phase.steps.filter((step) => {
       if (step.each && !isEvenEachNight()) return false;
+      if (step.key === 'sheriff_election' && !includeSheriff) return false;
       if (!step.requires || step.requires.length === 0) return true;
       if (!hasAnyRole(step.requires)) return false;
       if (step.key === 'sisters_each' && sistersAlive().length < 2) return false;
@@ -904,7 +920,7 @@
     }
     const sheriffToken = specialTokens.find((token) => slugifyRole(token.role) === 'sheriff_badge');
     const sheriffTokenId = sheriffToken?.id;
-    if (pendingSheriffSuccession && !sheriffHolderId && !sheriffTokenId) {
+    if (includeSheriff && pendingSheriffSuccession && !sheriffHolderId && !sheriffTokenId) {
       pendingSheriffSuccession = false;
     }
     const interphaseQueue = [...(phaseState.pendingInterphases ?? [])];
@@ -917,15 +933,20 @@
     // Identify new interphases to enqueue
     const newInterphases = [];
     if (pendingHunterShot && !interphaseQueue.includes(PHASE_KEY_HUNTER)) newInterphases.push(PHASE_KEY_HUNTER);
-    if (pendingSheriffSuccession && !interphaseQueue.includes(PHASE_KEY_SHERIFF)) newInterphases.push(PHASE_KEY_SHERIFF);
+    if (knightPending && !interphaseQueue.includes(PHASE_KEY_KNIGHT)) newInterphases.push(PHASE_KEY_KNIGHT);
+    if (includeSheriff && pendingSheriffSuccession && !interphaseQueue.includes(PHASE_KEY_SHERIFF)) newInterphases.push(PHASE_KEY_SHERIFF);
     if (pendingJudgeExtraDay && !interphaseQueue.includes(PHASE_KEY_EACH_DAY)) newInterphases.push(PHASE_KEY_EACH_DAY);
     const mergedQueue = [...interphaseQueue, ...newInterphases].filter(Boolean);
     if (newInterphases.includes(PHASE_KEY_EACH_DAY)) {
       pendingJudgeExtraDay = false;
     }
+    if (newInterphases.includes(PHASE_KEY_KNIGHT)) {
+      knightPending = false;
+    }
     // enforce Hunter -> Sheriff order
     const orderedQueue = [];
     if (mergedQueue.includes(PHASE_KEY_HUNTER)) orderedQueue.push(PHASE_KEY_HUNTER);
+    if (mergedQueue.includes(PHASE_KEY_KNIGHT)) orderedQueue.push(PHASE_KEY_KNIGHT);
     if (mergedQueue.includes(PHASE_KEY_SHERIFF)) orderedQueue.push(PHASE_KEY_SHERIFF);
     if (mergedQueue.includes(PHASE_KEY_EACH_DAY)) orderedQueue.push(PHASE_KEY_EACH_DAY);
 
@@ -940,7 +961,7 @@
     };
 
     // If resolving an interphase, drop it and move to next interphase or base phase
-    if (phaseKeyNow === PHASE_KEY_HUNTER || phaseKeyNow === PHASE_KEY_SHERIFF) {
+    if (phaseKeyNow === PHASE_KEY_HUNTER || phaseKeyNow === PHASE_KEY_KNIGHT || phaseKeyNow === PHASE_KEY_SHERIFF) {
       const remainingQueue = orderedQueue.filter((key) => key !== phaseKeyNow);
       if (remainingQueue.length) {
         phaseState = { ...phaseState, previous: phaseKeyNow, current: remainingQueue[0], next: null, pendingInterphases: remainingQueue.slice(1) };
@@ -1039,6 +1060,9 @@
     houndChoice = null;
     houndSelection = null;
     houndModalOpen = false;
+    knightPending = false;
+    knightTargetId = null;
+    woundedQueue = [];
     tokens = tokens.map((token) => {
       if (token.id === actorBaseTokenId && actorToken) {
         return actorToken;
@@ -1145,7 +1169,8 @@
     lover: '/markers/lovers-heart.png',
     sheriff: '/markers/sheriff-star.png',
     seer: '/markers/seer-eye.png',
-    model: '/markers/model-lantern.png'
+    model: '/markers/model-lantern.png',
+    injured: '/markers/injured-wound.png'
   };
   const houndOptions = [
     {
@@ -1179,6 +1204,9 @@
     }
     if (childModelTarget && token.id === childModelTarget) {
       markers.push({ type: 'model', icon: markerAssets.model, title: 'Model' });
+    }
+    if (woundedQueue.some((entry) => entry.id === token.id)) {
+      markers.push({ type: 'injured', icon: markerAssets.injured, title: 'Wounded by Knight' });
     }
     return markers;
   };
@@ -1217,6 +1245,8 @@
         return 'witch';
       case 'hunter_bullet':
         return 'hunter';
+      case 'knight_sword':
+        return 'knight';
       case 'werewolves_claws':
         return 'werewolf';
       case 'judge_maze':
@@ -1227,6 +1257,8 @@
         return 'child';
       case 'fox_senses':
         return 'fox';
+      case 'knight_sword':
+        return 'knight';
       case 'cursed_wolf_father':
       case 'father_bite':
         return 'cursed_wolf_father';
@@ -1260,6 +1292,9 @@
     const ownerSlug = ownerSlugForSpecial(slug);
     if (!ownerSlug) return true; // ficha no vinculada a rol concreto
     const canonical = normalizeRoleSlug(ownerSlug);
+    if (canonical === 'sheriff') {
+      return includeSheriff && sheriffAvailable;
+    }
     if (canonical === 'werewolf') {
       return (
         aliveRoleSet.has('werewolf') ||
@@ -1275,6 +1310,9 @@
         if (!isHunter) return false;
         return deadSet.has(t.id) || pendingDeaths.includes(t.id);
       });
+    }
+    if (canonical === 'knight') {
+      return !knightPending && !aliveRoleSet.has('knight') ? false : true;
     }
     return aliveRoleSet.has(canonical);
   };
@@ -1314,6 +1352,11 @@
       if (!houndAlive) return true;
       if (!isFirstNightPhase) return true;
       if (consumedSpecialIds.includes(token.id)) return true;
+    }
+    if (slug === 'knight_sword') {
+      if (!knightPending) return true;
+      if (consumedSpecialIds.includes(token.id)) return true;
+      if (normalizedPhaseKey !== PHASE_KEY_KNIGHT) return true;
     }
     if (slug === 'white_claw') {
       if (!isNightPhase) return true;
@@ -1384,8 +1427,10 @@
       if (!specialOwnerAlive(token)) return false;
       if (slug === 'white_claw' && !whiteClawActive) return false;
       if (phaseKeyNow === PHASE_KEY_HUNTER) return slug === 'hunter_bullet';
-      if (phaseKeyNow === PHASE_KEY_SHERIFF) return slug === 'sheriff_badge';
+      if (phaseKeyNow === PHASE_KEY_KNIGHT) return slug === 'knight_sword';
+      if (phaseKeyNow === PHASE_KEY_SHERIFF) return includeSheriff && slug === 'sheriff_badge';
       if (phaseKeyNow === PHASE_KEY_END) return false;
+      if (!includeSheriff && slug === 'sheriff_badge') return false;
       if (pendingSheriffSuccession && slug === 'sheriff_badge') return true;
       if (isPreparationKey) return slug === 'sheriff_badge';
       if (isNightKey) return !['sheriff_badge', 'villagers_guillotine', 'hunter_bullet'].includes(slug);
@@ -1437,9 +1482,8 @@
     const defenderTargets = uniqueList(defenderTargetsRaw);
     const healTargets = uniqueList((specialTargets.witch_heal ?? []).map((entry) => entry.targetId));
     const venomTargets = uniqueList((specialTargets.witch_venom ?? []).map((entry) => entry.targetId));
-    const wolfTargets = uniqueList(
-      (specialTargets.werewolves_claws ?? []).map((entry) => entry.targetId)
-    ).filter((id) => !isWerewolfAligned(id)); // los lobos no pueden eliminar a roles alineados con ellos
+    const wolfTargetsRaw = uniqueList((specialTargets.werewolves_claws ?? []).map((entry) => entry.targetId));
+    const wolfTargets = wolfTargetsRaw.filter((id) => !isWerewolfAligned(id)); // los lobos no pueden eliminar a roles alineados con ellos
     const eliminationTargets = uniqueList((specialTargets.villagers_guillotine ?? []).map((entry) => entry.targetId));
     const hunterShotEntries = specialTargets.hunter_bullet ?? [];
     const hunterShotTargets = uniqueList(hunterShotEntries.map((entry) => entry.targetId));
@@ -1447,6 +1491,8 @@
     const childModelTargetResolved = childModelEntries[0]?.targetId ?? null;
     const houndChoiceEntries = specialTargets.hound_choice ?? [];
     const houndAnswered = houndChoiceEntries.length > 0 || houndChoice;
+    const knightSwordEntries = specialTargets.knight_sword ?? [];
+    const knightTargetResolved = knightSwordEntries[0]?.targetId ?? null;
     const infectionTargetsCurrent = uniqueList(
       [...(specialTargets.cursed_wolf_father ?? []), ...(specialTargets.father_bite ?? [])].map((entry) => entry.targetId)
     );
@@ -1460,6 +1506,29 @@
     ) {
       showToast({
         message: $t?.('session.errors.child_model_required') ?? 'The Wild Child must choose a role model before advancing.',
+        variant: 'error'
+      });
+      return false;
+    }
+    if (
+      phaseKeyNow === PHASE_KEY_KNIGHT &&
+      knightPending &&
+      !(specialTargets.knight_sword ?? []).length
+    ) {
+      showToast({
+        message: $t?.('session.errors.knight_target_required') ?? 'You must mark the wounded werewolf for the Knight.',
+        variant: 'error'
+      });
+      return false;
+    }
+    if (
+      phaseKeyNow === PHASE_KEY_KNIGHT &&
+      knightPending &&
+      knightTargetResolved &&
+      !isWerewolfAligned(knightTargetResolved)
+    ) {
+      showToast({
+        message: $t?.('session.errors.knight_target_required') ?? 'You must mark the wounded werewolf for the Knight.',
         variant: 'error'
       });
       return false;
@@ -1521,6 +1590,7 @@
     ];
     const usedChildIds = (specialTargets.child_lighthouse ?? []).map((entry) => entry.tokenId);
     const usedHoundIds = (specialTargets.hound_choice ?? []).map((entry) => entry.tokenId);
+    const usedKnightIds = (specialTargets.knight_sword ?? []).map((entry) => entry.tokenId);
 
     const loversSet = new Set(loversLinks.map((pair) => pair.join('|')));
     if (cupidTargets.length >= 2) {
@@ -1540,10 +1610,32 @@
     if (houndChoiceEntries.length && !houndChoice) {
       houndChoice = houndChoiceEntries[0]?.targetId === 'wolves' ? 'wolves' : 'village';
     }
+    const woundedSet = new Set(woundedQueue.map((entry) => entry.id));
+    if (phaseKeyNow === PHASE_KEY_KNIGHT && knightTargetResolved && isWerewolfAligned(knightTargetResolved)) {
+      knightTargetId = knightTargetResolved;
+      const due = (nightNumber || 0) + 1;
+      woundedQueue = [...woundedQueue, { id: knightTargetResolved, dueNight: due }];
+      const stamp = new Date().toLocaleTimeString();
+      const woundedName = nameForToken(knightTargetResolved);
+      logEntries = [
+        { text: ($t?.('session.logbook.knight_retaliates', { target: woundedName }) ?? `Knight wounds ${woundedName}`), stamp },
+        ...logEntries
+      ];
+    }
 
     const deaths = new Set([...wolfTargets, ...venomTargets, ...eliminationTargets]);
     hunterShotTargets.forEach((id) => deaths.add(id));
     healTargets.forEach((id) => deaths.delete(id));
+    const woundDueNow = isNightKey
+      ? woundedQueue.filter((entry) => entry.dueNight && entry.dueNight <= (nightNumber || 0)).map((entry) => entry.id)
+      : [];
+    woundDueNow.forEach((id) => deaths.add(id));
+    const knightKilledByWolves =
+      knightTokenId && wolfTargetsRaw.includes(knightTokenId) && deaths.has(knightTokenId) && !infectionTargetsUnique.includes(knightTokenId);
+    if (knightKilledByWolves) {
+      knightPending = true;
+      knightTargetId = null;
+    }
     // Defender: solo protege de garras y solo si no fue protegido la noche anterior.
     const effectiveDefenders = defenderTargets.filter((id) => !lastProtectedTargets.includes(id));
     const defendedWolfTargets = wolfTargets.filter((id) => effectiveDefenders.includes(id));
@@ -1599,6 +1691,11 @@
       deaths.add(id);
       infectionSet.delete(id);
     });
+
+    // Wounded queue: mark resolved entries when targets fall.
+    woundedQueue = woundedQueue.map((entry) =>
+      deaths.has(entry.id) || deadSet.has(entry.id) ? { ...entry, resolved: true, dueNight: null } : entry
+    );
 
     deadCharacters.forEach((id) => deaths.add(id)); // keep previous deaths
 
@@ -1790,7 +1887,8 @@
       ...usedFatherIds,
       ...usedHunterBulletIds,
       ...usedChildIds,
-      ...usedHoundIds
+      ...usedHoundIds,
+      ...usedKnightIds
     ]);
     const deadHunters = characters
       .filter((token) => slugifyRole(token.role) === 'hunter')

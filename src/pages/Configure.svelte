@@ -99,6 +99,17 @@
     return Object.values(selection?.[category] ?? {}).reduce((sum, value) => sum + (Number(value) || 0), 0);
   }
 
+  const normalizeMixOverride = (mix) => {
+    if (!mix || typeof mix !== 'object') return null;
+    const keys = ['villagers', 'ambiguous', 'werewolves', 'loners'];
+    const normalized = {};
+    keys.forEach((key) => {
+      const value = Number(mix?.[key]);
+      normalized[key] = Number.isFinite(value) ? value : 0;
+    });
+    return normalized;
+  };
+
   function buildAutoSelection() {
     if (!playerBreakdown || !rulesetRoles) return selectedRoles;
     const next = createEmptyRoleSelection();
@@ -125,11 +136,15 @@
     return next;
   }
 
-  let loading = true;
-  let saving = false;
-  let forceStartHintVisible = false;
-  let overrideRoleLimits = false;
-  let activeModal = null;
+let loading = true;
+let saving = false;
+let forceStartHintVisible = false;
+let overrideRoleLimits = false;
+let includeSheriff = true;
+let tweakRoleMix = false;
+let roleMixOverride = null;
+let basePlayerBreakdown = null;
+let activeModal = null;
   let connectedCount = 0;
   let readyCount = 0;
   let sessionStatus = 'draft';
@@ -142,7 +157,8 @@
     storyteller: metadata?.defaults?.storyteller ?? availableStorytellers[0],
     language: metadata?.defaults?.language ?? defaultLanguage,
     assistEnabled: metadata?.defaults?.assist_enabled ?? false,
-    assistTasks: []
+    assistTasks: [],
+    include_sheriff: true
   };
 
   if (form.storyteller === 'AI' || form.storyteller === 'human-AI') {
@@ -151,11 +167,12 @@
     form.assistEnabled = false;
   }
 
-  let selectedRoles = createEmptyRoleSelection();
-  let rolesCustomized = false;
-  let selectedActorRoles = [];
-  let selectedThiefRoles = [];
-  let autoSeedKey = '';
+let selectedRoles = createEmptyRoleSelection();
+let rolesCustomized = false;
+let selectedActorRoles = [];
+let selectedThiefRoles = [];
+let selectedExclusionList = [];
+let autoSeedKey = '';
   let alertOpen = false;
   let alertMessage = '';
   let alertVariant = 'info';
@@ -244,7 +261,8 @@
   $: showLanguageSelector = form.storyteller !== 'human';
   $: showAssistControls = form.storyteller === 'human-AI';
 
-  $: playerBreakdown = balanceTable?.[String(form.players_expected)] ?? null;
+  $: basePlayerBreakdown = balanceTable?.[String(form.players_expected)] ?? null;
+  $: playerBreakdown = tweakRoleMix && roleMixOverride ? roleMixOverride : basePlayerBreakdown;
   $: rulesetResources = resourcesTable?.[form.rulesets] ?? null;
   $: rulesetRoles = rulesetResources?.roles ?? {};
   $: roleLimits = ROLE_BREAKDOWN_ORDER.reduce((acc, role) => {
@@ -300,7 +318,9 @@
     connectedCount >= expectedPlayersCount &&
     readyCount >= expectedPlayersCount;
   $: startActionDisabled = sessionStatus !== 'paused' && !allPlayersReady;
-  $: distributionTokens = buildDistributionTokens(selectedRoles, playerAssignments, playerList);
+  $: distributionTokens = buildDistributionTokens(selectedRoles, playerAssignments, playerList, {
+    includeSheriff: form.include_sheriff !== false
+  });
   $: matchPlayers = [...playerList, ...testPlayers];
   $: if (sessionId && !loading) {
     dispatch('session-stats', {
@@ -343,14 +363,28 @@
           assistEnabled: !!settings.assist_enabled,
           assistTasks: Array.isArray(settings.assist_tasks)
             ? settings.assist_tasks.filter((task) => assistTaskOptions.includes(task))
-            : []
+            : [],
+          include_sheriff: settings.include_sheriff ?? true
         };
+        overrideRoleLimits = settings.override_limits ?? false;
+        includeSheriff = form.include_sheriff;
+        tweakRoleMix = settings.tweak_role_mix ?? false;
+        roleMixOverride = normalizeMixOverride(settings.role_mix_override);
         if (settings.roles) {
           selectedRoles = normalizeRoleSelection(settings.roles);
           rolesCustomized = true;
         }
         if (Array.isArray(settings.actor_roles)) {
           selectedActorRoles = settings.actor_roles.slice(0, 3);
+        }
+        if (Array.isArray(settings.thief_roles)) {
+          selectedThiefRoles = settings.thief_roles.slice(0, 2);
+        }
+        if (Array.isArray(settings.thief_exclusions)) {
+          selectedExclusionList = settings.thief_exclusions;
+        }
+        if (Array.isArray(settings.exclusion_list)) {
+          selectedExclusionList = settings.exclusion_list;
         }
         if (form.storyteller === 'human') {
           form.assistEnabled = false;
@@ -407,6 +441,8 @@
         'settings.assist_tasks': assistEnabled ? form.assistTasks : [],
         'settings.roles': selectedRoles,
         'settings.actor_roles': selectedActorRoles,
+        'settings.include_sheriff': includeSheriff,
+        'settings.override_limits': overrideRoleLimits,
         status: nextStatus
       };
 
@@ -511,7 +547,8 @@
       'settings.language': languageValue,
       'settings.assist_enabled': assistEnabled,
       'settings.assist_tasks': assistEnabled ? form.assistTasks : [],
-      'settings.actor_roles': selectedActorRoles
+      'settings.actor_roles': selectedActorRoles,
+      'settings.include_sheriff': includeSheriff
     };
     try {
       await updateSession(sessionId, payload);
@@ -529,14 +566,29 @@
       rolesCustomized = true;
       autoSeedKey = `${form.rulesets}|${form.players_expected}`;
     }
+    if (typeof detail.tweakRoleMix === 'boolean') {
+      tweakRoleMix = detail.tweakRoleMix;
+    }
+    if (detail.roleMixOverride) {
+      roleMixOverride = normalizeMixOverride(detail.roleMixOverride);
+    } else if (!tweakRoleMix) {
+      roleMixOverride = null;
+    }
     if (Array.isArray(detail.actorRoles)) {
       selectedActorRoles = detail.actorRoles.slice(0, 3);
     }
     if (Array.isArray(detail.thiefRoles)) {
       selectedThiefRoles = detail.thiefRoles;
     }
+    if (Array.isArray(detail.exclusionList)) {
+      selectedExclusionList = detail.exclusionList;
+    }
     if (typeof detail.override === 'boolean') {
       overrideRoleLimits = detail.override;
+    }
+    if (typeof detail.includeSheriff === 'boolean') {
+      includeSheriff = detail.includeSheriff;
+      form.include_sheriff = includeSheriff;
     }
     if (!sessionId) {
       showToast({ message: $t('configure.errors.missing_session'), variant: 'error' });
@@ -546,7 +598,12 @@
       await updateSession(sessionId, {
         'settings.roles': selectedRoles,
         'settings.actor_roles': selectedActorRoles,
-        'settings.override_limits': overrideRoleLimits
+        'settings.thief_roles': selectedThiefRoles,
+        'settings.exclusion_list': selectedExclusionList,
+        'settings.override_limits': overrideRoleLimits,
+        'settings.include_sheriff': includeSheriff,
+        'settings.tweak_role_mix': tweakRoleMix,
+        'settings.role_mix_override': roleMixOverride
       });
       showToast({ message: $t('configure.saved'), variant: 'success' });
     } catch (error) {
@@ -774,16 +831,20 @@
     selected={selectedRoles}
     actorRoles={selectedActorRoles}
     thiefRoles={selectedThiefRoles}
+    exclusionList={selectedExclusionList}
     limits={roleLimits}
     resourceLimits={resourceLimits}
-  override={overrideRoleLimits}
-  players={form.players_expected}
-  mix={playerBreakdown}
-  totalLimit={clampPlayers(form.players_expected)}
-  duplicates={[...DUPLICATE_ROLE_NAMES]}
-  on:save={handleSelectionSave}
-  on:cancel={closeModal}
-/>
+    override={overrideRoleLimits}
+    includeSheriff={includeSheriff}
+    players={form.players_expected}
+    mix={playerBreakdown}
+    totalLimit={clampPlayers(form.players_expected)}
+    duplicates={[...DUPLICATE_ROLE_NAMES]}
+    tweakRoleMix={tweakRoleMix}
+    roleMixOverride={roleMixOverride}
+    on:save={handleSelectionSave}
+    on:cancel={closeModal}
+  />
 
 <MatchModal
   open={activeModal === 'match'}

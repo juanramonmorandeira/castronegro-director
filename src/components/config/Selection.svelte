@@ -3,6 +3,7 @@
   import { t } from '../../lib/i18n.js';
   import Modal from '../ui/Modal.svelte';
   import Button from '../ui/Button.svelte';
+  import roleDefinitions from '../../../reference-data/datasets/roles.json';
 
   export let open = false;
   export let categories = [];
@@ -17,12 +18,26 @@
   export let mix = null;
   export let actorRoles = [];
   export let thiefRoles = [];
+  export let exclusionList = [];
+  export let includeSheriff = true;
+  export let tweakRoleMix = false;
+  export let roleMixOverride = null;
 
   const dispatch = createEventDispatcher();
 
   const slugify = (value) => (value ?? '').toLowerCase().replace(/\s+/g, '_');
   const createEmptySelection = () =>
     (categories ?? []).reduce((acc, category) => ({ ...acc, [category]: {} }), {});
+
+  const MIX_KEYS = ['villagers', 'ambiguous', 'werewolves', 'loners'];
+  const cloneMix = (source) => {
+    const base = {};
+    MIX_KEYS.forEach((key) => {
+      const value = source?.[key];
+      base[key] = Number.isFinite(Number(value)) ? Number(value) : 0;
+    });
+    return base;
+  };
 
   const cloneSelection = (source) => {
     const base = createEmptySelection();
@@ -103,23 +118,61 @@
   let wasOpen = false;
   let actorChoices = ['', '', ''];
   let thiefChoices = ['', ''];
+  let draftExclusionList = [];
   let actorActive = false;
   let pickerOpen = false;
   let pickerType = null; // 'actor' | 'thief'
   let pickerIndex = 0;
+  let draftIncludeSheriff = true;
+  let showSheriffHint = false;
+  let showOverrideHint = false;
+  let draftTweakRoleMix = false;
+  let showTweakHint = false;
+  let draftMix = null;
+  let showExclusionEditor = true;
+  let showExclusionHint = false;
 
   const duplicateSet = new Set((duplicates ?? []).map((entry) => slugify(entry)));
   const actorSlots = [0, 1, 2];
   const thiefSlots = [0, 1];
+  const exclusionSet = () => new Set((draftExclusionList ?? []).map((entry) => slugify(entry)));
+  const isExcluded = (role) => exclusionSet().has(slugify(role));
 
-  $: if (open && !wasOpen) {
+  const toggleExclusion = (role, checked) => {
+    const current = new Set(draftExclusionList ?? []);
+    const slug = slugify(role);
+    if (checked) current.add(slug);
+    else current.delete(slug);
+    draftExclusionList = Array.from(current);
+  };
+
+  const toggleGroupExclusion = (roles = [], checked) => {
+    const current = new Set(draftExclusionList ?? []);
+    roles.forEach((role) => {
+      const slug = slugify(role);
+      if (checked) current.add(slug);
+      else current.delete(slug);
+    });
+    draftExclusionList = Array.from(current);
+  };
+
+$: if (open && !wasOpen) {
     wasOpen = true;
     draftOverride = override;
     draftSelections = cloneSelection(selected);
+    draftIncludeSheriff = includeSheriff !== false;
+    showSheriffHint = false;
+    showOverrideHint = false;
+    draftTweakRoleMix = !!tweakRoleMix;
+    showTweakHint = false;
+    draftMix = cloneMix(roleMixOverride ?? mix ?? {});
     actorChoices = Array.isArray(actorRoles) ? [...actorRoles].slice(0, 3) : ['', '', ''];
     while (actorChoices.length < 3) actorChoices.push('');
     thiefChoices = Array.isArray(thiefRoles) ? [...thiefRoles].slice(0, 2) : ['', ''];
     while (thiefChoices.length < 2) thiefChoices.push('');
+    draftExclusionList = Array.isArray(exclusionList)
+      ? exclusionList.map((entry) => slugify(entry)).filter(Boolean)
+      : [];
   } else if (!open && wasOpen) {
     wasOpen = false;
   }
@@ -248,6 +301,32 @@ $: console.debug('[selection] actorActive', actorActive, {
     return acc;
   }, {});
 
+$: mixTotal = MIX_KEYS.reduce((sum, key) => sum + (Number(draftMix?.[key]) || 0), 0);
+$: if (draftTweakRoleMix && (!draftMix || MIX_KEYS.every((key) => draftMix?.[key] == null))) {
+    draftMix = cloneMix(roleMixOverride ?? mix ?? {});
+  }
+
+  const mixLimit = () => {
+    const cap = playersLimit();
+    return cap ?? null;
+  };
+
+  const setMixValue = (key, value) => {
+    const cap = mixLimit();
+    const current = Number(draftMix?.[key]) || 0;
+    let desired = Math.max(0, Math.floor(Number(value) || 0));
+    if (cap != null) {
+      const others = mixTotal - current;
+      const maxAllowed = Math.max(0, cap - others);
+      desired = Math.min(desired, maxAllowed);
+    }
+    draftMix = { ...(draftMix ?? {}), [key]: desired };
+  };
+
+  const adjustMix = (key, delta) => {
+    const current = Number(draftMix?.[key]) || 0;
+    setMixValue(key, current + delta);
+  };
   const villagerRoles = () => categoryRoles('villagers');
 
   $: availableVillagers = villagerRoles().filter((role) => {
@@ -265,27 +344,36 @@ $: console.debug('[selection] actorActive', actorActive, {
 
   const allRoleCategory = (() => {
     const map = new Map();
-    Object.entries(roles ?? {}).forEach(([category, list]) => {
-      (list ?? []).forEach((role) => {
-        map.set(slugify(role), category);
-      });
+    Object.entries(roleDefinitions ?? {}).forEach(([role, data]) => {
+      if (!role || typeof data !== 'object') return;
+      if (role === 'defaults') return;
+      const category = data?.category ?? 'villagers';
+      map.set(slugify(role), category);
     });
     return map;
   })();
 
-  const availableThiefRoles = () => {
-    const pool = [];
-    Object.entries(roles ?? {}).forEach(([category, list]) => {
-      (list ?? []).forEach((role) => {
-        const slug = slugify(role);
-        const alreadySelected = (draftSelections?.[category]?.[role] ?? 0) > 0;
-        if (alreadySelected) return;
-        if (thiefSelectedSlugs.has(slug)) return;
-        pool.push(role);
-      });
-    });
-    return pool;
-  };
+$: allRolesList = (() => {
+  const list = [];
+  Object.entries(roleDefinitions ?? {}).forEach(([role, data]) => {
+    if (!role || role === 'defaults') return;
+    if (typeof data !== 'object') return;
+    list.push(role);
+  });
+  return list;
+})();
+
+$: rolesByCategory = (() => {
+  const bucket = { villagers: [], ambiguous: [], loners: [], werewolves: [] };
+  Object.entries(roleDefinitions ?? {}).forEach(([role, data]) => {
+    if (!role || role === 'defaults') return;
+    const cat = data?.category ?? 'villagers';
+    if (bucket[cat]) bucket[cat].push(role);
+  });
+  return bucket;
+})();
+
+$: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
 
   function openPicker(type, index) {
     pickerType = type;
@@ -318,7 +406,9 @@ $: console.debug('[selection] actorActive', actorActive, {
   }
 
   function autoFillThief() {
-    const pool = availableThiefRoles();
+    const pool = availableThiefRoles().filter(
+      (role) => !draftExclusionList.map((entry) => slugify(entry)).includes(slugify(role))
+    );
     if (!pool.length) return;
     const shuffled = [...pool].sort(() => Math.random() - 0.5);
     thiefChoices = shuffled.slice(0, 2);
@@ -350,8 +440,12 @@ $: console.debug('[selection] actorActive', actorActive, {
     dispatch('save', {
       selections: draftSelections,
       override: draftOverride,
+      includeSheriff: draftIncludeSheriff,
+      tweakRoleMix: draftTweakRoleMix,
+      roleMixOverride: draftTweakRoleMix ? draftMix : null,
       actorRoles: actorPayload,
-      thiefRoles: thiefPayload
+      thiefRoles: thiefPayload,
+      exclusionList: draftExclusionList.filter(Boolean)
     });
   }
 
@@ -369,27 +463,220 @@ $: console.debug('[selection] actorActive', actorActive, {
 >
   <div class="selection-body">
     <div class="override-banner">
-      <label class="override-toggle">
-        <input type="checkbox" bind:checked={draftOverride} />
-        {$t('configure.role_override_label')}
-      </label>
-      <p class="override-hint">{$t('configure.role_override_active')}</p>
+      <div class="toggle-stack">
+        <label class="override-toggle">
+          <input type="checkbox" bind:checked={draftOverride} />
+          {$t('configure.role_override_label')}
+        </label>
+        <button
+          class="info-pill"
+          type="button"
+          aria-label={$t('configure.role_override_active')}
+          title={$t('configure.role_override_active')}
+          aria-pressed={showOverrideHint}
+          aria-expanded={showOverrideHint}
+          on:click={() => (showOverrideHint = !showOverrideHint)}
+        >
+          i
+        </button>
+        {#if showOverrideHint}
+          <p class="info-popover">{$t('configure.role_override_active')}</p>
+        {/if}
+      </div>
+      <div class="toggle-stack">
+        <label class="override-toggle">
+          <input type="checkbox" bind:checked={draftTweakRoleMix} />
+          {$t('configure.tweak_mix_label')}
+        </label>
+        <button
+          class="info-pill"
+          type="button"
+          aria-label={$t('configure.tweak_mix_hint')}
+          title={$t('configure.tweak_mix_hint')}
+          aria-pressed={showTweakHint}
+          aria-expanded={showTweakHint}
+          on:click={() => (showTweakHint = !showTweakHint)}
+        >
+          i
+        </button>
+        {#if showTweakHint}
+          <p class="info-popover">{$t('configure.tweak_mix_hint')}</p>
+        {/if}
+      </div>
+      <div class="toggle-stack">
+        <label class="override-toggle">
+          <input type="checkbox" bind:checked={showExclusionEditor} />
+          {$t('configure.exclusions_toggle_label')}
+        </label>
+        <button
+          class="info-pill"
+          type="button"
+          aria-label={$t('configure.exclusions_toggle_hint')}
+          title={$t('configure.exclusions_toggle_hint')}
+          aria-pressed={showExclusionHint}
+          aria-expanded={showExclusionHint}
+          on:click={() => (showExclusionHint = !showExclusionHint)}
+        >
+          i
+        </button>
+        {#if showExclusionHint}
+          <p class="info-popover">{$t('configure.exclusions_toggle_hint')}</p>
+        {/if}
+      </div>
+      <div class="toggle-stack">
+        <label class="override-toggle">
+          <input type="checkbox" bind:checked={draftIncludeSheriff} />
+          {$t('configure.sheriff_include_label')}
+        </label>
+        <button
+          class="info-pill"
+          type="button"
+          aria-label={$t('configure.sheriff_include_hint')}
+          title={$t('configure.sheriff_include_hint')}
+          aria-pressed={showSheriffHint}
+          aria-expanded={showSheriffHint}
+          on:click={() => (showSheriffHint = !showSheriffHint)}
+        >
+          i
+        </button>
+        {#if showSheriffHint}
+          <p class="info-popover">{$t('configure.sheriff_include_hint')}</p>
+        {/if}
+      </div>
     </div>
 
-    {#if mix}
+    {#if showExclusionEditor}
+      <div class="exclusions-box">
+        <div class="exclusions-header">
+          <h3>{$t('configure.thief_exclusions_label')}</h3>
+        </div>
+        <div class="exclusions-groups">
+          <label class="exclusion-chip exclusion-chip--group">
+            <input
+              type="checkbox"
+              on:change={(e) =>
+                toggleGroupExclusion(['pyromaniac', 'scandalmonger'], e.currentTarget.checked)
+              }
+              checked={['pyromaniac', 'scandalmonger'].every((role) => exclusionSet().has(slugify(role)))}
+            />
+            <span>{$t('configure.exclusions_group_village')}</span>
+          </label>
+          <label class="exclusion-chip exclusion-chip--group">
+            <input
+              type="checkbox"
+              on:change={(e) => toggleGroupExclusion(['gypsy', 'town_crier'], e.currentTarget.checked)}
+              checked={['gypsy', 'town_crier'].every((role) => exclusionSet().has(slugify(role)))}
+            />
+            <span>{$t('configure.exclusions_group_newmoon')}</span>
+          </label>
+          <label class="exclusion-chip exclusion-chip--group">
+            <input
+              type="checkbox"
+              on:change={(e) => {
+                const pool = rolesByCategory?.ambiguous ?? [];
+                toggleGroupExclusion(pool, e.currentTarget.checked);
+              }}
+              checked={(rolesByCategory?.ambiguous ?? []).every((role) => exclusionSet().has(slugify(role)))}
+            />
+            <span>{$t('configure.exclusions_group_ambiguous')}</span>
+          </label>
+          <label class="exclusion-chip exclusion-chip--group">
+            <input
+              type="checkbox"
+              on:change={(e) => {
+                const pool = rolesByCategory?.loners ?? [];
+                toggleGroupExclusion(pool, e.currentTarget.checked);
+              }}
+              checked={(rolesByCategory?.loners ?? []).every((role) => exclusionSet().has(slugify(role)))}
+            />
+            <span>{$t('configure.exclusions_group_loners')}</span>
+          </label>
+          <label class="exclusion-chip exclusion-chip--group">
+            <input
+              type="checkbox"
+              on:change={(e) => {
+                const pool = [...(rolesByCategory?.werewolves ?? []), 'white'];
+                toggleGroupExclusion(pool, e.currentTarget.checked);
+              }}
+              checked={[...(rolesByCategory?.werewolves ?? []), 'white'].every((role) =>
+                exclusionSet().has(slugify(role))
+              )}
+            />
+            <span>{$t('configure.exclusions_group_werewolves')}</span>
+          </label>
+          <label class="exclusion-chip exclusion-chip--group">
+            <input
+              type="checkbox"
+              on:change={(e) =>
+                toggleGroupExclusion(['brothers', 'sisters', 'trusted', 'villager'], e.currentTarget.checked)
+              }
+              checked={['brothers', 'sisters', 'trusted', 'villager'].every((role) =>
+                exclusionSet().has(slugify(role))
+              )}
+            />
+            <span>{$t('configure.exclusions_group_no_power_villagers')}</span>
+          </label>
+        </div>
+        <div class="excluded-summary">
+          <span>{$t('configure.exclusions_current')}</span>
+          {#if (draftExclusionList ?? []).length}
+            <div class="excluded-chips">
+              {#each draftExclusionList as role}
+                <span class="excluded-chip">{role}</span>
+              {/each}
+            </div>
+          {:else}
+            <span class="empty-exclusions">{$t('configure.exclusions_none')}</span>
+          {/if}
+        </div>
+        <div class="exclusions-grid">
+          {#each exclusionCandidates as role}
+            <label class={`exclusion-chip ${exclusionSet().has(slugify(role)) ? 'exclusion-chip--excluded' : ''}`}>
+              <input
+                type="checkbox"
+                value={role}
+                on:change={(event) => {
+                  toggleExclusion(role, event.currentTarget.checked);
+                }}
+                checked={exclusionSet().has(slugify(role))}
+              />
+              <img
+                src={`/roles/${allRoleCategory.get(slugify(role)) ?? 'villagers'}/${slugify(role)}.png`}
+                alt={role}
+              />
+              <span>{role}</span>
+            </label>
+          {/each}
+          {#if !exclusionCandidates.length}
+            <p class="empty-exclusions">{$t('configure.thief_exclusions_empty')}</p>
+          {/if}
+        </div>
+      </div>
+    {/if}
+
+    {#if draftMix || mix}
       <div class="mix-summary">
         <div class="mix-header">
           <h3>{$t('configure.balance_label')}</h3>
-          <p class="mix-hint">{$t('configure.selection_hint')}</p>
         </div>
         <div class="mix-grid">
-          {#each Object.entries(mix || {}) as [key, value]}
-            {#if typeof value === 'number'}
-              <div class="mix-chip">
-                <span class="mix-value">{value}</span>
-                <span class="mix-label">{key}</span>
-              </div>
-            {/if}
+          {#each MIX_KEYS as key}
+            <div class="mix-chip">
+              {#if draftTweakRoleMix}
+                <div class="mix-counter">
+                  <button type="button" on:click={() => adjustMix(key, -1)} disabled={(draftMix?.[key] ?? 0) <= 0}>
+                    −
+                  </button>
+                  <span class="mix-value">{draftMix?.[key] ?? 0}</span>
+                  <button type="button" on:click={() => adjustMix(key, 1)}>
+                    +
+                  </button>
+                </div>
+              {:else}
+                <span class="mix-value">{draftMix?.[key] ?? mix?.[key] ?? 0}</span>
+              {/if}
+              <span class="mix-label">{key}</span>
+            </div>
           {/each}
         </div>
       </div>
@@ -573,13 +860,14 @@ $: console.debug('[selection] actorActive', actorActive, {
   }
 
   .override-banner {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.35rem 1rem;
     padding: 1rem 1.25rem;
     border-radius: 20px;
     border: 1px solid var(--glass-border);
     background: rgba(8, 12, 20, 0.85);
+    align-items: start;
   }
 
   .override-toggle {
@@ -593,6 +881,44 @@ $: console.debug('[selection] actorActive', actorActive, {
     margin: 0;
     font-size: 0.85rem;
     color: var(--color-white-muted);
+  }
+
+  .toggle-stack {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .info-pill {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--color-white-contrast);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+  }
+
+  .info-pill:active {
+    transform: scale(0.96);
+  }
+
+  .info-popover {
+    margin: 0;
+    margin-left: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--color-white-muted);
+    background: rgba(12, 16, 24, 0.9);
+    border: 1px solid var(--glass-hover);
+    border-radius: 10px;
+    padding: 0.5rem 0.75rem;
+    max-width: 320px;
+    display: inline-block;
   }
 
   .mix-summary {
@@ -617,7 +943,7 @@ $: console.debug('[selection] actorActive', actorActive, {
     padding: 0.85rem 0.9rem;
     display: grid;
     justify-items: center;
-    gap: 0.3rem;
+    gap: 0.35rem;
     min-height: 90px;
   }
 
@@ -631,6 +957,125 @@ $: console.debug('[selection] actorActive', actorActive, {
     font-size: 0.85rem;
     text-transform: capitalize;
     color: var(--color-white-muted);
+  }
+
+  .mix-counter {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: rgba(4, 7, 12, 0.85);
+    border-radius: 999px;
+    padding: 0.35rem 0.6rem;
+  }
+
+  .mix-counter button {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--color-white-contrast);
+    cursor: pointer;
+  }
+
+  .mix-counter button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .exclusions-box {
+    border: 1px solid var(--glass-hover);
+    border-radius: 20px;
+    padding: 1rem 1.25rem;
+    background: rgba(6, 12, 20, 0.85);
+    display: grid;
+    gap: 0.6rem;
+  }
+
+  .exclusions-header h3 {
+    margin: 0;
+  }
+
+  .exclusions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.6rem;
+  }
+
+  .exclusion-chip {
+    border: 1px solid var(--glass-border);
+    border-radius: 14px;
+    padding: 0.4rem 0.65rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(10, 14, 20, 0.7);
+    color: var(--color-white-contrast);
+    min-height: 46px;
+  }
+
+  .exclusion-chip--group {
+    border: none;
+    background: transparent;
+    padding: 0;
+    min-height: auto;
+    gap: 0.35rem;
+  }
+
+  .exclusion-chip--excluded {
+    filter: grayscale(1);
+    opacity: 0.6;
+  }
+
+  .exclusion-chip img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--surface-chip);
+    padding: 0.15rem;
+    display: block;
+  }
+
+  .exclusions-hints {
+    color: var(--color-white-muted);
+    font-size: 0.9rem;
+    margin: 0;
+  }
+
+  .exclusions-groups {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem 0.75rem;
+  }
+
+  .excluded-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--color-white-muted);
+    font-size: 0.9rem;
+  }
+
+  .excluded-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .excluded-chip {
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    padding: 0.25rem 0.5rem;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--color-white-contrast);
+  }
+
+  .empty-exclusions {
+    grid-column: 1 / -1;
+    margin: 0;
+    color: var(--color-white-muted);
+    font-size: 0.9rem;
   }
 
   .categories {
