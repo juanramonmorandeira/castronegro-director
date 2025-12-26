@@ -115,6 +115,10 @@
   let pendingHunterShot = false;
   let pendingSheriffSuccession = false;
   let includeSheriff = true;
+  const MANIPULATOR_TOKEN_ID = 'special-manipulator-division';
+  let manipulatorAssignments = {};
+  let manipulatorModalOpen = false;
+  let manipulatorDone = false;
   let actorModalOpen = false;
   let actorSelection = null;
   let actorTempSpecialIds = [];
@@ -124,9 +128,6 @@
   let actorPrepModalOpen = false;
   let actorBaseTokenId = null;
   let actorOriginalToken = null;
-  let manipulatorAssignments = {};
-  let manipulatorModalOpen = false;
-  let manipulatorDone = false;
   let foxModalOpen = false;
   let foxSelection = null;
   let foxReveal = null; // { role: 'werewolf'|'villager', image: string }
@@ -666,10 +667,38 @@
           image: '/tokens/actor-cards.png'
         }
       : null;
-  $: paletteSpecialTokens = actorActionToken ? [...specialTokens, actorActionToken] : specialTokens;
   $: actorActionDisabled =
     !actorAlive ||
     (!isNightPhase && !actorState.currentNightChoice);
+  $: manipulatorMarkersVersion = JSON.stringify(manipulatorAssignments ?? {});
+  $: manipulatorActionToken =
+    normalizedPhaseKey === 'prep_manipulator' ||
+    (phaseState?.pendingPreparation ?? []).includes('prep_manipulator')
+      ? {
+          id: MANIPULATOR_TOKEN_ID,
+          role: 'manipulator_division',
+          category: 'special',
+          image: '/tokens/manipulator-division.png'
+        }
+      : null;
+  $: manipulatorPaletteToken =
+    manipulatorActionToken ||
+    (consumedSpecialIds.includes(MANIPULATOR_TOKEN_ID)
+      ? {
+          id: MANIPULATOR_TOKEN_ID,
+          role: 'manipulator_division',
+          category: 'special',
+          image: '/tokens/manipulator-division.png'
+        }
+      : null);
+  $: paletteSpecialTokensPrep = manipulatorPaletteToken ? [manipulatorPaletteToken] : [];
+  $: paletteSpecialTokens = (() => {
+    const base = actorActionToken ? [...specialTokens, actorActionToken] : specialTokens;
+    if (isPrepPhaseKey(normalizedPhaseKey)) {
+      return [...paletteSpecialTokensPrep, ...base];
+    }
+    return base;
+  })();
   $: console.info('[actor] state', {
     actorAlive,
     actorBaseTokenId,
@@ -1264,16 +1293,10 @@
     if (isPrepPhaseKey(phaseKeyNow)) {
       if (phaseKeyNow === 'prep_actor') actorPrepModalOpen = true;
       if (phaseKeyNow === 'prep_thief') thiefPrepModalOpen = true;
-      if (phaseKeyNow === 'prep_manipulator') manipulatorModalOpen = true;
-      if (phaseKeyNow === 'prep_manipulator' && !allManipulatorAssigned()) {
-        showToast({
-          message: $t?.('session.errors.manipulator_assign') ?? 'Assign all roles to a team before continuing.',
-          variant: 'error'
-        });
-        return;
-      }
       if (phaseKeyNow === 'prep_manipulator') {
+        // no auto-open; modal se abre solo por el token o al entrar
         manipulatorDone = true;
+        // solo persiste; markers ya pintados en el modal
         persistManipulatorAssignments();
       }
       // Validations for empty slots
@@ -1304,6 +1327,12 @@
           pendingPreparation: [],
           baseIndex: 1
         };
+      }
+      if (phaseKeyNow === 'prep_manipulator' && manipulatorActionToken) {
+        if (!consumedSpecialIds.includes(MANIPULATOR_TOKEN_ID)) {
+          consumedSpecialIds = [...consumedSpecialIds, MANIPULATOR_TOKEN_ID];
+          activeSpecialIds = activeSpecialIds.filter((id) => id !== MANIPULATOR_TOKEN_ID);
+        }
       }
       persistPhaseState();
       return;
@@ -1431,6 +1460,7 @@
     pendingJudgeExtraDay = false;
     judgeModalOpen = false;
     manipulatorAssignments = {};
+    manipulatorDone = false;
     childModelTarget = null;
     pendingHunterShot = false;
     preparationResolved = false;
@@ -1580,7 +1610,7 @@
   const MARKER_MAX_SPREAD = 210;
   const MARKER_MIN_STEP = 28;
   const MARKER_RADIUS = 52;
-  const statusMarkersFor = (token) => {
+  const statusMarkersFor = (token, _version = '') => {
     const markers = [];
     if (charmedTargets?.includes(token.id)) {
       markers.push({ type: 'charmed', icon: markerAssets.charmed, title: 'Charmed' });
@@ -1607,7 +1637,7 @@
     }
     return markers;
   };
-  const markerPlacementsFor = (token) => {
+  const markerPlacementsFor = (token, version = '') => {
     const markers = [];
     if (seerPresent) {
       markers.push({
@@ -1618,7 +1648,7 @@
         disabled: !seerActive
       });
     }
-    markers.push(...statusMarkersFor(token));
+    markers.push(...statusMarkersFor(token, version));
     if (!markers.length) return [];
     const count = markers.length;
     const spread = Math.min(MARKER_MAX_SPREAD, Math.max(MARKER_MIN_STEP * (count - 1), 0));
@@ -1753,10 +1783,14 @@
     if (!token || token.category !== 'special') return true;
     if (!specialOwnerAlive(token)) return true;
     const slug = slugifyRole(token.role);
-    // Pool de preparación: todos los tokens deshabilitados salvo el badge en prep_sheriff
+    // Pool de preparación: todos los tokens deshabilitados salvo el badge en prep_sheriff o el token de división en prep_manipulator
     if (isPrepPhaseKey(normalizedPhaseKey)) {
       if (slug === 'sheriff_badge' && normalizedPhaseKey === 'prep_sheriff') return false;
+      if (slug === 'manipulator_division' && normalizedPhaseKey === 'prep_manipulator') return false;
       return true;
+    }
+    if (slug === 'manipulator_division') {
+      return normalizedPhaseKey !== 'prep_manipulator';
     }
     if (slug === 'fox_senses') {
       if (!foxAlive) return true;
@@ -1768,6 +1802,9 @@
       if (!judgeAlive) return true;
       if (consumedSpecialIds.includes(token.id)) return true;
       if (!isDayPhase) return true;
+    }
+    if (slug === 'manipulator_division') {
+      if (normalizedPhaseKey !== 'prep_manipulator') return true;
     }
     if (slug === 'child_lighthouse') {
       if (!isFirstNightPhase) return true;
@@ -2556,6 +2593,8 @@
                   houndModalOpen = true;
                 } else if (slugifyRole(token.role) === 'thief_mask') {
                   openThiefModal(token.id);
+                } else if (slugifyRole(token.role) === 'manipulator_division') {
+                  manipulatorModalOpen = true;
                 } else {
                   deploySpecialToken(token);
                 }
@@ -2576,7 +2615,7 @@
         {#if characterTokens.length === 0 && activeSpecialTokens.length === 0}
           <p class="board-empty">{$t('configure.role_preview_empty')}</p>
         {:else}
-          {#each characterTokens as token (token.id + (infectedIdSet.has(token.id) ? '-infected' : '-clean'))}
+          {#each characterTokens as token (token.id + (infectedIdSet.has(token.id) ? '-infected' : '-clean') + manipulatorMarkersVersion)}
             <button
               type="button"
               class={`role-token category-${displayCategory(token)} ${consumedSpecialIds.includes(token.id) ? 'token-consumed' : ''} ${deadSet.has(token.id) ? 'token-dead' : ''} ${infectedTargets.includes(token.id) ? 'token-infected' : ''}`}
@@ -2774,32 +2813,28 @@
             {/each}
           </div>
           <div class="modal-actions">
-            <button
-              class="btn ghost"
-              type="button"
-              on:click={() => {
-                manipulatorModalDismissed = true;
-                manipulatorModalOpen = false;
-              }}
-            >
-              {$t('common.actions.close')}
-            </button>
             <button class="btn primary" type="button" on:click={() => {
+              const msgKey = $t?.('session.errors.manipulator_assign');
+              const errText =
+                msgKey && msgKey !== 'session.errors.manipulator_assign'
+                  ? msgKey
+                  : 'Assign all roles to a team before continuing.';
               if (!allManipulatorAssigned()) {
                 showToast({
-                  message: $t?.('session.errors.manipulator_assign') ?? 'Assign all roles to a team before continuing.',
+                  message: errText,
                   variant: 'error'
                 });
                 return;
               }
+              // Forzar reactividad y pintar marcadores inmediatamente
+              manipulatorAssignments = { ...(manipulatorAssignments ?? {}) };
               manipulatorDone = true;
-              manipulatorModalDismissed = true;
               persistManipulatorAssignments();
               manipulatorModalOpen = false;
             }}>
               {$t('common.actions.done')}
             </button>
-      </div>
+          </div>
     </div>
   </Modal>
 
