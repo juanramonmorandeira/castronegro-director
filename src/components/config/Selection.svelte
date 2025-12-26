@@ -3,7 +3,7 @@
   import { t } from '../../lib/i18n.js';
   import Modal from '../ui/Modal.svelte';
   import Button from '../ui/Button.svelte';
-  import roleDefinitions from '../../../reference-data/datasets/roles.json';
+  import roleDefinitions from '../../../reference-data/datasets/roles.json' with { type: 'json' };
 
   export let open = false;
   export let categories = [];

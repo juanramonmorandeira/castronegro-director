@@ -120,8 +120,13 @@
   let actorTempSpecialIds = [];
   let actorCurrentRoleSlug = null;
   let actorState = { available: [], consumed: [], currentNightChoice: null };
+  let actorPrepChoices = [];
+  let actorPrepModalOpen = false;
   let actorBaseTokenId = null;
   let actorOriginalToken = null;
+  let manipulatorAssignments = {};
+  let manipulatorModalOpen = false;
+  let manipulatorDone = false;
   let foxModalOpen = false;
   let foxSelection = null;
   let foxReveal = null; // { role: 'werewolf'|'villager', image: string }
@@ -149,6 +154,10 @@
   let thiefSpecialId = null;
   let thiefBaseTokenId = null;
   let thiefAlive = false;
+  let thiefPrepChoices = [];
+  let thiefPrepModalOpen = false;
+  let prepConfirmOpen = false;
+  let prepConfirmMode = null; // 'actor' | 'thief'
   $: sessionKey = sessionId ?? 'default';
   let lastProtectedTargets = [];
   let activeSpecialIds = [];
@@ -221,6 +230,13 @@
   $: if ((!actorState?.available || actorState.available.length === 0) && Array.isArray(actorRoles) && actorRoles.length) {
     actorState = { ...actorState, available: sanitizeActorRoles(actorRoles) };
   }
+  $: if (!actorPrepChoices.length && Array.isArray(actorRoles) && actorRoles.length) {
+    actorPrepChoices = sanitizeActorRoles(actorRoles);
+  }
+  $: if (!thiefPrepChoices.length && Array.isArray(thiefRoles) && thiefRoles.length) {
+    thiefPrepChoices = thiefRoles.slice(0, 2);
+    while (thiefPrepChoices.length < 2) thiefPrepChoices.push('');
+  }
 
   onMount(() => {
     const bootstrap = async () => {
@@ -239,6 +255,9 @@
         includeTownCrier = settings.include_town_crier ?? true;
         sheriffAvailable = includeSheriff;
         thiefRoles = Array.isArray(settings.thief_roles) ? settings.thief_roles.slice(0, 2) : thiefRoles;
+        manipulatorAssignments = settings.manipulator_assignments ?? manipulatorAssignments;
+        actorPrepChoices = Array.isArray(settings.actor_roles) ? sanitizeActorRoles(settings.actor_roles) : actorPrepChoices;
+        thiefPrepChoices = Array.isArray(settings.thief_roles) ? settings.thief_roles.slice(0, 2) : thiefPrepChoices;
         exclusionList = Array.isArray(settings.exclusion_list)
           ? settings.exclusion_list.map((slug) => slugifyRole(slug))
           : Array.isArray(settings.thief_exclusions)
@@ -246,11 +265,13 @@
             : exclusionList;
         const prepRemote = phasesRemote.pending_preparation ?? null;
         const prepQueue = Array.isArray(prepRemote) ? prepRemote : buildPreparationQueue();
-        actorState = {
-          available,
-          consumed: Array.isArray(remoteState.consumed) ? remoteState.consumed.map((item) => slugifyRole(item)).filter(Boolean) : [],
-          currentNightChoice: remoteState.currentNightChoice ?? null
-        };
+    actorState = {
+      available,
+      consumed: Array.isArray(remoteState.consumed) ? remoteState.consumed.map((item) => slugifyRole(item)).filter(Boolean) : [],
+      currentNightChoice: remoteState.currentNightChoice ?? null
+    };
+    actorPrepChoices = Array.isArray(settings.actor_roles) ? sanitizeActorRoles(settings.actor_roles) : actorPrepChoices;
+    thiefPrepChoices = Array.isArray(settings.thief_roles) ? settings.thief_roles.slice(0, 2) : thiefPrepChoices;
         foxState = {
           lastResult: remoteFox.lastResult ?? null,
           available: remoteFox.available ?? true,
@@ -356,6 +377,29 @@
     return entry?.category ?? 'villagers';
   };
   const isPrepPhaseKey = (key) => typeof key === 'string' && key.startsWith('prep_');
+  const prepDefaults = () => buildPreparationQueue();
+  const actorPrepPool = () => actorPoolAvailable();
+  const fillActorPrepSlots = () => {
+    const pool = actorPrepPool();
+    const filled = [...actorPrepChoices];
+    for (let i = 0; i < 3; i += 1) {
+      if (filled[i]) continue;
+      const pick = pool.find((role) => !filled.includes(role));
+      if (pick) filled[i] = pick;
+    }
+    actorPrepChoices = filled.slice(0, 3);
+  };
+  const fillThiefPrepSlots = () => {
+    const pool = thiefPoolAvailable(true);
+    const filled = [...thiefPrepChoices];
+    for (let i = 0; i < 2; i += 1) {
+      if (filled[i]) continue;
+      const pick = pool.find((role) => !filled.includes(role));
+      if (pick) filled[i] = pick;
+    }
+    thiefPrepChoices = filled.slice(0, 2);
+  };
+
 
   const thiefPoolAvailable = (respectExclusions = true) => {
     const inPlay = new Set(characterTokens.map((token) => normalizeRoleSlug(slugifyRole(token.role))));
@@ -502,6 +546,8 @@
     thiefOffer = buildThiefOffer();
     thiefChoice = null;
     thiefModalOpen = true;
+    actorPrepModalOpen = false;
+    thiefPrepModalOpen = false;
   };
 
   const applyThiefChoice = () => {
@@ -551,6 +597,19 @@
     thiefModalOpen = false;
   };
 
+  const persistPrepRoles = async (key, values) => {
+    if (!sessionId) return;
+    const payload = {};
+    if (key === 'actor') payload['settings.actor_roles'] = values.slice(0, 3);
+    if (key === 'thief') payload['settings.thief_roles'] = values.slice(0, 2);
+    if (!Object.keys(payload).length) return;
+    try {
+      await updateSession(sessionId, payload);
+    } catch (error) {
+      console.error('[session] unable to persist prep roles', key, error);
+    }
+  };
+
   $: roleSet = (() => {
     const set = new Set();
     if (!selection) return set;
@@ -566,7 +625,8 @@
   const buildPreparationQueue = () => {
     const queue = [];
     queue.push('prep_characters');
-    queue.push('prep_buildings');
+    const includeBuildings = false;
+    if (includeBuildings) queue.push('prep_buildings');
     const hasRole = (slug) => roleSet.has(normalizeRoleSlug(slug));
     if (hasRole('manipulator')) queue.push('prep_manipulator');
     if (hasRole('gypsy')) queue.push('prep_gypsy');
@@ -753,7 +813,7 @@
   $: normalizedPhaseKey = normalizePhaseKey(currentPhaseKeyValue);
   const prettyPrepLabel = (slug) => {
     const map = {
-      prep_characters: $t('session.phases.preparation.title'),
+      prep_characters: $t('session.prep.characters') ?? 'Characters',
       prep_buildings: $t('session.prep.buildings') ?? 'Buildings',
       prep_manipulator: $t('session.prep.manipulator') ?? 'Manipulator',
       prep_gypsy: $t('session.prep.gypsy') ?? 'Gypsy',
@@ -770,7 +830,7 @@
     if (!key) return '—';
     if (key.startsWith('prep_')) {
       const step = prettyPrepLabel(key);
-      const base = $t(PHASE_KEY_PREPARATION) || 'Preparation';
+      const base = $t('session.phases.preparation.title') || 'Preparation';
       return `${base} (${step})`;
     }
     return $t(key) || '—';
@@ -1120,7 +1180,7 @@
   }
 
   const phaseIndexByKey = (key) => phases.findIndex((phase) => phase.titleKey === key);
-  $: isPreparationPhase = normalizedPhaseKey === PHASE_KEY_PREPARATION;
+  $: isPreparationPhase = normalizedPhaseKey === PHASE_KEY_PREPARATION || isPrepPhaseKey(normalizedPhaseKey);
   $: isFirstNightPhase = normalizedPhaseKey === PHASE_KEY_FIRST_NIGHT;
   $: isEachNightPhase = normalizedPhaseKey === PHASE_KEY_EACH_NIGHT;
   $: isNightPhase = isFirstNightPhase || isEachNightPhase;
@@ -1192,10 +1252,38 @@
         next: null,
         pendingPreparation: prepQueue.slice(1)
       };
+      if (prepQueue[0] === 'prep_actor') actorPrepModalOpen = true;
+      if (prepQueue[0] === 'prep_thief') thiefPrepModalOpen = true;
+      if (prepQueue[0] === 'prep_manipulator') {
+        manipulatorModalOpen = true;
+        manipulatorDone = false;
+      }
       persistPhaseState();
       return;
     }
     if (isPrepPhaseKey(phaseKeyNow)) {
+      if (phaseKeyNow === 'prep_actor') actorPrepModalOpen = true;
+      if (phaseKeyNow === 'prep_thief') thiefPrepModalOpen = true;
+      if (phaseKeyNow === 'prep_manipulator') manipulatorModalOpen = true;
+      if (phaseKeyNow === 'prep_manipulator' && !allManipulatorAssigned()) {
+        showToast({
+          message: $t?.('session.errors.manipulator_assign') ?? 'Assign all roles to a team before continuing.',
+          variant: 'error'
+        });
+        return;
+      }
+      if (phaseKeyNow === 'prep_manipulator') {
+        manipulatorDone = true;
+        persistManipulatorAssignments();
+      }
+      // Validations for empty slots
+      const needsActorPrompt = phaseKeyNow === 'prep_actor' && actorPrepChoices.filter(Boolean).length < 3;
+      const needsThiefPrompt = phaseKeyNow === 'prep_thief' && thiefPrepChoices.filter(Boolean).length < 2;
+      if (!prepConfirmOpen && (needsActorPrompt || needsThiefPrompt)) {
+        prepConfirmMode = needsActorPrompt ? 'actor' : 'thief';
+        prepConfirmOpen = true;
+        return;
+      }
       const remainingPrep = prepQueue.filter((slug) => slug !== phaseKeyNow);
       if (remainingPrep.length) {
         phaseState = {
@@ -1205,6 +1293,8 @@
           next: null,
           pendingPreparation: remainingPrep.slice(1)
         };
+        if (remainingPrep[0] === 'prep_actor') actorPrepModalOpen = true;
+        if (remainingPrep[0] === 'prep_thief') thiefPrepModalOpen = true;
       } else {
         phaseState = {
           ...phaseState,
@@ -1340,6 +1430,7 @@
     pendingSheriffSuccession = false;
     pendingJudgeExtraDay = false;
     judgeModalOpen = false;
+    manipulatorAssignments = {};
     childModelTarget = null;
     pendingHunterShot = false;
     preparationResolved = false;
@@ -1469,7 +1560,9 @@
     sheriff: '/markers/sheriff-star.png',
     seer: '/markers/seer-eye.png',
     model: '/markers/model-lantern.png',
-    injured: '/markers/injured-wound.png'
+    injured: '/markers/injured-wound.png',
+    manipulated_blue: '/markers/manipulated-blue.png',
+    manipulated_cream: '/markers/manipulated-cream.png'
   };
   const houndOptions = [
     {
@@ -1506,6 +1599,11 @@
     }
     if (woundedQueue.some((entry) => entry.id === token.id)) {
       markers.push({ type: 'injured', icon: markerAssets.injured, title: 'Wounded by Knight' });
+    }
+    if (manipulatorAssignments?.[token.id] === 'blue') {
+      markers.push({ type: 'manipulated_blue', icon: markerAssets.manipulated_blue, title: 'Manipulated (blue)' });
+    } else if (manipulatorAssignments?.[token.id] === 'cream') {
+      markers.push({ type: 'manipulated_cream', icon: markerAssets.manipulated_cream, title: 'Manipulated (cream)' });
     }
     return markers;
   };
@@ -1565,6 +1663,27 @@
         return 'cursed_wolf_father';
       default:
         return null;
+    }
+  };
+  const allManipulatorAssigned = () => {
+    const ids = characterTokens.map((t) => t.id);
+    return ids.every((id) => manipulatorAssignments?.[id]);
+  };
+
+  $: if (normalizedPhaseKey === 'prep_manipulator' && !manipulatorModalOpen && !manipulatorDone) {
+    manipulatorModalOpen = true;
+  }
+
+  const setManipulatorTeam = (tokenId, team) => {
+    manipulatorAssignments = { ...(manipulatorAssignments ?? {}), [tokenId]: team };
+  };
+
+  const persistManipulatorAssignments = async () => {
+    if (!sessionId) return;
+    try {
+      await updateSession(sessionId, { 'settings.manipulator_assignments': manipulatorAssignments });
+    } catch (error) {
+      console.error('[session] unable to persist manipulator assignments', error);
     }
   };
   const isWerewolfAligned = (id) => {
@@ -1634,6 +1753,11 @@
     if (!token || token.category !== 'special') return true;
     if (!specialOwnerAlive(token)) return true;
     const slug = slugifyRole(token.role);
+    // Pool de preparación: todos los tokens deshabilitados salvo el badge en prep_sheriff
+    if (isPrepPhaseKey(normalizedPhaseKey)) {
+      if (slug === 'sheriff_badge' && normalizedPhaseKey === 'prep_sheriff') return false;
+      return true;
+    }
     if (slug === 'fox_senses') {
       if (!foxAlive) return true;
       if (!isNightPhase) return true;
@@ -1672,7 +1796,7 @@
     if (isHunterInterphase) return slug !== 'hunter_bullet';
     if (isSheriffInterphase) return !isSheriffToken(token);
     if (isEndPhase) return true;
-    if (isPreparationPhase) return slug !== 'sheriff_badge';
+    if (normalizedPhaseKey === PHASE_KEY_PREPARATION) return slug !== 'sheriff_badge';
     if (isNightPhase) return slug === 'sheriff_badge' || slug === 'villagers_guillotine' || slug === 'hunter_bullet';
     if (isDayPhase) return !['villagers_guillotine', 'judge_maze'].includes(slug);
     if (isSheriffToken(token) && !sheriffPhaseEligible()) return true;
@@ -2611,6 +2735,141 @@
       </div>
     </div>
   </Footbar>
+
+  <Modal
+    open={manipulatorModalOpen}
+    title={$t?.('session.prep.manipulator') ?? 'Manipulator'}
+    size="lg"
+    closeOnBackdrop={false}
+    showClose={false}
+    on:close={() => (manipulatorModalOpen = false)}
+  >
+        <div class="manipulator-modal">
+          <div class="manipulator-grid">
+            {#each characterTokens as token}
+              <div class="manipulator-row">
+                <div class="manipulator-role">
+                  <img src={token.image} alt={token.role} class="manipulator-avatar" />
+                  <span>{token.player ?? token.role}</span>
+                </div>
+                <div class="manipulator-actions">
+                  <button
+                    type="button"
+                    class={`manipulator-chip ${manipulatorAssignments?.[token.id] === 'blue' ? 'selected' : ''}`}
+                    on:click={() => setManipulatorTeam(token.id, 'blue')}
+                    aria-pressed={manipulatorAssignments?.[token.id] === 'blue'}
+                  >
+                    <img src="/markers/manipulated-blue.png" alt="Blue team" />
+                  </button>
+                  <button
+                    type="button"
+                    class={`manipulator-chip ${manipulatorAssignments?.[token.id] === 'cream' ? 'selected' : ''}`}
+                    on:click={() => setManipulatorTeam(token.id, 'cream')}
+                    aria-pressed={manipulatorAssignments?.[token.id] === 'cream'}
+                  >
+                    <img src="/markers/manipulated-cream.png" alt="Cream team" />
+                  </button>
+                </div>
+              </div>
+            {/each}
+          </div>
+          <div class="modal-actions">
+            <button
+              class="btn ghost"
+              type="button"
+              on:click={() => {
+                manipulatorModalDismissed = true;
+                manipulatorModalOpen = false;
+              }}
+            >
+              {$t('common.actions.close')}
+            </button>
+            <button class="btn primary" type="button" on:click={() => {
+              if (!allManipulatorAssigned()) {
+                showToast({
+                  message: $t?.('session.errors.manipulator_assign') ?? 'Assign all roles to a team before continuing.',
+                  variant: 'error'
+                });
+                return;
+              }
+              manipulatorDone = true;
+              manipulatorModalDismissed = true;
+              persistManipulatorAssignments();
+              manipulatorModalOpen = false;
+            }}>
+              {$t('common.actions.done')}
+            </button>
+      </div>
+    </div>
+  </Modal>
+
+  <style>
+    .manipulator-modal {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .manipulator-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.5rem;
+    }
+    .manipulator-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.5rem 0.75rem;
+      border: 1px solid var(--surface-border, #333);
+      border-radius: 8px;
+      background: var(--surface-2, #0f1419);
+    }
+    .manipulator-role {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      min-width: 0;
+    }
+    .manipulator-role span {
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .manipulator-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1px solid var(--surface-border, #333);
+      background: #000;
+    }
+    .manipulator-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .manipulator-chip {
+      width: 48px;
+      height: 48px;
+      border-radius: 8px;
+      border: 1px solid var(--surface-border, #333);
+      background: var(--surface-1, #131a20);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .manipulator-chip img {
+      width: 40px;
+      height: 40px;
+      object-fit: contain;
+    }
+    .manipulator-chip.selected {
+      border-color: var(--accent, #d4a017);
+      box-shadow: 0 0 0 2px rgba(212, 160, 23, 0.3);
+    }
+  </style>
 
   <Modal
     open={actorModalOpen}

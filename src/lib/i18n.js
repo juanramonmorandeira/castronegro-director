@@ -1,18 +1,5 @@
 // src/lib/i18n.js
-import { writable,       prep: {
-        buildings: 'Épületek',
-        manipulator: 'Előítéletes manipulátor',
-        gypsy: 'Cigánylány',
-        town_crier_cards: 'Kürtös lapjai',
-        actor: 'Komédiás',
-        thief: 'Tolvaj',
-        town_crier: 'Kürtös',
-        modal_empty_title: 'Vannak üres helyek. Folytatod?',
-        modal_empty_cancel: 'Mégse',
-        modal_empty_confirm: 'Megerősítés',
-        modal_empty_autofill: 'Automatikus kitöltés'
-      },
-derived, get } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
 
 // Idioma por defecto (EN). Podrías leer de localStorage si lo deseas.
 const initial = 'en';
@@ -289,7 +276,7 @@ const dictionaries = {
       exclusions_group_newmoon: 'Exclude “New Moon”',
       exclusions_group_ambiguous: 'Exclude all Ambiguous roles',
       exclusions_group_loners: 'Exclude all Loners',
-      exclusions_group_multiplayer: 'Exclude multi-player roles (brothers, sisters)',
+      exclusions_group_multiplayer: 'Exclude multi-player roles',
       exclusions_group_werewolves: 'Exclude Werewolves',
       exclusions_group_no_power_villagers: 'Exclude villagers without powers',
       exclusions_current: 'Current exclusions:',
@@ -369,6 +356,7 @@ const dictionaries = {
     session: {
       title: 'Session',
       prep: {
+        characters: 'Characters',
         buildings: 'Buildings',
         manipulator: 'Manipulator',
         gypsy: 'Gypsy',
@@ -381,18 +369,8 @@ const dictionaries = {
         modal_empty_confirm: 'Confirm',
         modal_empty_autofill: 'Autofill'
       },
-      prep: {
-        buildings: 'Buildings',
-        manipulator: 'Manipulator',
-        gypsy: 'Gypsy',
-        town_crier_cards: 'Town Crier Cards',
-        actor: 'Actor',
-        thief: 'Thief',
-        town_crier: 'Town Crier',
-        modal_empty_title: 'Some slots are empty. Continue?',
-        modal_empty_cancel: 'Cancel',
-        modal_empty_confirm: 'Confirm',
-        modal_empty_autofill: 'Autofill'
+      errors: {
+        manipulator_assign: 'Assign all roles to a team before continuing.'
       },
       distribution: {
         label: 'Distribution',
@@ -1136,6 +1114,7 @@ const dictionaries = {
     session: {
       title: 'Sesión',
       prep: {
+        characters: 'Personajes',
         buildings: 'Edificios',
         manipulator: 'Manipulador prejuicioso',
         gypsy: 'Gitana',
@@ -1147,6 +1126,9 @@ const dictionaries = {
         modal_empty_cancel: 'Cancelar',
         modal_empty_confirm: 'Confirmar',
         modal_empty_autofill: 'Autocompletar'
+      },
+      errors: {
+        manipulator_assign: 'Asigna todos los roles a un equipo antes de continuar.'
       },
       distribution: {
         label: 'Distribución',
@@ -1761,6 +1743,23 @@ const dictionaries = {
     },
     session: {
       title: 'Játék',
+      prep: {
+        characters: 'Szerepek',
+        buildings: 'Épületek',
+        manipulator: 'Előítéletes manipulátor',
+        gypsy: 'Cigánylány',
+        town_crier_cards: 'Kikiáltó kártyái',
+        actor: 'Komédiás',
+        thief: 'Tolvaj',
+        town_crier: 'Kikiáltó',
+        modal_empty_title: 'Vannak üres helyek. Folytatod?',
+        modal_empty_cancel: 'Mégse',
+        modal_empty_confirm: 'Megerősítés',
+        modal_empty_autofill: 'Automatikus kitöltés'
+      },
+      errors: {
+        manipulator_assign: 'Rendelj minden szerepet valamelyik csapathoz, mielőtt továbblépsz.'
+      },
       distribution: {
         label: 'Elhelyezés',
         title: 'Játék #{id}',
