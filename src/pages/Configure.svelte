@@ -174,6 +174,7 @@ let rolesCustomized = false;
 let selectedActorRoles = [];
 let selectedThiefRoles = [];
 let selectedExclusionList = [];
+let selectedModifyExclusions = true;
 let autoSeedKey = '';
   let alertOpen = false;
   let alertMessage = '';
@@ -372,6 +373,7 @@ let autoSeedKey = '';
         overrideRoleLimits = settings.override_limits ?? false;
         includeSheriff = form.include_sheriff;
         includeTownCrier = form.include_town_crier;
+        selectedModifyExclusions = settings.modify_exclusion_list ?? selectedModifyExclusions;
         tweakRoleMix = settings.tweak_role_mix ?? false;
         roleMixOverride = normalizeMixOverride(settings.role_mix_override);
         if (settings.roles) {
@@ -382,13 +384,16 @@ let autoSeedKey = '';
           selectedActorRoles = settings.actor_roles.slice(0, 3);
         }
         if (Array.isArray(settings.thief_roles)) {
-          selectedThiefRoles = settings.thief_roles.slice(0, 2);
+          selectedThiefRoles = settings.thief_roles.map((role) => slugifyRole(role)).filter(Boolean).slice(0, 2);
         }
         if (Array.isArray(settings.thief_exclusions)) {
           selectedExclusionList = settings.thief_exclusions;
         }
         if (Array.isArray(settings.exclusion_list)) {
           selectedExclusionList = settings.exclusion_list;
+        }
+        if (typeof settings.modify_exclusion_list === 'boolean') {
+          selectedModifyExclusions = settings.modify_exclusion_list;
         }
         if (form.storyteller === 'human') {
           form.assistEnabled = false;
@@ -583,10 +588,13 @@ let autoSeedKey = '';
       selectedActorRoles = detail.actorRoles.slice(0, 3);
     }
     if (Array.isArray(detail.thiefRoles)) {
-      selectedThiefRoles = detail.thiefRoles;
+      selectedThiefRoles = detail.thiefRoles.map((role) => slugifyRole(role)).filter(Boolean).slice(0, 2);
     }
     if (Array.isArray(detail.exclusionList)) {
       selectedExclusionList = detail.exclusionList;
+    }
+    if (typeof detail.modifyExclusionList === 'boolean') {
+      selectedModifyExclusions = detail.modifyExclusionList;
     }
     if (typeof detail.override === 'boolean') {
       overrideRoleLimits = detail.override;
@@ -608,12 +616,15 @@ let autoSeedKey = '';
         'settings.roles': selectedRoles,
         'settings.actor_roles': selectedActorRoles,
         'settings.thief_roles': selectedThiefRoles,
+        // Guardamos la lista de exclusiones en ambas claves por compatibilidad
         'settings.exclusion_list': selectedExclusionList,
+        'settings.thief_exclusions': selectedExclusionList,
         'settings.override_limits': overrideRoleLimits,
         'settings.include_sheriff': includeSheriff,
         'settings.include_town_crier': includeTownCrier,
         'settings.tweak_role_mix': tweakRoleMix,
-        'settings.role_mix_override': roleMixOverride
+        'settings.role_mix_override': roleMixOverride,
+        'settings.modify_exclusion_list': selectedModifyExclusions
       });
       showToast({ message: $t('configure.saved'), variant: 'success' });
     } catch (error) {
@@ -842,6 +853,7 @@ let autoSeedKey = '';
     actorRoles={selectedActorRoles}
     thiefRoles={selectedThiefRoles}
     exclusionList={selectedExclusionList}
+    modifyExclusionList={selectedModifyExclusions}
     limits={roleLimits}
     resourceLimits={resourceLimits}
     override={overrideRoleLimits}

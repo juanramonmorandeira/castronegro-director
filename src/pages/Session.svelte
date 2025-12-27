@@ -16,6 +16,8 @@
   import { createEventDispatcher, onMount } from 'svelte';
   import { getSessionPositions, setRolePosition } from '../lib/stores/rolePositions.js';
   import Modal from '../components/ui/Modal.svelte';
+  import RoleSlotPicker from '../components/ui/RoleSlotPicker.svelte';
+  import RolePickerGrid from '../components/ui/RolePickerGrid.svelte';
   import { getSessionById, updateSession } from '../lib/db.js';
 
   export let sessionId = null;
@@ -119,6 +121,7 @@
   let manipulatorAssignments = {};
   let manipulatorModalOpen = false;
   let manipulatorDone = false;
+  let actorPrepDone = false;
   let actorModalOpen = false;
   let actorSelection = null;
   let actorTempSpecialIds = [];
@@ -126,6 +129,10 @@
   let actorState = { available: [], consumed: [], currentNightChoice: null };
   let actorPrepChoices = [];
   let actorPrepModalOpen = false;
+  let actorPrepOptions = [];
+  let actorPickerOpen = false;
+  let actorPickerIndex = 0;
+  let actorPickerOptions = [];
   let actorBaseTokenId = null;
   let actorOriginalToken = null;
   let foxModalOpen = false;
@@ -157,6 +164,10 @@
   let thiefAlive = false;
   let thiefPrepChoices = [];
   let thiefPrepModalOpen = false;
+  let thiefPrepDone = false;
+  let thiefPickerOpen = false;
+  let thiefPickerIndex = 0;
+  let thiefPickerOptions = [];
   let prepConfirmOpen = false;
   let prepConfirmMode = null; // 'actor' | 'thief'
   $: sessionKey = sessionId ?? 'default';
@@ -238,6 +249,16 @@
     thiefPrepChoices = thiefRoles.slice(0, 2);
     while (thiefPrepChoices.length < 2) thiefPrepChoices.push('');
   }
+  $: if (thiefPrepChoices.length < 2) {
+    const next = [...thiefPrepChoices];
+    while (next.length < 2) next.push('');
+    thiefPrepChoices = next;
+  }
+  $: if (actorPrepChoices.length < 3) {
+    const next = [...actorPrepChoices];
+    while (next.length < 3) next.push('');
+    actorPrepChoices = next;
+  }
 
   onMount(() => {
     const bootstrap = async () => {
@@ -255,10 +276,15 @@
         includeSheriff = settings.include_sheriff ?? true;
         includeTownCrier = settings.include_town_crier ?? true;
         sheriffAvailable = includeSheriff;
-        thiefRoles = Array.isArray(settings.thief_roles) ? settings.thief_roles.slice(0, 2) : thiefRoles;
+        thiefRoles = Array.isArray(settings.thief_roles)
+          ? settings.thief_roles.map((role) => slugifyRole(role)).filter(Boolean).slice(0, 2)
+          : thiefRoles;
         manipulatorAssignments = settings.manipulator_assignments ?? manipulatorAssignments;
         actorPrepChoices = Array.isArray(settings.actor_roles) ? sanitizeActorRoles(settings.actor_roles) : actorPrepChoices;
-        thiefPrepChoices = Array.isArray(settings.thief_roles) ? settings.thief_roles.slice(0, 2) : thiefPrepChoices;
+        thiefPrepChoices = Array.isArray(settings.thief_roles)
+          ? settings.thief_roles.map((role) => slugifyRole(role)).filter(Boolean).slice(0, 2)
+          : thiefPrepChoices;
+        thiefPrepDone = Array.isArray(thiefPrepChoices) && thiefPrepChoices.filter(Boolean).length > 0;
         exclusionList = Array.isArray(settings.exclusion_list)
           ? settings.exclusion_list.map((slug) => slugifyRole(slug))
           : Array.isArray(settings.thief_exclusions)
@@ -272,7 +298,10 @@
       currentNightChoice: remoteState.currentNightChoice ?? null
     };
     actorPrepChoices = Array.isArray(settings.actor_roles) ? sanitizeActorRoles(settings.actor_roles) : actorPrepChoices;
-    thiefPrepChoices = Array.isArray(settings.thief_roles) ? settings.thief_roles.slice(0, 2) : thiefPrepChoices;
+    actorPrepDone = actorPrepChoices.filter(Boolean).length > 0;
+        thiefPrepChoices = Array.isArray(settings.thief_roles)
+          ? settings.thief_roles.map((role) => slugifyRole(role)).filter(Boolean).slice(0, 2)
+          : thiefPrepChoices;
         foxState = {
           lastResult: remoteFox.lastResult ?? null,
           available: remoteFox.available ?? true,
@@ -333,6 +362,40 @@
     three_brothers: 'brothers',
     prejudiced_manipulator: 'manipulator'
   };
+  const SHORT_ROLE_LABELS = {
+    angel: 'Angel',
+    bad: 'Bad',
+    father: 'Father',
+    white: 'White',
+    werewolf: 'Werewolf',
+    wolf_hound: 'Hound',
+    hound: 'Hound',
+    child: 'Child',
+    gypsy: 'Gypsy',
+    tamer: 'Tamer',
+    scapegoat: 'Scapegoat',
+    fox: 'Fox',
+    seer: 'Seer',
+    witch: 'Witch',
+    hunter: 'Hunter',
+    elder: 'Elder',
+    defender: 'Defender',
+    pyromaniac: 'Pyromaniac',
+    scandalmonger: 'Scandalmonger',
+    piper: 'Piper',
+    manipulator: 'Manipulator',
+    judge: 'Judge',
+    knight: 'Knight',
+    cupid: 'Cupid',
+    idiot: 'Idiot',
+    villager: 'Villager',
+    trusted: 'Trusted',
+    brothers: 'Brothers',
+    sisters: 'Sisters',
+    actor: 'Actor',
+    thief: 'Thief',
+    ginasta: 'Gypsy'
+  };
   const infectedSlugMap = {
     the_two_sisters: 'sisters',
     two_sisters: 'sisters',
@@ -377,11 +440,30 @@
     const entry = roleDefinitions?.[normalized];
     return entry?.category ?? 'villagers';
   };
+  $: actorPrepOptions = actorPrepPool({ respectExclusions: false });
   const isPrepPhaseKey = (key) => typeof key === 'string' && key.startsWith('prep_');
   const prepDefaults = () => buildPreparationQueue();
-  const actorPrepPool = () => actorPoolAvailable();
+  const actorPrepPool = ({ respectExclusions = false } = {}) => {
+    const inPlay = new Set(characterTokens.map((token) => normalizeRoleSlug(slugifyRole(token.role))));
+    const excluded = respectExclusions ? exclusionSet() : new Set();
+    return allRolesList
+      .filter(({ category }) => category === 'villagers')
+      .map(({ slug }) => normalizeRoleSlug(slug))
+      .filter((slug) => {
+        if (!slug) return false;
+        if (multiPlayerRoles.has(slug)) return false;
+        if (['trusted', 'villager', 'werewolf'].includes(slug)) return false; // sin poder/no permitidos
+        if (['werewolf', 'bad', 'father', 'white'].includes(slug)) return false;
+        const def = roleDefinitions?.[slug];
+        if (def?.category === 'loners') return false;
+        if (def?.category === 'ambiguous') return false;
+        if (excluded.has(slug)) return false;
+        if (inPlay.has(slug)) return false;
+        return true;
+      });
+  };
   const fillActorPrepSlots = () => {
-    const pool = actorPrepPool();
+    const pool = actorPrepPool({ respectExclusions: true });
     const filled = [...actorPrepChoices];
     for (let i = 0; i < 3; i += 1) {
       if (filled[i]) continue;
@@ -389,6 +471,20 @@
       if (pick) filled[i] = pick;
     }
     actorPrepChoices = filled.slice(0, 3);
+  };
+
+  const openActorPrepPicker = (index) => {
+    if (actorPrepDone) return;
+    actorPickerIndex = index;
+    const current = actorPrepChoices[index];
+    const pickedSet = new Set(actorPrepChoices.filter(Boolean));
+    actorPickerOptions = actorPrepOptions.filter((slug) => !pickedSet.has(slug) || slug === current);
+    actorPickerOpen = true;
+  };
+
+  const chooseActorPrepRole = (slug) => {
+    actorPrepChoices = actorPrepChoices.map((val, idx) => (idx === actorPickerIndex ? slug : val));
+    actorPickerOpen = false;
   };
   const fillThiefPrepSlots = () => {
     const pool = thiefPoolAvailable(true);
@@ -401,10 +497,25 @@
     thiefPrepChoices = filled.slice(0, 2);
   };
 
+  const openThiefPrepPicker = (index) => {
+    if (thiefPrepDone) return;
+    thiefPickerIndex = index;
+    const current = thiefPrepChoices[index];
+    const pickedSet = new Set(thiefPrepChoices.filter(Boolean));
+    thiefPickerOptions = thiefPoolAvailable(false).filter((slug) => !pickedSet.has(slug) || slug === current);
+    thiefPickerOpen = true;
+  };
+
+  const chooseThiefPrepRole = (slug) => {
+    thiefPrepChoices = thiefPrepChoices.map((val, idx) => (idx === thiefPickerIndex ? slug : val));
+    thiefPickerOpen = false;
+  };
+
 
   const thiefPoolAvailable = (respectExclusions = true) => {
     const inPlay = new Set(characterTokens.map((token) => normalizeRoleSlug(slugifyRole(token.role))));
     const excluded = respectExclusions ? exclusionSet() : new Set();
+    const actorChosen = new Set(actorPrepChoices.filter(Boolean).map((role) => normalizeRoleSlug(role)));
     return allRolesList
       .map(({ slug }) => normalizeRoleSlug(slug))
       .filter((slug) => {
@@ -412,13 +523,18 @@
         if (slug === 'thief') return false;
         if (multiPlayerRoles.has(slug)) return false;
         if (respectExclusions && excluded.has(slug)) return false;
+        if (actorChosen.has(slug)) return false;
         if (!duplicableThiefRoles.has(slug) && inPlay.has(slug)) return false;
         return true;
       });
   };
 
   const buildThiefOffer = () => {
-    const manual = Array.isArray(thiefRoles) ? thiefRoles.map((role) => normalizeRoleSlug(role)).filter(Boolean) : [];
+    const manual = Array.isArray(thiefRoles)
+      ? thiefRoles.map((role) => normalizeRoleSlug(role)).filter(Boolean)
+      : Array.isArray(thiefPrepChoices)
+        ? thiefPrepChoices.map((role) => normalizeRoleSlug(role)).filter(Boolean)
+        : [];
     const validManual = manual.filter((slug) => thiefPoolAvailable(false).includes(slug));
     const offer = [...validManual];
     const pool = shuffleArray(thiefPoolAvailable(true));
@@ -542,6 +658,8 @@
     }
   };
 
+  const cleanActorName = (slug) => shortRoleLabel(slug);
+
   const openThiefModal = (tokenId = null) => {
     thiefSpecialId = tokenId ?? thiefSpecialId;
     thiefOffer = buildThiefOffer();
@@ -560,18 +678,19 @@
       });
       return;
     }
-    const targetSlug = thiefChoice || null;
+    const targetSlug = thiefChoice ? normalizeRoleSlug(thiefChoice) : null;
     const targetDefinition = targetSlug ? getRoleDefinition(targetSlug) : null;
     const targetCategory = targetDefinition?.category ?? 'villagers';
-    const targetRoleName = targetSlug ? targetDefinition?.names?.en ?? targetSlug : 'villager';
+    const targetRoleLabel = targetSlug ? shortRoleLabel(targetSlug) : 'Villager';
+    const targetImage = roleImageSrc(targetCategory, targetSlug || 'villager');
     if (thiefBaseTokenId) {
       tokens = tokens.map((token) =>
         token.id === thiefBaseTokenId
           ? {
               ...token,
-              role: targetRoleName,
+              role: targetSlug || 'villager',
               category: targetCategory,
-              image: roleImageSrc(targetCategory, targetSlug || 'villager')
+              image: targetImage
             }
           : token
       );
@@ -588,14 +707,23 @@
     logEntries = [
       {
         text: thiefChoice
-          ? $t?.('session.logbook.thief_adopts_role', { role: getRoleName(targetSlug, currentLocale) }) ??
-            `Thief adopts ${getRoleName(targetSlug, currentLocale)}`
+          ? $t?.('session.logbook.thief_adopts_role', { role: targetRoleLabel }) ??
+            `Thief adopts ${targetRoleLabel}`
           : $t?.('session.logbook.thief_becomes_villager') ?? 'Thief becomes a Villager',
         stamp
       },
       ...logEntries
     ];
     thiefModalOpen = false;
+  };
+
+  const persistThiefPrepChoices = async () => {
+    if (!sessionId) return;
+    try {
+      await updateSession(sessionId, { 'settings.thief_roles': thiefPrepChoices.filter(Boolean) });
+    } catch (error) {
+      console.error('[session] unable to persist thief prep choices', error);
+    }
   };
 
   const persistPrepRoles = async (key, values) => {
@@ -694,10 +822,15 @@
   $: paletteSpecialTokensPrep = manipulatorPaletteToken ? [manipulatorPaletteToken] : [];
   $: paletteSpecialTokens = (() => {
     const base = actorActionToken ? [...specialTokens, actorActionToken] : specialTokens;
+    const extra = manipulatorPaletteToken ? [manipulatorPaletteToken] : [];
     if (isPrepPhaseKey(normalizedPhaseKey)) {
-      return [...paletteSpecialTokensPrep, ...base];
+      return [...extra, ...base];
     }
-    return base;
+    const merged = [...base];
+    extra.forEach((token) => {
+      if (!merged.some((t) => t.id === token.id)) merged.push(token);
+    });
+    return merged;
   })();
   $: console.info('[actor] state', {
     actorAlive,
@@ -1030,7 +1163,17 @@
     }
   };
 
-  const actorRoleLabel = (slug) => getRoleName(slug, currentLocale) || slug;
+  const actorRoleLabel = (slug) => shortRoleLabel(slug);
+  const shortRoleLabel = (slugOrToken) => {
+    const value =
+      typeof slugOrToken === 'object' && slugOrToken !== null && slugOrToken.role
+        ? slugOrToken.role
+        : slugOrToken;
+    const norm = normalizeRoleSlug(value);
+    if (SHORT_ROLE_LABELS[norm]) return SHORT_ROLE_LABELS[norm];
+    const base = norm.replace(/^the_/, '').replace(/_/g, ' ');
+    return base.charAt(0).toUpperCase() + base.slice(1);
+  };
 
   function addActorLogEntry(selectedSlug) {
     const text =
@@ -1281,8 +1424,10 @@
         next: null,
         pendingPreparation: prepQueue.slice(1)
       };
-      if (prepQueue[0] === 'prep_actor') actorPrepModalOpen = true;
-      if (prepQueue[0] === 'prep_thief') thiefPrepModalOpen = true;
+      if (prepQueue[0] === 'prep_actor' && !actorPrepDone) {
+        actorPrepModalOpen = true;
+      }
+      if (prepQueue[0] === 'prep_thief' && !thiefPrepDone) thiefPrepModalOpen = true;
       if (prepQueue[0] === 'prep_manipulator') {
         manipulatorModalOpen = true;
         manipulatorDone = false;
@@ -1291,8 +1436,8 @@
       return;
     }
     if (isPrepPhaseKey(phaseKeyNow)) {
-      if (phaseKeyNow === 'prep_actor') actorPrepModalOpen = true;
-      if (phaseKeyNow === 'prep_thief') thiefPrepModalOpen = true;
+      if (phaseKeyNow === 'prep_actor' && !actorPrepDone) actorPrepModalOpen = true;
+      if (phaseKeyNow === 'prep_thief' && !thiefPrepDone) thiefPrepModalOpen = true;
       if (phaseKeyNow === 'prep_manipulator') {
         // no auto-open; modal se abre solo por el token o al entrar
         manipulatorDone = true;
@@ -1300,13 +1445,8 @@
         persistManipulatorAssignments();
       }
       // Validations for empty slots
-      const needsActorPrompt = phaseKeyNow === 'prep_actor' && actorPrepChoices.filter(Boolean).length < 3;
-      const needsThiefPrompt = phaseKeyNow === 'prep_thief' && thiefPrepChoices.filter(Boolean).length < 2;
-      if (!prepConfirmOpen && (needsActorPrompt || needsThiefPrompt)) {
-        prepConfirmMode = needsActorPrompt ? 'actor' : 'thief';
-        prepConfirmOpen = true;
-        return;
-      }
+      const needsActorPrompt = false;
+      // ya no forzamos confirmaciones por huecos
       const remainingPrep = prepQueue.filter((slug) => slug !== phaseKeyNow);
       if (remainingPrep.length) {
         phaseState = {
@@ -1317,7 +1457,7 @@
           pendingPreparation: remainingPrep.slice(1)
         };
         if (remainingPrep[0] === 'prep_actor') actorPrepModalOpen = true;
-        if (remainingPrep[0] === 'prep_thief') thiefPrepModalOpen = true;
+        if (remainingPrep[0] === 'prep_thief' && !thiefPrepDone) thiefPrepModalOpen = true;
       } else {
         phaseState = {
           ...phaseState,
@@ -1439,6 +1579,14 @@
   function goToConfigure() {
     dispatch('configure', { sessionId });
   }
+  const persistActorPrepChoices = async () => {
+    if (!sessionId) return;
+    try {
+      await updateSession(sessionId, { 'settings.actor_roles': actorPrepChoices.filter(Boolean) });
+    } catch (error) {
+      console.error('[session] unable to persist actor prep choices', error);
+    }
+  };
 
   async function resetSessionStateTemp() {
     if (!sessionId) return;
@@ -1461,6 +1609,9 @@
     judgeModalOpen = false;
     manipulatorAssignments = {};
     manipulatorDone = false;
+    actorPrepDone = false;
+    thiefPrepDone = false;
+    thiefPrepChoices = ['', ''];
     childModelTarget = null;
     pendingHunterShot = false;
     preparationResolved = false;
@@ -1582,7 +1733,6 @@
     }
     return token.image;
   };
-  const shortRoleLabel = (token) => normalizeRoleSlug(slugifyRole(token?.role ?? ''));
   const markerAssets = {
     charmed: '/markers/charmed-flute.png',
     protected: '/markers/defended-shield.png',
@@ -2838,6 +2988,144 @@
     </div>
   </Modal>
 
+  <Modal
+    open={actorPrepModalOpen}
+    title={$t('session.prep.actor_characters') ?? "The Actor's Characters"}
+    size="lg"
+    closeOnBackdrop={false}
+    showClose={false}
+    on:close={() => (actorPrepModalOpen = false)}
+  >
+    <div class="prep-actor-modal">
+      <p class="prep-actor-subtitle">{$t('session.prep.actor_subtitle') ?? 'Choose up to 3 villagers.'}</p>
+      <div class="prep-actor-slots">
+        {#each actorPrepChoices as choice, index}
+          <RoleSlotPicker
+            value={choice}
+            title={choice ? cleanActorName(choice) : ''}
+            image={choice ? roleImageSrc(getRoleDefinition(choice)?.category ?? 'villagers', slugifyRole(choice)) : ''}
+            labelEmpty={$t('configure.role_preview_empty') ?? 'Select villager'}
+            removable={!actorPrepDone}
+            on:pick={() => openActorPrepPicker(index)}
+            on:clear={() => (actorPrepChoices = actorPrepChoices.map((v, i) => (i === index ? '' : v)))}
+          />
+        {/each}
+      </div>
+      <div class="modal-actions">
+        <button class="btn ghost" type="button" on:click={fillActorPrepSlots}>
+          {$t('common.actions.autofill') ?? 'Autofill'}
+        </button>
+        <button
+          class="btn primary"
+          type="button"
+          on:click={() => {
+            actorPrepDone = true;
+            persistActorPrepChoices();
+            actorPrepModalOpen = false;
+          }}
+        >
+          {$t('common.actions.done')}
+        </button>
+      </div>
+    </div>
+  </Modal>
+
+  <Modal
+    open={thiefPrepModalOpen}
+    title={$t('session.prep.thief_roles') ?? "Thief's Roles"}
+    size="lg"
+    closeOnBackdrop={false}
+    showClose={false}
+    on:close={() => (thiefPrepModalOpen = false)}
+  >
+    <div class="prep-actor-modal">
+      <p class="prep-actor-subtitle">
+        {$t('session.prep.thief_subtitle') ?? 'Select 2 roles for the Thief.'}
+      </p>
+      <div class="prep-actor-slots two">
+        {#each thiefPrepChoices as choice, index}
+          <RoleSlotPicker
+            value={choice}
+            title={choice ? cleanActorName(choice) : ''}
+            image={choice ? roleImageSrc(getRoleDefinition(choice)?.category ?? 'villagers', slugifyRole(choice)) : ''}
+            labelEmpty={$t('session.prep.thief_slot_label') ?? 'Select role'}
+            removable={true}
+            on:pick={() => openThiefPrepPicker(index)}
+            on:clear={() => (thiefPrepChoices = thiefPrepChoices.map((v, i) => (i === index ? '' : v)))}
+          />
+        {/each}
+      </div>
+      <div class="modal-actions">
+        <button class="btn ghost" type="button" on:click={fillThiefPrepSlots}>
+          {$t('common.actions.autofill') ?? 'Autofill'}
+        </button>
+        <button
+          class="btn primary"
+          type="button"
+          on:click={() => {
+            thiefPrepDone = true;
+            thiefRoles = thiefPrepChoices.map((r) => normalizeRoleSlug(r));
+            persistThiefPrepChoices();
+            thiefPrepModalOpen = false;
+          }}
+        >
+          {$t('common.actions.done')}
+        </button>
+      </div>
+    </div>
+  </Modal>
+
+  <Modal
+    open={thiefPickerOpen}
+    title="Select a role"
+    size="lg"
+    closeOnBackdrop={true}
+    showClose={true}
+    on:close={() => (thiefPickerOpen = false)}
+  >
+    {#if thiefPickerOptions.length === 0}
+      <p class="hint">{$t?.('configure.role_preview_empty') ?? 'No roles available'}</p>
+    {:else}
+      <RolePickerGrid
+        showTitle={false}
+        variant="storyteller"
+        options={thiefPickerOptions.map((option) => ({
+          id: option,
+          label: cleanActorName(option),
+          image: roleImageSrc(getRoleDefinition(option)?.category ?? 'villagers', slugifyRole(option)),
+          selected: false,
+          disabled: false
+        }))}
+        on:select={(event) => chooseThiefPrepRole(event.detail.id)}
+      />
+    {/if}
+  </Modal>
+  <Modal
+    open={actorPickerOpen}
+    title="Select a role"
+    size="lg"
+    closeOnBackdrop={true}
+    showClose={true}
+    on:close={() => (actorPickerOpen = false)}
+  >
+    {#if actorPickerOptions.length === 0}
+      <p class="hint">{$t?.('configure.role_preview_empty') ?? 'No roles available'}</p>
+    {:else}
+      <RolePickerGrid
+        showTitle={false}
+        variant="storyteller"
+        options={actorPickerOptions.map((option) => ({
+          id: option,
+          label: cleanActorName(option),
+          image: roleImageSrc(getRoleDefinition(option)?.category ?? 'villagers', slugifyRole(option)),
+          selected: false,
+          disabled: false
+        }))}
+        on:select={(event) => chooseActorPrepRole(event.detail.id)}
+      />
+    {/if}
+  </Modal>
+
   <style>
     .manipulator-modal {
       display: flex;
@@ -2904,42 +3192,176 @@
       border-color: var(--accent, #d4a017);
       box-shadow: 0 0 0 2px rgba(212, 160, 23, 0.3);
     }
+    .prep-actor-modal {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .prep-actor-subtitle {
+      opacity: 0.8;
+      margin: 0;
+      font-size: 0.95rem;
+    }
+    .prep-actor-slots {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 0.75rem;
+    }
+    .prep-actor-slots.two {
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    }
+    .prep-actor-tile {
+      border: 1px solid var(--surface-border, #333);
+      border-radius: 10px;
+      background: var(--surface-2, #0f1419);
+      min-height: 140px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+      color: var(--text-primary, #fff);
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .prep-actor-inner {
+      width: 100%;
+      margin: 0;
+    }
+    .prep-actor-tile.filled {
+      border-style: solid;
+      box-shadow: 0 0 0 2px rgba(212, 160, 23, 0.2);
+    }
+    .prep-actor-tile img {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1px solid var(--surface-border, #333);
+    }
+    .prep-actor-tile .plus {
+      font-size: 1.4rem;
+      opacity: 0.8;
+    }
+    .prep-actor-tile .label {
+      font-size: 0.95rem;
+      opacity: 0.8;
+    }
+    .prep-actor-tile .plus-circle {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 1px solid var(--surface-border, #333);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+    }
+    .prep-actor-tile .name {
+      font-weight: 600;
+      text-align: center;
+      padding: 0 0.5rem;
+    }
+    .prep-actor-filled {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.35rem;
+      width: 100%;
+    }
+    .prep-actor-filled-footer {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      justify-content: center;
+    }
+    .icon-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 1px solid var(--surface-border, #333);
+      background: var(--surface-1, #131a20);
+      color: var(--text-primary, #fff);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      padding: 0;
+    }
+    .prep-actor-picker {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .prep-actor-picker-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.9rem;
+    }
+    .prep-actor-card {
+      background: var(--surface-2, #0f1419);
+      color: var(--text-primary, #fff);
+      border: 1px solid var(--surface-border, #333);
+      border-radius: 12px;
+      padding: 0.9rem;
+      min-height: 150px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.6rem;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
+    }
+    .prep-actor-card:hover {
+      border-color: var(--accent, #d4a017);
+      box-shadow: 0 0 0 2px rgba(212, 160, 23, 0.2);
+      transform: translateY(-2px);
+    }
+    .prep-actor-card img {
+      width: 84px;
+      height: 84px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1px solid var(--surface-border, #333);
+    }
+    .prep-actor-card span {
+      text-align: center;
+      font-weight: 600;
+      color: var(--text-primary, #fff);
+    }
   </style>
 
   <Modal
     open={actorModalOpen}
-    title={$t?.('session.phases.steps.actor') ?? 'Select role for Actor'}
+    title="Choose a role to play"
     size="lg"
     closeOnBackdrop={true}
     showClose={false}
     on:close={closeActorModal}
   >
-    <div class="actor-modal-body">
-      {#if actorAvailable.length === 0}
-        <p class="hint">{$t?.('configure.role_preview_empty') ?? 'No roles available'}</p>
-      {:else}
-        <div class="actor-modal-grid">
-          {#each actorAvailable as role}
-            {#if actorConsumed.has(slugifyRole(role))}
-              <button class="actor-card consumed" type="button" disabled>
-                <img src={roleImageSrc(getRoleDefinition(role)?.category ?? 'villagers', slugifyRole(role))} alt={role} />
-                <span>{actorRoleLabel(role)}</span>
-              </button>
-            {:else}
-              <button
-                class={`actor-card ${actorSelection === slugifyRole(role) ? 'selected' : ''}`}
-                type="button"
-                on:click={() => (actorSelection = slugifyRole(role))}
-                aria-pressed={actorSelection === slugifyRole(role)}
-              >
-                <img src={roleImageSrc(getRoleDefinition(role)?.category ?? 'villagers', slugifyRole(role))} alt={role} />
-                <span>{actorRoleLabel(role)}</span>
-              </button>
-            {/if}
-          {/each}
-        </div>
-      {/if}
-    </div>
+    {#if actorAvailable.length === 0}
+      <p class="hint">{$t?.('configure.role_preview_empty') ?? 'No roles available'}</p>
+    {:else}
+      <RolePickerGrid
+        title=""
+        subtitle=""
+        variant="player"
+        options={actorAvailable.map((role) => {
+          const slug = slugifyRole(role);
+          return {
+            id: slug,
+            label: actorRoleLabel(role),
+            image: roleImageSrc(getRoleDefinition(role)?.category ?? 'villagers', slug),
+            disabled: actorConsumed.has(slug),
+            selected: actorSelection === slug
+          };
+        })}
+        showTitle={false}
+        on:select={(event) => {
+          const option = event.detail;
+          if (option?.disabled) return;
+          actorSelection = option.id;
+        }}
+      />
+    {/if}
     <svelte:fragment slot="footer">
       <button class="btn ghost" type="button" on:click={closeActorModal}>
         {$t?.('common.actions.cancel') ?? 'Cancel'}
@@ -2952,27 +3374,24 @@
 
   <Modal
     open={foxModalOpen}
-    title={$t?.('session.fox.modal_title') ?? 'Fox senses…'}
+    title={$t?.('session.fox.modal_title') ?? 'Your search results'}
     size="md"
     closeOnBackdrop={true}
     showClose={false}
     on:close={closeFoxModal}
   >
-    <div class="actor-modal-body">
-      <div class="actor-modal-grid">
-        {#each foxOptions as option}
-          <button
-            class={`actor-card ${foxSelection === option.key ? 'selected' : ''}`}
-            type="button"
-            on:click={() => (foxSelection = option.key)}
-            aria-pressed={foxSelection === option.key}
-          >
-            <img src={option.image} alt={option.key} />
-            <span>{$t?.(`session.fox.option.${option.key}`) ?? option.key}</span>
-          </button>
-        {/each}
-      </div>
-    </div>
+    <RolePickerGrid
+      showTitle={false}
+      variant="player"
+      options={foxOptions.map((option) => ({
+        id: option.key,
+        label: $t?.(`session.fox.option.${option.key}`) ?? option.key,
+        image: option.image,
+        selected: foxSelection === option.key,
+        disabled: false
+      }))}
+      on:select={(event) => (foxSelection = event.detail.id)}
+    />
     <svelte:fragment slot="footer">
       <button class="btn ghost" type="button" on:click={closeFoxModal}>
         {$t?.('common.actions.cancel') ?? 'Cancel'}
@@ -3019,28 +3438,25 @@
 
   <Modal
     open={houndModalOpen}
-    title={$t?.('session.hound.modal_title') ?? 'Did the Wolf-Hound join the wolves?'}
+    title={$t?.('session.hound.modal_title') ?? 'Choose between Werewolves or Villagers'}
     size="md"
     closeOnBackdrop={true}
     showClose={false}
     on:close={() => (houndModalOpen = false)}
   >
     <p class="hint">{$t?.('session.hound.modal_body') ?? 'Choose whether the Wolf-Hound sides with the wolves or stays with the villagers. Single use.'}</p>
-    <div class="actor-modal-body">
-      <div class="actor-modal-grid">
-        {#each houndOptions as option}
-          <button
-            class={`actor-card ${houndSelection === option.key ? 'selected' : ''}`}
-            type="button"
-            on:click={() => (houndSelection = option.key)}
-            aria-pressed={houndSelection === option.key}
-          >
-            <img src={option.image} alt={option.key} />
-            <span>{$t?.(option.labelKey) ?? option.key}</span>
-          </button>
-        {/each}
-      </div>
-    </div>
+    <RolePickerGrid
+      showTitle={false}
+      variant="player"
+      options={houndOptions.map((option) => ({
+        id: option.key,
+        label: $t?.(option.labelKey) ?? option.key,
+        image: option.image,
+        selected: houndSelection === option.key,
+        disabled: false
+      }))}
+      on:select={(event) => (houndSelection = event.detail.id)}
+    />
     <svelte:fragment slot="footer">
       <button class="btn ghost" type="button" on:click={() => (houndModalOpen = false)}>
         {$t?.('common.actions.cancel') ?? 'Cancel'}
@@ -3064,7 +3480,7 @@
 
   <Modal
     open={thiefModalOpen}
-    title={$t?.('session.thief.modal_title') ?? 'Thief chooses a new role'}
+    title="Choose a role to impersonate"
     size="md"
     closeOnBackdrop={true}
     showClose={false}
@@ -3077,21 +3493,18 @@
     {#if thiefOfferData.length === 0}
       <p class="empty-exclusions">{$t?.('session.thief.no_roles') ?? 'No roles available for the Thief.'}</p>
     {:else}
-      <div class="actor-modal-body">
-        <div class="actor-modal-grid">
-          {#each thiefOfferData as option}
-            <button
-              class={`actor-card ${thiefChoice === option.slug ? 'selected' : ''}`}
-              type="button"
-              on:click={() => (thiefChoice = option.slug)}
-              aria-pressed={thiefChoice === option.slug}
-            >
-              <img src={roleImageSrc(option.category, option.slug)} alt={option.name} />
-              <span>{option.name}</span>
-            </button>
-          {/each}
-        </div>
-      </div>
+      <RolePickerGrid
+        showTitle={false}
+        variant="player"
+        options={thiefOfferData.map((option) => ({
+          id: option.slug,
+          label: option.name,
+          image: roleImageSrc(option.category, option.slug),
+          selected: thiefChoice === option.slug,
+          disabled: false
+        }))}
+        on:select={(event) => (thiefChoice = event.detail.id)}
+      />
     {/if}
     <svelte:fragment slot="footer">
       <button class="btn ghost" type="button" on:click={() => (thiefModalOpen = false)}>
@@ -3607,7 +4020,9 @@
   .actor-modal-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 0.75rem;
+    gap: 0.9rem;
+    overflow: visible;
+    padding-top: 1rem;
   }
 
   .actor-card {
@@ -3634,8 +4049,8 @@
   }
 
   .actor-card.selected {
-    border-color: var(--color-gold-brand);
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+    border-color: var(--surface-border, #333);
+    box-shadow: none;
   }
 
   .actor-card.consumed {

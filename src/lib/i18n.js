@@ -28,7 +28,8 @@ const dictionaries = {
         cancel: 'Cancel',
         save: 'Save',
         close: 'Close',
-        done: 'Done'
+        done: 'Done',
+        autofill: 'Autofill'
       },
       alerts: {
         default_title: 'Please review the information'
@@ -362,7 +363,14 @@ const dictionaries = {
         gypsy: 'Gypsy',
         town_crier_cards: 'Town Crier Cards',
         actor: 'Actor',
+        actor_characters: "The Actor's Characters",
+        thief_picker_title: 'Select a role',
+        thief_subtitle: 'Select 2 roles for the Thief.',
+        thief_slot_label: 'Select role',
+        roles: 'Roles',
         thief: 'Thief',
+        thief_roles: "Thief's Roles",
+        actor_subtitle: 'Choose up to 3 villagers.',
         town_crier: 'Town Crier',
         modal_empty_title: 'Some slots are empty. Continue?',
         modal_empty_cancel: 'Cancel',
@@ -608,7 +616,7 @@ const dictionaries = {
         delete_modal_word: 'delete'
       },
       footbar: {
-        signature: '@chatgpt-juarnamon intellectual property',
+        signature: '@juchatgptmon intellectual property',
         aria_label: 'Application footer'
       }
     },
@@ -658,7 +666,8 @@ const dictionaries = {
         cancel: 'Cancelar',
         save: 'Guardar',
         close: 'Cerrar',
-        done: 'Aceptar'
+        done: 'Aceptar',
+        autofill: 'Autocompletar'
       },
       alerts: {
         default_title: 'Revisa la información'
@@ -1088,7 +1097,7 @@ const dictionaries = {
         delete_modal_word: 'delete'
       },
       footbar: {
-        signature: '@chatgpt-juarnamon propiedad intelectual',
+        signature: '@juchatgptmon propiedad intelectual',
         aria_label: 'Pie de aplicación'
       }
     },
@@ -1120,8 +1129,14 @@ const dictionaries = {
         gypsy: 'Gitana',
         town_crier_cards: 'Cartas de Pregonero',
         actor: 'Comediante',
+        actor_characters: 'Cartas del Comediante',
+        thief_subtitle: 'Selecciona 2 roles para el Ladrón.',
+        thief_slot_label: 'Selecciona rol',
+        thief_roles: 'Cartas del Ladrón',
+        roles: 'Roles',
         thief: 'Ladrón',
         town_crier: 'Pregonero',
+        actor_subtitle: 'Elige hasta 3 aldeanos.',
         modal_empty_title: 'Hay huecos vacíos. ¿Continuar?',
         modal_empty_cancel: 'Cancelar',
         modal_empty_confirm: 'Confirmar',
@@ -1288,7 +1303,8 @@ const dictionaries = {
         cancel: 'Mégse',
         save: 'Mentés',
         close: 'Bezárás',
-        done: 'Kész'
+        done: 'Kész',
+        autofill: 'Automatikus kitöltés'
       },
       alerts: {
         default_title: 'Ellenőrizd az adatokat'
@@ -1718,7 +1734,7 @@ const dictionaries = {
         delete_modal_word: 'delete'
       },
       footbar: {
-        signature: '@chatgpt-juarnamon szellemi tulajdona',
+        signature: '@juchatgptmon szellemi tulajdona',
         aria_label: 'Alkalmazás lábléc'
       }
     },
@@ -1750,8 +1766,14 @@ const dictionaries = {
         gypsy: 'Cigánylány',
         town_crier_cards: 'Kikiáltó kártyái',
         actor: 'Komédiás',
+        actor_characters: 'A komédiás kártyái',
+        thief_subtitle: 'Válassz 2 szerepet a Tolvajnak.',
+        thief_slot_label: 'Válassz szerepet',
+        thief_roles: 'A tolvaj kártyái',
+        roles: 'Szerepek',
         thief: 'Tolvaj',
         town_crier: 'Kikiáltó',
+        actor_subtitle: 'Válassz legfeljebb 3 falusit.',
         modal_empty_title: 'Vannak üres helyek. Folytatod?',
         modal_empty_cancel: 'Mégse',
         modal_empty_confirm: 'Megerősítés',

@@ -3,6 +3,7 @@
   import { t } from '../../lib/i18n.js';
   import Modal from '../ui/Modal.svelte';
   import Button from '../ui/Button.svelte';
+  import RolePickerGrid from '../ui/RolePickerGrid.svelte';
   import roleDefinitions from '../../../reference-data/datasets/roles.json' with { type: 'json' };
 
   export let open = false;
@@ -23,10 +24,81 @@
   export let includeTownCrier = true;
   export let tweakRoleMix = false;
   export let roleMixOverride = null;
+  export let modifyExclusionList = true;
 
   const dispatch = createEventDispatcher();
 
   const slugify = (value) => (value ?? '').toLowerCase().replace(/\s+/g, '_');
+  const roleAliases = {
+    the_actor: 'actor',
+    actor: 'actor',
+    comedian: 'actor',
+    comediante: 'actor',
+    el_comediante: 'actor',
+    bad: 'bad',
+    big_bad_wolf: 'bad',
+    wolf_hound: 'hound',
+    white_werewolf: 'white',
+    the_white_werewolf: 'white',
+    cursed_wolf_father: 'father',
+    wandering_judge: 'judge',
+    judge: 'judge',
+    the_judge: 'judge',
+    the_wandering_judge: 'judge',
+    bear_tamer: 'tamer',
+    wild_child: 'child',
+    two_sisters: 'sisters',
+    three_brothers: 'brothers',
+    prejudiced_manipulator: 'manipulator'
+  };
+  const SHORT_ROLE_LABELS = {
+    angel: 'Angel',
+    bad: 'Bad',
+    father: 'Father',
+    white: 'White',
+    werewolf: 'Werewolf',
+    wolf_hound: 'Hound',
+    hound: 'Hound',
+    child: 'Child',
+    gypsy: 'Gypsy',
+    tamer: 'Tamer',
+    scapegoat: 'Scapegoat',
+    fox: 'Fox',
+    seer: 'Seer',
+    witch: 'Witch',
+    hunter: 'Hunter',
+    elder: 'Elder',
+    defender: 'Defender',
+    pyromaniac: 'Pyromaniac',
+    scandalmonger: 'Scandalmonger',
+    piper: 'Piper',
+    manipulator: 'Manipulator',
+    judge: 'Judge',
+    knight: 'Knight',
+    cupid: 'Cupid',
+    idiot: 'Idiot',
+    villager: 'Villager',
+    trusted: 'Trusted',
+    brothers: 'Brothers',
+    sisters: 'Sisters',
+    actor: 'Actor',
+    thief: 'Thief'
+  };
+  const normalizeRoleSlug = (slug = '') => {
+    const normalized = slugify(slug);
+    return roleAliases[normalized] ?? normalized;
+  };
+  const shortRoleLabel = (slug) => {
+    const norm = normalizeRoleSlug(slug);
+    if (SHORT_ROLE_LABELS[norm]) return SHORT_ROLE_LABELS[norm];
+    const base = norm.replace(/^the_/, '').replace(/_/g, ' ');
+    return base.charAt(0).toUpperCase() + base.slice(1);
+  };
+  const roleImagePath = (slug) => {
+    const norm = normalizeRoleSlug(slug);
+    const category = allRoleCategory.get(norm) ?? 'villagers';
+    return `/roles/${category}/${norm}.png`;
+  };
   const createEmptySelection = () =>
     (categories ?? []).reduce((acc, category) => ({ ...acc, [category]: {} }), {});
 
@@ -132,7 +204,7 @@
   let draftTweakRoleMix = false;
   let showTweakHint = false;
   let draftMix = null;
-  let showExclusionEditor = true;
+  let draftModifyExclusions = true;
   let showExclusionHint = false;
 
   const duplicateSet = new Set((duplicates ?? []).map((entry) => slugify(entry)));
@@ -148,13 +220,15 @@
   const thiefSlots = [0, 1];
   let exclusionSlugs = [];
   let exclusionSetMemo = new Set();
-  $: exclusionSlugs = (draftExclusionList ?? []).map((entry) => slugify(entry)).filter(Boolean);
+  $: exclusionSlugs = (draftExclusionList ?? [])
+    .map((entry) => normalizeRoleSlug(entry))
+    .filter(Boolean);
   $: exclusionSetMemo = new Set(exclusionSlugs);
-  const isExcluded = (role) => exclusionSetMemo.has(slugify(role));
+  const isExcluded = (role) => exclusionSetMemo.has(normalizeRoleSlug(role));
 
   const toggleExclusion = (role, checked) => {
     const current = new Set(draftExclusionList ?? []);
-    const slug = slugify(role);
+    const slug = normalizeRoleSlug(role);
     if (checked) current.add(slug);
     else current.delete(slug);
     draftExclusionList = Array.from(current);
@@ -163,7 +237,7 @@
   const toggleGroupExclusion = (roles = [], checked) => {
     const current = new Set(draftExclusionList ?? []);
     roles.forEach((role) => {
-      const slug = slugify(role);
+      const slug = normalizeRoleSlug(role);
       if (checked) current.add(slug);
       else current.delete(slug);
     });
@@ -181,13 +255,18 @@
     draftTweakRoleMix = !!tweakRoleMix;
     showTweakHint = false;
     draftMix = cloneMix(roleMixOverride ?? mix ?? {});
-    actorChoices = Array.isArray(actorRoles) ? [...actorRoles].slice(0, 3) : ['', '', ''];
+    actorChoices = Array.isArray(actorRoles)
+      ? [...actorRoles].map((role) => normalizeRoleSlug(role)).slice(0, 3)
+      : ['', '', ''];
     while (actorChoices.length < 3) actorChoices.push('');
-    thiefChoices = Array.isArray(thiefRoles) ? [...thiefRoles].slice(0, 2) : ['', ''];
+    thiefChoices = Array.isArray(thiefRoles)
+      ? [...thiefRoles].map((role) => normalizeRoleSlug(role)).slice(0, 2)
+      : ['', ''];
     while (thiefChoices.length < 2) thiefChoices.push('');
     draftExclusionList = Array.isArray(exclusionList)
-      ? exclusionList.map((entry) => slugify(entry)).filter(Boolean)
+      ? exclusionList.map((entry) => normalizeRoleSlug(entry)).filter(Boolean)
       : [];
+    draftModifyExclusions = modifyExclusionList !== false;
   } else if (!open && wasOpen) {
     wasOpen = false;
   }
@@ -294,8 +373,8 @@ $: if (!hasRoleSelected('actor') && actorChoices.some(Boolean)) {
 
 // Debug removed to avoid noisy console
 
-  $: actorSelectedSlugs = new Set(actorChoices.filter(Boolean).map((role) => slugify(role)));
-  $: thiefSelectedSlugs = new Set(thiefChoices.filter(Boolean).map((role) => slugify(role)));
+  $: actorSelectedSlugs = new Set(actorChoices.filter(Boolean).map((role) => normalizeRoleSlug(role)));
+  $: thiefSelectedSlugs = new Set(thiefChoices.filter(Boolean).map((role) => normalizeRoleSlug(role)));
 
   $: categoryStats = (categories ?? []).reduce((acc, category) => {
     acc[category] = {
@@ -334,13 +413,13 @@ $: if (draftTweakRoleMix && (!draftMix || MIX_KEYS.every((key) => draftMix?.[key
   const villagerRoles = () => categoryRoles('villagers');
 
   $: availableVillagers = villagerRoles().filter((role) => {
-    const slug = slugify(role);
+    const slug = normalizeRoleSlug(role);
     const selectedInVillagers = (draftSelections?.villagers?.[role] ?? 0) > 0;
     return !selectedInVillagers && !actorSelectedSlugs.has(slug) && !thiefSelectedSlugs.has(slug);
   });
 
   const isActorReserved = (role) => {
-    const slug = slugify(role);
+    const slug = normalizeRoleSlug(role);
     return actorSelectedSlugs.has(slug) && !duplicateSet.has(slug);
   };
 
@@ -379,7 +458,7 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
   const thiefAvailablePool = (respectExclusions = true) => {
     const pool = [];
     allRolesList.forEach((role) => {
-      const slug = slugify(role);
+      const slug = normalizeRoleSlug(role);
       if (multiPlayerRoles.has(slug)) return;
       const category = allRoleCategory.get(slug) ?? 'villagers';
       const alreadySelected =
@@ -387,7 +466,7 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
         Object.values(draftSelections ?? {}).some((cat) => Number(cat?.[role] ?? 0) > 0);
       if (alreadySelected && nonDuplicable(role)) return;
       if (respectExclusions && isExcluded(role)) return; // auto selección respeta exclusiones
-      pool.push(role);
+      pool.push(slug);
     });
     return pool;
   };
@@ -404,11 +483,11 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
   function handleActorPick(role) {
     if (!actorActive) return;
     if (!role) return;
-    const slug = slugify(role);
+    const slug = normalizeRoleSlug(role);
     if (actorSelectedSlugs.has(slug)) return;
-    if ((draftSelections?.villagers?.[role] ?? 0) > 0) return;
+    if ((draftSelections?.villagers?.[slug] ?? 0) > 0) return;
     const next = [...actorChoices];
-    next[pickerIndex] = role;
+    next[pickerIndex] = slug;
     actorChoices = next.slice(0, 3);
     pickerOpen = false;
   }
@@ -416,11 +495,11 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
   function handleThiefPick(role) {
     if (!thiefActive) return;
     if (!role) return;
-    const slug = slugify(role);
+    const slug = normalizeRoleSlug(role);
     if (thiefSelectedSlugs.has(slug)) return;
-    if (thiefAvailablePool(false).every((entry) => slugify(entry) !== slug)) return;
+    if (thiefAvailablePool(false).every((entry) => normalizeRoleSlug(entry) !== slug)) return;
     const next = [...thiefChoices];
-    next[pickerIndex] = role;
+    next[pickerIndex] = slug;
     thiefChoices = next.slice(0, 2);
     pickerOpen = false;
   }
@@ -432,9 +511,7 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
     thiefChoices = shuffled.slice(0, 2);
   }
 
-  $: if (thiefActive && !draftOverride && thiefChoices.every((slot) => !slot)) {
-    autoFillThief();
-  }
+  // Do not auto-fill thief choices unless requested explicitly.
 
   function clearActorSlot(index) {
     const next = [...actorChoices];
@@ -453,21 +530,12 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
   }
 
   function save() {
-    // Auto-relleno de slots del Thief si quedan huecos
-    const thiefPool = thiefAvailablePool();
-    const filledThiefChoices = [...thiefChoices];
-    if (thiefActive) {
-      for (let i = 0; i < filledThiefChoices.length; i += 1) {
-        if (filledThiefChoices[i]) continue;
-        const chosen = thiefPool.find(
-          (role) => !filledThiefChoices.includes(role)
-        );
-        if (chosen) filledThiefChoices[i] = chosen;
-      }
-    }
-
-    const actorPayload = actorActive ? actorChoices.filter(Boolean) : [];
-    const thiefPayload = thiefActive ? filledThiefChoices.filter(Boolean) : [];
+    const actorPayload = actorActive
+      ? actorChoices.filter(Boolean).map((r) => normalizeRoleSlug(r))
+      : [];
+    const thiefPayload = thiefActive
+      ? thiefChoices.filter(Boolean).map((r) => normalizeRoleSlug(r))
+      : [];
     dispatch('save', {
       selections: draftSelections,
       override: draftOverride,
@@ -477,7 +545,8 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
       roleMixOverride: draftTweakRoleMix ? draftMix : null,
       actorRoles: actorPayload,
       thiefRoles: thiefPayload,
-      exclusionList: draftExclusionList.filter(Boolean)
+      exclusionList: draftExclusionList.filter(Boolean),
+      modifyExclusionList: draftModifyExclusions
     });
   }
 
@@ -537,7 +606,7 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
       </div>
       <div class="toggle-stack">
         <label class="override-toggle">
-          <input type="checkbox" bind:checked={showExclusionEditor} />
+          <input type="checkbox" bind:checked={draftModifyExclusions} />
           {$t('configure.exclusions_toggle_label')}
         </label>
         <button
@@ -597,7 +666,7 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
       </div>
     </div>
 
-    {#if showExclusionEditor}
+    {#if draftModifyExclusions}
       <div class="exclusions-box">
         <div class="exclusions-header">
           <h3>{$t('configure.thief_exclusions_label')}</h3>
@@ -609,7 +678,7 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
               on:change={(e) =>
                 toggleGroupExclusion(['pyromaniac', 'scandalmonger'], e.currentTarget.checked)
               }
-              checked={['pyromaniac', 'scandalmonger'].every((role) => exclusionSetMemo.has(slugify(role)))}
+              checked={['pyromaniac', 'scandalmonger'].every((role) => exclusionSetMemo.has(normalizeRoleSlug(role)))}
             />
             <span>{$t('configure.exclusions_group_village')}</span>
           </label>
@@ -617,7 +686,7 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
             <input
               type="checkbox"
               on:change={(e) => toggleGroupExclusion(['gypsy', 'town_crier'], e.currentTarget.checked)}
-              checked={['gypsy', 'town_crier'].every((role) => exclusionSetMemo.has(slugify(role)))}
+              checked={['gypsy', 'town_crier'].every((role) => exclusionSetMemo.has(normalizeRoleSlug(role)))}
             />
             <span>{$t('configure.exclusions_group_newmoon')}</span>
           </label>
@@ -628,7 +697,7 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
                 const pool = rolesByCategory?.ambiguous ?? [];
                 toggleGroupExclusion(pool, e.currentTarget.checked);
               }}
-              checked={(rolesByCategory?.ambiguous ?? []).every((role) => exclusionSetMemo.has(slugify(role)))}
+              checked={(rolesByCategory?.ambiguous ?? []).every((role) => exclusionSetMemo.has(normalizeRoleSlug(role)))}
             />
             <span>{$t('configure.exclusions_group_ambiguous')}</span>
           </label>
@@ -639,7 +708,7 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
                 const pool = rolesByCategory?.loners ?? [];
                 toggleGroupExclusion(pool, e.currentTarget.checked);
               }}
-              checked={(rolesByCategory?.loners ?? []).every((role) => exclusionSetMemo.has(slugify(role)))}
+              checked={(rolesByCategory?.loners ?? []).every((role) => exclusionSetMemo.has(normalizeRoleSlug(role)))}
             />
             <span>{$t('configure.exclusions_group_loners')}</span>
           </label>
@@ -647,7 +716,7 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
             <input
               type="checkbox"
               on:change={(e) => toggleGroupExclusion(['brothers', 'sisters'], e.currentTarget.checked)}
-              checked={['brothers', 'sisters'].every((role) => exclusionSetMemo.has(slugify(role)))}
+              checked={['brothers', 'sisters'].every((role) => exclusionSetMemo.has(normalizeRoleSlug(role)))}
             />
             <span>{$t('configure.exclusions_group_multiplayer')}</span>
           </label>
@@ -659,7 +728,7 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
                 toggleGroupExclusion(pool, e.currentTarget.checked);
               }}
               checked={[...(rolesByCategory?.werewolves ?? []), 'white'].every((role) =>
-                exclusionSetMemo.has(slugify(role))
+                exclusionSetMemo.has(normalizeRoleSlug(role))
               )}
             />
             <span>{$t('configure.exclusions_group_werewolves')}</span>
@@ -671,7 +740,7 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
                 toggleGroupExclusion(['brothers', 'sisters', 'trusted', 'villager'], e.currentTarget.checked)
               }
               checked={['brothers', 'sisters', 'trusted', 'villager'].every((role) =>
-                exclusionSetMemo.has(slugify(role))
+                exclusionSetMemo.has(normalizeRoleSlug(role))
               )}
             />
             <span>{$t('configure.exclusions_group_no_power_villagers')}</span>
@@ -691,20 +760,17 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
         </div>
         <div class="exclusions-grid">
           {#each exclusionCandidates as role}
-            <label class={`exclusion-chip ${exclusionSetMemo.has(slugify(role)) ? 'exclusion-chip--excluded' : ''}`}>
+            <label class={`exclusion-chip ${exclusionSetMemo.has(normalizeRoleSlug(role)) ? 'exclusion-chip--excluded' : ''}`}>
               <input
                 type="checkbox"
                 value={role}
                 on:change={(event) => {
                   toggleExclusion(role, event.currentTarget.checked);
                 }}
-                checked={exclusionSetMemo.has(slugify(role))}
+                checked={exclusionSetMemo.has(normalizeRoleSlug(role))}
               />
-              <img
-                src={`/roles/${allRoleCategory.get(slugify(role)) ?? 'villagers'}/${slugify(role)}.png`}
-                alt={role}
-              />
-              <span>{role}</span>
+              <img src={roleImagePath(role)} alt={shortRoleLabel(role)} />
+              <span>{shortRoleLabel(role)}</span>
             </label>
           {/each}
           {#if !exclusionCandidates.length}
@@ -761,9 +827,9 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
             {#each categoryRoles(category) as role}
               {#if duplicateSet.has(slugify(role))}
                 <div class={`role-card duplicable ${draftSelections[category]?.[role] ? 'selected' : ''}`}>
-                  <img src={`/roles/${category}/${slugify(role)}.png`} alt={role} />
+                  <img src={roleImagePath(role)} alt={shortRoleLabel(role)} />
                   <div class="card-info">
-                    <span>{role}</span>
+                    <span>{shortRoleLabel(role)}</span>
                     <div class="counter">
                       <button
                         type="button"
@@ -786,8 +852,8 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
                   on:click={() => toggleRole(category, role)}
                   disabled={isBlockedByActor(role)}
                 >
-                  <img src={`/roles/${category}/${slugify(role)}.png`} alt={role} />
-                  <span class="card-info">{role}</span>
+                  <img src={roleImagePath(role)} alt={shortRoleLabel(role)} />
+                  <span class="card-info">{shortRoleLabel(role)}</span>
                 </button>
               {/if}
             {/each}
@@ -808,9 +874,9 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
           {#each actorSlots as index}
             {#if actorChoices[index]}
               <div class="actor-slot filled">
-                <img src={`/roles/villagers/${slugify(actorChoices[index])}.png`} alt={actorChoices[index]} />
+                <img src={roleImagePath(actorChoices[index])} alt={shortRoleLabel(actorChoices[index])} />
                 <div class="actor-slot__info">
-                  <span>{actorChoices[index]}</span>
+                  <span>{shortRoleLabel(actorChoices[index])}</span>
                   <button type="button" class="actor-clear" on:click={() => clearActorSlot(index)}>×</button>
                 </div>
               </div>
@@ -839,12 +905,9 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
           {#each thiefSlots as index}
             {#if thiefChoices[index]}
                 <div class="actor-slot filled">
-                  <img
-                    src={`/roles/${allRoleCategory.get(slugify(thiefChoices[index])) ?? 'villagers'}/${slugify(thiefChoices[index])}.png`}
-                    alt={thiefChoices[index]}
-                  />
+                  <img src={roleImagePath(thiefChoices[index])} alt={shortRoleLabel(thiefChoices[index])} />
                   <div class="actor-slot__info">
-                    <span>{thiefChoices[index]}</span>
+                    <span>{shortRoleLabel(thiefChoices[index])}</span>
                   <button type="button" class="actor-clear" on:click={() => clearThiefSlot(index)}>×</button>
                   </div>
                 </div>
@@ -870,37 +933,45 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
   {#if pickerOpen}
     <Modal
       open={pickerOpen}
-      title={pickerType === 'actor' ? 'Select villager for Actor' : 'Select role for Thief'}
+      title="Select a role"
       size="lg"
       on:close={() => (pickerOpen = false)}
     >
-      <div class="picker-grid">
-        {#if pickerType === 'actor'}
-          {#each availableVillagers as role}
-            <button type="button" class="picker-card" on:click={() => handleActorPick(role)}>
-              <img src={`/roles/villagers/${slugify(role)}.png`} alt={role} />
-              <span>{role}</span>
-            </button>
-          {/each}
-        {:else}
-          {#each availableThiefRoles() as role}
-            <button
-              type="button"
-              class="picker-card"
-              disabled={!draftOverride}
-              on:click={() => {
-                if (draftOverride) handleThiefPick(role);
-              }}
-            >
-              <img
-                src={`/roles/${allRoleCategory.get(slugify(role)) ?? 'villagers'}/${slugify(role)}.png`}
-                alt={role}
-              />
-              <span>{role}</span>
-            </button>
-          {/each}
-        {/if}
-      </div>
+      {#if pickerType === 'actor'}
+        <RolePickerGrid
+          showTitle={false}
+          variant="storyteller"
+          options={availableVillagers.map((role) => {
+            const slug = normalizeRoleSlug(role);
+            return {
+              id: slug,
+              label: shortRoleLabel(slug),
+              image: roleImagePath(slug),
+              disabled: false,
+              selected: false
+            };
+          })}
+          on:select={(event) => handleActorPick(event.detail.id)}
+        />
+      {:else}
+        <RolePickerGrid
+          showTitle={false}
+          variant="storyteller"
+          options={availableThiefRoles().map((role) => {
+            const slug = normalizeRoleSlug(role);
+            return {
+              id: slug,
+              label: shortRoleLabel(slug),
+              image: roleImagePath(slug),
+              disabled: !draftOverride,
+              selected: false
+            };
+          })}
+          on:select={(event) => {
+            if (draftOverride) handleThiefPick(event.detail.id);
+          }}
+        />
+      {/if}
     </Modal>
   {/if}
 </Modal>
