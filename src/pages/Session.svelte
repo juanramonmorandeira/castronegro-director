@@ -1657,6 +1657,7 @@
           pending_preparation: prepQueue.slice(1),
           base_index: 0
         },
+        'settings.manipulator_assignments': {},
         actor_state: {
           available: sanitizeActorRoles(actorRoles),
           consumed: [],
@@ -1665,7 +1666,8 @@
         fox_state: {
           lastResult: null,
           available: true,
-          lastNightUsed: null
+          lastNightUsed: null,
+          lastNightUsedKey: null
         }
       });
     } catch (error) {

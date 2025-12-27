@@ -10,6 +10,8 @@
   export let testPlayers = [];
   export let roles = [];
   export let assignments = {};
+  export let seatingOrder = [];
+  export let expectedSeats = 0;
 
   const shuffle = (list = []) => {
     const copy = [...list];
@@ -23,6 +25,8 @@
   const dispatch = createEventDispatcher();
 
   let draftAssignments = {};
+  let draftSeatRoles = [];
+  let draftSeating = [];
   let userModified = false;
   let lastSyncedKey = '';
   let lastOpenState = false;
@@ -51,9 +55,12 @@
 
   $: normalizedAssignments = normalizeAssignments(assignments);
   $: normalizedKey = JSON.stringify(normalizedAssignments);
+  $: normalizedSeatingKey = JSON.stringify(seatingOrder ?? []);
 
   $: if (open && !lastOpenState) {
     draftAssignments = normalizedAssignments;
+    draftSeating = seatingOrder ?? [];
+    draftSeatRoles = buildSeatRoles(draftSeating, draftAssignments);
     userModified = false;
     lastSyncedKey = normalizedKey;
     draftTestPlayers = Array.isArray(testPlayers) ? [...testPlayers] : [];
@@ -62,10 +69,13 @@
 
   $: if (open && normalizedKey !== lastSyncedKey && !userModified) {
     draftAssignments = normalizedAssignments;
+    draftSeatRoles = buildSeatRoles(draftSeating, draftAssignments);
     lastSyncedKey = normalizedKey;
     draftTestPlayers = Array.isArray(testPlayers) ? [...testPlayers] : [];
     newPlayerName = '';
   }
+
+  $: seatsCount = expectedSeats > 0 ? expectedSeats : (players?.length ?? 0);
 
   $: lastOpenState = open;
 
@@ -76,30 +86,99 @@
     return acc;
   }, {});
 
-  $: roleUsage = Object.values(draftAssignments ?? {}).reduce((acc, slug) => {
+  $: roleUsage = (draftSeatRoles ?? []).reduce((acc, slug) => {
     if (!slug) return acc;
     acc[slug] = (acc[slug] ?? 0) + 1;
     return acc;
   }, {});
 
   $: matchPlayers = [...(players ?? []), ...(draftTestPlayers ?? [])];
+  $: playersMap = new Map((matchPlayers ?? []).map((p) => [p.id, p]));
 
-  function roleInstanceIndex(slug, playerId) {
+  const buildSeatAssignments = (order = [], count = seatsCount) => {
+    const seats = [];
+    const used = new Set();
+    (order ?? []).forEach((id) => {
+      if (seats.length >= count) return;
+      if (playersMap.has(id) && !used.has(id)) {
+        seats.push(id);
+        used.add(id);
+      }
+    });
+    while (seats.length < count) seats.push(null);
+    return seats;
+  };
+
+  const ensureSeatArrays = (count) => {
+    if (!Array.isArray(draftSeating)) draftSeating = [];
+    if (!Array.isArray(draftSeatRoles)) draftSeatRoles = [];
+    while (draftSeating.length < count) draftSeating.push(null);
+    while (draftSeatRoles.length < count) draftSeatRoles.push('');
+    if (draftSeating.length > count) draftSeating = draftSeating.slice(0, count);
+    if (draftSeatRoles.length > count) draftSeatRoles = draftSeatRoles.slice(0, count);
+  };
+
+  const buildSeatRoles = (seats = [], assignmentMap = {}) => {
+    const roles = [];
+    seats.forEach((playerId) => {
+      if (playerId && assignmentMap[playerId]) {
+        roles.push(assignmentMap[playerId]);
+      } else {
+        roles.push('');
+      }
+    });
+    return roles;
+  };
+
+  $: if (open) {
+    draftSeating = buildSeatAssignments(userModified ? draftSeating : seatingOrder, seatsCount);
+    ensureSeatArrays(seatsCount);
+    if (!userModified) {
+      draftSeatRoles = buildSeatRoles(draftSeating, normalizedAssignments);
+    }
+  }
+
+  const setSeat = (index, playerId) => {
+    if (index < 0 || index >= seatsCount) return;
+    const next = [...draftSeating];
+    const normalized = playerId || null;
+    // Remove player from any other seat
+    if (normalized) {
+      draftSeating.forEach((id, idx) => {
+        if (idx !== index && id === normalized) {
+          next[idx] = null;
+        }
+      });
+    }
+    next[index] = normalized;
+    draftSeating = next;
+    userModified = true;
+  };
+
+  $: seatedIds = new Set(draftSeating.filter(Boolean));
+  $: queuePlayers = (matchPlayers ?? []).filter((p) => !seatedIds.has(p.id));
+
+  const isOffline = (player) => {
+    if (!player) return false;
+    if (player.offline === true) return true;
+    if (typeof player.id === 'string' && player.id.startsWith('test-')) return true;
+    return false;
+  };
+
+  function roleInstanceIndex(slug) {
     const total = roleCapacities[slug] ?? 0;
     if (total <= 1) return null;
-    const assigned = (matchPlayers ?? []).filter((player) => draftAssignments[player.id] === slug);
-    const position = assigned.findIndex((player) => player.id === playerId);
-    if (position >= 0) return position + 1;
+    const assigned = (draftSeatRoles ?? []).filter((value) => value === slug);
     const nextIndex = assigned.length + 1;
     return Math.min(nextIndex, total);
   }
 
-  function formatRoleLabel(role, playerId, available = null) {
+  function formatRoleLabel(role, available = null) {
     const slug = resolveRoleSlug(role);
     const total = Number(role.count) || 0;
     if (!slug || total <= 1) return role.role;
     if (available === 0) return `${role.role} (0/${total})`;
-    const index = roleInstanceIndex(slug, playerId) ?? 1;
+    const index = roleInstanceIndex(slug) ?? 1;
     return `${role.role} (${index}/${total})`;
   }
 
@@ -111,14 +190,9 @@
     return capacity - used;
   }
 
-  function assign(playerId, value) {
-    const next = { ...draftAssignments };
-    if (!value) {
-      delete next[playerId];
-    } else {
-      next[playerId] = value;
-    }
-    draftAssignments = next;
+  function assignSeatRole(index, value) {
+    ensureSeatArrays(seatsCount);
+    draftSeatRoles[index] = value || '';
     userModified = true;
   }
 
@@ -149,10 +223,9 @@
 
   function removeTestPlayer(id) {
     draftTestPlayers = draftTestPlayers.filter((player) => player.id !== id);
-    if (draftAssignments[id]) {
-      const next = { ...draftAssignments };
-      delete next[id];
-      draftAssignments = next;
+    const seatIndex = draftSeating.findIndex((playerId) => playerId === id);
+    if (seatIndex >= 0) {
+      setSeat(seatIndex, null);
     }
   }
 
@@ -161,7 +234,7 @@
   }
 
   function autoAssign() {
-    if (!Array.isArray(matchPlayers) || !Array.isArray(roles)) return;
+    if (!Array.isArray(roles)) return;
     const pool = [];
     roles.forEach((role) => {
       const count = Number(role.count) || 0;
@@ -172,122 +245,98 @@
     });
     if (!pool.length) return;
     const randomized = shuffle(pool);
-    const next = {};
-    (matchPlayers ?? []).forEach((player, index) => {
-      const slug = randomized[index];
-      if (slug) next[player.id] = slug;
-    });
-    draftAssignments = next;
+    ensureSeatArrays(seatsCount);
+    draftSeatRoles = draftSeatRoles.map((_, index) => randomized[index] ?? '');
+    userModified = true;
   }
 
   function confirm() {
     const payload = {};
-    (matchPlayers ?? []).forEach((player) => {
-      const slug = draftAssignments[player.id];
-      if (!slug) return;
-      const role = (roles ?? []).find((item) => item.slug === slug);
+    ensureSeatArrays(seatsCount);
+    draftSeating.forEach((playerId, index) => {
+      const slug = draftSeatRoles[index];
+      if (!playerId || !slug) return;
+      const role = (roles ?? []).find((item) => resolveRoleSlug(item) === slug);
       if (!role) return;
-      payload[player.id] = {
+      payload[playerId] = {
         role: role.role,
-        slug: role.slug,
+        slug: resolveRoleSlug(role),
         category: role.category,
-        alias: player.alias ?? player.name ?? player.id
+        alias: playersMap.get(playerId)?.alias ?? playersMap.get(playerId)?.name ?? playerId
       };
     });
-    dispatch('save', { assignments: payload, testPlayers: draftTestPlayers });
+    dispatch('save', {
+      assignments: payload,
+      testPlayers: draftTestPlayers,
+      seatingOrder: draftSeating.slice(0, seatsCount)
+    });
   }
 
   $: hasPlayers = Array.isArray(matchPlayers) && matchPlayers.length > 0;
   $: hasRoles = Array.isArray(roles) && roles.length > 0;
-  const hint = $t('configure.match_hint');
+  const hint = 'Assign seats and roles.';
 </script>
 
 <Modal
   open={open}
-  title={$t('configure.match_title')}
+  title="Match"
   description={hint}
   size="lg"
   on:close={close}
 >
   <div class="match-body">
-    <div class="test-players card-outline">
-      <div class="section-header">
-        <label class="section-label" for="test-player-input">{$t('configure.match_offline_players_label')}</label>
-        <small class="section-hint">{$t('configure.match_offline_players_hint')}</small>
-      </div>
-      <div class="test-input-row">
-        <input
-          id="test-player-input"
-          class="test-input"
-          placeholder="Nombre o alias"
-          bind:value={newPlayerName}
-          on:keydown={(event) => event.key === 'Enter' && addTestPlayer()}
-        />
-        <Button variant="secondary" type="button" on:click={addTestPlayer}>
-          Añadir
-        </Button>
-      </div>
-      {#if draftTestPlayers.length}
-        <div class="test-chip-list" aria-live="polite">
-          {#each draftTestPlayers as player}
-            <span class="test-chip">
-              {player.alias}
-              <button
-                type="button"
-                class="chip-remove"
-                aria-label={`Eliminar ${player.alias}`}
-                on:click={() => removeTestPlayer(player.id)}
-              >
-                ×
-              </button>
-            </span>
-          {/each}
-        </div>
-      {/if}
-    </div>
-
     {#if !hasPlayers}
       <p class="match-empty">{$t('configure.match_no_players')}</p>
     {:else if !hasRoles}
       <p class="match-empty">{$t('configure.match_no_roles')}</p>
     {:else}
-      <table class="match-table">
-        <thead>
-          <tr>
-            <th>{$t('configure.match_players_title')}</th>
-            <th>{$t('configure.match_roles_title')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each matchPlayers as player}
-            <tr>
-              <td>
-                <div class="player-info">
-                  <span class="player-alias">{player.alias}</span>
-                  <span class={`status-pill status-pill--${player.ready ? 'ready' : 'connected'}`}>
-                    {player.ready
-                      ? $t('configure.match_status_ready')
-                      : $t('configure.match_status_connected')}
-                  </span>
-                </div>
-              </td>
-              <td>
+      <div class="match-table card-outline">
+        <div class="match-table-header">
+          <h3>Player's table</h3>
+        </div>
+        <div class="table-grid">
+          <div class="table-row table-head">
+            <div class="col-seat">Seat</div>
+            <div class="col-player">Player</div>
+            <div class="col-role">Role</div>
+          </div>
+          {#each Array(seatsCount) as _, index}
+            <div class="table-row">
+              <div class="col-seat">#{index}</div>
+              <div class="col-player">
                 <select
                   class="match-select"
-                  bind:value={draftAssignments[player.id]}
-                  on:change={(event) => assign(player.id, event?.currentTarget?.value ?? '')}
+                  value={draftSeating[index] ?? ''}
+                  on:change={(event) => setSeat(index, event?.currentTarget?.value ?? '')}
                 >
-                  <option value="">{ $t('configure.match_unassigned') }</option>
+                  <option value="">Select a player</option>
+                  {#if draftSeating[index] && playersMap.has(draftSeating[index])}
+                    <option value={draftSeating[index]}>
+                      {playersMap.get(draftSeating[index]).alias}
+                    </option>
+                  {/if}
+                  {#each queuePlayers as player}
+                    <option value={player.id}>{player.alias}</option>
+                  {/each}
+                </select>
+              </div>
+              <div class="col-role">
+                <select
+                  class="match-select"
+                  bind:value={draftSeatRoles[index]}
+                  on:change={(event) => assignSeatRole(index, event?.currentTarget?.value ?? '')}
+                >
+                  <option value="">Select a role</option>
                   {#each roles as role}
                     {@const slug = resolveRoleSlug(role)}
                     {#if role.count > 0}
-                      {#if remainingFor(slug, draftAssignments[player.id]) > 0 || draftAssignments[player.id] === slug}
+                      {#if remainingFor(slug, draftSeatRoles[index]) > 0 || draftSeatRoles[index] === slug}
                         <option value={slug}>
-                          {formatRoleLabel(role, player.id)}
+                          {formatRoleLabel(role)}
                         </option>
                       {:else}
                         <option value={slug} disabled>
-                          {formatRoleLabel(role, player.id, 0)}
+                          {formatRoleLabel(role, 0)}
                         </option>
                       {/if}
                     {:else}
@@ -295,11 +344,67 @@
                     {/if}
                   {/each}
                 </select>
-              </td>
-            </tr>
+              </div>
+            </div>
           {/each}
-        </tbody>
-      </table>
+        </div>
+      </div>
+
+      <section class="queue-section card-outline">
+        <header class="section-header">
+          <div>
+            <h3>Player's queue</h3>
+          </div>
+        </header>
+        <div class="queue-list {queuePlayers.length === 0 ? 'queue-list--empty' : ''}">
+          {#each queuePlayers as player}
+            <div class="queue-item">
+              <div class="player-info">
+                <span class="player-alias">{player.alias}</span>
+                <span class={`status-pill status-pill--${isOffline(player) ? 'offline' : 'online'}`}>
+                  {isOffline(player) ? 'offline' : 'online'}
+                </span>
+              </div>
+            </div>
+          {/each}
+        </div>
+      </section>
+
+      <div class="test-players card-outline inline-section">
+        <div class="section-header">
+          <h3>Add offline players</h3>
+          <p class="section-hint">Create placeholders for players who are not connected.</p>
+        </div>
+        <div class="test-input-row">
+          <input
+            id="test-player-input"
+            class="test-input"
+            placeholder="Name or alias"
+            bind:value={newPlayerName}
+            on:keydown={(event) => event.key === 'Enter' && addTestPlayer()}
+          />
+          <Button variant="secondary" type="button" on:click={addTestPlayer}>
+            Add
+          </Button>
+        </div>
+        {#if draftTestPlayers.length}
+          <div class="test-chip-list" aria-live="polite">
+                {#each draftTestPlayers as player}
+                  <span class="test-chip">
+                    {player.alias}
+                    <button
+                      type="button"
+                      class="chip-remove"
+                      aria-label={`Remove ${player.alias}`}
+                      on:click={() => removeTestPlayer(player.id)}
+                    >
+                      ×
+                    </button>
+                  </span>
+            {/each}
+          </div>
+        {/if}
+      </div>
     {/if}
   </div>
 
@@ -333,7 +438,7 @@
   .card-outline {
     border: 1px solid var(--glass-border);
     border-radius: 0.85rem;
-    padding: 1rem;
+    padding: 1.2rem;
     background: rgba(255, 255, 255, 0.02);
   }
 
@@ -343,6 +448,11 @@
     align-items: baseline;
     gap: 0.5rem;
     margin-bottom: 0.35rem;
+  }
+
+  .section-header h3 {
+    margin: 0;
+    font-size: 1.05rem;
   }
 
   .test-players {
@@ -406,31 +516,6 @@
     color: var(--color-white-muted);
   }
 
-  .match-table {
-    width: 100%;
-    border-collapse: collapse;
-    border: 1px solid var(--glass-border);
-    border-radius: 1rem;
-    overflow: hidden;
-  }
-
-  .match-table th,
-  .match-table td {
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid var(--glass-border);
-  }
-
-  .match-table thead {
-    background: var(--glass-hover);
-    text-align: left;
-    font-weight: 600;
-    color: var(--color-white-muted);
-  }
-
-  .match-table tbody tr:nth-child(odd) {
-    background: rgba(255, 255, 255, 0.03);
-  }
-
   .player-info {
     display: flex;
     align-items: center;
@@ -454,8 +539,13 @@
     color: var(--color-text-invert);
   }
 
-  .status-pill--connected {
-    background: var(--state-waiting);
+  .status-pill--online {
+    background: var(--state-in-progress);
+    color: var(--color-text-invert);
+  }
+
+  .status-pill--offline {
+    background: var(--glass-border);
     color: var(--color-text-invert);
   }
 
@@ -466,6 +556,120 @@
     border-radius: 0.65rem;
     padding: 0.5rem 0.75rem;
     color: var(--color-white-contrast);
+  }
+
+  .seating-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .seat-section,
+  .queue-section {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .seat-list {
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  .seat-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .seat-number {
+    min-width: 44px;
+    padding: 0.4rem 0.6rem;
+    border-radius: 0.65rem;
+    background: var(--glass-hover);
+    text-align: center;
+    font-weight: 700;
+    color: var(--color-white-contrast);
+  }
+
+  .seat-player-meta {
+    display: flex;
+    align-items: center;
+  }
+
+  .queue-list {
+    display: grid;
+    gap: 0.5rem;
+    min-height: 0.75rem;
+  }
+
+  .queue-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0.75rem;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 0.8rem;
+    border: 1px solid var(--glass-border);
+  }
+
+  .queue-actions .pill-btn {
+    padding: 0.35rem 0.7rem;
+  }
+
+  .queue-list--empty {
+    min-height: 0;
+    padding: 0;
+  }
+
+  .match-table {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .match-table-header h3 {
+    margin: 0;
+    font-size: 1.05rem;
+  }
+
+  .table-grid {
+    display: grid;
+    gap: 0.35rem;
+  }
+
+  .table-row {
+    display: grid;
+    grid-template-columns: 0.4fr 1fr 1fr;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--glass-border);
+    border-radius: 0.75rem;
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .table-head {
+    background: var(--glass-hover);
+    font-weight: 700;
+  }
+
+  .col-seat {
+    font-weight: 700;
+  }
+
+  .placeholder {
+    color: var(--color-white-muted);
+    font-size: 0.9rem;
+  }
+
+  @media (max-width: 900px) {
+    .seating-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .match-row {
+      grid-template-columns: 1fr;
+    }
   }
 
 </style>

@@ -176,7 +176,8 @@ let rolesCustomized = false;
 let selectedActorRoles = [];
 let selectedThiefRoles = [];
 let selectedActorExclusions = [...DEFAULT_ACTOR_EXCLUSIONS];
-let selectedThiefExclusions = [...DEFAULT_THIEF_EXCLUSIONS];
+  let selectedThiefExclusions = [...DEFAULT_THIEF_EXCLUSIONS];
+  let seatingOrder = [];
 let autoSeedKey = '';
   let alertOpen = false;
   let alertMessage = '';
@@ -237,6 +238,10 @@ let matchPlayers = [];
     if (!snapshot) return;
     sessionStatus = snapshot.status ?? sessionStatus;
     playerAssignments = snapshot.player_roles ?? {};
+    seatingOrder = Array.isArray(snapshot.settings?.seating_order) ? snapshot.settings.seating_order : seatingOrder;
+    if (Array.isArray(snapshot.settings?.test_players)) {
+      testPlayers = snapshot.settings.test_players;
+    }
     const legacyReadySource =
       snapshot.players_ready ??
       snapshot.ready_players ??
@@ -262,9 +267,6 @@ let matchPlayers = [];
   $: if (!derivedAssistEnabled && form.assistTasks.length) {
     form.assistTasks = [];
   }
-
-  $: showLanguageSelector = form.storyteller !== 'human';
-  $: showAssistControls = form.storyteller === 'human-AI';
 
   $: basePlayerBreakdown = balanceTable?.[String(form.players_expected)] ?? null;
   $: playerBreakdown = tweakRoleMix && roleMixOverride ? roleMixOverride : basePlayerBreakdown;
@@ -393,6 +395,7 @@ $: matchPlayers = playerList;
         selectedActorExclusions = Array.isArray(settings.actor_exclusions)
           ? settings.actor_exclusions
           : [...DEFAULT_ACTOR_EXCLUSIONS];
+        seatingOrder = Array.isArray(settings.seating_order) ? settings.seating_order : [];
         if (form.storyteller === 'human') {
           form.assistEnabled = false;
           form.assistTasks = [];
@@ -622,16 +625,13 @@ $: matchPlayers = playerList;
         'settings.include_town_crier': includeTownCrier,
         'settings.tweak_role_mix': tweakRoleMix,
         'settings.role_mix_override': roleMixOverride,
+        'settings.seating_order': seatingOrder
       });
       showToast({ message: $t('configure.saved'), variant: 'success' });
     } catch (error) {
       console.error('[configure] unable to save selection', error);
       openAlert($t('configure.errors.save_failed'), 'error');
     }
-  }
-
-  function handleMatchAuto() {
-    console.info('[configure] auto-assign roles requested');
   }
 
   async function handleMatchSave(event) {
@@ -644,6 +644,14 @@ $: matchPlayers = playerList;
     testPlayers = manualPlayers;
     try {
       await savePlayerRoleAssignments(sessionId, assignments);
+      const seatingOrderDetail = event?.detail?.seatingOrder ?? [];
+      if (Array.isArray(seatingOrderDetail)) {
+        seatingOrder = seatingOrderDetail;
+        await updateSession(sessionId, {
+          'settings.seating_order': seatingOrderDetail,
+          'settings.test_players': manualPlayers
+        });
+      }
       playerAssignments = assignments;
       showToast({ message: $t('configure.saved'), variant: 'success' });
     } catch (error) {
@@ -872,7 +880,8 @@ $: matchPlayers = playerList;
   testPlayers={testPlayers}
   roles={roleOptions}
   assignments={playerAssignments}
-  on:auto={handleMatchAuto}
+  seatingOrder={seatingOrder}
+  expectedSeats={clampPlayers(form.players_expected)}
   on:save={handleMatchSave}
   on:cancel={closeModal}
 />
