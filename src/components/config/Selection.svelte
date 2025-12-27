@@ -19,12 +19,12 @@
   export let mix = null;
   export let actorRoles = [];
   export let thiefRoles = [];
-  export let exclusionList = [];
+  export let actorExclusions = [];
+  export let thiefExclusions = [];
   export let includeSheriff = true;
   export let includeTownCrier = true;
   export let tweakRoleMix = false;
   export let roleMixOverride = null;
-  export let modifyExclusionList = true;
 
   const dispatch = createEventDispatcher();
 
@@ -84,6 +84,16 @@
     actor: 'Actor',
     thief: 'Thief'
   };
+  const GROUP_LABELS = {
+    village: 'Exclude “The Village”',
+    newmoon: 'Exclude “New Moon”',
+    ambiguous: 'Exclude all Ambiguous roles',
+    loners: 'Exclude all Loners',
+    multiplayer: 'Exclude multi-player roles',
+    werewolves: 'Exclude Werewolves',
+    powerless: 'Exclude villagers without powers'
+  };
+  const GROUP_KEYS = ['village', 'newmoon', 'ambiguous', 'loners', 'multiplayer', 'werewolves', 'powerless'];
   const normalizeRoleSlug = (slug = '') => {
     const normalized = slugify(slug);
     return roleAliases[normalized] ?? normalized;
@@ -191,21 +201,17 @@
   let wasOpen = false;
   let actorChoices = ['', '', ''];
   let thiefChoices = ['', ''];
-  let draftExclusionList = [];
   let actorActive = false;
   let pickerOpen = false;
   let pickerType = null; // 'actor' | 'thief'
   let pickerIndex = 0;
   let draftIncludeSheriff = true;
-  let showSheriffHint = false;
   let draftIncludeTownCrier = true;
-  let showTownCrierHint = false;
-  let showOverrideHint = false;
   let draftTweakRoleMix = false;
-  let showTweakHint = false;
   let draftMix = null;
-  let draftModifyExclusions = true;
-  let showExclusionHint = false;
+  let draftActorExclusions = [];
+  let draftThiefExclusions = [];
+  let advancedOpen = false;
 
   const duplicateSet = new Set((duplicates ?? []).map((entry) => slugify(entry)));
   const hasRoleInSelection = (selection = {}, slug = '') => {
@@ -218,30 +224,108 @@
   };
   const actorSlots = [0, 1, 2];
   const thiefSlots = [0, 1];
-  let exclusionSlugs = [];
-  let exclusionSetMemo = new Set();
-  $: exclusionSlugs = (draftExclusionList ?? [])
-    .map((entry) => normalizeRoleSlug(entry))
-    .filter(Boolean);
-  $: exclusionSetMemo = new Set(exclusionSlugs);
-  const isExcluded = (role) => exclusionSetMemo.has(normalizeRoleSlug(role));
+  let actorExclusionSlugs = [];
+  let thiefExclusionSlugs = [];
+  let actorExclusionSet = new Set();
+  let thiefExclusionSet = new Set();
+  $: actorExclusionSlugs = (draftActorExclusions ?? []).map((entry) => normalizeRoleSlug(entry)).filter(Boolean);
+  $: thiefExclusionSlugs = (draftThiefExclusions ?? []).map((entry) => normalizeRoleSlug(entry)).filter(Boolean);
+  $: actorExclusionSet = new Set(actorExclusionSlugs);
+  $: thiefExclusionSet = new Set(thiefExclusionSlugs);
+  const isActorExcluded = (role) => actorExclusionSet.has(normalizeRoleSlug(role));
+  const isThiefExcluded = (role) => thiefExclusionSet.has(normalizeRoleSlug(role));
 
-  const toggleExclusion = (role, checked) => {
-    const current = new Set(draftExclusionList ?? []);
-    const slug = normalizeRoleSlug(role);
-    if (checked) current.add(slug);
-    else current.delete(slug);
-    draftExclusionList = Array.from(current);
+  let editModalOpen = false;
+  let editTarget = 'thief';
+  let tempManualExclusions = new Set();
+  let tempGroupState = new Map();
+
+  const getGroupRoles = (key) => {
+    const pools = {
+      village: ['pyromaniac', 'scandalmonger'],
+      newmoon: ['gypsy', 'town_crier'],
+      ambiguous: rolesByCategory?.ambiguous ?? [],
+      loners: rolesByCategory?.loners ?? [],
+      multiplayer: ['brothers', 'sisters'],
+      werewolves: ['bad', 'father', 'werewolf'],
+      powerless: ['brothers', 'sisters', 'trusted', 'villager']
+    };
+    return pools[key] ?? [];
+  };
+  $: derivedTempExclusions = (() => {
+    const set = new Set(tempManualExclusions);
+    GROUP_KEYS.forEach((key) => {
+      if (tempGroupState.get(key)) {
+        getGroupRoles(key).forEach((role) => set.add(normalizeRoleSlug(role)));
+      }
+    });
+    return set;
+  })();
+
+  const buildDefaultActorExclusions = () => {
+    const set = new Set();
+    ['ambiguous', 'loners', 'werewolves', 'multiplayer', 'powerless'].forEach((key) => {
+      getGroupRoles(key).forEach((role) => set.add(normalizeRoleSlug(role)));
+    });
+    return Array.from(set);
   };
 
-  const toggleGroupExclusion = (roles = [], checked) => {
-    const current = new Set(draftExclusionList ?? []);
-    roles.forEach((role) => {
-      const slug = normalizeRoleSlug(role);
-      if (checked) current.add(slug);
-      else current.delete(slug);
+  const buildDefaultThiefExclusions = () => {
+    const set = new Set();
+    ['multiplayer', 'powerless'].forEach((key) => {
+      getGroupRoles(key).forEach((role) => set.add(normalizeRoleSlug(role)));
     });
-    draftExclusionList = Array.from(current);
+    return Array.from(set);
+  };
+
+  const groupChecked = (key) => !!tempGroupState.get(key);
+
+  const toggleGroupInEditor = (key, checked) => {
+    const next = new Map(tempGroupState);
+    next.set(key, checked);
+    tempGroupState = next;
+  };
+
+  const handleRoleToggle = (role) => {
+    const slug = normalizeRoleSlug(role);
+    const next = new Set(tempManualExclusions);
+    if (next.has(slug)) next.delete(slug);
+    else next.add(slug);
+    tempManualExclusions = next;
+  };
+
+  const openExclusionEditor = (target) => {
+    editTarget = target;
+    const current = target === 'actor' ? draftActorExclusions : draftThiefExclusions;
+    const startGroupState = new Map();
+    GROUP_KEYS.forEach((key) => {
+      const roles = getGroupRoles(key);
+      startGroupState.set(
+        key,
+        roles.length > 0 && roles.every((role) => current.includes(normalizeRoleSlug(role)))
+      );
+    });
+    tempGroupState = startGroupState;
+    const coveredByGroups = new Set();
+    GROUP_KEYS.forEach((key) => {
+      if (startGroupState.get(key)) {
+        getGroupRoles(key).forEach((role) => coveredByGroups.add(normalizeRoleSlug(role)));
+      }
+    });
+    const manual = current.filter((role) => !coveredByGroups.has(normalizeRoleSlug(role)));
+    tempManualExclusions = new Set(manual);
+    editModalOpen = true;
+  };
+
+  const closeExclusionEditor = (apply = false) => {
+    if (apply) {
+      const final = Array.from(derivedTempExclusions);
+      if (editTarget === 'actor') draftActorExclusions = final;
+      else draftThiefExclusions = final;
+    }
+    editModalOpen = false;
+    tempManualExclusions = new Set();
+    tempGroupState = new Map();
   };
 
   $: if (open && !wasOpen) {
@@ -250,26 +334,31 @@
     draftSelections = cloneSelection(selected);
     draftIncludeSheriff = includeSheriff !== false;
     draftIncludeTownCrier = includeTownCrier !== false;
-    showSheriffHint = false;
-    showOverrideHint = false;
     draftTweakRoleMix = !!tweakRoleMix;
-    showTweakHint = false;
     draftMix = cloneMix(roleMixOverride ?? mix ?? {});
     actorChoices = Array.isArray(actorRoles)
       ? [...actorRoles].map((role) => normalizeRoleSlug(role)).slice(0, 3)
       : ['', '', ''];
     while (actorChoices.length < 3) actorChoices.push('');
-    thiefChoices = Array.isArray(thiefRoles)
-      ? [...thiefRoles].map((role) => normalizeRoleSlug(role)).slice(0, 2)
-      : ['', ''];
-    while (thiefChoices.length < 2) thiefChoices.push('');
-    draftExclusionList = Array.isArray(exclusionList)
-      ? exclusionList.map((entry) => normalizeRoleSlug(entry)).filter(Boolean)
-      : [];
-    draftModifyExclusions = modifyExclusionList !== false;
-  } else if (!open && wasOpen) {
-    wasOpen = false;
+  thiefChoices = Array.isArray(thiefRoles)
+    ? [...thiefRoles].map((role) => normalizeRoleSlug(role)).slice(0, 2)
+    : ['', ''];
+  while (thiefChoices.length < 2) thiefChoices.push('');
+  draftActorExclusions = Array.isArray(actorExclusions)
+    ? actorExclusions.map((entry) => normalizeRoleSlug(entry)).filter(Boolean)
+    : [];
+  draftThiefExclusions = Array.isArray(thiefExclusions)
+    ? thiefExclusions.map((entry) => normalizeRoleSlug(entry)).filter(Boolean)
+    : [];
+  if (!draftActorExclusions.length) {
+    draftActorExclusions = buildDefaultActorExclusions();
   }
+  if (!draftThiefExclusions.length) {
+    draftThiefExclusions = buildDefaultThiefExclusions();
+  }
+} else if (!open && wasOpen) {
+  wasOpen = false;
+}
 
   const canonicalSlug = (value) => {
     const base = slugify(value);
@@ -361,14 +450,16 @@ $: actorActive =
   hasActorRole ||
   actorChoices.some(Boolean) ||
   Boolean(draftSelections?.Ambiguous?.actor ?? draftSelections?.ambiguous?.actor);
-$: thiefActive =
-  hasRoleSelected('thief') ||
-  hasRoleInSelection(selected, 'thief') ||
-  (draftSelections?.ambiguous?.thief ?? 0) > 0 ||
-  thiefChoices.some(Boolean);
+$: thiefCount =
+  Number(draftSelections?.ambiguous?.thief ?? draftSelections?.Ambiguous?.thief ?? 0);
+$: thiefActive = thiefCount > 0 || thiefChoices.some(Boolean);
 
 $: if (!hasRoleSelected('actor') && actorChoices.some(Boolean)) {
   actorChoices = ['', '', ''];
+}
+
+$: if (thiefCount === 0 && thiefChoices.some(Boolean)) {
+  thiefChoices = ['', ''];
 }
 
 // Debug removed to avoid noisy console
@@ -415,7 +506,12 @@ $: if (draftTweakRoleMix && (!draftMix || MIX_KEYS.every((key) => draftMix?.[key
   $: availableVillagers = villagerRoles().filter((role) => {
     const slug = normalizeRoleSlug(role);
     const selectedInVillagers = (draftSelections?.villagers?.[role] ?? 0) > 0;
-    return !selectedInVillagers && !actorSelectedSlugs.has(slug) && !thiefSelectedSlugs.has(slug);
+    return (
+      !selectedInVillagers &&
+      !actorSelectedSlugs.has(slug) &&
+      !thiefSelectedSlugs.has(slug) &&
+      !isActorExcluded(slug)
+    );
   });
 
   const isActorReserved = (role) => {
@@ -465,7 +561,7 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
         Number(draftSelections?.[category]?.[role] ?? 0) > 0 ||
         Object.values(draftSelections ?? {}).some((cat) => Number(cat?.[role] ?? 0) > 0);
       if (alreadySelected && nonDuplicable(role)) return;
-      if (respectExclusions && isExcluded(role)) return; // auto selección respeta exclusiones
+      if (respectExclusions && isThiefExcluded(role)) return; // auto selección respeta exclusiones
       pool.push(slug);
     });
     return pool;
@@ -545,8 +641,8 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
       roleMixOverride: draftTweakRoleMix ? draftMix : null,
       actorRoles: actorPayload,
       thiefRoles: thiefPayload,
-      exclusionList: draftExclusionList.filter(Boolean),
-      modifyExclusionList: draftModifyExclusions
+      actorExclusions: draftActorExclusions.filter(Boolean),
+      thiefExclusions: draftThiefExclusions.filter(Boolean)
     });
   }
 
@@ -556,230 +652,17 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
 
 <Modal
   open={open}
-  title={$t('configure.selection_title')}
+  title="Roles"
   description={selectionDescription}
   size="xl"
   closeOnBackdrop={false}
   on:close={close}
 >
+  <svelte:fragment slot="footer">
+    <Button variant="primary" type="button" on:click={save}>{$t('common.actions.save')}</Button>
+  </svelte:fragment>
+
   <div class="selection-body">
-    <div class="override-banner">
-      <div class="toggle-stack">
-        <label class="override-toggle">
-          <input type="checkbox" bind:checked={draftOverride} />
-          {$t('configure.role_override_label')}
-        </label>
-        <button
-          class="info-pill"
-          type="button"
-          aria-label={$t('configure.role_override_active')}
-          title={$t('configure.role_override_active')}
-          aria-pressed={showOverrideHint}
-          aria-expanded={showOverrideHint}
-          on:click={() => (showOverrideHint = !showOverrideHint)}
-        >
-          i
-        </button>
-        {#if showOverrideHint}
-          <p class="info-popover">{$t('configure.role_override_active')}</p>
-        {/if}
-      </div>
-      <div class="toggle-stack">
-        <label class="override-toggle">
-          <input type="checkbox" bind:checked={draftTweakRoleMix} />
-          {$t('configure.tweak_mix_label')}
-        </label>
-        <button
-          class="info-pill"
-          type="button"
-          aria-label={$t('configure.tweak_mix_hint')}
-          title={$t('configure.tweak_mix_hint')}
-          aria-pressed={showTweakHint}
-          aria-expanded={showTweakHint}
-          on:click={() => (showTweakHint = !showTweakHint)}
-        >
-          i
-        </button>
-        {#if showTweakHint}
-          <p class="info-popover">{$t('configure.tweak_mix_hint')}</p>
-        {/if}
-      </div>
-      <div class="toggle-stack">
-        <label class="override-toggle">
-          <input type="checkbox" bind:checked={draftModifyExclusions} />
-          {$t('configure.exclusions_toggle_label')}
-        </label>
-        <button
-          class="info-pill"
-          type="button"
-          aria-label={$t('configure.exclusions_toggle_hint')}
-          title={$t('configure.exclusions_toggle_hint')}
-          aria-pressed={showExclusionHint}
-          aria-expanded={showExclusionHint}
-          on:click={() => (showExclusionHint = !showExclusionHint)}
-        >
-          i
-        </button>
-        {#if showExclusionHint}
-          <p class="info-popover">{$t('configure.exclusions_toggle_hint')}</p>
-        {/if}
-      </div>
-      <div class="toggle-stack">
-        <label class="override-toggle">
-          <input type="checkbox" bind:checked={draftIncludeSheriff} />
-          {$t('configure.sheriff_include_label')}
-        </label>
-        <button
-          class="info-pill"
-          type="button"
-          aria-label={$t('configure.sheriff_include_hint')}
-          title={$t('configure.sheriff_include_hint')}
-          aria-pressed={showSheriffHint}
-          aria-expanded={showSheriffHint}
-          on:click={() => (showSheriffHint = !showSheriffHint)}
-        >
-          i
-        </button>
-        {#if showSheriffHint}
-          <p class="info-popover">{$t('configure.sheriff_include_hint')}</p>
-        {/if}
-      </div>
-      <div class="toggle-stack">
-        <label class="override-toggle">
-          <input type="checkbox" bind:checked={draftIncludeTownCrier} />
-          {$t('configure.towncrier_include_label')}
-        </label>
-        <button
-          class="info-pill"
-          type="button"
-          aria-label={$t('configure.towncrier_include_hint')}
-          title={$t('configure.towncrier_include_hint')}
-          aria-pressed={showTownCrierHint}
-          aria-expanded={showTownCrierHint}
-          on:click={() => (showTownCrierHint = !showTownCrierHint)}
-        >
-          i
-        </button>
-        {#if showTownCrierHint}
-          <p class="info-popover">{$t('configure.towncrier_include_hint')}</p>
-        {/if}
-      </div>
-    </div>
-
-    {#if draftModifyExclusions}
-      <div class="exclusions-box">
-        <div class="exclusions-header">
-          <h3>{$t('configure.thief_exclusions_label')}</h3>
-        </div>
-        <div class="exclusions-groups">
-          <label class="exclusion-chip exclusion-chip--group">
-            <input
-              type="checkbox"
-              on:change={(e) =>
-                toggleGroupExclusion(['pyromaniac', 'scandalmonger'], e.currentTarget.checked)
-              }
-              checked={['pyromaniac', 'scandalmonger'].every((role) => exclusionSetMemo.has(normalizeRoleSlug(role)))}
-            />
-            <span>{$t('configure.exclusions_group_village')}</span>
-          </label>
-          <label class="exclusion-chip exclusion-chip--group">
-            <input
-              type="checkbox"
-              on:change={(e) => toggleGroupExclusion(['gypsy', 'town_crier'], e.currentTarget.checked)}
-              checked={['gypsy', 'town_crier'].every((role) => exclusionSetMemo.has(normalizeRoleSlug(role)))}
-            />
-            <span>{$t('configure.exclusions_group_newmoon')}</span>
-          </label>
-          <label class="exclusion-chip exclusion-chip--group">
-            <input
-              type="checkbox"
-              on:change={(e) => {
-                const pool = rolesByCategory?.ambiguous ?? [];
-                toggleGroupExclusion(pool, e.currentTarget.checked);
-              }}
-              checked={(rolesByCategory?.ambiguous ?? []).every((role) => exclusionSetMemo.has(normalizeRoleSlug(role)))}
-            />
-            <span>{$t('configure.exclusions_group_ambiguous')}</span>
-          </label>
-          <label class="exclusion-chip exclusion-chip--group">
-            <input
-              type="checkbox"
-              on:change={(e) => {
-                const pool = rolesByCategory?.loners ?? [];
-                toggleGroupExclusion(pool, e.currentTarget.checked);
-              }}
-              checked={(rolesByCategory?.loners ?? []).every((role) => exclusionSetMemo.has(normalizeRoleSlug(role)))}
-            />
-            <span>{$t('configure.exclusions_group_loners')}</span>
-          </label>
-          <label class="exclusion-chip exclusion-chip--group">
-            <input
-              type="checkbox"
-              on:change={(e) => toggleGroupExclusion(['brothers', 'sisters'], e.currentTarget.checked)}
-              checked={['brothers', 'sisters'].every((role) => exclusionSetMemo.has(normalizeRoleSlug(role)))}
-            />
-            <span>{$t('configure.exclusions_group_multiplayer')}</span>
-          </label>
-          <label class="exclusion-chip exclusion-chip--group">
-            <input
-              type="checkbox"
-              on:change={(e) => {
-                const pool = [...(rolesByCategory?.werewolves ?? []), 'white'];
-                toggleGroupExclusion(pool, e.currentTarget.checked);
-              }}
-              checked={[...(rolesByCategory?.werewolves ?? []), 'white'].every((role) =>
-                exclusionSetMemo.has(normalizeRoleSlug(role))
-              )}
-            />
-            <span>{$t('configure.exclusions_group_werewolves')}</span>
-          </label>
-          <label class="exclusion-chip exclusion-chip--group">
-            <input
-              type="checkbox"
-              on:change={(e) =>
-                toggleGroupExclusion(['brothers', 'sisters', 'trusted', 'villager'], e.currentTarget.checked)
-              }
-              checked={['brothers', 'sisters', 'trusted', 'villager'].every((role) =>
-                exclusionSetMemo.has(normalizeRoleSlug(role))
-              )}
-            />
-            <span>{$t('configure.exclusions_group_no_power_villagers')}</span>
-          </label>
-        </div>
-        <div class="excluded-summary">
-          <span>{$t('configure.exclusions_current')}</span>
-          {#if (draftExclusionList ?? []).length}
-            <div class="excluded-chips">
-              {#each draftExclusionList as role}
-                <span class="excluded-chip">{role}</span>
-              {/each}
-            </div>
-          {:else}
-            <span class="empty-exclusions">{$t('configure.exclusions_none')}</span>
-          {/if}
-        </div>
-        <div class="exclusions-grid">
-          {#each exclusionCandidates as role}
-            <label class={`exclusion-chip ${exclusionSetMemo.has(normalizeRoleSlug(role)) ? 'exclusion-chip--excluded' : ''}`}>
-              <input
-                type="checkbox"
-                value={role}
-                on:change={(event) => {
-                  toggleExclusion(role, event.currentTarget.checked);
-                }}
-                checked={exclusionSetMemo.has(normalizeRoleSlug(role))}
-              />
-              <img src={roleImagePath(role)} alt={shortRoleLabel(role)} />
-              <span>{shortRoleLabel(role)}</span>
-            </label>
-          {/each}
-          {#if !exclusionCandidates.length}
-            <p class="empty-exclusions">{$t('configure.thief_exclusions_empty')}</p>
-          {/if}
-        </div>
-      </div>
-    {/if}
-
     {#if draftMix || mix}
       <div class="mix-summary">
         <div class="mix-header">
@@ -867,7 +750,7 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
         <header class="category-header">
           <div>
             <h4>The Actor's Characters</h4>
-            <p class="totals">Choose up to 3 villagers.</p>
+            <p class="totals">{actorChoices.filter(Boolean).length} selected</p>
           </div>
         </header>
         <div class="actor-slots">
@@ -884,7 +767,7 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
               <div class="actor-slot empty">
                 <button type="button" class="actor-add" on:click={() => openPicker('actor', index)}>
                   <span class="plus">+</span>
-                  <span class="actor-add__label">Select villager</span>
+                  <span class="actor-add__label">Select role</span>
                 </button>
               </div>
             {/if}
@@ -898,7 +781,7 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
         <header class="category-header">
           <div>
             <h4>Thief's Roles</h4>
-            <p class="totals">Select 2 roles for the Thief.</p>
+            <p class="totals">{thiefChoices.filter(Boolean).length} selected</p>
           </div>
         </header>
         <div class="actor-slots">
@@ -923,58 +806,191 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
         </div>
       </section>
     {/if}
-  </div>
-  </div>
 
-  <svelte:fragment slot="footer">
-    <Button variant="primary" type="button" on:click={save}>{$t('common.actions.save')}</Button>
-  </svelte:fragment>
+    <div class="advanced-toggle">
+      <label class="switch-label">
+        <input type="checkbox" class="pill-switch" bind:checked={advancedOpen} />
+        <span>Advanced settings</span>
+      </label>
+    </div>
 
-  {#if pickerOpen}
-    <Modal
-      open={pickerOpen}
-      title="Select a role"
-      size="lg"
-      on:close={() => (pickerOpen = false)}
-    >
-      {#if pickerType === 'actor'}
-        <RolePickerGrid
-          showTitle={false}
-          variant="storyteller"
-          options={availableVillagers.map((role) => {
-            const slug = normalizeRoleSlug(role);
-            return {
-              id: slug,
-              label: shortRoleLabel(slug),
-              image: roleImagePath(slug),
-              disabled: false,
-              selected: false
-            };
-          })}
-          on:select={(event) => handleActorPick(event.detail.id)}
-        />
-      {:else}
-        <RolePickerGrid
-          showTitle={false}
-          variant="storyteller"
-          options={availableThiefRoles().map((role) => {
-            const slug = normalizeRoleSlug(role);
-            return {
-              id: slug,
-              label: shortRoleLabel(slug),
-              image: roleImagePath(slug),
-              disabled: !draftOverride,
-              selected: false
-            };
-          })}
-          on:select={(event) => {
-            if (draftOverride) handleThiefPick(event.detail.id);
-          }}
-        />
-      {/if}
-    </Modal>
-  {/if}
+    {#if advancedOpen}
+      <section class="category advanced-section">
+        <header class="category-header">
+          <div>
+            <h4>Honorary Roles</h4>
+          </div>
+        </header>
+        <div class="switch-grid">
+          <label class="switch-label">
+            <input type="checkbox" class="pill-switch" bind:checked={draftIncludeSheriff} />
+            <span>Include Sheriff</span>
+          </label>
+          <label class="switch-label">
+            <input type="checkbox" class="pill-switch" bind:checked={draftIncludeTownCrier} />
+            <span>Include Town Crier</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="category advanced-section">
+        <header class="category-header">
+          <div>
+            <h4>Flexibility</h4>
+          </div>
+        </header>
+        <div class="switch-grid">
+          <label class="switch-label">
+            <input type="checkbox" class="pill-switch" bind:checked={draftTweakRoleMix} />
+            <span>Tweak role mix</span>
+          </label>
+          <label class="switch-label">
+            <input type="checkbox" class="pill-switch" bind:checked={draftOverride} />
+            <span>Override limits</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="category advanced-section">
+        <header class="category-header">
+          <div>
+            <h4>Exclusion Lists</h4>
+          </div>
+        </header>
+        <div class="exclusion-summary-cards">
+          <div class="exclusion-card">
+            <div class="exclusion-card__header">
+              <div>
+                <h5>Actor exclusion list</h5>
+                <p class="totals">Current exclusions:</p>
+              </div>
+              <Button variant="secondary" type="button" on:click={() => openExclusionEditor('actor')}>
+                Edit
+              </Button>
+            </div>
+            <div class="excluded-chips">
+              {#if draftActorExclusions.length}
+                {#each draftActorExclusions as role}
+                  <span class="excluded-chip">{role}</span>
+                {/each}
+              {:else}
+                <span class="empty-exclusions">None</span>
+              {/if}
+            </div>
+          </div>
+          <div class="exclusion-card">
+            <div class="exclusion-card__header">
+              <div>
+                <h5>Thief exclusion list</h5>
+                <p class="totals">Current exclusions:</p>
+              </div>
+              <Button variant="secondary" type="button" on:click={() => openExclusionEditor('thief')}>
+                Edit
+              </Button>
+            </div>
+            <div class="excluded-chips">
+              {#if draftThiefExclusions.length}
+                {#each draftThiefExclusions as role}
+                  <span class="excluded-chip">{role}</span>
+                {/each}
+              {:else}
+                <span class="empty-exclusions">None</span>
+              {/if}
+            </div>
+          </div>
+        </div>
+      </section>
+    {/if}
+  </div>
 </Modal>
+
+{#if editModalOpen}
+  <Modal
+    open={editModalOpen}
+    title="Edit"
+    size="lg"
+    showClose={false}
+    on:close={() => closeExclusionEditor(false)}
+  >
+    <div class="exclusions-box">
+      <div class="switch-grid">
+        {#each GROUP_KEYS as key}
+          <label class="switch-label">
+            <input
+              type="checkbox"
+              class="pill-switch"
+              checked={groupChecked(key)}
+              on:change={(event) => toggleGroupInEditor(key, event.currentTarget.checked)}
+            />
+            <span>{key === 'ambiguous' ? 'Exclude all Ambiguous' : GROUP_LABELS[key]}</span>
+          </label>
+        {/each}
+      </div>
+      <div class="exclusions-grid separation-top">
+        {#each exclusionCandidates as role}
+          {@const slug = normalizeRoleSlug(role)}
+          <button
+            type="button"
+            class={`exclusion-tile ${derivedTempExclusions.has(slug) ? 'exclusion-tile--excluded' : ''}`}
+            on:click={() => handleRoleToggle(role)}
+          >
+            <img src={roleImagePath(role)} alt={shortRoleLabel(role)} />
+            <span>{shortRoleLabel(role)}</span>
+          </button>
+        {/each}
+      </div>
+    </div>
+    <svelte:fragment slot="footer">
+      <Button variant="ghost" type="button" on:click={() => closeExclusionEditor(false)}>Close</Button>
+      <Button variant="primary" type="button" on:click={() => closeExclusionEditor(true)}>Save</Button>
+    </svelte:fragment>
+  </Modal>
+{/if}
+
+{#if pickerOpen}
+  <Modal
+    open={pickerOpen}
+    title="Select a role"
+    size="lg"
+    on:close={() => (pickerOpen = false)}
+  >
+    {#if pickerType === 'actor'}
+      <RolePickerGrid
+        showTitle={false}
+        variant="storyteller"
+        options={availableVillagers.map((role) => {
+          const slug = normalizeRoleSlug(role);
+          return {
+            id: slug,
+            label: shortRoleLabel(slug),
+            image: roleImagePath(slug),
+            disabled: false,
+            selected: false
+          };
+        })}
+        on:select={(event) => handleActorPick(event.detail.id)}
+      />
+    {:else}
+      <RolePickerGrid
+        showTitle={false}
+        variant="storyteller"
+        options={availableThiefRoles().map((role) => {
+          const slug = normalizeRoleSlug(role);
+          return {
+            id: slug,
+            label: shortRoleLabel(slug),
+            image: roleImagePath(slug),
+            disabled: !draftOverride,
+            selected: false
+          };
+        })}
+        on:select={(event) => {
+          if (draftOverride) handleThiefPick(event.detail.id);
+        }}
+      />
+    {/if}
+  </Modal>
+{/if}
 
 <style>
   .selection-body {
@@ -1048,10 +1064,16 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
   .mix-summary {
     display: grid;
     gap: 0.75rem;
-    padding: 1rem 1.25rem;
-    border-radius: 24px;
+    padding: 1.2rem;
+    border-radius: 20px;
     border: 1px solid var(--glass-hover);
-    background: rgba(6, 10, 18, 0.85);
+    background: rgba(6, 12, 20, 0.75);
+  }
+
+  .mix-header h3 {
+    margin: 0 0 0.25rem 0;
+    font-size: 1.05rem;
+    line-height: 1.3;
   }
 
   .mix-grid {
@@ -1107,6 +1129,116 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
     cursor: not-allowed;
   }
 
+  .advanced-toggle {
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .switch-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.75rem;
+  }
+
+  .switch-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    color: var(--color-white-contrast);
+    font-weight: 600;
+  }
+
+  .pill-switch {
+    appearance: none;
+    width: 44px;
+    height: 24px;
+    background: var(--glass-border);
+    border-radius: 999px;
+    position: relative;
+    outline: none;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+
+  .pill-switch::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.2s ease;
+  }
+
+  .pill-switch:checked {
+    background: var(--state-in-progress);
+  }
+
+  .pill-switch:checked::after {
+    transform: translateX(20px);
+  }
+
+  .advanced-section {
+    background: rgba(6, 12, 20, 0.75);
+  }
+
+  .exclusion-summary-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem;
+    align-items: start;
+  }
+
+  .exclusion-card {
+    border: 1px solid var(--glass-border);
+    border-radius: 14px;
+    padding: 0.85rem;
+    background: rgba(10, 14, 20, 0.7);
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  .exclusion-card__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .exclusion-card h5 {
+    margin: 0;
+    line-height: 1.3;
+  }
+
+  .exclusion-tile {
+    border: 1px solid var(--glass-border);
+    border-radius: 14px;
+    padding: 0.5rem 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    background: rgba(10, 14, 20, 0.75);
+    color: var(--color-white-contrast);
+    cursor: pointer;
+  }
+
+  .exclusion-tile img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--surface-chip);
+    padding: 0.2rem;
+  }
+
+  .exclusion-tile--excluded {
+    filter: grayscale(1);
+    opacity: 0.55;
+  }
+
   .exclusions-box {
     border: 1px solid var(--glass-hover);
     border-radius: 20px;
@@ -1124,6 +1256,10 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 0.6rem;
+  }
+
+  .separation-top {
+    margin-top: 0.75rem;
   }
 
   .exclusion-chip {
@@ -1185,14 +1321,16 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
     display: flex;
     flex-wrap: wrap;
     gap: 0.35rem;
+    align-items: flex-start;
   }
 
   .excluded-chip {
     border: 1px solid var(--glass-border);
     border-radius: 10px;
-    padding: 0.25rem 0.5rem;
+    padding: 0.18rem 0.45rem;
     background: rgba(255, 255, 255, 0.06);
     color: var(--color-white-contrast);
+    line-height: 1.2;
   }
 
   .empty-exclusions {

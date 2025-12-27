@@ -1,6 +1,7 @@
 <script>
   import { createEventDispatcher } from 'svelte';
   import { t } from '../../lib/i18n.js';
+  import { slugifyRole } from '../../lib/roles.js';
   import Modal from '../ui/Modal.svelte';
   import Button from '../ui/Button.svelte';
 
@@ -22,26 +23,46 @@
   const dispatch = createEventDispatcher();
 
   let draftAssignments = {};
+  let userModified = false;
+  let lastSyncedKey = '';
   let lastOpenState = false;
   let draftTestPlayers = [];
   let newPlayerName = '';
+
+  const resolveRoleSlug = (role) => {
+    if (!role) return '';
+    return role.slug ?? slugifyRole(role.role ?? '');
+  };
 
   function normalizeAssignments(source = {}) {
     const result = {};
     Object.entries(source ?? {}).forEach(([playerId, data]) => {
       if (!data) return;
       if (typeof data === 'string') {
-        result[playerId] = data;
+        const slug = slugifyRole(data);
+        if (slug) result[playerId] = slug;
       } else if (typeof data === 'object') {
-        const slug = data.slug ?? data.role ?? '';
+        const slug = slugifyRole(data.slug ?? data.role ?? '');
         if (slug) result[playerId] = slug;
       }
     });
     return result;
   }
 
+  $: normalizedAssignments = normalizeAssignments(assignments);
+  $: normalizedKey = JSON.stringify(normalizedAssignments);
+
   $: if (open && !lastOpenState) {
-    draftAssignments = normalizeAssignments(assignments);
+    draftAssignments = normalizedAssignments;
+    userModified = false;
+    lastSyncedKey = normalizedKey;
+    draftTestPlayers = Array.isArray(testPlayers) ? [...testPlayers] : [];
+    newPlayerName = '';
+  }
+
+  $: if (open && normalizedKey !== lastSyncedKey && !userModified) {
+    draftAssignments = normalizedAssignments;
+    lastSyncedKey = normalizedKey;
     draftTestPlayers = Array.isArray(testPlayers) ? [...testPlayers] : [];
     newPlayerName = '';
   }
@@ -49,7 +70,8 @@
   $: lastOpenState = open;
 
   $: roleCapacities = (roles ?? []).reduce((acc, role) => {
-    const slug = role.slug ?? role.role;
+    const slug = resolveRoleSlug(role);
+    if (!slug) return acc;
     acc[slug] = Number(role.count) || 0;
     return acc;
   }, {});
@@ -62,6 +84,25 @@
 
   $: matchPlayers = [...(players ?? []), ...(draftTestPlayers ?? [])];
 
+  function roleInstanceIndex(slug, playerId) {
+    const total = roleCapacities[slug] ?? 0;
+    if (total <= 1) return null;
+    const assigned = (matchPlayers ?? []).filter((player) => draftAssignments[player.id] === slug);
+    const position = assigned.findIndex((player) => player.id === playerId);
+    if (position >= 0) return position + 1;
+    const nextIndex = assigned.length + 1;
+    return Math.min(nextIndex, total);
+  }
+
+  function formatRoleLabel(role, playerId, available = null) {
+    const slug = resolveRoleSlug(role);
+    const total = Number(role.count) || 0;
+    if (!slug || total <= 1) return role.role;
+    if (available === 0) return `${role.role} (0/${total})`;
+    const index = roleInstanceIndex(slug, playerId) ?? 1;
+    return `${role.role} (${index}/${total})`;
+  }
+
   function remainingFor(slug, currentSelection) {
     if (!slug) return 0;
     const capacity = roleCapacities[slug] ?? 0;
@@ -70,8 +111,7 @@
     return capacity - used;
   }
 
-  function assign(playerId, event) {
-    const value = event?.currentTarget?.value ?? '';
+  function assign(playerId, value) {
     const next = { ...draftAssignments };
     if (!value) {
       delete next[playerId];
@@ -79,6 +119,7 @@
       next[playerId] = value;
     }
     draftAssignments = next;
+    userModified = true;
   }
 
   function createTestPlayer(name) {
@@ -169,8 +210,11 @@
   on:close={close}
 >
   <div class="match-body">
-    <div class="test-players">
-      <label class="section-label" for="test-player-input">Añadir jugadores de prueba</label>
+    <div class="test-players card-outline">
+      <div class="section-header">
+        <label class="section-label" for="test-player-input">{$t('configure.match_offline_players_label')}</label>
+        <small class="section-hint">{$t('configure.match_offline_players_hint')}</small>
+      </div>
       <div class="test-input-row">
         <input
           id="test-player-input"
@@ -230,23 +274,24 @@
               <td>
                 <select
                   class="match-select"
-                  on:change={(event) => assign(player.id, event)}
-                  value={draftAssignments[player.id] ?? ''}
+                  bind:value={draftAssignments[player.id]}
+                  on:change={(event) => assign(player.id, event?.currentTarget?.value ?? '')}
                 >
                   <option value="">{ $t('configure.match_unassigned') }</option>
                   {#each roles as role}
+                    {@const slug = resolveRoleSlug(role)}
                     {#if role.count > 0}
-                      {#if remainingFor(role.slug, draftAssignments[player.id]) > 0 || draftAssignments[player.id] === role.slug}
-                        <option value={role.slug}>
-                          {role.role} ({remainingFor(role.slug, draftAssignments[player.id])}/{role.count})
+                      {#if remainingFor(slug, draftAssignments[player.id]) > 0 || draftAssignments[player.id] === slug}
+                        <option value={slug}>
+                          {formatRoleLabel(role, player.id)}
                         </option>
                       {:else}
-                        <option value={role.slug} disabled>
-                          {role.role} (0/{role.count})
+                        <option value={slug} disabled>
+                          {formatRoleLabel(role, player.id, 0)}
                         </option>
                       {/if}
                     {:else}
-                      <option value={role.slug} disabled>{role.role}</option>
+                      <option value={slug} disabled>{role.role}</option>
                     {/if}
                   {/each}
                 </select>
@@ -285,6 +330,21 @@
     gap: 1.25rem;
   }
 
+  .card-outline {
+    border: 1px solid var(--glass-border);
+    border-radius: 0.85rem;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-bottom: 0.35rem;
+  }
+
   .test-players {
     display: flex;
     flex-direction: column;
@@ -294,6 +354,12 @@
   .section-label {
     font-weight: 600;
     color: var(--color-white-muted);
+  }
+
+  .section-hint {
+    margin: 0;
+    color: var(--color-white-dim);
+    font-size: 0.85rem;
   }
 
   .test-input-row {

@@ -55,6 +55,8 @@
     ? metadata.language_values
     : ['en'];
   const defaultLanguage = availableLanguages[0] ?? 'en';
+  const DEFAULT_ACTOR_EXCLUSIONS = [];
+  const DEFAULT_THIEF_EXCLUSIONS = [];
 
   const DEFAULT_ASSIST_TASKS = [
     'Roles_Selection',
@@ -160,7 +162,7 @@ let activeModal = null;
     assistEnabled: metadata?.defaults?.assist_enabled ?? false,
     assistTasks: [],
     include_sheriff: true,
-    include_town_crier: true
+    include_town_crier: false
   };
 
   if (form.storyteller === 'AI' || form.storyteller === 'human-AI') {
@@ -173,8 +175,8 @@ let selectedRoles = createEmptyRoleSelection();
 let rolesCustomized = false;
 let selectedActorRoles = [];
 let selectedThiefRoles = [];
-let selectedExclusionList = [];
-let selectedModifyExclusions = true;
+let selectedActorExclusions = [...DEFAULT_ACTOR_EXCLUSIONS];
+let selectedThiefExclusions = [...DEFAULT_THIEF_EXCLUSIONS];
 let autoSeedKey = '';
   let alertOpen = false;
   let alertMessage = '';
@@ -185,7 +187,7 @@ let autoSeedKey = '';
   let playerAssignments = {};
   let distributionTokens = [];
   let testPlayers = [];
-  let matchPlayers = [];
+let matchPlayers = [];
   let sessionUnsubscribe = null;
 
   const countEntries = (value) => {
@@ -309,9 +311,9 @@ let autoSeedKey = '';
   $: canShareSession = totalSelectedRoles >= clampPlayers(form.players_expected);
   $: rolesMatchingTaskEnabled =
     Array.isArray(form.assistTasks) && form.assistTasks.includes('Roles_Matching');
-  $: matchEnabled =
-    form.storyteller === 'human' ||
-    (form.storyteller === 'human-AI' && !rolesMatchingTaskEnabled);
+  // Siempre permitimos abrir el modal de emparejar cuando el narrador no es 100% IA
+  // para que el narrador humano pueda revisar o ajustar, aunque la IA asista.
+  $: matchEnabled = form.storyteller !== 'AI';
   $: selectionAssistEnabled =
     form.storyteller === 'AI' ||
     (form.storyteller === 'human-AI' && Array.isArray(form.assistTasks) && form.assistTasks.includes('Roles_Selection'));
@@ -324,7 +326,7 @@ let autoSeedKey = '';
   $: distributionTokens = buildDistributionTokens(selectedRoles, playerAssignments, playerList, {
     includeSheriff: form.include_sheriff !== false
   });
-  $: matchPlayers = [...playerList, ...testPlayers];
+$: matchPlayers = playerList;
   $: if (sessionId && !loading) {
     dispatch('session-stats', {
       expected: expectedPlayersCount,
@@ -368,12 +370,11 @@ let autoSeedKey = '';
             ? settings.assist_tasks.filter((task) => assistTaskOptions.includes(task))
             : [],
           include_sheriff: settings.include_sheriff ?? true,
-          include_town_crier: settings.include_town_crier ?? true
+          include_town_crier: settings.include_town_crier ?? false
         };
         overrideRoleLimits = settings.override_limits ?? false;
         includeSheriff = form.include_sheriff;
         includeTownCrier = form.include_town_crier;
-        selectedModifyExclusions = settings.modify_exclusion_list ?? selectedModifyExclusions;
         tweakRoleMix = settings.tweak_role_mix ?? false;
         roleMixOverride = normalizeMixOverride(settings.role_mix_override);
         if (settings.roles) {
@@ -386,22 +387,19 @@ let autoSeedKey = '';
         if (Array.isArray(settings.thief_roles)) {
           selectedThiefRoles = settings.thief_roles.map((role) => slugifyRole(role)).filter(Boolean).slice(0, 2);
         }
-        if (Array.isArray(settings.thief_exclusions)) {
-          selectedExclusionList = settings.thief_exclusions;
-        }
-        if (Array.isArray(settings.exclusion_list)) {
-          selectedExclusionList = settings.exclusion_list;
-        }
-        if (typeof settings.modify_exclusion_list === 'boolean') {
-          selectedModifyExclusions = settings.modify_exclusion_list;
-        }
+        selectedThiefExclusions = Array.isArray(settings.thief_exclusions)
+          ? settings.thief_exclusions
+          : [...DEFAULT_THIEF_EXCLUSIONS];
+        selectedActorExclusions = Array.isArray(settings.actor_exclusions)
+          ? settings.actor_exclusions
+          : [...DEFAULT_ACTOR_EXCLUSIONS];
         if (form.storyteller === 'human') {
           form.assistEnabled = false;
           form.assistTasks = [];
-          } else if (form.storyteller === 'AI' && !form.assistTasks.length && assistTaskOptions.length) {
-            form.assistEnabled = true;
-            form.assistTasks = [...assistTaskOptions];
-          }
+        } else if (form.storyteller === 'AI' && !form.assistTasks.length && assistTaskOptions.length) {
+          form.assistEnabled = true;
+          form.assistTasks = [...assistTaskOptions];
+        }
         }
       } catch (error) {
         console.error('[configure] unable to load session', error);
@@ -590,11 +588,11 @@ let autoSeedKey = '';
     if (Array.isArray(detail.thiefRoles)) {
       selectedThiefRoles = detail.thiefRoles.map((role) => slugifyRole(role)).filter(Boolean).slice(0, 2);
     }
-    if (Array.isArray(detail.exclusionList)) {
-      selectedExclusionList = detail.exclusionList;
+    if (Array.isArray(detail.actorExclusions)) {
+      selectedActorExclusions = detail.actorExclusions;
     }
-    if (typeof detail.modifyExclusionList === 'boolean') {
-      selectedModifyExclusions = detail.modifyExclusionList;
+    if (Array.isArray(detail.thiefExclusions)) {
+      selectedThiefExclusions = detail.thiefExclusions;
     }
     if (typeof detail.override === 'boolean') {
       overrideRoleLimits = detail.override;
@@ -617,14 +615,13 @@ let autoSeedKey = '';
         'settings.actor_roles': selectedActorRoles,
         'settings.thief_roles': selectedThiefRoles,
         // Guardamos la lista de exclusiones en ambas claves por compatibilidad
-        'settings.exclusion_list': selectedExclusionList,
-        'settings.thief_exclusions': selectedExclusionList,
+        'settings.actor_exclusions': selectedActorExclusions,
+        'settings.thief_exclusions': selectedThiefExclusions,
         'settings.override_limits': overrideRoleLimits,
         'settings.include_sheriff': includeSheriff,
         'settings.include_town_crier': includeTownCrier,
         'settings.tweak_role_mix': tweakRoleMix,
         'settings.role_mix_override': roleMixOverride,
-        'settings.modify_exclusion_list': selectedModifyExclusions
       });
       showToast({ message: $t('configure.saved'), variant: 'success' });
     } catch (error) {
@@ -852,8 +849,8 @@ let autoSeedKey = '';
     selected={selectedRoles}
     actorRoles={selectedActorRoles}
     thiefRoles={selectedThiefRoles}
-    exclusionList={selectedExclusionList}
-    modifyExclusionList={selectedModifyExclusions}
+    actorExclusions={selectedActorExclusions}
+    thiefExclusions={selectedThiefExclusions}
     limits={roleLimits}
     resourceLimits={resourceLimits}
     override={overrideRoleLimits}
