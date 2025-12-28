@@ -782,7 +782,7 @@ $: matchPlayers = playerList;
             {$t('configure.btn_match')}
           </button>
           <button class="pill-btn" type="button" on:click={shareSession} disabled={!form.game_id || !canShareSession}>
-            {$t('configure.btn_share')}
+            Share
           </button>
         </div>
 

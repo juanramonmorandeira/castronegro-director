@@ -112,7 +112,7 @@
   const createEmptySelection = () =>
     (categories ?? []).reduce((acc, category) => ({ ...acc, [category]: {} }), {});
 
-  const MIX_KEYS = ['villagers', 'ambiguous', 'werewolves', 'loners'];
+  const MIX_KEYS = ['villagers', 'ambiguous', 'loners', 'werewolves'];
   const cloneMix = (source) => {
     const base = {};
     MIX_KEYS.forEach((key) => {
@@ -901,6 +901,7 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
         </div>
       </section>
     {/if}
+    </div>
   </div>
 </Modal>
 
@@ -1246,10 +1247,6 @@ $: exclusionCandidates = [...allRolesList].sort((a, b) => a.localeCompare(b));
     background: rgba(6, 12, 20, 0.85);
     display: grid;
     gap: 0.6rem;
-  }
-
-  .exclusions-header h3 {
-    margin: 0;
   }
 
   .exclusions-grid {

@@ -14,7 +14,7 @@
   import roleDefinitions from '../../reference-data/datasets/roles.json' with { type: 'json' };
   import { showToast } from '../lib/toast.js';
   import { createEventDispatcher, onMount } from 'svelte';
-  import { getSessionPositions, setRolePosition } from '../lib/stores/rolePositions.js';
+import { getSessionPositions, setRolePosition, setSessionPositions } from '../lib/stores/rolePositions.js';
   import Modal from '../components/ui/Modal.svelte';
   import RoleSlotPicker from '../components/ui/RoleSlotPicker.svelte';
   import RolePickerGrid from '../components/ui/RolePickerGrid.svelte';
@@ -1630,6 +1630,9 @@
     knightPending = false;
     knightTargetId = null;
     woundedQueue = [];
+    positions = {};
+    setSessionPositions(sessionKey, {});
+    syncPositions();
     tokens = tokens.map((token) => {
       if (token.id === actorBaseTokenId && actorToken) {
         return actorToken;
@@ -1658,6 +1661,19 @@
           base_index: 0
         },
         'settings.manipulator_assignments': {},
+        day_number: dayNumber,
+        night_number: nightNumber,
+        sheriff: {
+          holder_id: null,
+          available: true,
+          disabled: false
+        },
+        lovers: [],
+        protected_targets: [],
+        infected_targets: [],
+        charmed_targets: [],
+        consumed_special_ids: [],
+        active_special_ids: [],
         actor_state: {
           available: sanitizeActorRoles(actorRoles),
           consumed: [],
@@ -1668,8 +1684,22 @@
           available: true,
           lastNightUsed: null,
           lastNightUsedKey: null
-        }
+        },
+        tokens: tokens.map((token) => ({
+          ...token,
+          player: token.player ?? null
+        }))
       });
+      // Refuerza el estado local y remoto tras el reset para volver siempre al inicio del ciclo de preparación.
+      phaseState = {
+        previous: null,
+        current: prepQueue[0] ?? PHASE_KEY_FIRST_NIGHT,
+        next: PHASE_KEY_FIRST_NIGHT,
+        pendingInterphases: [],
+        pendingPreparation: prepQueue.slice(1),
+        baseIndex: 0
+      };
+      await persistPhaseState();
     } catch (error) {
       console.error('[session] reset failed', error);
     } finally {
@@ -2163,24 +2193,6 @@
       });
       return false;
     }
-    // Ensure Father infection tracks the same target as the werewolves claws token.
-    const specialsBySlug = (slug) =>
-      specials.filter((token) => slugifyRole(token.role) === slug).map((token) => token.id);
-    const clawsId = specialsBySlug('werewolves_claws').find((id) => activeSpecialIds.includes(id));
-    const fatherId = specialsBySlug('cursed_wolf_father')
-      .concat(specialsBySlug('father_bite'))
-      .find((id) => activeSpecialIds.includes(id));
-    if (clawsId && fatherId) {
-      const clawsTarget = findTargetForSpecial(clawsId, characters);
-      console.info('[session] resolve effects claws/father', {
-        clawsId,
-        fatherId,
-        clawsTarget,
-        positions,
-        activeSpecialIds
-      });
-      if (clawsTarget) infectionTargetsCurrent.push(clawsTarget);
-    }
     const infectionTargetsUnique = uniqueList(
       infectionTargetsCurrent.filter((id) => {
         const token = getTokenById(id);
@@ -2267,6 +2279,26 @@
       }
     });
     const whiteClawKills = new Set(whiteClawTargets);
+    const werewolfDeathsThisNight = Array.from(deaths).some((id) => isWerewolfAligned(id));
+    if (werewolfDeathsThisNight) {
+      const clawTokens = specials
+        .filter((token) => slugifyRole(token.role) === 'werewolves_claws')
+        .map((token) => token.id);
+      if (clawTokens.length > 1) {
+        const [keep, ...extras] = clawTokens;
+        positions = { ...positions };
+        extras.forEach((tokenId) => {
+          delete positions[tokenId];
+          activeSpecialIds = activeSpecialIds.filter((id) => id !== tokenId);
+          if (!consumedSpecialIds.includes(tokenId)) {
+            consumedSpecialIds = [...consumedSpecialIds, tokenId];
+          }
+        });
+        if (!positions[keep]) {
+          positions[keep] = palettePosition(0, specials.length);
+        }
+      }
+    }
 
     if (childModelTargetResolved && childTokenId) {
       const stamp = new Date().toLocaleTimeString();

@@ -92,19 +92,41 @@
     return acc;
   }, {});
 
-  $: matchPlayers = [...(players ?? []), ...(draftTestPlayers ?? [])];
+  $: basePlayerIds = new Set([...(players ?? []), ...(draftTestPlayers ?? [])].map((p) => p.id));
+  $: derivedMissingPlayers = Object.entries(normalizedAssignments ?? {})
+    .filter(([playerId]) => playerId && !basePlayerIds.has(playerId))
+    .map(([playerId, data]) => ({
+      id: playerId,
+      alias: data?.alias ?? data?.player ?? playerId,
+      ready: false,
+      offline: true
+    }));
+  $: matchPlayers = [...(players ?? []), ...(draftTestPlayers ?? []), ...derivedMissingPlayers];
   $: playersMap = new Map((matchPlayers ?? []).map((p) => [p.id, p]));
 
   const buildSeatAssignments = (order = [], count = seatsCount) => {
     const seats = [];
     const used = new Set();
-    (order ?? []).forEach((id) => {
+
+    const tryPush = (id) => {
+      if (!id) return;
       if (seats.length >= count) return;
-      if (playersMap.has(id) && !used.has(id)) {
-        seats.push(id);
-        used.add(id);
-      }
-    });
+      if (!playersMap.has(id)) return;
+      if (used.has(id)) return;
+      seats.push(id);
+      used.add(id);
+    };
+
+    (order ?? []).forEach((id) => tryPush(id));
+
+    if (seats.length < count) {
+      Object.keys(normalizedAssignments ?? {}).forEach((id) => tryPush(id));
+    }
+
+    if (seats.length < count) {
+      (matchPlayers ?? []).forEach((player) => tryPush(player.id));
+    }
+
     while (seats.length < count) seats.push(null);
     return seats;
   };
@@ -165,20 +187,31 @@
     return false;
   };
 
-  function roleInstanceIndex(slug) {
+  function roleInstanceIndex(slug, seatIndex) {
     const total = roleCapacities[slug] ?? 0;
     if (total <= 1) return null;
-    const assigned = (draftSeatRoles ?? []).filter((value) => value === slug);
-    const nextIndex = assigned.length + 1;
-    return Math.min(nextIndex, total);
+    const roles = draftSeatRoles ?? [];
+    let seen = 0;
+    for (let idx = 0; idx < roles.length; idx += 1) {
+      if (roles[idx] === slug) {
+        seen += 1;
+      }
+      if (idx === seatIndex) {
+        // If this seat is already the slug, return its order; otherwise next available slot.
+        const position = roles[idx] === slug ? seen : seen + 1;
+        return Math.min(position, total);
+      }
+    }
+    // Seat index beyond current array or seat not yet assigned: next available instance.
+    return Math.min(seen + 1, total);
   }
 
-  function formatRoleLabel(role, available = null) {
+  function formatRoleLabel(role, seatIndex, available = null) {
     const slug = resolveRoleSlug(role);
     const total = Number(role.count) || 0;
     if (!slug || total <= 1) return role.role;
     if (available === 0) return `${role.role} (0/${total})`;
-    const index = roleInstanceIndex(slug) ?? 1;
+    const index = roleInstanceIndex(slug, seatIndex) ?? 1;
     return `${role.role} (${index}/${total})`;
   }
 
@@ -332,11 +365,11 @@
                     {#if role.count > 0}
                       {#if remainingFor(slug, draftSeatRoles[index]) > 0 || draftSeatRoles[index] === slug}
                         <option value={slug}>
-                          {formatRoleLabel(role)}
+                          {formatRoleLabel(role, index)}
                         </option>
                       {:else}
                         <option value={slug} disabled>
-                          {formatRoleLabel(role, 0)}
+                          {formatRoleLabel(role, index, 0)}
                         </option>
                       {/if}
                     {:else}
@@ -611,10 +644,6 @@
     background: rgba(255, 255, 255, 0.03);
     border-radius: 0.8rem;
     border: 1px solid var(--glass-border);
-  }
-
-  .queue-actions .pill-btn {
-    padding: 0.35rem 0.7rem;
   }
 
   .queue-list--empty {
