@@ -383,8 +383,8 @@ export async function createSessionDraft({ title, language, creatorUid } = {}) {
   const statusDefault = defaults.status ?? 'draft';
   const rulesetDefault =
     defaults.rulesets ??
-    gamesMetadata?.rulesets_values?.[0] ??
-    'basic';
+    (gamesMetadata?.rulesets_values?.includes('thepact') ? 'thepact' : gamesMetadata?.rulesets_values?.[0]) ??
+    'thepact';
   const storytellerDefault =
     defaults.storyteller ??
     gamesMetadata?.storyteller_values?.[0] ??
@@ -429,15 +429,89 @@ export async function createSessionDraft({ title, language, creatorUid } = {}) {
       roles_in_play: {},
       assist_enabled: assistEnabled,
       language: languageDefault,
-      assist_tasks: assistTasksDefault
+      assist_tasks: assistTasksDefault,
+      include_buildings: false
     },
     players: {},
-    game_phases: {
-      previous: null,
-      current: gamePhaseDefault,
-      next: 'undetermined',
-      phase_summary: [],
-      pending_interphases: []
+    session_phases: {
+      phase_previous: null,
+      phase_current: 'prepCharacters',
+      phase_next: null,
+      pending_preparation: [
+        { key: 'prepCharacters', status: 'enabled' },
+        { key: 'prepBuildings', status: 'disabled' },
+        { key: 'prepManipulator', status: 'disabled' },
+        { key: 'prepGypsy', status: 'disabled' },
+        { key: 'prepTownCrierCards', status: 'disabled' },
+        { key: 'prepActor', status: 'disabled' },
+        { key: 'prepThief', status: 'disabled' },
+        { key: 'prepSheriff', status: 'disabled' }
+      ],
+      pending_firstnight: [
+        { key: 'firstnightThief', status: 'disabled' },
+        { key: 'firstnightActor', status: 'disabled' },
+        { key: 'firstnightCupid', status: 'disabled' },
+        { key: 'firstnightSeer', status: 'disabled' },
+        { key: 'firstnightFox', status: 'disabled' },
+        { key: 'firstnightLovers', status: 'disabled' },
+        { key: 'firstnightJudge', status: 'disabled' },
+        { key: 'firstnightSisters', status: 'disabled' },
+        { key: 'firstnightBrothers', status: 'disabled' },
+        { key: 'firstnightChild', status: 'disabled' },
+        { key: 'firstnightTamer', status: 'disabled' },
+        { key: 'firstnightScandalmonger', status: 'disabled' },
+        { key: 'firstnightPyromaniac', status: 'disabled' },
+        { key: 'firstnightDefender', status: 'disabled' },
+        { key: 'firstnightPack', status: 'disabled' },
+        { key: 'firstnightHound', status: 'disabled' },
+        { key: 'firstnightGirl', status: 'disabled' },
+        { key: 'firstnightBaker', status: 'disabled' },
+        { key: 'firstnightFather', status: 'disabled' },
+        { key: 'firstnightBad', status: 'disabled' },
+        { key: 'firstnightWitch', status: 'disabled' },
+        { key: 'firstnightGypsy', status: 'disabled' },
+        { key: 'firstnightPiper', status: 'disabled' },
+        { key: 'firstnightCharmed', status: 'disabled' }
+      ],
+      pending_eachday: [
+        { key: 'eachdayVictims', status: 'disabled' },
+        { key: 'eachdayTamer', status: 'disabled' },
+        { key: 'eachdayMedium', status: 'disabled' },
+        { key: 'eachdayTownCrier', status: 'disabled' },
+        { key: 'eachdayDebate', status: 'disabled' },
+        { key: 'eachdayVote', status: 'disabled' },
+        { key: 'eachdayServant', status: 'disabled' },
+        { key: 'eachdayJudge', status: 'disabled' }
+      ],
+      pending_eachnight: [
+        { key: 'eachnightActor', status: 'disabled' },
+        { key: 'eachnightSeer', status: 'disabled' },
+        { key: 'eachnightFox', status: 'disabled' },
+        { key: 'eachnightScandalmonger', status: 'disabled' },
+        { key: 'eachnightPyromaniac', status: 'disabled' },
+        { key: 'eachnightDefender', status: 'disabled' },
+        { key: 'eachnightPack', status: 'disabled' },
+        { key: 'eachnightBaker', status: 'disabled' },
+        { key: 'eachnightWhite', status: 'disabled' },
+        { key: 'eachnightFather', status: 'disabled' },
+        { key: 'eachnightBad', status: 'disabled' },
+        { key: 'eachnightWitch', status: 'disabled' },
+        { key: 'eachnightGypsy', status: 'disabled' },
+        { key: 'eachnightPiper', status: 'disabled' },
+        { key: 'eachnightCharmed', status: 'disabled' },
+        { key: 'eachnightSisters', status: 'disabled' },
+        { key: 'eachnightBrothers', status: 'disabled' }
+      ],
+      pending_interphases: [
+        { key: 'interHunter', status: 'disabled' },
+        { key: 'interScapegoat', status: 'disabled' },
+        { key: 'interKnight', status: 'disabled' },
+        { key: 'interSheriff', status: 'disabled' },
+        { key: 'interVote', status: 'disabled' },
+        { key: 'interServant', status: 'disabled' },
+        { key: 'interEnd', status: 'disabled' }
+      ],
+      phase_logbook: []
     },
     logs: [],
     meta: gamesMetadata?.meta ?? { version: 1, schema: 'game_schema' },

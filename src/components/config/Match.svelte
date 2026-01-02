@@ -12,6 +12,7 @@
   export let assignments = {};
   export let seatingOrder = [];
   export let expectedSeats = 0;
+  export let seatRoles = [];
 
   const shuffle = (list = []) => {
     const copy = [...list];
@@ -60,7 +61,9 @@
   $: if (open && !lastOpenState) {
     draftAssignments = normalizedAssignments;
     draftSeating = seatingOrder ?? [];
-    draftSeatRoles = buildSeatRoles(draftSeating, draftAssignments);
+    draftSeatRoles = Array.isArray(seatRoles) && seatRoles.length
+      ? seatRoles.slice(0, seatsCount || seatRoles.length)
+      : buildSeatRoles(draftSeating, draftAssignments);
     userModified = false;
     lastSyncedKey = normalizedKey;
     draftTestPlayers = Array.isArray(testPlayers) ? [...testPlayers] : [];
@@ -69,7 +72,9 @@
 
   $: if (open && normalizedKey !== lastSyncedKey && !userModified) {
     draftAssignments = normalizedAssignments;
-    draftSeatRoles = buildSeatRoles(draftSeating, draftAssignments);
+    draftSeatRoles = Array.isArray(seatRoles) && seatRoles.length
+      ? seatRoles.slice(0, seatsCount || seatRoles.length)
+      : buildSeatRoles(draftSeating, draftAssignments);
     lastSyncedKey = normalizedKey;
     draftTestPlayers = Array.isArray(testPlayers) ? [...testPlayers] : [];
     newPlayerName = '';
@@ -156,7 +161,10 @@
     draftSeating = buildSeatAssignments(userModified ? draftSeating : seatingOrder, seatsCount);
     ensureSeatArrays(seatsCount);
     if (!userModified) {
-      draftSeatRoles = buildSeatRoles(draftSeating, normalizedAssignments);
+      draftSeatRoles =
+        Array.isArray(seatRoles) && seatRoles.length
+          ? seatRoles.slice(0, seatsCount || seatRoles.length)
+          : buildSeatRoles(draftSeating, normalizedAssignments);
     }
   }
 
@@ -298,15 +306,23 @@
         alias: playersMap.get(playerId)?.alias ?? playersMap.get(playerId)?.name ?? playerId
       };
     });
+    console.info('[match] confirm payload', {
+      seating: draftSeating,
+      seatRoles: draftSeatRoles,
+      payloadKeys: Object.keys(payload || {}),
+      payload
+    });
     dispatch('save', {
       assignments: payload,
       testPlayers: draftTestPlayers,
-      seatingOrder: draftSeating.slice(0, seatsCount)
+      seatingOrder: draftSeating.slice(0, seatsCount),
+      seatRoles: draftSeatRoles.slice(0, seatsCount)
     });
   }
 
   $: hasPlayers = Array.isArray(matchPlayers) && matchPlayers.length > 0;
   $: hasRoles = Array.isArray(roles) && roles.length > 0;
+  $: hasSeats = seatsCount > 0;
   const hint = 'Assign seats and roles.';
 </script>
 
@@ -318,70 +334,65 @@
   on:close={close}
 >
   <div class="match-body">
-    {#if !hasPlayers}
-      <p class="match-empty">{$t('configure.match_no_players')}</p>
-    {:else if !hasRoles}
-      <p class="match-empty">{$t('configure.match_no_roles')}</p>
-    {:else}
-      <div class="match-table card-outline">
-        <div class="match-table-header">
-          <h3>Player's table</h3>
-        </div>
-        <div class="table-grid">
-          <div class="table-row table-head">
-            <div class="col-seat">Seat</div>
-            <div class="col-player">Player</div>
-            <div class="col-role">Role</div>
-          </div>
-          {#each Array(seatsCount) as _, index}
-            <div class="table-row">
-              <div class="col-seat">#{index}</div>
-              <div class="col-player">
-                <select
-                  class="match-select"
-                  value={draftSeating[index] ?? ''}
-                  on:change={(event) => setSeat(index, event?.currentTarget?.value ?? '')}
-                >
-                  <option value="">Select a player</option>
-                  {#if draftSeating[index] && playersMap.has(draftSeating[index])}
-                    <option value={draftSeating[index]}>
-                      {playersMap.get(draftSeating[index]).alias}
-                    </option>
-                  {/if}
-                  {#each queuePlayers as player}
-                    <option value={player.id}>{player.alias}</option>
-                  {/each}
-                </select>
-              </div>
-              <div class="col-role">
-                <select
-                  class="match-select"
-                  bind:value={draftSeatRoles[index]}
-                  on:change={(event) => assignSeatRole(index, event?.currentTarget?.value ?? '')}
-                >
-                  <option value="">Select a role</option>
-                  {#each roles as role}
-                    {@const slug = resolveRoleSlug(role)}
-                    {#if role.count > 0}
-                      {#if remainingFor(slug, draftSeatRoles[index]) > 0 || draftSeatRoles[index] === slug}
-                        <option value={slug}>
-                          {formatRoleLabel(role, index)}
-                        </option>
-                      {:else}
-                        <option value={slug} disabled>
-                          {formatRoleLabel(role, index, 0)}
-                        </option>
-                      {/if}
-                    {:else}
-                      <option value={slug} disabled>{role.role}</option>
-                    {/if}
-                  {/each}
-                </select>
-              </div>
-            </div>
-          {/each}
-        </div>
+    <div class="match-table card-outline">
+      <div class="match-table-header">
+        <h3>Player's table</h3>
       </div>
+      <div class="table-grid">
+        <div class="table-row table-head">
+          <div class="col-seat">Seat</div>
+          <div class="col-player">Player</div>
+          <div class="col-role">Role</div>
+        </div>
+        {#each Array(seatsCount) as _, index}
+          <div class="table-row">
+            <div class="col-seat">#{index}</div>
+            <div class="col-player">
+              <select
+                class="match-select"
+                value={draftSeating[index] ?? ''}
+                on:change={(event) => setSeat(index, event?.currentTarget?.value ?? '')}
+              >
+                <option value="">Select a player</option>
+                {#if draftSeating[index] && playersMap.has(draftSeating[index])}
+                  <option value={draftSeating[index]}>
+                    {playersMap.get(draftSeating[index]).alias}
+                  </option>
+                {/if}
+                {#each queuePlayers as player}
+                  <option value={player.id}>{player.alias}</option>
+                {/each}
+              </select>
+            </div>
+            <div class="col-role">
+              <select
+                class="match-select"
+                bind:value={draftSeatRoles[index]}
+                on:change={(event) => assignSeatRole(index, event?.currentTarget?.value ?? '')}
+              >
+                <option value="">Select a role</option>
+                {#each roles as role}
+                  {@const slug = resolveRoleSlug(role)}
+                  {#if role.count > 0}
+                    {#if remainingFor(slug, draftSeatRoles[index]) > 0 || draftSeatRoles[index] === slug}
+                      <option value={slug}>
+                        {formatRoleLabel(role, index)}
+                      </option>
+                    {:else}
+                      <option value={slug} disabled>
+                        {formatRoleLabel(role, index, 0)}
+                      </option>
+                    {/if}
+                  {:else}
+                    <option value={slug} disabled>{role.role}</option>
+                  {/if}
+                {/each}
+              </select>
+            </div>
+          </div>
+        {/each}
+      </div>
+    </div>
 
       <section class="queue-section card-outline">
         <header class="section-header">
@@ -438,7 +449,6 @@
           </div>
         {/if}
       </div>
-    {/if}
   </div>
 
   <svelte:fragment slot="footer">
@@ -446,7 +456,7 @@
       variant="ghost"
       type="button"
       on:click={autoAssign}
-      disabled={!hasPlayers || !hasRoles}
+      disabled={!hasSeats}
     >
       {$t('configure.match_auto')}
     </Button>
@@ -454,7 +464,7 @@
       variant="primary"
       type="button"
       on:click={confirm}
-      disabled={!hasPlayers || !hasRoles}
+      disabled={!hasSeats || !hasRoles}
     >
       {$t('common.actions.save')}
     </Button>

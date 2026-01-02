@@ -45,9 +45,12 @@
   const minPlayers = 5;
   const maxPlayers = 15;
 
-  const availableRulesets = metadata?.rulesets_values?.length
-    ? metadata.rulesets_values
-    : ['basic'];
+const availableRulesets = metadata?.rulesets_values?.length
+  ? metadata.rulesets_values
+  : ['basic', 'thepact'];
+const defaultRuleset =
+  metadata?.defaults?.rulesets ??
+  (availableRulesets.includes('thepact') ? 'thepact' : availableRulesets[0]);
   const availableStorytellers = metadata?.storyteller_values?.length
     ? metadata.storyteller_values
     : ['human', 'human-AI', 'AI'];
@@ -88,6 +91,102 @@
     Summary: 'summary',
     Logbook: 'logbook'
   };
+
+  const PHASE_POOLS = {
+    pending_preparation: [
+      'prepCharacters',
+      'prepBuildings',
+      'prepManipulator',
+      'prepGypsy',
+      'prepTownCrierCards',
+      'prepActor',
+      'prepThief',
+      'prepSheriff'
+    ],
+    pending_firstnight: [
+      'firstnightThief',
+      'firstnightActor',
+      'firstnightCupid',
+      'firstnightSeer',
+      'firstnightFox',
+      'firstnightLovers',
+      'firstnightJudge',
+      'firstnightSisters',
+      'firstnightBrothers',
+      'firstnightChild',
+      'firstnightTamer',
+      'firstnightScandalmonger',
+      'firstnightPyromaniac',
+      'firstnightDefender',
+      'firstnightPack',
+      'firstnightHound',
+      'firstnightGirl',
+      'firstnightBaker',
+      'firstnightFather',
+      'firstnightBad',
+      'firstnightWitch',
+      'firstnightGypsy',
+      'firstnightPiper',
+      'firstnightCharmed'
+    ],
+    pending_eachday: [
+      'eachdayVictims',
+      'eachdayTamer',
+      'eachdayMedium',
+      'eachdayTownCrier',
+      'eachdayDebate',
+      'eachdayVote',
+      'eachdayServant',
+      'eachdayJudge'
+    ],
+    pending_eachnight: [
+      'eachnightActor',
+      'eachnightSeer',
+      'eachnightFox',
+      'eachnightScandalmonger',
+      'eachnightPyromaniac',
+      'eachnightDefender',
+      'eachnightPack',
+      'eachnightBaker',
+      'eachnightWhite',
+      'eachnightFather',
+      'eachnightBad',
+      'eachnightWitch',
+      'eachnightGypsy',
+      'eachnightPiper',
+      'eachnightCharmed'
+    ],
+    pending_interphases: [
+      'interHunter',
+      'interScapegoat',
+      'interKnight',
+      'interSheriff',
+      'interVote',
+      'interServant',
+      'interEnd'
+    ]
+  };
+
+  const buildPhasePool = (poolKey, status = 'disabled') => {
+    const list = PHASE_POOLS[poolKey] ?? [];
+    return list.map((key) => ({ key, status }));
+  };
+
+  const buildSessionPhasesDefaults = () => ({
+    phase_previous: null,
+    phase_current: 'prepCharacters',
+    phase_next: null,
+    pending_preparation: (() => {
+      const pool = buildPhasePool('pending_preparation');
+      if (pool.length) pool[0].status = 'enabled';
+      return pool;
+    })(),
+    pending_firstnight: buildPhasePool('pending_firstnight'),
+    pending_eachday: buildPhasePool('pending_eachday'),
+    pending_eachnight: buildPhasePool('pending_eachnight'),
+    pending_interphases: buildPhasePool('pending_interphases'),
+    phase_logbook: []
+  });
 
   const clampPlayers = (value) => {
     const numeric = Number(value);
@@ -146,23 +245,25 @@ let includeSheriff = true;
 let includeTownCrier = true;
 let tweakRoleMix = false;
 let roleMixOverride = null;
+let seatRoles = [];
 let basePlayerBreakdown = null;
 let activeModal = null;
   let connectedCount = 0;
   let readyCount = 0;
   let sessionStatus = 'draft';
-  let form = {
-    name: '',
-    game_id: '',
-    description: '',
-    rulesets: metadata?.defaults?.rulesets ?? availableRulesets[0],
+let form = {
+  name: '',
+  game_id: '',
+  description: '',
+  rulesets: defaultRuleset,
     players_expected: metadata?.defaults?.players_expected ?? minPlayers,
     storyteller: metadata?.defaults?.storyteller ?? availableStorytellers[0],
     language: metadata?.defaults?.language ?? defaultLanguage,
     assistEnabled: metadata?.defaults?.assist_enabled ?? false,
     assistTasks: [],
     include_sheriff: true,
-    include_town_crier: false
+    include_town_crier: false,
+    include_buildings: false
   };
 
   if (form.storyteller === 'AI' || form.storyteller === 'human-AI') {
@@ -234,11 +335,31 @@ let matchPlayers = [];
     playerList = mapPlayers(livePlayers);
   }
 
+  const parseSeatingOrder = (raw) => {
+    if (!Array.isArray(raw)) return { players: [], roles: [] };
+    if (raw.every((entry) => typeof entry === 'object' && entry !== null)) {
+      return {
+        players: raw.map((entry) => entry?.player_id ?? null),
+        roles: raw.map((entry) => entry?.role ?? null)
+      };
+    }
+    return { players: raw, roles: [] };
+  };
+
   function handleSessionSnapshot(snapshot) {
     if (!snapshot) return;
     sessionStatus = snapshot.status ?? sessionStatus;
     playerAssignments = snapshot.player_roles ?? {};
-    seatingOrder = Array.isArray(snapshot.settings?.seating_order) ? snapshot.settings.seating_order : seatingOrder;
+    const parsedSeating = parseSeatingOrder(snapshot.seating_order);
+    seatingOrder = parsedSeating.players;
+    seatRoles = parsedSeating.roles;
+    form.include_buildings = snapshot.settings?.include_buildings ?? form.include_buildings ?? false;
+    if (!snapshot.session_phases) {
+      const phasesDefault = buildSessionPhasesDefaults();
+      updateSession(snapshot.id, { session_phases: phasesDefault, 'settings.include_buildings': form.include_buildings }).catch(
+        (error) => console.error('[configure] unable to persist session_phases defaults', error)
+      );
+    }
     if (Array.isArray(snapshot.settings?.test_players)) {
       testPlayers = snapshot.settings.test_players;
     }
@@ -358,12 +479,12 @@ $: matchPlayers = playerList;
         const session = await getSessionById(sessionId);
         if (session) {
           handleSessionSnapshot(session);
-          const settings = session.settings ?? {};
+        const settings = session.settings ?? {};
         form = {
           name: session.title ?? settings.name ?? '',
           game_id: session.game_id ?? '',
           description: settings.description ?? form.description,
-          rulesets: settings.rulesets ?? form.rulesets,
+          rulesets: settings.rulesets ?? defaultRuleset,
           players_expected: clampPlayers(settings.players_expected ?? form.players_expected),
           storyteller: settings.storyteller ?? form.storyteller,
           language: settings.language ?? form.language,
@@ -372,7 +493,8 @@ $: matchPlayers = playerList;
             ? settings.assist_tasks.filter((task) => assistTaskOptions.includes(task))
             : [],
           include_sheriff: settings.include_sheriff ?? true,
-          include_town_crier: settings.include_town_crier ?? false
+          include_town_crier: settings.include_town_crier ?? false,
+          include_buildings: settings.include_buildings ?? false
         };
         overrideRoleLimits = settings.override_limits ?? false;
         includeSheriff = form.include_sheriff;
@@ -395,7 +517,6 @@ $: matchPlayers = playerList;
         selectedActorExclusions = Array.isArray(settings.actor_exclusions)
           ? settings.actor_exclusions
           : [...DEFAULT_ACTOR_EXCLUSIONS];
-        seatingOrder = Array.isArray(settings.seating_order) ? settings.seating_order : [];
         if (form.storyteller === 'human') {
           form.assistEnabled = false;
           form.assistTasks = [];
@@ -452,6 +573,7 @@ $: matchPlayers = playerList;
         'settings.roles': selectedRoles,
         'settings.actor_roles': selectedActorRoles,
         'settings.include_sheriff': includeSheriff,
+        'settings.include_buildings': form.include_buildings,
         'settings.override_limits': overrideRoleLimits,
         status: nextStatus
       };
@@ -559,7 +681,8 @@ $: matchPlayers = playerList;
       'settings.assist_tasks': assistEnabled ? form.assistTasks : [],
       'settings.actor_roles': selectedActorRoles,
       'settings.include_sheriff': includeSheriff,
-      'settings.include_town_crier': includeTownCrier
+      'settings.include_town_crier': includeTownCrier,
+      'settings.include_buildings': form.include_buildings
     };
     try {
       await updateSession(sessionId, payload);
@@ -624,8 +747,7 @@ $: matchPlayers = playerList;
         'settings.include_sheriff': includeSheriff,
         'settings.include_town_crier': includeTownCrier,
         'settings.tweak_role_mix': tweakRoleMix,
-        'settings.role_mix_override': roleMixOverride,
-        'settings.seating_order': seatingOrder
+        'settings.role_mix_override': roleMixOverride
       });
       showToast({ message: $t('configure.saved'), variant: 'success' });
     } catch (error) {
@@ -641,14 +763,25 @@ $: matchPlayers = playerList;
     }
     const assignments = event?.detail?.assignments ?? {};
     const manualPlayers = Array.isArray(event?.detail?.testPlayers) ? event.detail.testPlayers : testPlayers;
+    const seatRoles = Array.isArray(event?.detail?.seatRoles) ? event.detail.seatRoles : [];
     testPlayers = manualPlayers;
     try {
       await savePlayerRoleAssignments(sessionId, assignments);
       const seatingOrderDetail = event?.detail?.seatingOrder ?? [];
+      const seatingOrderObjects = seatingOrderDetail.map((playerId, index) => {
+        const slugFromSeat = seatRoles[index] ?? null;
+        const slug = assignments[playerId]?.slug ?? slugFromSeat ?? null;
+        const includeRole = slug || playerId === null || playerId === undefined;
+        return {
+          seat: index,
+          player_id: playerId ?? null,
+          role: includeRole ? slug : null
+        };
+      });
       if (Array.isArray(seatingOrderDetail)) {
         seatingOrder = seatingOrderDetail;
         await updateSession(sessionId, {
-          'settings.seating_order': seatingOrderDetail,
+          seating_order: seatingOrderObjects,
           'settings.test_players': manualPlayers
         });
       }
@@ -662,6 +795,24 @@ $: matchPlayers = playerList;
 
   function handleShareClose() {
     closeModal();
+  }
+
+  async function handleExclusionSave(event) {
+    if (!sessionId) return;
+    const actorEx = event?.detail?.actorExclusions ?? selectedActorExclusions;
+    const thiefEx = event?.detail?.thiefExclusions ?? selectedThiefExclusions;
+    selectedActorExclusions = actorEx;
+    selectedThiefExclusions = thiefEx;
+    try {
+      await updateSession(sessionId, {
+        'settings.actor_exclusions': actorEx,
+        'settings.thief_exclusions': thiefEx
+      });
+      showToast({ message: $t('configure.saved'), variant: 'success' });
+    } catch (error) {
+      console.error('[configure] unable to save exclusions', error);
+      openAlert($t('configure.errors.save_failed'), 'error');
+    }
   }
 
   function handleShareSave() {
@@ -871,6 +1022,7 @@ $: matchPlayers = playerList;
     tweakRoleMix={tweakRoleMix}
     roleMixOverride={roleMixOverride}
     on:save={handleSelectionSave}
+    on:exclusionSave={handleExclusionSave}
     on:cancel={closeModal}
   />
 
@@ -881,6 +1033,7 @@ $: matchPlayers = playerList;
   roles={roleOptions}
   assignments={playerAssignments}
   seatingOrder={seatingOrder}
+  seatRoles={seatRoles}
   expectedSeats={clampPlayers(form.players_expected)}
   on:save={handleMatchSave}
   on:cancel={closeModal}

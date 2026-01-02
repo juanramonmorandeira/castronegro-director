@@ -322,6 +322,13 @@
       const final = Array.from(derivedTempExclusions);
       if (editTarget === 'actor') draftActorExclusions = final;
       else draftThiefExclusions = final;
+      dispatch('exclusionSave', {
+        actorExclusions: draftActorExclusions.filter(Boolean),
+        thiefExclusions: draftThiefExclusions.filter(Boolean),
+        includeSheriff,
+        includeTownCrier,
+        override
+      });
     }
     editModalOpen = false;
     tempManualExclusions = new Set();

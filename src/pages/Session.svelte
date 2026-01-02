@@ -14,7 +14,7 @@
   import roleDefinitions from '../../reference-data/datasets/roles.json' with { type: 'json' };
   import { showToast } from '../lib/toast.js';
   import { createEventDispatcher, onMount } from 'svelte';
-import { getSessionPositions, setRolePosition, setSessionPositions } from '../lib/stores/rolePositions.js';
+  import { getSessionPositions, setRolePosition, setSessionPositions } from '../lib/stores/rolePositions.js';
   import Modal from '../components/ui/Modal.svelte';
   import RoleSlotPicker from '../components/ui/RoleSlotPicker.svelte';
   import RolePickerGrid from '../components/ui/RolePickerGrid.svelte';
@@ -39,17 +39,6 @@ import { getSessionPositions, setRolePosition, setSessionPositions } from '../li
   const PHASE_KEY_KNIGHT = 'session.phases.knight.title';
   const PHASE_KEY_SHERIFF = 'session.phases.sheriff.title';
   const PHASE_KEY_END = 'session.phases.end.title';
-  const PREPARATION_PHASES = [
-    'prep_characters',
-    'prep_buildings',
-    'prep_manipulator',
-    'prep_gypsy',
-    'prep_town_crier_cards',
-    'prep_actor',
-    'prep_thief',
-    'prep_sheriff',
-    'prep_town_crier'
-  ];
   const BASE_PHASE_SEQUENCE = [
     PHASE_KEY_PREPARATION,
     PHASE_KEY_FIRST_NIGHT,
@@ -57,34 +46,367 @@ import { getSessionPositions, setRolePosition, setSessionPositions } from '../li
     PHASE_KEY_EACH_NIGHT,
     PHASE_KEY_EACH_DAY
   ];
-  const ALL_PHASE_KEYS = new Set([
-    ...BASE_PHASE_SEQUENCE,
-    PHASE_KEY_HUNTER,
-    PHASE_KEY_SHERIFF,
-    PHASE_KEY_END,
-    ...PREPARATION_PHASES
-  ]);
-
   const normalizePhaseKey = (key) => {
-    if (!key) return PHASE_KEY_END;
+    if (!key) return 'prepCharacters';
     const aliases = {
-      sheriff: PHASE_KEY_SHERIFF,
-      sheriff_interphase: PHASE_KEY_SHERIFF
+      sheriff: 'interSheriff',
+      sheriff_interphase: 'interSheriff',
+      'session.phases.preparation.title': 'prepCharacters',
+      'session.phases.first_night.title': 'firstnightThief',
+      'session.phases.first_day.title': 'eachdayVictims',
+      'session.phases.each_night.title': 'eachnightActor',
+      'session.phases.each_day.title': 'eachdayVictims',
+      'session.phases.end.title': 'interEnd'
     };
-    const mapped = aliases[key] ?? key;
-    return ALL_PHASE_KEYS.has(mapped) ? mapped : PHASE_KEY_END;
+    return aliases[key] ?? key;
   };
+  const PHASE_POOLS = {
+    pending_preparation: [
+      'prepCharacters',
+      'prepBuildings',
+      'prepManipulator',
+      'prepGypsy',
+      'prepTownCrierCards',
+      'prepActor',
+      'prepThief',
+      'prepSheriff'
+    ],
+    pending_firstnight: [
+      'firstnightThief',
+      'firstnightActor',
+      'firstnightCupid',
+      'firstnightSeer',
+      'firstnightFox',
+      'firstnightLovers',
+      'firstnightJudge',
+      'firstnightSisters',
+      'firstnightBrothers',
+      'firstnightChild',
+      'firstnightTamer',
+      'firstnightScandalmonger',
+      'firstnightPyromaniac',
+      'firstnightDefender',
+      'firstnightPack',
+      'firstnightHound',
+      'firstnightGirl',
+      'firstnightBaker',
+      'firstnightFather',
+      'firstnightBad',
+      'firstnightWitch',
+      'firstnightGypsy',
+      'firstnightPiper',
+      'firstnightCharmed'
+    ],
+    pending_eachday: [
+      'eachdayVictims',
+      'eachdayTamer',
+      'eachdayMedium',
+      'eachdayTownCrier',
+      'eachdayDebate',
+      'eachdayVote',
+      'eachdayServant',
+      'eachdayJudge'
+    ],
+    pending_eachnight: [
+      'eachnightActor',
+      'eachnightSeer',
+      'eachnightFox',
+      'eachnightScandalmonger',
+      'eachnightPyromaniac',
+      'eachnightDefender',
+      'eachnightPack',
+      'eachnightBaker',
+      'eachnightWhite',
+      'eachnightFather',
+      'eachnightBad',
+      'eachnightWitch',
+      'eachnightGypsy',
+      'eachnightPiper',
+      'eachnightCharmed'
+    ],
+    pending_interphases: [
+      'interHunter',
+      'interScapegoat',
+      'interKnight',
+      'interSheriff',
+      'interVote',
+      'interServant',
+      'interEnd'
+    ]
+  };
+
+  const PHASE_LABELS = {
+    prepCharacters: 'session.prep.characters',
+    prepBuildings: 'session.prep.buildings',
+    prepManipulator: 'session.prep.manipulator',
+    prepGypsy: 'session.prep.gypsy',
+    prepTownCrierCards: 'session.prep.town_crier_cards',
+    prepActor: 'session.prep.actor',
+    prepThief: 'session.prep.thief',
+    prepSheriff: 'session.prep.sheriff',
+    firstnightThief: 'session.firstnight.thief',
+    firstnightActor: 'session.firstnight.actor',
+    firstnightCupid: 'session.firstnight.cupid',
+    firstnightSeer: 'session.firstnight.seer',
+    firstnightFox: 'session.firstnight.fox',
+    firstnightLovers: 'session.firstnight.lovers',
+    firstnightJudge: 'session.firstnight.judge',
+    firstnightSisters: 'session.firstnight.sisters',
+    firstnightBrothers: 'session.firstnight.brothers',
+    firstnightChild: 'session.firstnight.child',
+    firstnightTamer: 'session.firstnight.tamer',
+    firstnightScandalmonger: 'session.firstnight.scandalmonger',
+    firstnightPyromaniac: 'session.firstnight.pyromaniac',
+    firstnightDefender: 'session.firstnight.defender',
+    firstnightPack: 'session.firstnight.pack',
+    firstnightHound: 'session.firstnight.hound',
+    firstnightGirl: 'session.firstnight.girl',
+    firstnightBaker: 'session.firstnight.baker',
+    firstnightFather: 'session.firstnight.father',
+    firstnightBad: 'session.firstnight.bad',
+    firstnightWitch: 'session.firstnight.witch',
+    firstnightGypsy: 'session.firstnight.gypsy',
+    firstnightPiper: 'session.firstnight.piper',
+    firstnightCharmed: 'session.firstnight.charmed',
+    eachdayVictims: 'session.eachday.victims',
+    eachdayTamer: 'session.eachday.tamer',
+    eachdayMedium: 'session.eachday.medium',
+    eachdayTownCrier: 'session.eachday.town_crier',
+    eachdayDebate: 'session.eachday.debate',
+    eachdayVote: 'session.eachday.vote',
+    eachdayServant: 'session.eachday.servant',
+    eachdayJudge: 'session.eachday.judge',
+    eachnightActor: 'session.eachnight.actor',
+    eachnightSeer: 'session.eachnight.seer',
+    eachnightFox: 'session.eachnight.fox',
+    eachnightScandalmonger: 'session.eachnight.scandalmonger',
+    eachnightPyromaniac: 'session.eachnight.pyromaniac',
+    eachnightDefender: 'session.eachnight.defender',
+    eachnightPack: 'session.eachnight.pack',
+    eachnightBaker: 'session.eachnight.baker',
+    eachnightWhite: 'session.eachnight.white',
+    eachnightFather: 'session.eachnight.father',
+    eachnightBad: 'session.eachnight.bad',
+    eachnightWitch: 'session.eachnight.witch',
+    eachnightGypsy: 'session.eachnight.gypsy',
+    eachnightPiper: 'session.eachnight.piper',
+    eachnightCharmed: 'session.eachnight.charmed',
+    interHunter: 'session.inter.hunter',
+    interScapegoat: 'session.inter.scapegoat',
+    interKnight: 'session.inter.knight',
+    interSheriff: 'session.inter.sheriff',
+    interVote: 'session.inter.vote',
+    interServant: 'session.inter.servant',
+    interEnd: 'session.inter.end'
+  };
+
+  const PHASE_RULES = {
+    // Preparation
+    prepCharacters: (s) => true,
+    prepBuildings: (s) => s.includeBuildings,
+    prepManipulator: (s) => s.rolesAlive.has('manipulator'),
+    prepGypsy: (s) => s.rolesAlive.has('gypsy'),
+    prepTownCrierCards: (s) => s.includeTownCrier,
+    prepActor: (s) => s.rolesAlive.has('actor'),
+    prepThief: (s) => s.rolesAlive.has('thief'),
+    prepSheriff: (s) => s.includeSheriff,
+    // First night
+    firstnightThief: (s) => s.rolesAlive.has('thief'),
+    firstnightActor: (s) => s.rolesAlive.has('actor'),
+    firstnightCupid: (s) => s.rolesAlive.has('cupid'),
+    firstnightSeer: (s) => s.rolesAlive.has('seer'),
+    firstnightFox: (s) => s.rolesAlive.has('fox'),
+    // Solo si Cupido ya disparó sus flechas
+    firstnightLovers: (s) => s.rolesAlive.has('cupid') && !s.cupidArrowsNotShot,
+    firstnightJudge: (s) => s.rolesAlive.has('judge'),
+    firstnightSisters: (s) => s.rolesAlive.has('sisters'),
+    firstnightBrothers: (s) => s.rolesAlive.has('brothers'),
+    firstnightChild: (s) => s.rolesAlive.has('child'),
+    firstnightTamer: (s) => s.rolesAlive.has('tamer'),
+    firstnightScandalmonger: (s) => s.rolesAlive.has('scandalmonger'),
+    firstnightPyromaniac: (s) => s.rolesAlive.has('pyromaniac'),
+    firstnightDefender: (s) => s.rolesAlive.has('defender'),
+    firstnightPack: (s) =>
+      s.rolesAlive.has('bad') || s.rolesAlive.has('father') || s.rolesAlive.has('werewolf') || s.rolesAlive.has('white'),
+    firstnightHound: (s) => s.rolesAlive.has('hound'),
+    firstnightGirl: (s) => s.rolesAlive.has('girl'),
+    firstnightBaker: (s) => s.includeBuildings && s.rolesAlive.has('baker'),
+    firstnightFather: (s) => s.rolesAlive.has('father'),
+    firstnightBad: (s) => s.rolesAlive.has('bad'),
+    firstnightWitch: (s) => s.rolesAlive.has('witch'),
+    firstnightGypsy: (s) => s.rolesAlive.has('gypsy'),
+    firstnightPiper: (s) => s.rolesAlive.has('piper'),
+    firstnightCharmed: (s) => s.piperCharmed,
+    // Each day
+    eachdayVictims: () => true,
+    eachdayTamer: (s) => s.rolesAlive.has('tamer'),
+    eachdayMedium: (s) => s.includeMedium,
+    eachdayTownCrier: (s) => s.includeTownCrier && s.rolesAlive.has('town_crier'),
+    eachdayDebate: () => true,
+    eachdayVote: () => true,
+    eachdayServant: (s) => s.servantNotTransformed && s.rolesAlive.has('servant'),
+    eachdayJudge: (s) => s.judgeDecisionNotTaken && s.rolesAlive.has('judge'),
+    // Each night
+    eachnightActor: (s) => s.actorRolesNotExhausted && s.rolesAlive.has('actor'),
+    eachnightSeer: (s) => s.rolesAlive.has('seer'),
+    eachnightFox: (s) => s.foxSensesRemainAlert && s.rolesAlive.has('fox'),
+    eachnightSisters: (s) => s.sistersNumber >= 2 && s.nightNumber % 2 === 0,
+    eachnightBrothers: (s) => s.brothersNumber >= 2 && s.nightNumber % 2 === 0,
+    eachnightScandalmonger: (s) => s.rolesAlive.has('scandalmonger'),
+    eachnightPyromaniac: (s) => s.pyromaniacFlamesNotExtinguished && s.rolesAlive.has('pyromaniac'),
+    eachnightDefender: (s) => s.rolesAlive.has('defender'),
+    eachnightPack: (s) =>
+      s.rolesAlive.has('bad') ||
+      s.rolesAlive.has('father') ||
+      s.rolesAlive.has('werewolf') ||
+      s.rolesAlive.has('white') ||
+      s.fatherInfected,
+    eachnightBaker: (s) => s.includeBuildings && s.rolesAlive.has('baker'),
+    eachnightWhite: (s) => s.rolesAlive.has('white') && s.nightNumber % 2 === 1,
+    eachnightFather: (s) => !s.fatherInfected && s.rolesAlive.has('father'),
+    eachnightBad: (s) => s.rolesAlive.has('bad') && s.badClawStillActive,
+    eachnightWitch: (s) => s.rolesAlive.has('witch') && (s.witchHealNotConsumed || s.witchPoisonNotConsumed),
+    eachnightGypsy: (s) => s.rolesAlive.has('gypsy'),
+    eachnightPiper: (s) => s.rolesAlive.has('piper'),
+    eachnightCharmed: (s) => s.piperCharmed,
+    // Interphases
+    interHunter: (s) => s.rolesAlive.has('hunter') && s.hunterHasFallen,
+    interScapegoat: (s) => s.rolesAlive.has('scapegoat') && s.scapegoatHasFallen,
+    interKnight: (s) => s.rolesAlive.has('knight') && s.knightHasFallen,
+    interSheriff: (s) => s.includeSheriff && s.sheriffHasFallen && !s.sheriffIsIdiot,
+    interVote: (s) => !s.judgeDecisionNotTaken,
+    interServant: (s) => !s.judgeDecisionNotTaken && s.servantNotTransformed && s.rolesAlive.has('servant'),
+    interEnd: (s) => s.victoryConditionMet
+  };
+
+  const buildPhasePool = (poolKey, status = 'disabled') => {
+    const list = PHASE_POOLS[poolKey] ?? [];
+    return list.map((key) => ({ key, status }));
+  };
+
+  const POOL_PHASES = {
+    poolPreparation: [
+      'hydratePreparation',
+      'phaseCharacters',
+      'phaseBuildings',
+      'phaseManipulator',
+      'phaseGypsyCards',
+      'phaseTownCrierCards',
+      'phaseActorCards',
+      'phaseThiefCards',
+      'phaseSheriffElection'
+    ],
+    poolFirstNight: [
+      'hydrateFirstNight',
+      'phaseThief',
+      'phaseActor',
+      'phaseCupid',
+      'phaseSeer',
+      'phaseFox',
+      'phaseLovers',
+      'phaseJudgeSignal',
+      'phaseSisters',
+      'phaseBrothers',
+      'phaseChild',
+      'phaseTamerLocation',
+      'phaseScandalmonger',
+      'phasePyromaniac',
+      'phaseDefender',
+      'phasePack',
+      'phaseHound',
+      'phaseGirl',
+      'phaseBaker',
+      'phaseFather',
+      'phaseBad',
+      'phaseWitch',
+      'phaseGypsy',
+      'phasePiper',
+      'phaseCharmed',
+      'victoryCondition'
+    ],
+    poolEachDay: [
+      'hydrateEachDay',
+      'phaseVictims',
+      'phaseTamer',
+      'phaseMedium',
+      'phaseTownCrier',
+      'phaseDebate',
+      'phaseSheriff',
+      'phaseVote',
+      'phaseServant',
+      'phaseJudge',
+      'victoryCondition'
+    ],
+    poolEachNight: [
+      'hydrateEachNight',
+      'phaseActor',
+      'phaseSeer',
+      'phaseFox',
+      'phaseSisters',
+      'phaseBrothers',
+      'phaseScandalmonger',
+      'phasePyromaniac',
+      'phaseDefender',
+      'phasePack',
+      'phaseGirl',
+      'phaseBaker',
+      'phaseWhite',
+      'phaseFather',
+      'phaseBad',
+      'phaseWitch',
+      'phaseGypsy',
+      'phasePiper',
+      'phaseCharmed',
+      'victoryCondition'
+    ],
+    poolSpecialEvents: [
+      'hydrateSpecialEvents',
+      'phaseHunter',
+      'phaseScapegoat',
+      'phaseSheriffElection',
+      'phaseVote',
+      'phaseServant',
+      'victoryCondition',
+      'phaseEnd'
+    ]
+  };
+
+  const buildPhasePoolsDefaults = () => {
+    const poolWithPhases = Object.entries(POOL_PHASES).reduce((acc, [pool, phases]) => {
+      acc[pool] = phases.map((key) => ({ key, status: 'disabled' }));
+      return acc;
+    }, {});
+    return {
+      poolCurrent: 'poolPreparation',
+      poolPrevious: null,
+      poolNext: 'poolFirstNight',
+      poolCurrentPhaseIndex: 0,
+      ...poolWithPhases
+    };
+  };
+
+  const buildSessionPhasesDefaults = () => ({
+    phase_previous: null,
+    phase_current: 'prepCharacters',
+    phase_next: null,
+        pending_preparation: buildPhasePool('pending_preparation'),
+        pending_firstnight: buildPhasePool('pending_firstnight'),
+        pending_eachday: buildPhasePool('pending_eachday'),
+        pending_eachnight: buildPhasePool('pending_eachnight'),
+        pending_interphases: buildPhasePool('pending_interphases'),
+    phase_logbook: []
+  });
 
   let logEntries = [];
   let draftNote = '';
   let sessionStatus = 'in_progress';
+  let sessionPhases = buildSessionPhasesDefaults();
   let phaseState = {
     previous: null,
-    current: PHASE_KEY_PREPARATION,
-    next: PHASE_KEY_FIRST_NIGHT,
+    current: 'prepCharacters',
+    next: null,
     pendingInterphases: [],
-    pendingPreparation: [],
-    baseIndex: 0
+    pendingPreparation: []
   };
   let phaseExpanded = true;
   let logExpanded = true;
@@ -117,6 +439,7 @@ import { getSessionPositions, setRolePosition, setSessionPositions } from '../li
   let pendingHunterShot = false;
   let pendingSheriffSuccession = false;
   let includeSheriff = true;
+  let includeBuildings = false;
   const MANIPULATOR_TOKEN_ID = 'special-manipulator-division';
   let manipulatorAssignments = {};
   let manipulatorModalOpen = false;
@@ -192,8 +515,74 @@ import { getSessionPositions, setRolePosition, setSessionPositions } from '../li
         set.add('werewolves');
       }
     });
+    console.info('[session] aliveRoleSet', Array.from(set));
     return set;
   })();
+
+  const buildRoleInstancesFromTokens = (selection, tokenList = []) => {
+    const counters = new Map();
+    const chars = tokenList.filter((t) => t.category !== 'special');
+    return chars.map((token) => {
+      const slug = normalizeRoleSlug(slugifyRole(token.role));
+      const count = counters.get(slug) ?? 0;
+      counters.set(slug, count + 1);
+      const def = roleDefinitions?.[slug] ?? {};
+      const alignment = def?.category ?? token.category ?? 'villagers';
+      return {
+        id: `${slug}-${count}`,
+        name: slug,
+        alignment,
+        playerId: token.player ?? null,
+        seat: null,
+        alive: true,
+        powerConsumed: false,
+        tokens: [],
+        professions: [],
+        sheriff: false,
+        townCrier: false,
+        medium: false,
+        inLove: false,
+        infected: false,
+        charmed: false,
+        defended: false,
+        childModel: false,
+        manipulated: null
+      };
+    });
+  };
+
+  // role_instances helpers
+  const roleState = (slug) => (roleInstances ?? []).filter((r) => normalizeRoleSlug(r.name) === normalizeRoleSlug(slug));
+  const isAlive = (slug) => roleState(slug).some((r) => r.alive);
+  const isPowerConsumed = (slug) => {
+    const list = roleState(slug);
+    if (!list.length) return false;
+    return list.every((r) => {
+      if (Array.isArray(r.tokens) && r.tokens.length) {
+        return r.tokens.every((t) => t?.consumed);
+      }
+      return r.powerConsumed;
+    });
+  };
+  const countAlive = (slug) => roleState(slug).filter((r) => r.alive).length;
+  const anyInfected = () => (roleInstances ?? []).some((r) => r.alive && r.infected);
+  const anyCharmed = () => (roleInstances ?? []).some((r) => r.alive && r.charmed);
+  const allPackAlive = () => ['bad', 'father', 'werewolf', 'white'].every((slug) => isAlive(slug));
+  const isDesignated = (type) => (roleInstances ?? []).some((r) => r.alive && r?.[type] === true);
+  const isSheriff = (slug) => roleState(slug).some((r) => r.sheriff);
+  const isTownCrier = (slug) => roleState(slug).some((r) => r.townCrier);
+  const isMedium = (slug) => roleState(slug).some((r) => r.medium);
+  const isInLove = (slug) => roleState(slug).some((r) => r.inLove);
+  const isInfected = (slug) => roleState(slug).some((r) => r.infected);
+  const isCharmed = (slug) => roleState(slug).some((r) => r.charmed);
+  const isDefended = (slug) => roleState(slug).some((r) => r.defended);
+  const isChildModel = (slug) => roleState(slug).some((r) => r.childModel);
+  const getTokens = (slug) => roleState(slug).flatMap((r) => r.tokens ?? []);
+  const getProfession = (slug) => roleState(slug).flatMap((r) => r.professions ?? []);
+  const hasProfession = (name) =>
+    (roleInstances ?? []).some((r) => Array.isArray(r.professions) && r.professions.some((p) => p?.name === name && !p?.consumed));
+  const countPackAlive = () => ['bad', 'father', 'werewolf', 'white'].reduce((acc, slug) => acc + (isAlive(slug) ? 1 : 0), 0);
+  const countVillagersAlive = () => (roleInstances ?? []).filter((r) => r.alignment === 'villagers' && r.alive).length;
   $: seerActive = seerPresent && aliveRoleSet.has('seer');
   $: foxBaseTokenId = characterTokens.find((token) => slugifyRole(token.role) === 'fox')?.id ?? null;
   $: foxSpecialId = specialTokens.find((token) => slugifyRole(token.role) === 'fox_senses')?.id ?? null;
@@ -269,7 +658,6 @@ import { getSessionPositions, setRolePosition, setSessionPositions } from '../li
       try {
         const session = await getSessionById(sessionId);
         const settings = session?.settings ?? {};
-        const phasesRemote = session?.game_phases ?? {};
         const remoteState = session?.actor_state ?? {};
         const remoteFox = session?.fox_state ?? {};
         const available = sanitizeActorRoles(settings.actor_roles ?? actorRoles);
@@ -290,15 +678,18 @@ import { getSessionPositions, setRolePosition, setSessionPositions } from '../li
           : Array.isArray(settings.thief_exclusions)
             ? settings.thief_exclusions.map((slug) => slugifyRole(slug))
             : exclusionList;
-        const prepRemote = phasesRemote.pending_preparation ?? null;
-        const prepQueue = Array.isArray(prepRemote) ? prepRemote : buildPreparationQueue();
-    actorState = {
-      available,
-      consumed: Array.isArray(remoteState.consumed) ? remoteState.consumed.map((item) => slugifyRole(item)).filter(Boolean) : [],
-      currentNightChoice: remoteState.currentNightChoice ?? null
-    };
-    actorPrepChoices = Array.isArray(settings.actor_roles) ? sanitizeActorRoles(settings.actor_roles) : actorPrepChoices;
-    actorPrepDone = actorPrepChoices.filter(Boolean).length > 0;
+        includeBuildings = settings.include_buildings ?? false;
+        sessionPhases = session.session_phases ?? buildSessionPhasesDefaults();
+        phasePools = session.phase_pools ?? buildPhasePoolsDefaults();
+        const prepRemote = sessionPhases.pending_preparation ?? null;
+        const prepQueue = Array.isArray(prepRemote) ? prepRemote.map((item) => (typeof item === 'string' ? item : item?.key)).filter(Boolean) : buildPreparationQueue();
+        actorState = {
+          available,
+          consumed: Array.isArray(remoteState.consumed) ? remoteState.consumed.map((item) => slugifyRole(item)).filter(Boolean) : [],
+          currentNightChoice: remoteState.currentNightChoice ?? null
+        };
+        actorPrepChoices = Array.isArray(settings.actor_roles) ? sanitizeActorRoles(settings.actor_roles) : actorPrepChoices;
+        actorPrepDone = actorPrepChoices.filter(Boolean).length > 0;
         thiefPrepChoices = Array.isArray(settings.thief_roles)
           ? settings.thief_roles.map((role) => slugifyRole(role)).filter(Boolean).slice(0, 2)
           : thiefPrepChoices;
@@ -308,17 +699,32 @@ import { getSessionPositions, setRolePosition, setSessionPositions } from '../li
           lastNightUsed: remoteFox.lastNightUsed ?? null,
           lastNightUsedKey: remoteFox.lastNightUsedKey ?? null
         };
-        const normalizedCurrent = normalizePhaseKey(phasesRemote.current ?? (prepQueue[0] ?? PHASE_KEY_FIRST_NIGHT));
-        const remoteBase = BASE_PHASE_SEQUENCE.indexOf(normalizedCurrent);
-        const safeBaseIndex = remoteBase >= 0 ? remoteBase : 0;
+        sessionPhases = session.session_phases ?? buildSessionPhasesDefaults();
         phaseState = {
-          previous: phasesRemote.previous ?? null,
-          current: normalizedCurrent,
-          next: normalizePhaseKey(phasesRemote.next ?? PHASE_KEY_FIRST_NIGHT),
-          pendingInterphases: phasesRemote.pending_interphases ?? [],
-          pendingPreparation: prepQueue,
-          baseIndex: phasesRemote.base_index ?? safeBaseIndex
+          previous: session.session_phases?.phase_previous ?? null,
+          current: session.session_phases?.phase_current ?? 'prepCharacters',
+          next: session.session_phases?.phase_next ?? null,
+          pendingInterphases: session.session_phases?.pending_interphases ?? [],
+          pendingPreparation: session.session_phases?.pending_preparation ?? buildPhasePool('pending_preparation')
         };
+        roleInstances =
+          Array.isArray(session.role_instances) && session.role_instances.length
+            ? session.role_instances
+            : buildRoleInstancesFromTokens(selection, tokens);
+        if (!session.phase_pools) {
+          try {
+            await updateSession(sessionId, { phase_pools: phasePools });
+          } catch (e) {
+            console.error('[session] unable to persist phase_pools defaults', e);
+          }
+        }
+        if (!session.role_instances || !session.role_instances.length) {
+          try {
+            await updateSession(sessionId, { role_instances: roleInstances });
+          } catch (e) {
+            console.error('[session] unable to persist role_instances defaults', e);
+          }
+        }
       } catch (error) {
         console.error('[session] unable to load actor state', error);
         actorState = { available: sanitizeActorRoles(actorRoles), consumed: [], currentNightChoice: null };
@@ -328,8 +734,7 @@ import { getSessionPositions, setRolePosition, setSessionPositions } from '../li
           current: (buildPreparationQueue()[0] ?? PHASE_KEY_FIRST_NIGHT),
           next: PHASE_KEY_FIRST_NIGHT,
           pendingInterphases: [],
-          pendingPreparation: buildPreparationQueue(),
-          baseIndex: 0
+          pendingPreparation: buildPreparationQueue()
         };
       }
     };
@@ -441,7 +846,7 @@ import { getSessionPositions, setRolePosition, setSessionPositions } from '../li
     return entry?.category ?? 'villagers';
   };
   $: actorPrepOptions = actorPrepPool({ respectExclusions: false });
-  const isPrepPhaseKey = (key) => typeof key === 'string' && key.startsWith('prep_');
+  const isPrepPhaseKey = (key) => typeof key === 'string' && key.startsWith('prep');
   const prepDefaults = () => buildPreparationQueue();
   const actorPrepPool = ({ respectExclusions = false } = {}) => {
     const inPlay = new Set(characterTokens.map((token) => normalizeRoleSlug(slugifyRole(token.role))));
@@ -753,17 +1158,15 @@ import { getSessionPositions, setRolePosition, setSessionPositions } from '../li
   })();
   const buildPreparationQueue = () => {
     const queue = [];
-    queue.push('prep_characters');
-    const includeBuildings = false;
-    if (includeBuildings) queue.push('prep_buildings');
+    queue.push('prepCharacters');
+    if (includeBuildings) queue.push('prepBuildings');
     const hasRole = (slug) => roleSet.has(normalizeRoleSlug(slug));
-    if (hasRole('manipulator')) queue.push('prep_manipulator');
-    if (hasRole('gypsy')) queue.push('prep_gypsy');
-    if (includeTownCrier && hasRole('town_crier')) queue.push('prep_town_crier_cards');
-    if (hasRole('actor')) queue.push('prep_actor');
-    if (hasRole('thief')) queue.push('prep_thief');
-    if (includeSheriff) queue.push('prep_sheriff');
-    if (includeTownCrier && hasRole('town_crier')) queue.push('prep_town_crier');
+    if (hasRole('manipulator')) queue.push('prepManipulator');
+    if (hasRole('gypsy')) queue.push('prepGypsy');
+    if (includeTownCrier && hasRole('town_crier')) queue.push('prepTownCrierCards');
+    if (hasRole('actor')) queue.push('prepActor');
+    if (hasRole('thief')) queue.push('prepThief');
+    if (includeSheriff) queue.push('prepSheriff');
     return queue;
   };
 
@@ -773,6 +1176,14 @@ import { getSessionPositions, setRolePosition, setSessionPositions } from '../li
       : tokens.filter((token) => slugifyRole(token.role) !== 'sheriff_badge');
   $: specialTokens = effectiveTokens?.filter((token) => token.category === 'special') ?? [];
   $: characterTokens = effectiveTokens?.filter((token) => token.category !== 'special') ?? [];
+  $: console.info('[session] tokens snapshot', {
+    rawCount: tokens?.length ?? 0,
+    effectiveCount: effectiveTokens?.length ?? 0,
+    characters: characterTokens?.length ?? 0,
+    specials: specialTokens?.length ?? 0
+  });
+  let roleInstances = [];
+  let phasePools = buildPhasePoolsDefaults();
   $: actorToken =
     characterTokens.find((token) => normalizeRoleSlug(slugifyRole(token.role)) === 'actor') ?? null;
   $: actorBaseTokenId = actorToken?.id ?? actorBaseTokenId;
@@ -800,8 +1211,8 @@ import { getSessionPositions, setRolePosition, setSessionPositions } from '../li
     (!isNightPhase && !actorState.currentNightChoice);
   $: manipulatorMarkersVersion = JSON.stringify(manipulatorAssignments ?? {});
   $: manipulatorActionToken =
-    normalizedPhaseKey === 'prep_manipulator' ||
-    (phaseState?.pendingPreparation ?? []).includes('prep_manipulator')
+    normalizedPhaseKey === 'prepManipulator' ||
+    (phaseState?.pendingPreparation ?? []).includes('prepManipulator')
       ? {
           id: MANIPULATOR_TOKEN_ID,
           role: 'manipulator_division',
@@ -973,29 +1384,13 @@ import { getSessionPositions, setRolePosition, setSessionPositions } from '../li
 
   $: currentPhaseKeyValue = phaseState.current;
   $: normalizedPhaseKey = normalizePhaseKey(currentPhaseKeyValue);
-  const prettyPrepLabel = (slug) => {
-    const map = {
-      prep_characters: $t('session.prep.characters') ?? 'Characters',
-      prep_buildings: $t('session.prep.buildings') ?? 'Buildings',
-      prep_manipulator: $t('session.prep.manipulator') ?? 'Manipulator',
-      prep_gypsy: $t('session.prep.gypsy') ?? 'Gypsy',
-      prep_town_crier_cards: $t('session.prep.town_crier_cards') ?? 'Town Crier Cards',
-      prep_actor: $t('session.prep.actor') ?? 'Actor',
-      prep_thief: $t('session.prep.thief') ?? 'Thief',
-      prep_sheriff: $t('session.phases.sheriff.title'),
-      prep_town_crier: $t('session.prep.town_crier') ?? 'Town Crier'
-    };
-    return map[slug] ?? slug;
-  };
   $: currentPhaseLabel = (() => {
     const key = normalizedPhaseKey;
     if (!key) return '—';
-    if (key.startsWith('prep_')) {
-      const step = prettyPrepLabel(key);
-      const base = $t('session.phases.preparation.title') || 'Preparation';
-      return `${base} (${step})`;
+    if (PHASE_LABELS[key]) {
+      return $t(PHASE_LABELS[key]) ?? key;
     }
-    return $t(key) || '—';
+    return $t(key) || key;
   })();
   $: thiefOfferData = thiefOffer.map((slug) => ({
     slug,
@@ -1144,24 +1539,7 @@ import { getSessionPositions, setRolePosition, setSessionPositions } from '../li
     }
   };
 
-  const persistPhaseState = async () => {
-    if (!sessionId) return;
-    try {
-      await updateSession(sessionId, {
-        game_phases: {
-          previous: normalizePhaseKey(phaseState.previous),
-          current: normalizePhaseKey(phaseState.current),
-          next: normalizePhaseKey(phaseState.next),
-          phase_summary: [], // extend if needed
-          pending_interphases: phaseState.pendingInterphases,
-          pending_preparation: phaseState.pendingPreparation,
-          base_index: phaseState.baseIndex
-        }
-      });
-    } catch (error) {
-      console.error('[session] unable to persist phase state', error);
-    }
-  };
+  const persistPhaseState = async () => persistSessionPhases();
 
   const actorRoleLabel = (slug) => shortRoleLabel(slug);
   const shortRoleLabel = (slugOrToken) => {
@@ -1352,7 +1730,10 @@ import { getSessionPositions, setRolePosition, setSessionPositions } from '../li
   }
 
   const phaseIndexByKey = (key) => phases.findIndex((phase) => phase.titleKey === key);
-  $: isPreparationPhase = normalizedPhaseKey === PHASE_KEY_PREPARATION || isPrepPhaseKey(normalizedPhaseKey);
+  $: isPreparationPhase =
+    typeof normalizedPhaseKey === 'string'
+      ? normalizedPhaseKey.startsWith('prep') || normalizedPhaseKey === PHASE_KEY_PREPARATION
+      : false;
   $: isFirstNightPhase = normalizedPhaseKey === PHASE_KEY_FIRST_NIGHT;
   $: isEachNightPhase = normalizedPhaseKey === PHASE_KEY_EACH_NIGHT;
   $: isNightPhase = isFirstNightPhase || isEachNightPhase;
@@ -1386,6 +1767,158 @@ import { getSessionPositions, setRolePosition, setSessionPositions } from '../li
     persistFoxState();
   }
 
+  const getPoolNameForKey = (key) => {
+    if (!key) return null;
+    const found = Object.keys(PHASE_POOLS).find((pool) => (sessionPhases[pool] ?? []).some((item) => item.key === key)) ?? null;
+    if (!found) {
+      console.warn('[session] pool not found for key', key, { sessionPhases });
+    }
+    return found;
+  };
+
+  const setPhaseStatus = (key, status) => {
+    if (!key) return;
+    const poolName = getPoolNameForKey(key);
+    if (!poolName) return;
+    const updated = (sessionPhases[poolName] ?? []).map((item) => (item.key === key ? { ...item, status } : item));
+    sessionPhases = { ...sessionPhases, [poolName]: updated };
+  };
+
+  const tokenAvailable = (slug) => {
+    const token = specialTokens.find((t) => slugifyRole(t.role) === slug);
+    if (!token) return false;
+    return !consumedSpecialIds.includes(token.id);
+  };
+
+  const computeEvalState = () => {
+    const rolesAlive = new Set(aliveRoleSet);
+    if (rolesAlive.size === 0 && selection) {
+      Object.values(selection ?? {}).forEach((category) => {
+        Object.entries(category ?? {}).forEach(([role, count]) => {
+          if ((Number(count) || 0) > 0) {
+            rolesAlive.add(normalizeRoleSlug(slugifyRole(role)));
+          }
+        });
+      });
+    }
+    const countAlive = (slug) =>
+      characterTokens.filter((t) => !deadSet.has(t.id) && normalizeRoleSlug(slugifyRole(t.role)) === slug).length;
+    const sistersNumber = countAlive('sisters');
+    const brothersNumber = countAlive('brothers');
+    const includeMedium = rolesAlive.has('medium');
+    const actorRolesNotExhausted = actorRemaining.length > 0 || !!actorState.currentNightChoice;
+    const servantNotTransformed = true;
+    const judgeDecisionNotTaken = !pendingJudgeExtraDay;
+    const foxSensesRemainAlert = foxAlive && foxState.available !== false && foxState.lastResult !== 'villagers';
+    const pyromaniacFlamesNotExtinguished = true;
+    const badClawStillActive = specialTokens.some(
+      (t) => slugifyRole(t.role).includes('werewolves_claw') && !consumedSpecialIds.includes(t.id)
+    );
+    const witchHealNotConsumed = tokenAvailable('witch_heal');
+    const witchPoisonNotConsumed = tokenAvailable('witch_venom');
+    const piperCharmed = (charmedTargets ?? []).length > 0;
+    const fatherInfected = (infectedTargets ?? []).length > 0 || infectedIdSet.size > 0;
+    const hunterHasFallen = characterTokens.some(
+      (t) => slugifyRole(t.role) === 'hunter' && (deadSet.has(t.id) || pendingDeaths.includes(t.id))
+    );
+    const scapegoatHasFallen = characterTokens.some(
+      (t) => slugifyRole(t.role) === 'scapegoat' && (deadSet.has(t.id) || pendingDeaths.includes(t.id))
+    );
+    const knightHasFallen = characterTokens.some(
+      (t) => slugifyRole(t.role) === 'knight' && (deadSet.has(t.id) || pendingDeaths.includes(t.id))
+    );
+    const sheriffHasFallen = includeSheriff && pendingSheriffSuccession;
+    const sheriffIsIdiot = false;
+    const victoryConditionMet = Object.values(victoryResult ?? {}).some(Boolean);
+    const includeTownCrierFlag = includeTownCrier;
+    const includeSheriffFlag = includeSheriff;
+    const cupidArrowsNotShot = consumedSpecialIds.every((id) => !slugifyRole(getTokenById(id)?.role)?.includes('cupid'));
+    return {
+      rolesAlive,
+      cupidArrowsNotShot,
+      nightNumber: Math.max(0, nightNumber),
+      dayNumber: Math.max(0, dayNumber),
+      sistersNumber,
+      brothersNumber,
+      includeSheriff: includeSheriffFlag,
+      includeTownCrier: includeTownCrierFlag,
+      includeBuildings,
+      includeMedium,
+      sheriffAlive: includeSheriffFlag && sheriffAvailable,
+      townCrierAlive: includeTownCrierFlag && rolesAlive.has('town_crier'),
+      bakerAlive: rolesAlive.has('baker'),
+      actorRolesNotExhausted,
+      servantNotTransformed,
+      judgeDecisionNotTaken,
+      foxSensesRemainAlert,
+      pyromaniacFlamesNotExtinguished,
+      badClawStillActive,
+      witchHealNotConsumed,
+      witchPoisonNotConsumed,
+      piperCharmed,
+      fatherInfected,
+      hunterHasFallen,
+      scapegoatHasFallen,
+      knightHasFallen,
+      sheriffHasFallen,
+      sheriffIsIdiot,
+      victoryConditionMet
+    };
+  };
+
+  const hydratePhasePools = () => {
+    const evalState = computeEvalState();
+    const nextPools = {};
+    Object.keys(PHASE_POOLS).forEach((pool) => {
+      const currentList = sessionPhases[pool] ?? buildPhasePool(pool);
+      nextPools[pool] = currentList.map((item) => {
+        const rule = PHASE_RULES[item.key];
+        const enabled = rule ? rule(evalState) : false;
+        return { ...item, status: enabled ? 'enabled' : 'disabled' };
+      });
+    });
+    sessionPhases = { ...sessionPhases, ...nextPools };
+    return evalState;
+  };
+
+  const persistSessionPhases = async () => {
+    if (!sessionId) return;
+    try {
+      await updateSession(sessionId, {
+        session_phases: sessionPhases,
+        day_number: dayNumber,
+        night_number: nightNumber
+      });
+    } catch (error) {
+      console.error('[session] unable to persist session phases', error);
+    }
+  };
+
+  const findNextPhase = (currentKey) => {
+    const flow = ['pending_preparation', 'pending_firstnight', 'pending_interphases', 'pending_eachday', 'pending_interphases', 'pending_eachnight'];
+    const currentPool = getPoolNameForKey(currentKey) ?? flow[0];
+    let idx = flow.indexOf(currentPool);
+    if (idx < 0) idx = 0;
+    console.info('[session] findNextPhase start', { currentKey, currentPool, flow });
+    let attempts = 0;
+    while (attempts < flow.length) {
+      const poolName = flow[idx];
+      const pool = sessionPhases[poolName] ?? [];
+      const startIndex = poolName === currentPool ? pool.findIndex((item) => item.key === currentKey) + 1 : 0;
+      const candidate = pool.slice(startIndex).find((item) => item.status === 'enabled');
+      if (candidate) return { key: candidate.key, pool: poolName };
+      console.info('[session] findNextPhase skipping pool', {
+        pool: poolName,
+        reason: 'no enabled phases',
+        poolStatus: pool.map((i) => `${i.key}:${i.status}`)
+      });
+      idx = (idx + 1) % flow.length;
+      attempts++;
+    }
+    return { key: null, pool: null };
+  };
+
+
   const nextBaseIndex = (index) => {
     if (index < 0) return 0;
     if (index >= BASE_PHASE_SEQUENCE.length - 1) return 3; // loop to each_night
@@ -1394,178 +1927,33 @@ import { getSessionPositions, setRolePosition, setSessionPositions } from '../li
 
   function evaluatePhase() {
     const phaseKeyNow = normalizePhaseKey(phaseState.current);
-    console.info('[session] evaluatePhase', {
-      phaseKeyNow,
-      phaseState,
-      nightNumber,
-      dayNumber,
-      isPreparationPhase,
-      isNightPhase,
-      isDayPhase,
-      pendingInterphases: phaseState.pendingInterphases
-    });
+    console.info('[session] evaluatePhase', { phaseKeyNow, phaseState, nightNumber, dayNumber });
     const resolutionOk = resolveBoardEffects(phaseKeyNow);
     if (resolutionOk === false) return;
     if (actorState.currentNightChoice && !isEndPhase) {
       revertActorIdentity();
     }
-    const sheriffToken = specialTokens.find((token) => slugifyRole(token.role) === 'sheriff_badge');
-    const sheriffTokenId = sheriffToken?.id;
-    if (includeSheriff && pendingSheriffSuccession && !sheriffHolderId && !sheriffTokenId) {
-      pendingSheriffSuccession = false;
-    }
-    const interphaseQueue = [...(phaseState.pendingInterphases ?? [])];
-    const prepQueue = [...(phaseState.pendingPreparation ?? [])];
-    if (!isPrepPhaseKey(phaseKeyNow) && prepQueue.length) {
-      phaseState = {
-        ...phaseState,
-        previous: phaseKeyNow,
-        current: prepQueue[0],
-        next: null,
-        pendingPreparation: prepQueue.slice(1)
-      };
-      if (prepQueue[0] === 'prep_actor' && !actorPrepDone) {
-        actorPrepModalOpen = true;
-      }
-      if (prepQueue[0] === 'prep_thief' && !thiefPrepDone) thiefPrepModalOpen = true;
-      if (prepQueue[0] === 'prep_manipulator') {
-        manipulatorModalOpen = true;
-        manipulatorDone = false;
-      }
-      persistPhaseState();
-      return;
-    }
-    if (isPrepPhaseKey(phaseKeyNow)) {
-      if (phaseKeyNow === 'prep_actor' && !actorPrepDone) actorPrepModalOpen = true;
-      if (phaseKeyNow === 'prep_thief' && !thiefPrepDone) thiefPrepModalOpen = true;
-      if (phaseKeyNow === 'prep_manipulator') {
-        // no auto-open; modal se abre solo por el token o al entrar
-        manipulatorDone = true;
-        // solo persiste; markers ya pintados en el modal
-        persistManipulatorAssignments();
-      }
-      // Validations for empty slots
-      const needsActorPrompt = false;
-      // ya no forzamos confirmaciones por huecos
-      const remainingPrep = prepQueue.filter((slug) => slug !== phaseKeyNow);
-      if (remainingPrep.length) {
-        phaseState = {
-          ...phaseState,
-          previous: phaseKeyNow,
-          current: remainingPrep[0],
-          next: null,
-          pendingPreparation: remainingPrep.slice(1)
-        };
-        if (remainingPrep[0] === 'prep_actor') actorPrepModalOpen = true;
-        if (remainingPrep[0] === 'prep_thief' && !thiefPrepDone) thiefPrepModalOpen = true;
-      } else {
-        phaseState = {
-          ...phaseState,
-          previous: phaseKeyNow,
-          current: PHASE_KEY_FIRST_NIGHT,
-          next: PHASE_KEY_FIRST_DAY,
-          pendingPreparation: [],
-          baseIndex: 1
-        };
-      }
-      if (phaseKeyNow === 'prep_manipulator' && manipulatorActionToken) {
-        if (!consumedSpecialIds.includes(MANIPULATOR_TOKEN_ID)) {
-          consumedSpecialIds = [...consumedSpecialIds, MANIPULATOR_TOKEN_ID];
-          activeSpecialIds = activeSpecialIds.filter((id) => id !== MANIPULATOR_TOKEN_ID);
-        }
-      }
-      persistPhaseState();
-      return;
-    }
-    if (phaseKeyNow === PHASE_KEY_KNIGHT) {
-      // La inter-fase de Knight ya se está resolviendo; no reencolarla.
-      knightPending = false;
-    }
-    // Victory check triggers end phase
-    if (Object.values(victoryResult).some(Boolean)) {
-      phaseState = { ...phaseState, previous: phaseKeyNow, current: PHASE_KEY_END, next: PHASE_KEY_END, pendingInterphases: [] };
-      persistPhaseState();
-      return;
-    }
-    // Identify new interphases to enqueue
-    const newInterphases = [];
-    if (pendingHunterShot) newInterphases.push(PHASE_KEY_HUNTER);
-    if (knightPending) newInterphases.push(PHASE_KEY_KNIGHT);
-    if (includeSheriff && pendingSheriffSuccession) newInterphases.push(PHASE_KEY_SHERIFF);
-    if (pendingJudgeExtraDay) newInterphases.push(PHASE_KEY_EACH_DAY);
-    const mergedQueue = [...interphaseQueue, ...newInterphases].filter(Boolean);
-    if (newInterphases.includes(PHASE_KEY_EACH_DAY)) {
-      pendingJudgeExtraDay = false;
-    }
-    // enforce Hunter -> Sheriff order
-    const orderedQueue = [];
-    if (mergedQueue.includes(PHASE_KEY_HUNTER)) orderedQueue.push(PHASE_KEY_HUNTER);
-    if (mergedQueue.includes(PHASE_KEY_KNIGHT)) orderedQueue.push(PHASE_KEY_KNIGHT);
-    if (mergedQueue.includes(PHASE_KEY_SHERIFF)) orderedQueue.push(PHASE_KEY_SHERIFF);
-    if (mergedQueue.includes(PHASE_KEY_EACH_DAY)) orderedQueue.push(PHASE_KEY_EACH_DAY);
-
-    const advanceBaseIndex = () => {
-      const nextIndex = nextBaseIndex(phaseState.baseIndex);
-      phaseState = { ...phaseState, baseIndex: nextIndex };
-      return nextIndex;
-    };
-
-    const setNextPhase = (nextKey) => {
-      phaseState = { ...phaseState, previous: phaseKeyNow, current: nextKey, next: null, pendingInterphases: orderedQueue.slice(1) };
-    };
-
-    // If resolving an interphase, drop it and move to next interphase or base phase
-    if (phaseKeyNow === PHASE_KEY_HUNTER || phaseKeyNow === PHASE_KEY_KNIGHT || phaseKeyNow === PHASE_KEY_SHERIFF) {
-      const remainingQueue = orderedQueue.filter((key) => key !== phaseKeyNow);
-      if (remainingQueue.length) {
-        phaseState = { ...phaseState, previous: phaseKeyNow, current: remainingQueue[0], next: null, pendingInterphases: remainingQueue.slice(1) };
-      } else {
-        const nextIndex = phaseState.baseIndex;
-        const nextBase = BASE_PHASE_SEQUENCE[nextIndex] ?? PHASE_KEY_EACH_NIGHT;
-        phaseState = { ...phaseState, previous: phaseKeyNow, current: nextBase, next: null, pendingInterphases: [] };
-      }
-      persistPhaseState();
-      return;
-    }
-
-    // Base phase bookkeeping
-    if (phaseKeyNow === PHASE_KEY_PREPARATION) {
-      preparationResolved = true;
-    }
-    if (phaseKeyNow === PHASE_KEY_FIRST_NIGHT) {
+    hydratePhasePools();
+    setPhaseStatus(phaseKeyNow, 'disabled');
+    const { key: nextKey, pool: nextPool } = findNextPhase(phaseKeyNow);
+    const currentPool = getPoolNameForKey(phaseKeyNow);
+    if (nextPool === 'pending_firstnight' && nightNumber === 0) {
       nightNumber = 1;
-    } else if (phaseKeyNow === PHASE_KEY_EACH_NIGHT) {
-      nightNumber = Math.max(1, nightNumber + 1);
+    } else if (nextPool === 'pending_eachnight' && currentPool !== 'pending_eachnight') {
+      nightNumber = nightNumber ? nightNumber + 1 : 1;
     }
-    if (phaseKeyNow === PHASE_KEY_FIRST_DAY) {
-      dayNumber = 1;
-    } else if (phaseKeyNow === PHASE_KEY_EACH_DAY) {
-      dayNumber = Math.max(1, dayNumber + 1);
+    if (nextPool === 'pending_eachday' && currentPool !== 'pending_eachday') {
+      dayNumber = dayNumber ? dayNumber + 1 : 1;
     }
-
-    // Decide next phase
-    if (orderedQueue.length) {
-      phaseState = {
-        ...phaseState,
-        previous: phaseKeyNow,
-        current: orderedQueue[0],
-        next: null,
-        pendingInterphases: orderedQueue.slice(1),
-        baseIndex: nextBaseIndex(BASE_PHASE_SEQUENCE.indexOf(phaseKeyNow))
-      };
-    } else {
-      const nextIndex = nextBaseIndex(BASE_PHASE_SEQUENCE.indexOf(phaseKeyNow));
-      const nextBase = BASE_PHASE_SEQUENCE[nextIndex] ?? PHASE_KEY_EACH_NIGHT;
-      phaseState = {
-        ...phaseState,
-        previous: phaseKeyNow,
-        current: nextBase,
-        next: null,
-        baseIndex: nextIndex,
-        pendingInterphases: []
-      };
-    }
-    persistPhaseState();
+    sessionPhases = { ...sessionPhases, phase_previous: phaseKeyNow, phase_current: nextKey, phase_next: null };
+    phaseState = {
+      previous: phaseKeyNow,
+      current: nextKey,
+      next: null,
+      pendingInterphases: sessionPhases.pending_interphases ?? [],
+      pendingPreparation: sessionPhases.pending_preparation ?? []
+    };
+    persistSessionPhases();
   }
 
   function finishSession() {
@@ -1641,25 +2029,20 @@ import { getSessionPositions, setRolePosition, setSessionPositions } from '../li
     });
     // Reset phase state
     const prepQueue = buildPreparationQueue();
+    sessionPhases = {
+      ...buildSessionPhasesDefaults(),
+      phase_current: prepQueue[0] ?? 'prepCharacters'
+    };
+    hydratePhasePools();
     phaseState = {
       previous: null,
-      current: prepQueue[0] ?? PHASE_KEY_FIRST_NIGHT,
-      next: PHASE_KEY_FIRST_NIGHT,
+      current: prepQueue[0] ?? 'prepCharacters',
+      next: null,
       pendingInterphases: [],
-      pendingPreparation: prepQueue.slice(1),
-      baseIndex: 0
+      pendingPreparation: prepQueue.slice(1)
     };
     try {
       await updateSession(sessionId, {
-        game_phases: {
-          previous: null,
-          current: prepQueue[0] ?? PHASE_KEY_FIRST_NIGHT,
-          next: PHASE_KEY_FIRST_NIGHT,
-          phase_summary: [],
-          pending_interphases: [],
-          pending_preparation: prepQueue.slice(1),
-          base_index: 0
-        },
         'settings.manipulator_assignments': {},
         day_number: dayNumber,
         night_number: nightNumber,
@@ -1674,6 +2057,8 @@ import { getSessionPositions, setRolePosition, setSessionPositions } from '../li
         charmed_targets: [],
         consumed_special_ids: [],
         active_special_ids: [],
+        session_phases: sessionPhases,
+        'settings.include_buildings': includeBuildings,
         actor_state: {
           available: sanitizeActorRoles(actorRoles),
           consumed: [],
@@ -1693,13 +2078,12 @@ import { getSessionPositions, setRolePosition, setSessionPositions } from '../li
       // Refuerza el estado local y remoto tras el reset para volver siempre al inicio del ciclo de preparación.
       phaseState = {
         previous: null,
-        current: prepQueue[0] ?? PHASE_KEY_FIRST_NIGHT,
-        next: PHASE_KEY_FIRST_NIGHT,
+        current: prepQueue[0] ?? 'prepCharacters',
+        next: null,
         pendingInterphases: [],
-        pendingPreparation: prepQueue.slice(1),
-        baseIndex: 0
+        pendingPreparation: prepQueue.slice(1)
       };
-      await persistPhaseState();
+      await persistSessionPhases();
     } catch (error) {
       console.error('[session] reset failed', error);
     } finally {
@@ -1882,7 +2266,7 @@ import { getSessionPositions, setRolePosition, setSessionPositions } from '../li
     return ids.every((id) => manipulatorAssignments?.[id]);
   };
 
-  $: if (normalizedPhaseKey === 'prep_manipulator' && !manipulatorModalOpen && !manipulatorDone) {
+  $: if (normalizedPhaseKey === 'prepManipulator' && !manipulatorModalOpen && !manipulatorDone) {
     manipulatorModalOpen = true;
   }
 
@@ -1967,12 +2351,12 @@ import { getSessionPositions, setRolePosition, setSessionPositions } from '../li
     const slug = slugifyRole(token.role);
     // Pool de preparación: todos los tokens deshabilitados salvo el badge en prep_sheriff o el token de división en prep_manipulator
     if (isPrepPhaseKey(normalizedPhaseKey)) {
-      if (slug === 'sheriff_badge' && normalizedPhaseKey === 'prep_sheriff') return false;
-      if (slug === 'manipulator_division' && normalizedPhaseKey === 'prep_manipulator') return false;
+      if (slug === 'sheriff_badge' && normalizedPhaseKey === 'prepSheriff') return false;
+      if (slug === 'manipulator_division' && normalizedPhaseKey === 'prepManipulator') return false;
       return true;
     }
     if (slug === 'manipulator_division') {
-      return normalizedPhaseKey !== 'prep_manipulator';
+      return normalizedPhaseKey !== 'prepManipulator';
     }
     if (slug === 'fox_senses') {
       if (!foxAlive) return true;
@@ -1986,7 +2370,7 @@ import { getSessionPositions, setRolePosition, setSessionPositions } from '../li
       if (!isDayPhase) return true;
     }
     if (slug === 'manipulator_division') {
-      if (normalizedPhaseKey !== 'prep_manipulator') return true;
+      if (normalizedPhaseKey !== 'prepManipulator') return true;
     }
     if (slug === 'child_lighthouse') {
       if (!isFirstNightPhase) return true;
