@@ -22,8 +22,10 @@
     roleImageSrc,
     slugifyRole,
     buildDistributionTokens,
-    flattenRoleSelection
+    flattenRoleSelection,
+    getRoleDefinition
   } from '../lib/roles.js';
+  import professionsData from '../../reference-data/datasets/professions.json' with { type: 'json' };
   import { mapPlayers, computePlayerCounts } from '../lib/players.js';
 
   export let sessionId;
@@ -756,6 +758,77 @@ $: matchPlayers = playerList;
     }
   }
 
+  const buildRoleInstancesFromMatch = (seating = [], actorRolesList = []) => {
+    const counters = new Map();
+    return seating.map((seatEntry, index) => {
+      const seatIndex = Number.isFinite(seatEntry?.seat) ? seatEntry.seat : index;
+      const slug = seatEntry?.role ? slugifyRole(seatEntry.role) : null;
+      const count = slug ? (counters.get(slug) ?? 0) : 0;
+      if (slug) counters.set(slug, count + 1);
+      const def = slug ? getRoleDefinition(slug) : null;
+      const alignment = def?.category ?? 'villagers';
+      const tokens = [];
+      if (slug === 'witch') {
+        tokens.push(
+          { name: 'poison', consumed: false },
+          { name: 'heal', consumed: false }
+        );
+      }
+      if (slug === 'actor') {
+        const available = (actorRolesList ?? [])
+          .map((role) => slugifyRole(role))
+          .filter(Boolean)
+          .slice(0, 3);
+        available.forEach((role) => {
+          tokens.push({ name: role, consumed: false });
+        });
+      }
+      return {
+        id: slug ? `${slug}-${count}` : `seat-${seatIndex}`,
+        name: slug,
+        alignment,
+        playerId: seatEntry?.player_id ?? null,
+        seat: Number.isFinite(seatIndex) ? seatIndex : null,
+        alive: true,
+        powerConsumed: false,
+        tokens,
+        professions: [],
+        sheriff: false,
+        townCrier: false,
+        medium: false,
+        inLove: false,
+        infected: false,
+        charmed: false,
+        defended: false,
+        childModel: false,
+        manipulated: null,
+        accused: false,
+        pendingDeath: false,
+        votingRight: true
+      };
+    });
+  };
+
+  const buildBuildingInstancesFromRoles = (roleInstances) => {
+    const seen = new Set();
+    const buildings = [];
+    (roleInstances ?? []).forEach((role) => {
+      const profs = Array.isArray(role.professions) ? role.professions : [];
+      profs.forEach((prof) => {
+        const slug = prof?.name ? slugifyRole(prof.name) : null;
+        if (!slug || slug === 'vagabond' || seen.has(slug)) return;
+        seen.add(slug);
+        const def = professionsData?.[slug];
+        buildings.push({
+          name: slug,
+          building: def?.building ?? {},
+          available: false
+        });
+      });
+    });
+    return buildings;
+  };
+
   async function handleMatchSave(event) {
     if (!sessionId) {
       openAlert($t('configure.errors.missing_session'), 'warning');
@@ -778,10 +851,14 @@ $: matchPlayers = playerList;
           role: includeRole ? slug : null
         };
       });
+      const roleInstances = buildRoleInstancesFromMatch(seatingOrderObjects, selectedActorRoles);
+      const buildingInstances = buildBuildingInstancesFromRoles(roleInstances);
       if (Array.isArray(seatingOrderDetail)) {
         seatingOrder = seatingOrderDetail;
         await updateSession(sessionId, {
           seating_order: seatingOrderObjects,
+          role_instances: roleInstances,
+          building_instances: buildingInstances,
           'settings.test_players': manualPlayers
         });
       }

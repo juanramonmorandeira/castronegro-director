@@ -398,10 +398,12 @@ const dictionaries = {
         first_day: { title: 'First day', subtitle: 'First daylight' },
         each_night: { title: 'Each night', subtitle: 'Standard order' },
         each_day: { title: 'Each day', subtitle: 'Daytime actions' },
+        special_events: { title: 'Special events', subtitle: 'Pending resolutions' },
         hunter: { title: 'Hunter', subtitle: '' },
         knight: { title: 'Knight', subtitle: 'Retaliation phase' },
         sheriff: { title: 'Sheriff', subtitle: '' },
         end: { title: 'End', subtitle: '' },
+        victory: { title: 'Victory condition', subtitle: '' },
         steps: {
           cards_dealt: 'Character cards are dealt',
           prejudiced_manipulator: 'Village separated for Prejudiced Manipulator',
@@ -477,7 +479,8 @@ const dictionaries = {
       errors: {
         child_model_required: 'The Wild Child must choose a role model before advancing.',
         hound_alignment_required: 'The Wolf-Hound must choose alignment before advancing.',
-        knight_target_required: 'You must mark the wounded werewolf for the Knight.'
+        knight_target_required: 'You must mark the wounded werewolf for the Knight.',
+        match_incomplete: 'Complete Match before continuing.'
       },
       controls: {
         previous: 'Previous',
@@ -1165,10 +1168,12 @@ const dictionaries = {
         first_day: { title: 'Primer día', subtitle: 'Primera jornada' },
         each_night: { title: 'Cada noche', subtitle: 'Orden estándar' },
         each_day: { title: 'Cada día', subtitle: 'Acciones diurnas' },
+        special_events: { title: 'Eventos especiales', subtitle: 'Resoluciones pendientes' },
         hunter: { title: 'Cazador', subtitle: '' },
         knight: { title: 'Caballero', subtitle: 'Fase de represalia' },
         sheriff: { title: 'Alguacil', subtitle: '' },
         end: { title: 'Fin', subtitle: '' },
+        victory: { title: 'Condición de victoria', subtitle: '' },
         steps: {
           cards_dealt: 'Se reparten las cartas de rol',
           prejudiced_manipulator: 'El pueblo se divide para el Manipulador Prejuicioso',
@@ -1244,7 +1249,8 @@ const dictionaries = {
       errors: {
         child_model_required: 'El Niño Salvaje debe elegir modelo antes de avanzar.',
         hound_alignment_required: 'El Perro Lobo debe escoger alineación antes de avanzar.',
-        knight_target_required: 'Hay que marcar al hombre lobo herido por el Caballero.'
+        knight_target_required: 'Hay que marcar al hombre lobo herido por el Caballero.',
+        match_incomplete: 'Completa el Match antes de continuar.'
       },
       controls: {
         previous: 'Anterior',
@@ -1804,10 +1810,12 @@ const dictionaries = {
         first_day: { title: 'Első nap', subtitle: 'Első nappali kör' },
         each_night: { title: 'Minden éjszaka', subtitle: 'Alap sorrend' },
         each_day: { title: 'Minden nap', subtitle: 'Nappali akciók' },
+        special_events: { title: 'Különleges események', subtitle: 'Függőben lévő döntések' },
         hunter: { title: 'Vadász', subtitle: '' },
         knight: { title: 'Lovag', subtitle: 'Bosszú fázis' },
         sheriff: { title: 'Seriff', subtitle: '' },
         end: { title: 'Vége', subtitle: '' },
+        victory: { title: 'Győzelmi feltétel', subtitle: '' },
         steps: {
           cards_dealt: 'Szerepkártyák kiosztása',
           prejudiced_manipulator: 'Falu kettéosztása az Előítéletes Manipulátorhoz',
@@ -1883,7 +1891,8 @@ const dictionaries = {
       errors: {
         child_model_required: 'A Vadgyereknek előbb példaképet kell választania.',
         hound_alignment_required: 'A Farkaskutyának előbb választania kell oldalt.',
-        knight_target_required: 'Meg kell jelölni a Lovag által sebesített vérfarkast.'
+        knight_target_required: 'Meg kell jelölni a Lovag által sebesített vérfarkast.',
+        match_incomplete: 'A Match befejezése szükséges a továbblépéshez.'
       },
       controls: {
         previous: 'Előző',

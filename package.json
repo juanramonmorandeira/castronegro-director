@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "node src/lib/domain/__test__/domain.test.js",
     "preview": "vite preview"
   },
   "devDependencies": {

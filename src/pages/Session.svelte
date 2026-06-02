@@ -8,6 +8,8 @@
     roleImageSrc,
     getRoleDefinition,
     createEmptyRoleSelection,
+    normalizeRoleSelection,
+    ROLE_CATEGORIES,
     buildDistributionTokens,
     getRoleName
   } from '../lib/roles.js';
@@ -373,7 +375,10 @@
 
   const buildPhasePoolsDefaults = () => {
     const poolWithPhases = Object.entries(POOL_PHASES).reduce((acc, [pool, phases]) => {
-      acc[pool] = phases.map((key) => ({ key, status: 'disabled' }));
+      acc[pool] = phases.map((key) => ({
+        key,
+        status: key.startsWith('hydrate') || key === 'victoryCondition' ? 'enabled' : 'disabled'
+      }));
       return acc;
     }, {});
     return {
@@ -389,13 +394,99 @@
     phase_previous: null,
     phase_current: 'prepCharacters',
     phase_next: null,
-        pending_preparation: buildPhasePool('pending_preparation'),
-        pending_firstnight: buildPhasePool('pending_firstnight'),
-        pending_eachday: buildPhasePool('pending_eachday'),
-        pending_eachnight: buildPhasePool('pending_eachnight'),
-        pending_interphases: buildPhasePool('pending_interphases'),
+    pending_preparation: buildPhasePool('pending_preparation'),
+    pending_firstnight: buildPhasePool('pending_firstnight'),
+    pending_eachday: buildPhasePool('pending_eachday'),
+    pending_eachnight: buildPhasePool('pending_eachnight'),
+    pending_interphases: buildPhasePool('pending_interphases'),
     phase_logbook: []
   });
+
+  const LEGACY_TO_POOL_PHASE = {
+    prepCharacters: { pool: 'poolPreparation', phase: 'phaseCharacters' },
+    prepBuildings: { pool: 'poolPreparation', phase: 'phaseBuildings' },
+    prepManipulator: { pool: 'poolPreparation', phase: 'phaseManipulator' },
+    prepGypsy: { pool: 'poolPreparation', phase: 'phaseGypsyCards' },
+    prepTownCrierCards: { pool: 'poolPreparation', phase: 'phaseTownCrierCards' },
+    prepActor: { pool: 'poolPreparation', phase: 'phaseActorCards' },
+    prepThief: { pool: 'poolPreparation', phase: 'phaseThiefCards' },
+    prepSheriff: { pool: 'poolPreparation', phase: 'phaseSheriffElection' },
+    firstnightThief: { pool: 'poolFirstNight', phase: 'phaseThief' },
+    firstnightActor: { pool: 'poolFirstNight', phase: 'phaseActor' },
+    firstnightCupid: { pool: 'poolFirstNight', phase: 'phaseCupid' },
+    firstnightSeer: { pool: 'poolFirstNight', phase: 'phaseSeer' },
+    firstnightFox: { pool: 'poolFirstNight', phase: 'phaseFox' },
+    firstnightLovers: { pool: 'poolFirstNight', phase: 'phaseLovers' },
+    firstnightJudge: { pool: 'poolFirstNight', phase: 'phaseJudgeSignal' },
+    firstnightSisters: { pool: 'poolFirstNight', phase: 'phaseSisters' },
+    firstnightBrothers: { pool: 'poolFirstNight', phase: 'phaseBrothers' },
+    firstnightChild: { pool: 'poolFirstNight', phase: 'phaseChild' },
+    firstnightTamer: { pool: 'poolFirstNight', phase: 'phaseTamerLocation' },
+    firstnightScandalmonger: { pool: 'poolFirstNight', phase: 'phaseScandalmonger' },
+    firstnightPyromaniac: { pool: 'poolFirstNight', phase: 'phasePyromaniac' },
+    firstnightDefender: { pool: 'poolFirstNight', phase: 'phaseDefender' },
+    firstnightPack: { pool: 'poolFirstNight', phase: 'phasePack' },
+    firstnightHound: { pool: 'poolFirstNight', phase: 'phaseHound' },
+    firstnightGirl: { pool: 'poolFirstNight', phase: 'phaseGirl' },
+    firstnightBaker: { pool: 'poolFirstNight', phase: 'phaseBaker' },
+    firstnightFather: { pool: 'poolFirstNight', phase: 'phaseFather' },
+    firstnightBad: { pool: 'poolFirstNight', phase: 'phaseBad' },
+    firstnightWitch: { pool: 'poolFirstNight', phase: 'phaseWitch' },
+    firstnightGypsy: { pool: 'poolFirstNight', phase: 'phaseGypsy' },
+    firstnightPiper: { pool: 'poolFirstNight', phase: 'phasePiper' },
+    firstnightCharmed: { pool: 'poolFirstNight', phase: 'phaseCharmed' },
+    eachdayVictims: { pool: 'poolEachDay', phase: 'phaseVictims' },
+    eachdayTamer: { pool: 'poolEachDay', phase: 'phaseTamer' },
+    eachdayMedium: { pool: 'poolEachDay', phase: 'phaseMedium' },
+    eachdayTownCrier: { pool: 'poolEachDay', phase: 'phaseTownCrier' },
+    eachdayDebate: { pool: 'poolEachDay', phase: 'phaseDebate' },
+    eachdaySheriff: { pool: 'poolEachDay', phase: 'phaseSheriff' },
+    eachdayVote: { pool: 'poolEachDay', phase: 'phaseVote' },
+    eachdayServant: { pool: 'poolEachDay', phase: 'phaseServant' },
+    eachdayJudge: { pool: 'poolEachDay', phase: 'phaseJudge' },
+    eachnightActor: { pool: 'poolEachNight', phase: 'phaseActor' },
+    eachnightSeer: { pool: 'poolEachNight', phase: 'phaseSeer' },
+    eachnightFox: { pool: 'poolEachNight', phase: 'phaseFox' },
+    eachnightSisters: { pool: 'poolEachNight', phase: 'phaseSisters' },
+    eachnightBrothers: { pool: 'poolEachNight', phase: 'phaseBrothers' },
+    eachnightScandalmonger: { pool: 'poolEachNight', phase: 'phaseScandalmonger' },
+    eachnightPyromaniac: { pool: 'poolEachNight', phase: 'phasePyromaniac' },
+    eachnightDefender: { pool: 'poolEachNight', phase: 'phaseDefender' },
+    eachnightPack: { pool: 'poolEachNight', phase: 'phasePack' },
+    eachnightGirl: { pool: 'poolEachNight', phase: 'phaseGirl' },
+    eachnightBaker: { pool: 'poolEachNight', phase: 'phaseBaker' },
+    eachnightWhite: { pool: 'poolEachNight', phase: 'phaseWhite' },
+    eachnightFather: { pool: 'poolEachNight', phase: 'phaseFather' },
+    eachnightBad: { pool: 'poolEachNight', phase: 'phaseBad' },
+    eachnightWitch: { pool: 'poolEachNight', phase: 'phaseWitch' },
+    eachnightGypsy: { pool: 'poolEachNight', phase: 'phaseGypsy' },
+    eachnightPiper: { pool: 'poolEachNight', phase: 'phasePiper' },
+    eachnightCharmed: { pool: 'poolEachNight', phase: 'phaseCharmed' },
+    interHunter: { pool: 'poolSpecialEvents', phase: 'phaseHunter' },
+    interScapegoat: { pool: 'poolSpecialEvents', phase: 'phaseScapegoat' },
+    interSheriff: { pool: 'poolSpecialEvents', phase: 'phaseSheriffElection' },
+    interVote: { pool: 'poolSpecialEvents', phase: 'phaseVote' },
+    interServant: { pool: 'poolSpecialEvents', phase: 'phaseServant' },
+    interEnd: { pool: 'poolSpecialEvents', phase: 'phaseEnd' }
+  };
+
+  const syncPhasePoolsFromLegacy = (legacyKey, pools) => {
+    const normalized = normalizePhaseKey(legacyKey);
+    const mapping = LEGACY_TO_POOL_PHASE[normalized];
+    if (!mapping) return pools;
+    const poolItems = pools[mapping.pool] ?? [];
+    const idx = poolItems.findIndex((item) => item.key === mapping.phase);
+    if (idx < 0) return pools;
+    const poolPrevious = mapping.pool === 'poolSpecialEvents' ? pools.poolPrevious ?? 'poolEachDay' : mapping.pool;
+    const nextPools = {
+      ...pools,
+      poolCurrent: mapping.pool,
+      poolCurrentPhaseIndex: idx,
+      poolPrevious
+    };
+    nextPools.poolNext = calculateNextPool(nextPools, poolPrevious, mapping.pool);
+    return nextPools;
+  };
 
   let logEntries = [];
   let draftNote = '';
@@ -519,7 +610,46 @@
     return set;
   })();
 
+  const buildRoleInstancesFromSelection = (selectionSource) => {
+    const normalized = normalizeRoleSelection(selectionSource);
+    const instances = [];
+    ROLE_CATEGORIES.forEach((category) => {
+      const roles = normalized?.[category] ?? {};
+      Object.entries(roles).forEach(([roleName, count]) => {
+        const slug = normalizeRoleSlug(slugifyRole(roleName));
+        const total = Number(count) || 0;
+        const def = roleDefinitions?.[slug] ?? {};
+        const alignment = def?.category ?? category ?? 'villagers';
+        for (let index = 0; index < total; index += 1) {
+          instances.push({
+            id: `${slug}-${index}`,
+            name: slug,
+            alignment,
+            playerId: null,
+            seat: null,
+            alive: true,
+            powerConsumed: false,
+            tokens: [],
+            professions: [],
+            sheriff: false,
+            townCrier: false,
+            medium: false,
+            inLove: false,
+            infected: false,
+            charmed: false,
+            defended: false,
+            childModel: false,
+            manipulated: null
+          });
+        }
+      });
+    });
+    return instances;
+  };
+
   const buildRoleInstancesFromTokens = (selection, tokenList = []) => {
+    const fromSelection = buildRoleInstancesFromSelection(selection);
+    if (fromSelection.length) return fromSelection;
     const counters = new Map();
     const chars = tokenList.filter((t) => t.category !== 'special');
     return chars.map((token) => {
@@ -583,6 +713,184 @@
     (roleInstances ?? []).some((r) => Array.isArray(r.professions) && r.professions.some((p) => p?.name === name && !p?.consumed));
   const countPackAlive = () => ['bad', 'father', 'werewolf', 'white'].reduce((acc, slug) => acc + (isAlive(slug) ? 1 : 0), 0);
   const countVillagersAlive = () => (roleInstances ?? []).filter((r) => r.alignment === 'villagers' && r.alive).length;
+  const isMatchComplete = () =>
+    Array.isArray(roleInstances) &&
+    roleInstances.length > 0 &&
+    roleInstances.every((role) => role?.playerId && role?.name && role?.seat !== null && role?.seat !== undefined);
+
+  const PHASE_POOL_RULES = {
+    poolPreparation: {
+      hydratePreparation: () => true,
+      phaseCharacters: () => true,
+      phaseBuildings: () => includeBuildings,
+      phaseManipulator: () => isAlive('manipulator'),
+      phaseGypsyCards: () => isAlive('gypsy'),
+      phaseTownCrierCards: () => includeTownCrier,
+      phaseActorCards: () => isAlive('actor'),
+      phaseThiefCards: () => isAlive('thief'),
+      phaseSheriffElection: () => includeSheriff
+    },
+    poolFirstNight: {
+      hydrateFirstNight: () => true,
+      phaseThief: () => isAlive('thief'),
+      phaseActor: () => isAlive('actor'),
+      phaseCupid: () => isAlive('cupid'),
+      phaseSeer: () => isAlive('seer'),
+      phaseFox: () => isAlive('fox'),
+      phaseLovers: () => isAlive('cupid'),
+      phaseJudgeSignal: () => isAlive('judge'),
+      phaseSisters: () => isAlive('sisters'),
+      phaseBrothers: () => isAlive('brothers'),
+      phaseChild: () => isAlive('child'),
+      phaseTamerLocation: () => isAlive('tamer'),
+      phaseScandalmonger: () => isAlive('scandalmonger'),
+      phasePyromaniac: () => isAlive('pyromaniac'),
+      phaseDefender: () => isAlive('defender'),
+      phasePack: () => isAlive('bad') || isAlive('father') || isAlive('werewolf') || isAlive('white') || anyInfected(),
+      phaseHound: () => isAlive('hound'),
+      phaseGirl: () => isAlive('girl'),
+      phaseBaker: () => hasProfession('baker'),
+      phaseFather: () => isAlive('father'),
+      phaseBad: () => isAlive('bad'),
+      phaseWitch: () => isAlive('witch'),
+      phaseGypsy: () => isAlive('gypsy'),
+      phasePiper: () => isAlive('piper'),
+      phaseCharmed: () => isAlive('piper') && anyCharmed(),
+      victoryCondition: () => true
+    },
+    poolEachDay: {
+      hydrateEachDay: () => true,
+      phaseVictims: () => true,
+      phaseTamer: () => isAlive('tamer'),
+      phaseMedium: () => isDesignated('medium'),
+      phaseTownCrier: () => isDesignated('townCrier'),
+      phaseDebate: () => true,
+      phaseSheriff: () => isDesignated('sheriff'),
+      phaseVote: () => true,
+      phaseServant: () => isAlive('servant'),
+      phaseJudge: () => isAlive('judge') && !isPowerConsumed('judge'),
+      victoryCondition: () => true
+    },
+    poolEachNight: {
+      hydrateEachNight: () => true,
+      phaseActor: () => isAlive('actor') && !isPowerConsumed('actor'),
+      phaseSeer: () => isAlive('seer'),
+      phaseFox: () => isAlive('fox') && !isPowerConsumed('fox'),
+      phaseSisters: () => countAlive('sisters') >= 2 && nightNumber % 2 === 0,
+      phaseBrothers: () => countAlive('brothers') >= 2 && nightNumber % 2 === 0,
+      phaseScandalmonger: () => isAlive('scandalmonger'),
+      phasePyromaniac: () => isAlive('pyromaniac') && !isPowerConsumed('pyromaniac'),
+      phaseDefender: () => isAlive('defender'),
+      phasePack: () => isAlive('bad') || isAlive('father') || isAlive('werewolf') || isAlive('white') || anyInfected(),
+      phaseGirl: () => isAlive('girl'),
+      phaseBaker: () => hasProfession('baker'),
+      phaseWhite: () => isAlive('white') && nightNumber % 2 === 1,
+      phaseFather: () => isAlive('father') && !anyInfected(),
+      phaseBad: () => isAlive('bad') && allPackAlive(),
+      phaseWitch: () => isAlive('witch') && !isPowerConsumed('witch'),
+      phaseGypsy: () => isAlive('gypsy'),
+      phasePiper: () => isAlive('piper'),
+      phaseCharmed: () => anyCharmed(),
+      victoryCondition: () => true
+    },
+    poolSpecialEvents: {
+      hydrateSpecialEvents: () => true,
+      phaseHunter: () => !isAlive('hunter'),
+      phaseScapegoat: () => !isAlive('scapegoat'),
+      phaseSheriffElection: () => !isDesignated('sheriff') && !isSheriff('idiot'),
+      phaseVote: () => false,
+      phaseServant: () => false,
+      victoryCondition: () => true,
+      phaseEnd: () => false
+    }
+  };
+
+  const hydratePhasePool = (poolKey, pools = phasePools) => {
+    const rules = PHASE_POOL_RULES[poolKey];
+    if (!rules || !pools?.[poolKey]) return pools;
+    const updated = pools[poolKey].map((item) => {
+      const rule = rules[item.key];
+      const enabled = rule ? rule() : false;
+      return { ...item, status: enabled ? 'enabled' : 'disabled' };
+    });
+    return { ...pools, [poolKey]: updated };
+  };
+
+  const enablePhaseInPool = (poolKey, phaseKey) => {
+    if (!phasePools?.[poolKey]) return;
+    const updated = phasePools[poolKey].map((item) => (item.key === phaseKey ? { ...item, status: 'enabled' } : item));
+    phasePools = { ...phasePools, [poolKey]: updated };
+  };
+
+  const poolHasEnabledPhases = (poolKey, pools = phasePools) =>
+    (pools?.[poolKey] ?? []).some((item) => item.status === 'enabled' && !item.key.startsWith('hydrate'));
+
+  const lastNotSpecialEvents = (poolPrevious, poolCurrent) =>
+    poolCurrent === 'poolSpecialEvents' ? poolPrevious : poolCurrent;
+
+  const calculateNextPool = (pools, poolPrevious, poolCurrent) => {
+    const withSpecial = hydratePhasePool('poolSpecialEvents', pools);
+    if (poolHasEnabledPhases('poolSpecialEvents', withSpecial)) {
+      return 'poolSpecialEvents';
+    }
+    if (poolCurrent === 'poolPreparation') return 'poolFirstNight';
+    if (poolCurrent === 'poolSpecialEvents') {
+      if (poolPrevious === 'poolFirstNight') return 'poolEachDay';
+      if (poolPrevious === 'poolEachDay') return 'poolEachNight';
+      return 'poolEachDay';
+    }
+    if (poolCurrent === 'poolFirstNight') return 'poolEachDay';
+    if (poolCurrent === 'poolEachDay') return 'poolEachNight';
+    return 'poolEachDay';
+  };
+
+  const findNextEnabledIndex = (poolItems = [], startIndex = 0) => {
+    for (let index = startIndex; index < poolItems.length; index += 1) {
+      if (poolItems[index]?.status === 'enabled') return index;
+    }
+    return null;
+  };
+
+  const advancePhasePools = async () => {
+    if (!phasePools?.poolCurrent) return;
+    let nextPools = { ...phasePools };
+    const poolCurrent = nextPools.poolCurrent;
+    const poolItems = nextPools[poolCurrent] ?? [];
+    const currentIndex = Number.isFinite(nextPools.poolCurrentPhaseIndex) ? nextPools.poolCurrentPhaseIndex : 0;
+    const currentPhaseKey = poolItems[currentIndex]?.key ?? null;
+
+    nextPools.poolPrevious = lastNotSpecialEvents(nextPools.poolPrevious, poolCurrent);
+
+    if (currentPhaseKey?.startsWith('hydrate')) {
+      nextPools = hydratePhasePool(poolCurrent, nextPools);
+    }
+
+    const nextIndex = findNextEnabledIndex(nextPools[poolCurrent], currentIndex + 1);
+    if (nextIndex !== null) {
+      nextPools.poolCurrentPhaseIndex = nextIndex;
+    } else {
+      const nextPool = calculateNextPool(nextPools, nextPools.poolPrevious, poolCurrent);
+      nextPools.poolCurrent = nextPool;
+      nextPools.poolCurrentPhaseIndex = 0;
+      nextPools.poolNext = calculateNextPool(nextPools, nextPools.poolPrevious, nextPool);
+    }
+
+    phasePools = nextPools;
+    if (sessionId) {
+      try {
+        await updateSession(sessionId, { phase_pools: nextPools });
+      } catch (error) {
+        console.error('[session] unable to persist phase_pools', error);
+      }
+    }
+  };
+
+  const applyPhasePoolTriggers = (phaseKeyNow) => {
+    if (phaseKeyNow === 'eachdayJudge') {
+      enablePhaseInPool('poolSpecialEvents', 'phaseVote');
+      enablePhaseInPool('poolSpecialEvents', 'phaseServant');
+    }
+  };
   $: seerActive = seerPresent && aliveRoleSet.has('seer');
   $: foxBaseTokenId = characterTokens.find((token) => slugifyRole(token.role) === 'fox')?.id ?? null;
   $: foxSpecialId = specialTokens.find((token) => slugifyRole(token.role) === 'fox_senses')?.id ?? null;
@@ -681,6 +989,9 @@
         includeBuildings = settings.include_buildings ?? false;
         sessionPhases = session.session_phases ?? buildSessionPhasesDefaults();
         phasePools = session.phase_pools ?? buildPhasePoolsDefaults();
+        if (!session.phase_pools) {
+          phasePools = syncPhasePoolsFromLegacy(session.session_phases?.phase_current ?? null, phasePools);
+        }
         const prepRemote = sessionPhases.pending_preparation ?? null;
         const prepQueue = Array.isArray(prepRemote) ? prepRemote.map((item) => (typeof item === 'string' ? item : item?.key)).filter(Boolean) : buildPreparationQueue();
         actorState = {
@@ -707,22 +1018,12 @@
           pendingInterphases: session.session_phases?.pending_interphases ?? [],
           pendingPreparation: session.session_phases?.pending_preparation ?? buildPhasePool('pending_preparation')
         };
-        roleInstances =
-          Array.isArray(session.role_instances) && session.role_instances.length
-            ? session.role_instances
-            : buildRoleInstancesFromTokens(selection, tokens);
+        roleInstances = Array.isArray(session.role_instances) ? session.role_instances : [];
         if (!session.phase_pools) {
           try {
             await updateSession(sessionId, { phase_pools: phasePools });
           } catch (e) {
             console.error('[session] unable to persist phase_pools defaults', e);
-          }
-        }
-        if (!session.role_instances || !session.role_instances.length) {
-          try {
-            await updateSession(sessionId, { role_instances: roleInstances });
-          } catch (e) {
-            console.error('[session] unable to persist role_instances defaults', e);
           }
         }
       } catch (error) {
@@ -1392,6 +1693,136 @@
     }
     return $t(key) || key;
   })();
+  const PHASE_POOL_TITLES = {
+    poolPreparation: PHASE_KEY_PREPARATION,
+    poolFirstNight: PHASE_KEY_FIRST_NIGHT,
+    poolEachDay: PHASE_KEY_EACH_DAY,
+    poolEachNight: PHASE_KEY_EACH_NIGHT,
+    poolSpecialEvents: 'session.phases.special_events.title'
+  };
+  const PHASE_POOL_SUBTITLES = {
+    poolPreparation: 'session.phases.preparation.subtitle',
+    poolFirstNight: 'session.phases.first_night.subtitle',
+    poolEachDay: 'session.phases.each_day.subtitle',
+    poolEachNight: 'session.phases.each_night.subtitle',
+    poolSpecialEvents: 'session.phases.special_events.subtitle'
+  };
+  const POOL_PHASE_LABELS = {
+    poolPreparation: {
+      phaseCharacters: 'session.prep.characters',
+      phaseBuildings: 'session.prep.buildings',
+      phaseManipulator: 'session.prep.manipulator',
+      phaseGypsyCards: 'session.prep.gypsy',
+      phaseTownCrierCards: 'session.prep.town_crier_cards',
+      phaseActorCards: 'session.prep.actor',
+      phaseThiefCards: 'session.prep.thief',
+      phaseSheriffElection: 'session.prep.sheriff'
+    },
+    poolFirstNight: {
+      phaseThief: 'session.firstnight.thief',
+      phaseActor: 'session.firstnight.actor',
+      phaseCupid: 'session.firstnight.cupid',
+      phaseSeer: 'session.firstnight.seer',
+      phaseFox: 'session.firstnight.fox',
+      phaseLovers: 'session.firstnight.lovers',
+      phaseJudgeSignal: 'session.firstnight.judge',
+      phaseSisters: 'session.firstnight.sisters',
+      phaseBrothers: 'session.firstnight.brothers',
+      phaseChild: 'session.firstnight.child',
+      phaseTamerLocation: 'session.firstnight.tamer',
+      phaseScandalmonger: 'session.firstnight.scandalmonger',
+      phasePyromaniac: 'session.firstnight.pyromaniac',
+      phaseDefender: 'session.firstnight.defender',
+      phasePack: 'session.firstnight.pack',
+      phaseHound: 'session.firstnight.hound',
+      phaseGirl: 'session.firstnight.girl',
+      phaseBaker: 'session.firstnight.baker',
+      phaseFather: 'session.firstnight.father',
+      phaseBad: 'session.firstnight.bad',
+      phaseWitch: 'session.firstnight.witch',
+      phaseGypsy: 'session.firstnight.gypsy',
+      phasePiper: 'session.firstnight.piper',
+      phaseCharmed: 'session.firstnight.charmed',
+      victoryCondition: 'session.phases.victory.title'
+    },
+    poolEachDay: {
+      phaseVictims: 'session.eachday.victims',
+      phaseTamer: 'session.eachday.tamer',
+      phaseMedium: 'session.eachday.medium',
+      phaseTownCrier: 'session.eachday.town_crier',
+      phaseDebate: 'session.eachday.debate',
+      phaseSheriff: 'session.eachday.sheriff',
+      phaseVote: 'session.eachday.vote',
+      phaseServant: 'session.eachday.servant',
+      phaseJudge: 'session.eachday.judge',
+      victoryCondition: 'session.phases.victory.title'
+    },
+    poolEachNight: {
+      phaseActor: 'session.eachnight.actor',
+      phaseSeer: 'session.eachnight.seer',
+      phaseFox: 'session.eachnight.fox',
+      phaseSisters: 'session.eachnight.sisters',
+      phaseBrothers: 'session.eachnight.brothers',
+      phaseScandalmonger: 'session.eachnight.scandalmonger',
+      phasePyromaniac: 'session.eachnight.pyromaniac',
+      phaseDefender: 'session.eachnight.defender',
+      phasePack: 'session.eachnight.pack',
+      phaseGirl: 'session.eachnight.girl',
+      phaseBaker: 'session.eachnight.baker',
+      phaseWhite: 'session.eachnight.white',
+      phaseFather: 'session.eachnight.father',
+      phaseBad: 'session.eachnight.bad',
+      phaseWitch: 'session.eachnight.witch',
+      phaseGypsy: 'session.eachnight.gypsy',
+      phasePiper: 'session.eachnight.piper',
+      phaseCharmed: 'session.eachnight.charmed',
+      victoryCondition: 'session.phases.victory.title'
+    },
+    poolSpecialEvents: {
+      phaseHunter: 'session.inter.hunter',
+      phaseScapegoat: 'session.inter.scapegoat',
+      phaseSheriffElection: 'session.inter.sheriff',
+      phaseVote: 'session.inter.vote',
+      phaseServant: 'session.inter.servant',
+      victoryCondition: 'session.phases.victory.title',
+      phaseEnd: 'session.inter.end'
+    }
+  };
+  const getPhasePoolsCurrentKey = () => {
+    const pool = phasePools?.poolCurrent;
+    const index = Number.isFinite(phasePools?.poolCurrentPhaseIndex) ? phasePools.poolCurrentPhaseIndex : 0;
+    const list = phasePools?.[pool] ?? [];
+    return list[index]?.key ?? null;
+  };
+  const getPhasePoolsLabelKey = (poolKey, phaseKey) => {
+    if (!poolKey || !phaseKey) return null;
+    if (phaseKey.startsWith('hydrate')) return PHASE_POOL_TITLES[poolKey] ?? null;
+    return POOL_PHASE_LABELS?.[poolKey]?.[phaseKey] ?? phaseKey;
+  };
+  $: poolCurrentPhaseKeyValue = getPhasePoolsCurrentKey();
+  $: poolCurrentPhaseLabel = (() => {
+    const poolKey = phasePools?.poolCurrent;
+    const labelKey = getPhasePoolsLabelKey(poolKey, poolCurrentPhaseKeyValue);
+    if (!labelKey) return '—';
+    return $t(labelKey) || labelKey;
+  })();
+  $: phasePoolDisplay = ['poolPreparation', 'poolFirstNight', 'poolEachDay', 'poolEachNight', 'poolSpecialEvents']
+    .map((poolKey) => {
+      const steps = (phasePools?.[poolKey] ?? [])
+        .filter((item) => item.status === 'enabled' && !item.key.startsWith('hydrate') && item.key !== 'victoryCondition')
+        .map((item) => ({
+          key: item.key,
+          labelKey: getPhasePoolsLabelKey(poolKey, item.key)
+        }))
+        .filter((item) => item.labelKey);
+      return {
+        poolKey,
+        titleKey: PHASE_POOL_TITLES[poolKey],
+        subtitleKey: PHASE_POOL_SUBTITLES[poolKey],
+        steps
+      };
+    })
+    .filter((phase) => phase.steps.length);
   $: thiefOfferData = thiefOffer.map((slug) => ({
     slug,
     name: getRoleName(slug, currentLocale),
@@ -1401,7 +1832,11 @@
     phaseState,
     currentPhaseKeyValue,
     normalizedPhaseKey,
-    currentPhaseLabel
+    currentPhaseLabel,
+    poolCurrentPhaseKeyValue,
+    poolCurrentPhaseLabel,
+    poolCurrent: phasePools?.poolCurrent,
+    poolCurrentPhaseIndex: phasePools?.poolCurrentPhaseIndex
   });
 
   function togglePhase() {
@@ -1928,6 +2363,17 @@
   function evaluatePhase() {
     const phaseKeyNow = normalizePhaseKey(phaseState.current);
     console.info('[session] evaluatePhase', { phaseKeyNow, phaseState, nightNumber, dayNumber });
+    if ((phaseKeyNow === 'prepCharacters' || poolCurrentPhaseKeyValue === 'phaseCharacters') && !isMatchComplete()) {
+      const msgKey = $t?.('session.errors.match_incomplete');
+      showToast({
+        message:
+          msgKey && msgKey !== 'session.errors.match_incomplete'
+            ? msgKey
+            : 'Complete Match before continuing.',
+        variant: 'warning'
+      });
+      return;
+    }
     const resolutionOk = resolveBoardEffects(phaseKeyNow);
     if (resolutionOk === false) return;
     if (actorState.currentNightChoice && !isEndPhase) {
@@ -1935,6 +2381,7 @@
     }
     hydratePhasePools();
     setPhaseStatus(phaseKeyNow, 'disabled');
+    applyPhasePoolTriggers(phaseKeyNow);
     const { key: nextKey, pool: nextPool } = findNextPhase(phaseKeyNow);
     const currentPool = getPoolNameForKey(phaseKeyNow);
     if (nextPool === 'pending_firstnight' && nightNumber === 0) {
@@ -1954,6 +2401,7 @@
       pendingPreparation: sessionPhases.pending_preparation ?? []
     };
     persistSessionPhases();
+    advancePhasePools();
   }
 
   function finishSession() {
@@ -2033,6 +2481,7 @@
       ...buildSessionPhasesDefaults(),
       phase_current: prepQueue[0] ?? 'prepCharacters'
     };
+    phasePools = syncPhasePoolsFromLegacy(prepQueue[0] ?? 'prepCharacters', buildPhasePoolsDefaults());
     hydratePhasePools();
     phaseState = {
       previous: null,
@@ -2058,6 +2507,7 @@
         consumed_special_ids: [],
         active_special_ids: [],
         session_phases: sessionPhases,
+        phase_pools: phasePools,
         'settings.include_buildings': includeBuildings,
         actor_state: {
           available: sanitizeActorRoles(actorRoles),
@@ -3276,13 +3726,15 @@
       </header>
       {#if phaseExpanded}
         <div class="phase-grid">
-          {#each phases as phase}
+          {#each phasePoolDisplay as phase}
             <article class="phase-card">
-              <p class="eyebrow">{$t(phase.subtitleKey)}</p>
-              <h3>{$t(phase.titleKey)}</h3>
+              {#if phase.subtitleKey}
+                <p class="eyebrow">{$t(phase.subtitleKey)}</p>
+              {/if}
+              <h3>{$t(phase.titleKey) || phase.titleKey}</h3>
               <ul>
                 {#each phase.steps as step}
-                  <li>{$t(`session.phases.steps.${step.key}`)}</li>
+                  <li>{$t(step.labelKey) || step.labelKey}</li>
                 {/each}
               </ul>
             </article>
@@ -3325,7 +3777,7 @@
   <Footbar>
     <div slot="actions" class="session-dock">
       <div class="dock-left">
-        <span class="phase-pill">{$t('session.phases.current')}: {currentPhaseLabel}</span>
+        <span class="phase-pill">{$t('session.phases.current')}: {poolCurrentPhaseLabel}</span>
       </div>
       <div class="dock-controls">
         <button class="btn secondary btn--size-sm" type="button" on:click={goToConfigure}>Configure</button>
