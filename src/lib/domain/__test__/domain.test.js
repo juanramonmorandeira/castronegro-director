@@ -18,22 +18,34 @@ import {
   VOTE_ROUND_TYPES,
   VOTE_TIE_POLICIES,
   buildRoleInstancesFromSeats,
+  completeCurrentStep,
   createPhasePools,
   createPhasePoolsFromSkinDefinition,
   createGameSession,
   createRelation,
-  createStepDefinition,
+  getCoreGroupCatalog,
+  getCoreRoleCatalog,
+  createStep,
   evaluateVictory,
   findAppliedSetPropertyHistory,
   getActionBlockKey,
   PHASE_STATUSES,
   PHASE_DEFINITION_ERRORS,
+  POOL_KEYS,
+  GROUP_CATALOG_IDS,
+  ROLE_CATALOG_IDS,
+  RECIPE_KEYS,
   resolveVoteRound,
   resolveAction,
   resolveCurrentStep,
   resolveRecipe,
   STEP_ACTION_KEYS,
+  STEP_CATALOG_IDS,
+  STEP_COMPLETION_MODES,
+  STEP_COMPLETION_REQUESTED_BY,
   STEP_KEYS,
+  getCatalogRecipe,
+  getCatalogStep,
   validateGameSession
 } from '../index.js';
 
@@ -58,7 +70,7 @@ function test(name, fn) {
 // - block_out_of_play bloquea set_in_play(false) sobre un target concreto.
 // - link_targets crea una relacion linked en la sesion.
 // - linked deriva inPlay=false hacia roles relacionados.
-// - prevent_repeat_target impide repetir bloqueo sobre el mismo target.
+// - no_repeat_target impide repetir bloqueo sobre el mismo target.
 // - victoryModel detecta victoria generica y victoria especial linked.
 // - voteModel cuenta votos y resuelve empates configurables.
 // - stepModel conecta el step actual con actionModel y avanza el cursor.
@@ -66,188 +78,36 @@ function test(name, fn) {
 // No usan Svelte, Firebase, i18n ni navegador.
 // ---------------------------------------------------------------------------
 
-const inspectRoleAction = {
-  id: ACTION_IDS.INSPECT_ROLE,
-  phase: 'each_night',
-  actor: { type: 'role_holder' },
-  target: {
-    type: 'role_instance',
-    count: 1,
-    filters: ['in_play', 'not_self']
-  },
-  effect: {
-    type: EFFECT_TYPES.REVEAL_PROPERTY,
-    property: 'roleId'
-  },
-  visibility: VISIBILITY.ACTOR_ONLY
-};
-
-const setInPlayFalseAction = {
-  id: ACTION_IDS.SET_IN_PLAY,
-  phase: 'each_night',
-  actor: {
-    type: 'faction_group',
-    factionId: 'team_b'
-  },
-  target: {
-    type: 'role_instance',
-    count: 1,
-    filters: ['in_play', 'not_same_faction']
-  },
-  effect: {
-    type: EFFECT_TYPES.SET_PROPERTY,
-    targetType: 'role_instance',
-    property: 'inPlay',
-    value: false
-  },
-  visibility: VISIBILITY.STORYTELLER_ONLY
-};
-
-const restoreRecentOutOfPlayAction = {
-  id: ACTION_IDS.SET_IN_PLAY,
-  phase: 'each_night',
-  actor: { type: 'role_holder' },
-  target: {
-    type: 'role_instance',
-    count: 1,
-    filters: []
-  },
-  constraints: [
-    {
-      type: CONSTRAINT_TYPES.REQUIRE_RECENT_SET_PROPERTY,
-      window: CONSTRAINT_WINDOWS.CURRENT_CYCLE,
-      property: 'inPlay',
-      value: false,
-      actionKey: STEP_ACTION_KEYS.SET_OUT_OF_PLAY
-    },
-    {
-      type: CONSTRAINT_TYPES.LIMITED_USES,
-      limit: 1,
-      window: CONSTRAINT_WINDOWS.SESSION,
-      scope: 'actor_recipe'
-    }
-  ],
-  effect: {
-    type: EFFECT_TYPES.SET_PROPERTY,
-    targetType: 'role_instance',
-    property: 'inPlay',
-    value: true
-  },
-  visibility: VISIBILITY.STORYTELLER_ONLY
-};
-
-const blockOutOfPlayRecipe = {
-  id: ACTION_IDS.BLOCK_ACTION,
-  phase: 'each_night',
-  actor: { type: 'role_holder' },
-  target: {
-    type: 'role_instance',
-    count: 1,
-    filters: ['in_play', 'not_self']
-  },
-  constraints: [
-    {
-      type: CONSTRAINT_TYPES.PREVENT_REPEAT_TARGET,
-      window: CONSTRAINT_WINDOWS.CURRENT_OR_PREVIOUS_CYCLE
-    }
-  ],
-  effect: {
-    type: EFFECT_TYPES.BLOCK_ACTION,
-    blocks: {
-      actionId: ACTION_IDS.SET_IN_PLAY,
-      params: {
-        property: 'inPlay',
-        value: false
-      }
-    },
-    duration: 'current_cycle'
-  },
-  visibility: VISIBILITY.STORYTELLER_ONLY
-};
-
-const linkTargetsAction = {
-  id: ACTION_IDS.LINK_TARGETS,
-  phase: 'first_night',
-  actor: { type: 'role_holder' },
-  target: {
-    type: 'role_instance',
-    count: 2,
-    filters: ['in_play', 'distinct']
-  },
-  effect: {
-    type: EFFECT_TYPES.SET_RELATION,
-    targetType: 'relation',
-    relationType: RELATION_TYPES.LINKED,
-    active: true
-  },
-  visibility: VISIBILITY.STORYTELLER_ONLY
-};
-
-const voteOutOfPlayAction = {
-  id: ACTION_IDS.VOTE,
-  phase: 'each_day_vote',
-  tiePolicy: VOTE_TIE_POLICIES.NULL_ON_TIE,
-  requiredVotes: VOTE_REQUIRED_POLICIES.ALL_IN_PLAY,
-  relationRestrictions: [
-    {
-      type: VOTE_RESTRICTION_TYPES.PREVENT_RELATED_TARGET,
-      relationType: RELATION_TYPES.LINKED
-    }
-  ],
-  onWinnerAction: {
-    id: ACTION_IDS.SET_IN_PLAY,
-    target: {
-      type: 'role_instance',
-      count: 1,
-      filters: ['in_play']
-    },
-    effect: {
-      type: EFFECT_TYPES.SET_PROPERTY,
-      targetType: 'role_instance',
-      property: 'inPlay',
-      value: false
-    },
-    visibility: VISIBILITY.ALL
-  },
-  visibility: VISIBILITY.ALL
-};
-
-const resolvePendingEffectsAction = {
-  id: ACTION_IDS.RESOLVE_PENDING_EFFECTS,
-  phase: 'daybreak',
-  actor: { type: 'system' },
-  target: {
-    type: 'all_role_instances',
-    count: 'automatic'
-  },
-  effect: {
-    type: EFFECT_TYPES.RESOLVE_PENDING_EFFECTS
-  },
-  visibility: VISIBILITY.ALL
-};
+const inspectRoleAction = getCatalogRecipe(RECIPE_KEYS.INSPECT_ROLE);
+const setInPlayFalseAction = getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY);
+const restoreRecentOutOfPlayAction = getCatalogRecipe(RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY);
+const blockOutOfPlayRecipe = getCatalogRecipe(RECIPE_KEYS.BLOCK_OUT_OF_PLAY);
+const linkTargetsAction = getCatalogRecipe(RECIPE_KEYS.LINK_TARGETS);
+const voteOutOfPlayAction = getCatalogRecipe(RECIPE_KEYS.VOTE_OUT_OF_PLAY);
+const closeCycleAction = getCatalogRecipe(RECIPE_KEYS.CLOSE_CYCLE);
 
 function createBaseSession({ relations = [], settings = {} } = {}) {
   const roleDefinitions = {
     team_b_attacker: {
-      factionId: 'team_b'
+      alignmentId: 'team_b'
     },
     team_a_blocker: {
-      factionId: 'team_a'
+      alignmentId: 'team_a'
     },
     team_a_target: {
-      factionId: 'team_a'
+      alignmentId: 'team_a'
     },
     team_a_plain: {
-      factionId: 'team_a'
+      alignmentId: 'team_a'
     },
     team_b_target: {
-      factionId: 'team_b'
+      alignmentId: 'team_b'
     },
     role_inspector: {
-      factionId: 'team_a'
+      alignmentId: 'team_a'
     },
     hidden_enemy: {
-      factionId: 'team_b'
+      alignmentId: 'team_b'
     }
   };
   const roleInstances = buildRoleInstancesFromSeats(
@@ -342,15 +202,15 @@ test('inspect_role revela roleId sin modificar la sesion', () => {
   ]);
 });
 
-test('resolveCurrentStep ejecuta steps consecutivos y avanza el cursor', () => {
+test('resolveCurrentStep ejecuta receta y completeCurrentStep avanza el cursor', () => {
   const session = withPhasePools(
     createBaseSession(),
     createPhasePools({
-      poolOrder: ['poolFirstNight'],
-      poolCurrent: 'poolFirstNight',
-      poolNext: 'poolFirstNight',
+      poolOrder: ['poolDeployment'],
+      poolCurrent: 'poolDeployment',
+      poolNext: 'poolDeployment',
       pools: {
-        poolFirstNight: [
+        poolDeployment: [
           {
             key: STEP_KEYS.STEP_01,
             status: PHASE_STATUSES.ENABLED,
@@ -365,38 +225,54 @@ test('resolveCurrentStep ejecuta steps consecutivos y avanza el cursor', () => {
       }
     })
   );
-  const inspected = resolveCurrentStep(session, {
+  const inspectedAction = resolveCurrentStep(session, {
     actorRoleInstanceId: 'role_inspector-0',
     targetRoleInstanceIds: ['hidden_enemy-0']
   });
-  const linked = resolveCurrentStep(inspected.session, {
+  const inspected = completeCurrentStep(inspectedAction.session, {
+    requestedBy: STEP_COMPLETION_REQUESTED_BY.PLAYER,
+    actorRoleInstanceId: 'role_inspector-0',
+    reason: 'player_finished_step'
+  });
+  const linkedAction = resolveCurrentStep(inspected.session, {
     actorRoleInstanceId: 'role_inspector-0',
     targetRoleInstanceIds: ['team_a_target-0', 'team_a_plain-0']
   });
+  const linked = completeCurrentStep(linkedAction.session, {
+    requestedBy: STEP_COMPLETION_REQUESTED_BY.DIRECTOR,
+    reason: 'director_finished_step'
+  });
 
+  assert.equal(inspectedAction.ok, true);
+  assert.equal(inspectedAction.step.phaseKey, STEP_KEYS.STEP_01);
+  assert.equal(inspectedAction.result.reveals[0].value, 'hidden_enemy');
+  assert.equal(inspectedAction.phaseAdvance, null);
   assert.equal(inspected.ok, true);
-  assert.equal(inspected.step.phaseKey, STEP_KEYS.STEP_01);
-  assert.equal(inspected.result.reveals[0].value, 'hidden_enemy');
   assert.equal(
-    inspected.session.phasePools.pools.poolFirstNight[0].status,
+    inspected.session.phasePools.pools.poolDeployment[0].status,
     PHASE_STATUSES.DONE
   );
   assert.equal(inspected.phaseAdvance.reason, 'next-phase-in-current-pool');
   assert.equal(inspected.phaseAdvance.next.phaseKey, STEP_KEYS.STEP_02);
+  assert.equal(linkedAction.ok, true);
+  assert.equal(linkedAction.session.relations[0].type, RELATION_TYPES.LINKED);
+  assert.equal(linkedAction.phaseAdvance, null);
   assert.equal(linked.ok, true);
-  assert.equal(linked.session.relations[0].type, RELATION_TYPES.LINKED);
   assert.equal(linked.phaseAdvance.reason, 'no-runnable-phase');
+  assert.equal(linked.session.stepCompletionHistory.length, 2);
+  assert.equal(linked.session.stepCompletionHistory[0].requestedBy, STEP_COMPLETION_REQUESTED_BY.PLAYER);
+  assert.equal(linked.session.stepCompletionHistory[1].requestedBy, STEP_COMPLETION_REQUESTED_BY.DIRECTOR);
 });
 
 test('resolveCurrentStep rechaza un step ejecutable sin action declarada', () => {
   const session = withPhasePools(
     createBaseSession(),
     createPhasePools({
-      poolOrder: ['poolFirstNight'],
-      poolCurrent: 'poolFirstNight',
-      poolNext: 'poolFirstNight',
+      poolOrder: ['poolDeployment'],
+      poolCurrent: 'poolDeployment',
+      poolNext: 'poolDeployment',
       pools: {
-        poolFirstNight: [
+        poolDeployment: [
           {
             key: 'stepMissingAction',
             status: PHASE_STATUSES.ENABLED
@@ -410,13 +286,13 @@ test('resolveCurrentStep rechaza un step ejecutable sin action declarada', () =>
   assert.equal(resolved.ok, false);
   assert.equal(resolved.errors[0].code, 'step/missing-action');
   assert.equal(
-    resolved.session.phasePools.pools.poolFirstNight[0].status,
+    resolved.session.phasePools.pools.poolDeployment[0].status,
     PHASE_STATUSES.ENABLED
   );
 });
 
-test('phaseDefinitionModel organiza steps construidos por stepDefinitionModel', () => {
-  const lateStep = createStepDefinition({
+test('phaseDefinition organiza steps construidos por stepDefinition', () => {
+  const lateStep = createStep({
     key: STEP_KEYS.STEP_02,
     status: PHASE_STATUSES.ENABLED,
     order: 20,
@@ -426,7 +302,7 @@ test('phaseDefinitionModel organiza steps construidos por stepDefinitionModel', 
     },
     actions: [actionRecipe(inspectRoleAction, STEP_ACTION_KEYS.INSPECT_ROLE)]
   });
-  const earlyStep = createStepDefinition({
+  const earlyStep = createStep({
     key: STEP_KEYS.STEP_01,
     status: PHASE_STATUSES.ENABLED,
     order: 10,
@@ -436,16 +312,16 @@ test('phaseDefinitionModel organiza steps construidos por stepDefinitionModel', 
     actions: [actionRecipe(voteOutOfPlayAction, STEP_ACTION_KEYS.VOTE_OUT_OF_PLAY)]
   });
   const created = createPhasePoolsFromSkinDefinition({
-    poolOrder: ['poolEachDay'],
-    poolCurrent: 'poolEachDay',
+    poolOrder: ['poolExposed'],
+    poolCurrent: 'poolExposed',
     pools: {
-      poolEachDay: [lateStep, earlyStep]
+      poolExposed: [lateStep, earlyStep]
     }
   });
   const duplicated = createPhasePoolsFromSkinDefinition({
-    poolOrder: ['poolEachDay'],
+    poolOrder: ['poolExposed'],
     pools: {
-      poolEachDay: [
+      poolExposed: [
         { ...earlyStep, order: 10 },
         { ...lateStep, order: 10 }
       ]
@@ -453,22 +329,159 @@ test('phaseDefinitionModel organiza steps construidos por stepDefinitionModel', 
   });
 
   assert.equal(created.ok, true);
-  assert.equal(created.phasePools.pools.poolEachDay[0].key, STEP_KEYS.STEP_01);
-  assert.equal(created.phasePools.pools.poolEachDay[0].actorScope.type, ACTOR_SCOPE_TYPES.ALL_ROLES);
-  assert.equal(created.phasePools.pools.poolEachDay[1].key, STEP_KEYS.STEP_02);
+  assert.equal(created.phasePools.pools.poolExposed[0].key, STEP_KEYS.STEP_01);
+  assert.equal(created.phasePools.pools.poolExposed[0].actorScope.type, ACTOR_SCOPE_TYPES.ALL_ROLES);
+  assert.equal(created.phasePools.pools.poolExposed[1].key, STEP_KEYS.STEP_02);
   assert.equal(duplicated.ok, false);
   assert.equal(duplicated.errors[0].code, PHASE_DEFINITION_ERRORS.DUPLICATE_ORDER);
+});
+
+test('stepDefinition define completion y recetas opcionales', () => {
+  const step = createStep({
+    key: STEP_KEYS.STEP_03,
+    status: PHASE_STATUSES.ENABLED,
+    actorScope: {
+      type: ACTOR_SCOPE_TYPES.ROLE,
+      roleInstanceId: 'team_a_blocker-0'
+    },
+    completion: {
+      mode: STEP_COMPLETION_MODES.MANUAL,
+      allowedRequesters: [
+        STEP_COMPLETION_REQUESTED_BY.PLAYER,
+        STEP_COMPLETION_REQUESTED_BY.DIRECTOR,
+        STEP_COMPLETION_REQUESTED_BY.SYSTEM
+      ]
+    },
+    actions: [
+      actionRecipe(restoreRecentOutOfPlayAction, STEP_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY),
+      {
+        ...actionRecipe(setInPlayFalseAction, STEP_ACTION_KEYS.SET_OUT_OF_PLAY),
+        optional: true
+      }
+    ]
+  });
+
+  assert.equal(step.completion.mode, STEP_COMPLETION_MODES.MANUAL);
+  assert.deepEqual(step.completion.allowedRequesters, [
+    STEP_COMPLETION_REQUESTED_BY.PLAYER,
+    STEP_COMPLETION_REQUESTED_BY.DIRECTOR,
+    STEP_COMPLETION_REQUESTED_BY.SYSTEM
+  ]);
+  assert.equal(step.actions.length, 2);
+  assert.equal(step.actions[0].optional, true);
+  assert.equal(step.actions[1].optional, true);
+});
+
+test('stepCatalog crea un step reutilizable de control inPlay', () => {
+  const step = getCatalogStep(STEP_CATALOG_IDS.ROLE_IN_PLAY_CONTROL, {
+    key: STEP_KEYS.STEP_03,
+    actorScope: {
+      type: ACTOR_SCOPE_TYPES.ROLE,
+      roleInstanceId: 'team_a_blocker-0'
+    }
+  });
+
+  assert.equal(step.key, STEP_KEYS.STEP_03);
+  assert.equal(step.actorScope.type, ACTOR_SCOPE_TYPES.ROLE);
+  assert.equal(step.actorScope.roleInstanceId, 'team_a_blocker-0');
+  assert.equal(step.completion.mode, STEP_COMPLETION_MODES.MANUAL);
+  assert.deepEqual(step.completion.allowedRequesters, [
+    STEP_COMPLETION_REQUESTED_BY.PLAYER,
+    STEP_COMPLETION_REQUESTED_BY.DIRECTOR,
+    STEP_COMPLETION_REQUESTED_BY.SYSTEM
+  ]);
+  assert.deepEqual(
+    step.actions.map((action) => action.key),
+    [STEP_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY, STEP_ACTION_KEYS.SET_OUT_OF_PLAY]
+  );
+  assert.equal(step.actions.every((action) => action.optional === true), true);
+  assert.equal(step.metadata.catalogId, 'role_in_play_control');
+});
+
+test('stepCatalog expone los steps mecanicos ya definidos', () => {
+  const steps = [
+    getCatalogStep(STEP_CATALOG_IDS.ROLE_INSPECTS, { key: STEP_KEYS.STEP_01 }),
+    getCatalogStep(STEP_CATALOG_IDS.ROLE_LINKS_TARGETS, { key: STEP_KEYS.STEP_02 }),
+    getCatalogStep(STEP_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY, { key: STEP_KEYS.STEP_02 }),
+    getCatalogStep(STEP_CATALOG_IDS.ROLE_IN_PLAY_CONTROL, { key: STEP_KEYS.STEP_03 }),
+    getCatalogStep(STEP_CATALOG_IDS.GROUP_SET_OUT_OF_PLAY, { key: STEP_KEYS.STEP_04 }),
+    getCatalogStep(STEP_CATALOG_IDS.GROUP_VOTE_OUT_OF_PLAY, { key: STEP_KEYS.STEP_05 }),
+    getCatalogStep(STEP_CATALOG_IDS.SYSTEM_CLOSES_CYCLE, { key: STEP_KEYS.STEP_06 })
+  ];
+
+  assert.deepEqual(
+    steps.map((step) => step.actions.map((action) => action.key)),
+    [
+      [STEP_ACTION_KEYS.INSPECT_ROLE],
+      [STEP_ACTION_KEYS.LINK_TARGETS],
+      [STEP_ACTION_KEYS.BLOCK_OUT_OF_PLAY],
+      [STEP_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY, STEP_ACTION_KEYS.SET_OUT_OF_PLAY],
+      [STEP_ACTION_KEYS.SET_OUT_OF_PLAY],
+      [STEP_ACTION_KEYS.VOTE_OUT_OF_PLAY],
+      [STEP_ACTION_KEYS.CLOSE_CYCLE]
+    ]
+  );
+  assert.equal(steps[0].actorScope.type, ACTOR_SCOPE_TYPES.ROLE);
+  assert.equal(steps[1].actorScope.type, ACTOR_SCOPE_TYPES.ROLE);
+  assert.equal(steps[2].actorScope.type, ACTOR_SCOPE_TYPES.ROLE);
+  assert.equal(steps[3].actorScope.type, ACTOR_SCOPE_TYPES.ROLE);
+  assert.equal(steps[4].actorScope.type, ACTOR_SCOPE_TYPES.ROLE_GROUP);
+  assert.equal(steps[5].actorScope.type, ACTOR_SCOPE_TYPES.ALL_ROLES);
+  assert.equal(steps[6].actorScope.type, 'system');
+  assert.deepEqual(steps[6].completion.allowedRequesters, [STEP_COMPLETION_REQUESTED_BY.SYSTEM]);
+});
+
+test('roleCatalog declara roles mecanicos y razones de orden', () => {
+  const catalog = getCoreRoleCatalog();
+  const byKey = Object.fromEntries(catalog.map((roleDefinition) => [roleDefinition.key, roleDefinition]));
+
+  assert.deepEqual(
+    catalog.map((roleDefinition) => roleDefinition.stepDefinitions[0].poolKey),
+    [
+      POOL_KEYS.POOL_DEPLOYMENT,
+      POOL_KEYS.POOL_CONCEALED,
+      POOL_KEYS.POOL_CONCEALED,
+      POOL_KEYS.POOL_CONCEALED
+    ]
+  );
+  assert.equal(byKey[ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS].stepDefinitions[0].order, null);
+  assert.equal(byKey[ROLE_CATALOG_IDS.ROLE_INSPECTS].stepDefinitions[0].order, 10);
+  assert.equal(byKey[ROLE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY].stepDefinitions[0].order, 20);
+  assert.equal(byKey[ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL].stepDefinitions[0].order, 40);
+  assert.equal(
+    byKey[ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL].stepDefinitions[0].metadata.orderReason.includes(
+      'same-cycle inPlay=false'
+    ),
+    true
+  );
+});
+
+test('groupCatalog declara grupos mecanicos y razones de orden', () => {
+  const catalog = getCoreGroupCatalog();
+  const group = catalog[0];
+  const stepDefinition = group.stepDefinitions[0];
+
+  assert.equal(group.key, GROUP_CATALOG_IDS.ALIGNMENT_SET_OUT_OF_PLAY);
+  assert.equal(group.selector.type, 'alignment');
+  assert.equal(group.selector.alignmentId, 'alignment_b');
+  assert.equal(stepDefinition.poolKey, POOL_KEYS.POOL_CONCEALED);
+  assert.equal(stepDefinition.order, 30);
+  assert.deepEqual(
+    stepDefinition.actions.map((action) => action.key),
+    [STEP_ACTION_KEYS.SET_OUT_OF_PLAY]
+  );
+  assert.equal(stepDefinition.metadata.orderReason.includes('after blockers'), true);
 });
 
 test('resolveCurrentStep exige actionKey cuando un step ofrece varias acciones', () => {
   const session = withPhasePools(
     createBaseSession(),
     createPhasePools({
-      poolOrder: ['poolEachNight'],
-      poolCurrent: 'poolEachNight',
-      poolNext: 'poolEachNight',
+      poolOrder: ['poolConcealed'],
+      poolCurrent: 'poolConcealed',
+      poolNext: 'poolConcealed',
       pools: {
-        poolEachNight: [
+        poolConcealed: [
           {
             key: STEP_KEYS.STEP_03,
             status: PHASE_STATUSES.ENABLED,
@@ -515,11 +528,11 @@ test('resolveCurrentStep ejecuta step_05 con receta vote_out_of_play', () => {
   const session = withPhasePools(
     createBaseSession(),
     createPhasePools({
-      poolOrder: ['poolEachDay'],
-      poolCurrent: 'poolEachDay',
-      poolNext: 'poolEachDay',
+      poolOrder: ['poolExposed'],
+      poolCurrent: 'poolExposed',
+      poolNext: 'poolExposed',
       pools: {
-        poolEachDay: [
+        poolExposed: [
           {
             key: STEP_KEYS.STEP_05,
             status: PHASE_STATUSES.ENABLED,
@@ -543,27 +556,33 @@ test('resolveCurrentStep ejecuta step_05 con receta vote_out_of_play', () => {
       'hidden_enemy-0': 'team_a_target-0'
     })
   });
+  const completed = completeCurrentStep(resolved.session, {
+    requestedBy: STEP_COMPLETION_REQUESTED_BY.DIRECTOR,
+    reason: 'director_closed_vote_step'
+  });
 
   assert.equal(resolved.ok, true);
   assert.equal(resolved.step.phaseKey, STEP_KEYS.STEP_05);
   assert.equal(resolved.result.vote.type, VOTE_OUTCOME_TYPES.WINNER);
   assert.equal(roleById(resolved.session, 'team_a_target-0').inPlay, false);
+  assert.equal(resolved.phaseAdvance, null);
+  assert.equal(completed.ok, true);
   assert.equal(
-    resolved.session.phasePools.pools.poolEachDay[0].status,
+    completed.session.phasePools.pools.poolExposed[0].status,
     PHASE_STATUSES.DONE
   );
-  assert.equal(resolved.phaseAdvance.reason, 'no-runnable-phase');
+  assert.equal(completed.phaseAdvance.reason, 'no-runnable-phase');
 });
 
 test('resolveCurrentStep ejecuta step_02 con receta block_out_of_play', () => {
   const session = withPhasePools(
     createBaseSession(),
     createPhasePools({
-      poolOrder: ['poolEachNight'],
-      poolCurrent: 'poolEachNight',
-      poolNext: 'poolEachNight',
+      poolOrder: ['poolConcealed'],
+      poolCurrent: 'poolConcealed',
+      poolNext: 'poolConcealed',
       pools: {
-        poolEachNight: [
+        poolConcealed: [
           {
             key: STEP_KEYS.STEP_02,
             status: PHASE_STATUSES.ENABLED,
@@ -584,11 +603,17 @@ test('resolveCurrentStep ejecuta step_02 con receta block_out_of_play', () => {
 
   assert.equal(blocking.ok, true);
   assert.equal(blocking.step.phaseKey, STEP_KEYS.STEP_02);
+  assert.equal(blocking.phaseAdvance, null);
+  const completed = completeCurrentStep(blocking.session, {
+    requestedBy: STEP_COMPLETION_REQUESTED_BY.PLAYER,
+    actorRoleInstanceId: 'team_a_blocker-0'
+  });
+  assert.equal(completed.ok, true);
   assert.equal(
-    blocking.session.phasePools.pools.poolEachNight[0].status,
+    completed.session.phasePools.pools.poolConcealed[0].status,
     PHASE_STATUSES.DONE
   );
-  assert.equal(blocking.phaseAdvance.reason, 'no-runnable-phase');
+  assert.equal(completed.phaseAdvance.reason, 'no-runnable-phase');
   assert.equal(attackAfterBlocking.ok, true);
   assert.equal(roleById(attackAfterBlocking.session, 'team_a_target-0').inPlay, true);
   assert.deepEqual(attackAfterBlocking.result.proposedEffects, []);
@@ -599,11 +624,11 @@ test('resolveCurrentStep ejecuta step_04 con receta set_out_of_play', () => {
   const session = withPhasePools(
     createBaseSession(),
     createPhasePools({
-      poolOrder: ['poolEachNight'],
-      poolCurrent: 'poolEachNight',
-      poolNext: 'poolEachNight',
+      poolOrder: ['poolConcealed'],
+      poolCurrent: 'poolConcealed',
+      poolNext: 'poolConcealed',
       pools: {
-        poolEachNight: [
+        poolConcealed: [
           {
             key: STEP_KEYS.STEP_02,
             status: PHASE_STATUSES.ENABLED,
@@ -622,20 +647,29 @@ test('resolveCurrentStep ejecuta step_04 con receta set_out_of_play', () => {
     actorRoleInstanceId: 'team_a_blocker-0',
     targetRoleInstanceIds: ['team_a_target-0']
   });
-  const blockedAttempt = resolveCurrentStep(blocking.session, {
+  const blockingCompleted = completeCurrentStep(blocking.session, {
+    requestedBy: STEP_COMPLETION_REQUESTED_BY.PLAYER,
+    actorRoleInstanceId: 'team_a_blocker-0'
+  });
+  const blockedAttempt = resolveCurrentStep(blockingCompleted.session, {
     actorRoleInstanceId: 'team_b_attacker-0',
     targetRoleInstanceIds: ['team_a_target-0']
   });
 
   assert.equal(blocking.ok, true);
-  assert.equal(blocking.phaseAdvance.next.phaseKey, STEP_KEYS.STEP_04);
+  assert.equal(blocking.phaseAdvance, null);
+  assert.equal(blockingCompleted.phaseAdvance.next.phaseKey, STEP_KEYS.STEP_04);
   assert.equal(blockedAttempt.ok, true);
   assert.equal(blockedAttempt.step.phaseKey, STEP_KEYS.STEP_04);
   assert.equal(roleById(blockedAttempt.session, 'team_a_target-0').inPlay, true);
   assert.deepEqual(blockedAttempt.result.proposedEffects, []);
   assert.equal(blockedAttempt.result.blockedActions[0].reason, 'blocked_action');
+  const blockedCompleted = completeCurrentStep(blockedAttempt.session, {
+    requestedBy: STEP_COMPLETION_REQUESTED_BY.DIRECTOR
+  });
+  assert.equal(blockedCompleted.ok, true);
   assert.equal(
-    blockedAttempt.session.phasePools.pools.poolEachNight[1].status,
+    blockedCompleted.session.phasePools.pools.poolConcealed[1].status,
     PHASE_STATUSES.DONE
   );
 });
@@ -644,11 +678,11 @@ test('actionHistory registra step, efectos finales y acciones bloqueadas', () =>
   const session = withPhasePools(
     createBaseSession(),
     createPhasePools({
-      poolOrder: ['poolEachNight'],
-      poolCurrent: 'poolEachNight',
-      poolNext: 'poolEachNight',
+      poolOrder: ['poolConcealed'],
+      poolCurrent: 'poolConcealed',
+      poolNext: 'poolConcealed',
       pools: {
-        poolEachNight: [
+        poolConcealed: [
           {
             key: STEP_KEYS.STEP_04,
             status: PHASE_STATUSES.ENABLED,
@@ -686,11 +720,11 @@ test('restore_recent_out_of_play ejecuta set_in_play(true) solo sobre un set_out
   const session = withPhasePools(
     createBaseSession(),
     createPhasePools({
-      poolOrder: ['poolEachNight'],
-      poolCurrent: 'poolEachNight',
-      poolNext: 'poolEachNight',
+      poolOrder: ['poolConcealed'],
+      poolCurrent: 'poolConcealed',
+      poolNext: 'poolConcealed',
       pools: {
-        poolEachNight: [
+        poolConcealed: [
           {
             key: STEP_KEYS.STEP_02,
             status: PHASE_STATUSES.ENABLED,
@@ -715,7 +749,11 @@ test('restore_recent_out_of_play ejecuta set_in_play(true) solo sobre un set_out
     actorRoleInstanceId: 'team_b_attacker-0',
     targetRoleInstanceIds: ['team_a_target-0']
   });
-  const restored = resolveCurrentStep(setOutOfPlay.session, {
+  const setOutStepClosed = completeCurrentStep(setOutOfPlay.session, {
+    requestedBy: STEP_COMPLETION_REQUESTED_BY.DIRECTOR,
+    reason: 'director_closed_set_out_step'
+  });
+  const restored = resolveCurrentStep(setOutStepClosed.session, {
     actionKey: STEP_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
     actorRoleInstanceId: 'team_a_blocker-0',
     targetRoleInstanceIds: ['team_a_target-0']
@@ -723,8 +761,16 @@ test('restore_recent_out_of_play ejecuta set_in_play(true) solo sobre un set_out
 
   assert.equal(setOutOfPlay.ok, true);
   assert.equal(roleById(setOutOfPlay.session, 'team_a_target-0').inPlay, false);
+  assert.equal(setOutOfPlay.phaseAdvance, null);
+  assert.equal(setOutStepClosed.ok, true);
+  assert.equal(setOutStepClosed.phaseAdvance.next.phaseKey, STEP_KEYS.STEP_03);
   assert.equal(restored.ok, true);
   assert.equal(roleById(restored.session, 'team_a_target-0').inPlay, true);
+  assert.equal(restored.phaseAdvance, null);
+  assert.equal(
+    restored.session.phasePools.pools.poolConcealed[1].status,
+    PHASE_STATUSES.ENABLED
+  );
   assert.equal(restored.session.actionHistory.at(-1).stepKey, STEP_KEYS.STEP_03);
   assert.equal(
     restored.session.actionHistory.at(-1).actionKey,
@@ -733,17 +779,133 @@ test('restore_recent_out_of_play ejecuta set_in_play(true) solo sobre un set_out
   assert.equal(restored.session.actionHistory.at(-1).finalEffects[0].value, true);
 });
 
+test('un step con recetas opcionales permanece abierto hasta cierre explicito', () => {
+  const preStepSetOut = resolveRecipe(
+    createBaseSession(),
+    actionRecipe(setInPlayFalseAction, STEP_ACTION_KEYS.SET_OUT_OF_PLAY),
+    {
+      actorRoleInstanceId: 'team_b_attacker-0',
+      targetRoleInstanceIds: ['team_a_target-0']
+    }
+  );
+  const optionalSetOutRecipe = actionRecipe(
+    {
+      ...setInPlayFalseAction,
+      constraints: [
+        {
+          type: CONSTRAINT_TYPES.LIMITED_USES,
+          limit: 1,
+          window: CONSTRAINT_WINDOWS.SESSION
+        }
+      ]
+    },
+    STEP_ACTION_KEYS.SET_OUT_OF_PLAY
+  );
+  const session = withPhasePools(
+    preStepSetOut.session,
+    createPhasePools({
+      poolOrder: ['poolConcealed'],
+      poolCurrent: 'poolConcealed',
+      poolNext: 'poolConcealed',
+      pools: {
+        poolConcealed: [
+          {
+            key: STEP_KEYS.STEP_03,
+            status: PHASE_STATUSES.ENABLED,
+            actions: [
+              actionRecipe(
+                restoreRecentOutOfPlayAction,
+                STEP_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY
+              ),
+              optionalSetOutRecipe
+            ]
+          }
+        ]
+      }
+    })
+  );
+  const restored = resolveCurrentStep(session, {
+    actionKey: STEP_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
+    actorRoleInstanceId: 'team_a_blocker-0',
+    targetRoleInstanceIds: ['team_a_target-0']
+  });
+  const setOut = resolveCurrentStep(restored.session, {
+    actionKey: STEP_ACTION_KEYS.SET_OUT_OF_PLAY,
+    actorRoleInstanceId: 'team_a_blocker-0',
+    targetRoleInstanceIds: ['team_b_target-0']
+  });
+  const completed = completeCurrentStep(setOut.session, {
+    requestedBy: STEP_COMPLETION_REQUESTED_BY.DIRECTOR,
+    reason: 'director_closed_optional_step'
+  });
+
+  assert.equal(preStepSetOut.ok, true);
+  assert.equal(restored.ok, true);
+  assert.equal(roleById(restored.session, 'team_a_target-0').inPlay, true);
+  assert.equal(restored.phaseAdvance, null);
+  assert.equal(
+    restored.session.phasePools.pools.poolConcealed[0].status,
+    PHASE_STATUSES.ENABLED
+  );
+  assert.equal(setOut.ok, true);
+  assert.equal(roleById(setOut.session, 'team_b_target-0').inPlay, false);
+  assert.equal(setOut.phaseAdvance, null);
+  assert.equal(completed.ok, true);
+  assert.equal(completed.phaseAdvance.reason, 'no-runnable-phase');
+  assert.equal(
+    completed.session.phasePools.pools.poolConcealed[0].status,
+    PHASE_STATUSES.DONE
+  );
+  assert.equal(completed.completion.requestedBy, STEP_COMPLETION_REQUESTED_BY.DIRECTOR);
+});
+
+test('completeCurrentStep respeta allowedRequesters del step', () => {
+  const step = createStep({
+    key: STEP_KEYS.STEP_03,
+    status: PHASE_STATUSES.ENABLED,
+    completion: {
+      mode: STEP_COMPLETION_MODES.MANUAL,
+      allowedRequesters: [STEP_COMPLETION_REQUESTED_BY.DIRECTOR]
+    },
+    actions: [actionRecipe(restoreRecentOutOfPlayAction, STEP_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY)]
+  });
+  const session = withPhasePools(
+    createBaseSession(),
+    createPhasePools({
+      poolOrder: ['poolConcealed'],
+      poolCurrent: 'poolConcealed',
+      poolNext: 'poolConcealed',
+      pools: {
+        poolConcealed: [step]
+      }
+    })
+  );
+  const actorClose = completeCurrentStep(session, {
+    requestedBy: STEP_COMPLETION_REQUESTED_BY.PLAYER,
+    actorRoleInstanceId: 'team_a_blocker-0'
+  });
+  const directorClose = completeCurrentStep(session, {
+    requestedBy: STEP_COMPLETION_REQUESTED_BY.DIRECTOR
+  });
+
+  assert.equal(actorClose.ok, false);
+  assert.equal(actorClose.errors[0].code, 'step/completion-not-allowed');
+  assert.deepEqual(actorClose.errors[0].allowedRequesters, [STEP_COMPLETION_REQUESTED_BY.DIRECTOR]);
+  assert.equal(directorClose.ok, true);
+  assert.equal(directorClose.completion.requestedBy, STEP_COMPLETION_REQUESTED_BY.DIRECTOR);
+});
+
 test('restore_recent_out_of_play rechaza targets sin set_out_of_play aplicado este ciclo', () => {
   const session = withPhasePools(
     withInPlayState(createBaseSession(), {
       'team_a_target-0': false
     }),
     createPhasePools({
-      poolOrder: ['poolEachNight'],
-      poolCurrent: 'poolEachNight',
-      poolNext: 'poolEachNight',
+      poolOrder: ['poolConcealed'],
+      poolCurrent: 'poolConcealed',
+      poolNext: 'poolConcealed',
       pools: {
-        poolEachNight: [
+        poolConcealed: [
           {
             key: STEP_KEYS.STEP_03,
             status: PHASE_STATUSES.ENABLED,
@@ -773,11 +935,11 @@ test('restore_recent_out_of_play rechaza un set_out_of_play bloqueado', () => {
   const session = withPhasePools(
     createBaseSession(),
     createPhasePools({
-      poolOrder: ['poolEachNight'],
-      poolCurrent: 'poolEachNight',
-      poolNext: 'poolEachNight',
+      poolOrder: ['poolConcealed'],
+      poolCurrent: 'poolConcealed',
+      poolNext: 'poolConcealed',
       pools: {
-        poolEachNight: [
+        poolConcealed: [
           {
             key: STEP_KEYS.STEP_01,
             status: PHASE_STATUSES.ENABLED,
@@ -806,25 +968,34 @@ test('restore_recent_out_of_play rechaza un set_out_of_play bloqueado', () => {
     actorRoleInstanceId: 'team_a_blocker-0',
     targetRoleInstanceIds: ['team_a_target-0']
   });
-  const blockedSetOutOfPlay = resolveCurrentStep(blocking.session, {
+  const blockingClosed = completeCurrentStep(blocking.session, {
+    requestedBy: STEP_COMPLETION_REQUESTED_BY.PLAYER,
+    actorRoleInstanceId: 'team_a_blocker-0'
+  });
+  const blockedSetOutOfPlay = resolveCurrentStep(blockingClosed.session, {
     actorRoleInstanceId: 'team_b_attacker-0',
     targetRoleInstanceIds: ['team_a_target-0']
   });
-  const restored = resolveCurrentStep(blockedSetOutOfPlay.session, {
+  const blockedSetOutClosed = completeCurrentStep(blockedSetOutOfPlay.session, {
+    requestedBy: STEP_COMPLETION_REQUESTED_BY.DIRECTOR
+  });
+  const restored = resolveCurrentStep(blockedSetOutClosed.session, {
     actionKey: STEP_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
     actorRoleInstanceId: 'team_a_blocker-0',
     targetRoleInstanceIds: ['team_a_target-0']
   });
 
   assert.equal(blocking.ok, true);
+  assert.equal(blockingClosed.ok, true);
   assert.equal(blockedSetOutOfPlay.ok, true);
   assert.deepEqual(blockedSetOutOfPlay.result.finalEffects, []);
   assert.equal(roleById(blockedSetOutOfPlay.session, 'team_a_target-0').inPlay, true);
+  assert.equal(blockedSetOutClosed.ok, true);
   assert.equal(restored.ok, false);
   assert.equal(restored.errors[0].code, 'constraint/require_recent_set_property');
 });
 
-test('limited_uses bloquea una segunda ejecucion actor_recipe en la sesion', () => {
+test('limited_uses bloquea una segunda ejecucion de la misma receta por el mismo actor', () => {
   const setOutRecipe = actionRecipe(setInPlayFalseAction, STEP_ACTION_KEYS.SET_OUT_OF_PLAY);
   const restoreRecipe = actionRecipe(
     restoreRecentOutOfPlayAction,
@@ -851,7 +1022,6 @@ test('limited_uses bloquea una segunda ejecucion actor_recipe en la sesion', () 
   assert.equal(secondSetOut.ok, true);
   assert.equal(secondRestore.ok, false);
   assert.equal(secondRestore.errors[0].code, 'constraint/limited_uses');
-  assert.equal(secondRestore.errors[0].scope, 'actor_recipe');
   assert.equal(secondRestore.errors[0].window, CONSTRAINT_WINDOWS.SESSION);
 });
 
@@ -879,7 +1049,7 @@ test('limited_uses con ventana current_cycle permite reutilizar en otro ciclo', 
     actorRoleInstanceId: 'team_a_blocker-0',
     targetRoleInstanceIds: ['team_a_target-0']
   });
-  const nextCycle = resolveAction(firstRestore.session, resolvePendingEffectsAction);
+  const nextCycle = resolveAction(firstRestore.session, closeCycleAction);
   const secondSetOut = resolveRecipe(nextCycle.session, setOutRecipe, {
     actorRoleInstanceId: 'team_b_attacker-0',
     targetRoleInstanceIds: ['team_a_plain-0']
@@ -894,16 +1064,16 @@ test('limited_uses con ventana current_cycle permite reutilizar en otro ciclo', 
   assert.equal(roleById(secondRestore.session, 'team_a_plain-0').inPlay, true);
 });
 
-test('limited_uses con ventana previous_cycle cuenta usos del ciclo anterior', () => {
+test('limited_uses con ventana next_cycle cuenta usos del ciclo anterior', () => {
   const setOutRecipe = actionRecipe(setInPlayFalseAction, STEP_ACTION_KEYS.SET_OUT_OF_PLAY);
-  const restorePreviousCycleRecipe = actionRecipe(
+  const restoreNextCycleRecipe = actionRecipe(
     {
       ...restoreRecentOutOfPlayAction,
       constraints: restoreRecentOutOfPlayAction.constraints.map((constraint) =>
         constraint.type === CONSTRAINT_TYPES.LIMITED_USES
           ? {
               ...constraint,
-              window: CONSTRAINT_WINDOWS.PREVIOUS_CYCLE
+              window: CONSTRAINT_WINDOWS.NEXT_CYCLE
             }
           : constraint
       )
@@ -914,16 +1084,16 @@ test('limited_uses con ventana previous_cycle cuenta usos del ciclo anterior', (
     actorRoleInstanceId: 'team_b_attacker-0',
     targetRoleInstanceIds: ['team_a_target-0']
   });
-  const firstRestore = resolveRecipe(firstSetOut.session, restorePreviousCycleRecipe, {
+  const firstRestore = resolveRecipe(firstSetOut.session, restoreNextCycleRecipe, {
     actorRoleInstanceId: 'team_a_blocker-0',
     targetRoleInstanceIds: ['team_a_target-0']
   });
-  const nextCycle = resolveAction(firstRestore.session, resolvePendingEffectsAction);
+  const nextCycle = resolveAction(firstRestore.session, closeCycleAction);
   const secondSetOut = resolveRecipe(nextCycle.session, setOutRecipe, {
     actorRoleInstanceId: 'team_b_attacker-0',
     targetRoleInstanceIds: ['team_a_plain-0']
   });
-  const secondRestore = resolveRecipe(secondSetOut.session, restorePreviousCycleRecipe, {
+  const secondRestore = resolveRecipe(secondSetOut.session, restoreNextCycleRecipe, {
     actorRoleInstanceId: 'team_a_blocker-0',
     targetRoleInstanceIds: ['team_a_plain-0']
   });
@@ -932,19 +1102,19 @@ test('limited_uses con ventana previous_cycle cuenta usos del ciclo anterior', (
   assert.equal(secondSetOut.ok, true);
   assert.equal(secondRestore.ok, false);
   assert.equal(secondRestore.errors[0].code, 'constraint/limited_uses');
-  assert.equal(secondRestore.errors[0].window, CONSTRAINT_WINDOWS.PREVIOUS_CYCLE);
+  assert.equal(secondRestore.errors[0].window, CONSTRAINT_WINDOWS.NEXT_CYCLE);
 });
 
-test('limited_uses con ventana current_or_previous_cycle cuenta el ciclo actual y el anterior', () => {
+test('limited_uses con ventana current_or_next_cycle cuenta el ciclo actual y el anterior', () => {
   const setOutRecipe = actionRecipe(setInPlayFalseAction, STEP_ACTION_KEYS.SET_OUT_OF_PLAY);
-  const restoreCurrentOrPreviousRecipe = actionRecipe(
+  const restoreCurrentOrNextRecipe = actionRecipe(
     {
       ...restoreRecentOutOfPlayAction,
       constraints: restoreRecentOutOfPlayAction.constraints.map((constraint) =>
         constraint.type === CONSTRAINT_TYPES.LIMITED_USES
           ? {
               ...constraint,
-              window: CONSTRAINT_WINDOWS.CURRENT_OR_PREVIOUS_CYCLE
+              window: CONSTRAINT_WINDOWS.CURRENT_OR_NEXT_CYCLE
             }
           : constraint
       )
@@ -955,16 +1125,16 @@ test('limited_uses con ventana current_or_previous_cycle cuenta el ciclo actual 
     actorRoleInstanceId: 'team_b_attacker-0',
     targetRoleInstanceIds: ['team_a_target-0']
   });
-  const firstRestore = resolveRecipe(firstSetOut.session, restoreCurrentOrPreviousRecipe, {
+  const firstRestore = resolveRecipe(firstSetOut.session, restoreCurrentOrNextRecipe, {
     actorRoleInstanceId: 'team_a_blocker-0',
     targetRoleInstanceIds: ['team_a_target-0']
   });
-  const nextCycle = resolveAction(firstRestore.session, resolvePendingEffectsAction);
+  const nextCycle = resolveAction(firstRestore.session, closeCycleAction);
   const secondSetOut = resolveRecipe(nextCycle.session, setOutRecipe, {
     actorRoleInstanceId: 'team_b_attacker-0',
     targetRoleInstanceIds: ['team_a_plain-0']
   });
-  const secondRestore = resolveRecipe(secondSetOut.session, restoreCurrentOrPreviousRecipe, {
+  const secondRestore = resolveRecipe(secondSetOut.session, restoreCurrentOrNextRecipe, {
     actorRoleInstanceId: 'team_a_blocker-0',
     targetRoleInstanceIds: ['team_a_plain-0']
   });
@@ -973,7 +1143,7 @@ test('limited_uses con ventana current_or_previous_cycle cuenta el ciclo actual 
   assert.equal(secondSetOut.ok, true);
   assert.equal(secondRestore.ok, false);
   assert.equal(secondRestore.errors[0].code, 'constraint/limited_uses');
-  assert.equal(secondRestore.errors[0].window, CONSTRAINT_WINDOWS.CURRENT_OR_PREVIOUS_CYCLE);
+  assert.equal(secondRestore.errors[0].window, CONSTRAINT_WINDOWS.CURRENT_OR_NEXT_CYCLE);
 });
 
 test('limited_uses cuenta una receta aunque su efecto quede bloqueado', () => {
@@ -984,8 +1154,7 @@ test('limited_uses cuenta una receta aunque su efecto quede bloqueado', () => {
         {
           type: CONSTRAINT_TYPES.LIMITED_USES,
           limit: 1,
-          window: CONSTRAINT_WINDOWS.SESSION,
-          scope: 'actor_recipe'
+          window: CONSTRAINT_WINDOWS.SESSION
         }
       ]
     },
@@ -1057,14 +1226,14 @@ test('block_out_of_play bloquea set_in_play(false) solo sobre su target', () => 
   assert.equal(roleById(unblockedTarget.session, 'team_a_plain-0').inPlay, false);
 });
 
-test('resolve_pending_effects limpia bloqueos temporales y avanza ciclo', () => {
+test('close_cycle limpia bloqueos temporales y avanza ciclo', () => {
   const session = createBaseSession();
   const blockingKey = getActionBlockKey(blockOutOfPlayRecipe.effect.blocks);
   const blocking = resolveAction(session, blockOutOfPlayRecipe, {
     actorRoleInstanceId: 'team_a_blocker-0',
     targetRoleInstanceIds: ['team_a_target-0']
   });
-  const closed = resolveAction(blocking.session, resolvePendingEffectsAction);
+  const closed = resolveAction(blocking.session, closeCycleAction);
 
   assert.equal(
     roleById(blocking.session, 'team_a_target-0').flags.blockedActions[blockingKey],
@@ -1074,13 +1243,13 @@ test('resolve_pending_effects limpia bloqueos temporales y avanza ciclo', () => 
   assert.equal(closed.result.nextCycleId, 2);
 });
 
-test('prevent_repeat_target impide repetir el mismo bloqueo sobre el mismo target', () => {
+test('no_repeat_target impide repetir el mismo bloqueo sobre el mismo target', () => {
   const session = createBaseSession();
   const firstBlocking = resolveRecipe(session, blockOutOfPlayRecipe, {
     actorRoleInstanceId: 'team_a_blocker-0',
     targetRoleInstanceIds: ['team_a_target-0']
   });
-  const nextCycle = resolveAction(firstBlocking.session, resolvePendingEffectsAction);
+  const nextCycle = resolveAction(firstBlocking.session, closeCycleAction);
   const repeatedBlocking = resolveRecipe(nextCycle.session, blockOutOfPlayRecipe, {
     actorRoleInstanceId: 'team_a_blocker-0',
     targetRoleInstanceIds: ['team_a_target-0']
@@ -1091,7 +1260,39 @@ test('prevent_repeat_target impide repetir el mismo bloqueo sobre el mismo targe
   });
 
   assert.equal(repeatedBlocking.ok, false);
-  assert.equal(repeatedBlocking.errors[0].code, 'constraint/prevent_repeat_target');
+  assert.equal(repeatedBlocking.errors[0].code, 'constraint/no_repeat_target');
+  assert.equal(otherTargetBlocking.ok, true);
+});
+
+test('no_repeat_target con ventana session impide repetir target durante toda la partida', () => {
+  const sessionOnlyRecipe = {
+    ...blockOutOfPlayRecipe,
+    constraints: [
+      {
+        type: CONSTRAINT_TYPES.NO_REPEAT_TARGET,
+        window: CONSTRAINT_WINDOWS.SESSION
+      }
+    ]
+  };
+  const firstBlocking = resolveRecipe(createBaseSession(), sessionOnlyRecipe, {
+    actorRoleInstanceId: 'team_a_blocker-0',
+    targetRoleInstanceIds: ['team_a_target-0']
+  });
+  const cycle2 = resolveAction(firstBlocking.session, closeCycleAction);
+  const cycle3 = resolveAction(cycle2.session, closeCycleAction);
+  const repeatedBlocking = resolveRecipe(cycle3.session, sessionOnlyRecipe, {
+    actorRoleInstanceId: 'team_a_blocker-0',
+    targetRoleInstanceIds: ['team_a_target-0']
+  });
+  const otherTargetBlocking = resolveRecipe(cycle3.session, sessionOnlyRecipe, {
+    actorRoleInstanceId: 'team_a_blocker-0',
+    targetRoleInstanceIds: ['team_a_plain-0']
+  });
+
+  assert.equal(firstBlocking.ok, true);
+  assert.equal(repeatedBlocking.ok, false);
+  assert.equal(repeatedBlocking.errors[0].code, 'constraint/no_repeat_target');
+  assert.equal(repeatedBlocking.errors[0].window, CONSTRAINT_WINDOWS.SESSION);
   assert.equal(otherTargetBlocking.ok, true);
 });
 
@@ -1157,7 +1358,7 @@ test('validateGameSession detecta relaciones que apuntan a roles inexistentes', 
   );
 });
 
-test('evaluateVictory devuelve ongoing cuando quedan varias facciones en juego', () => {
+test('evaluateVictory devuelve ongoing cuando quedan varios alignments en juego', () => {
   const session = createBaseSession();
   const victory = evaluateVictory(session);
 
@@ -1165,20 +1366,20 @@ test('evaluateVictory devuelve ongoing cuando quedan varias facciones en juego',
     status: VICTORY_STATUSES.ONGOING,
     type: VICTORY_TYPES.NONE,
     reason: 'no_victory_condition_met',
-    winnerFactionId: null,
+    winnerAlignmentId: null,
     winnerRoleInstanceIds: []
   });
 });
 
-test('evaluateVictory aplica regla neutral de faccion at_least_remaining', () => {
+test('evaluateVictory aplica regla neutral de alignment at_least_remaining', () => {
   const session = withInPlayState(
     createBaseSession({
       settings: {
         victory: {
-          factionRules: [
+          alignmentRules: [
             {
               id: 'team_b_reaches_threshold',
-              factionId: 'team_b',
+              alignmentId: 'team_b',
               condition: VICTORY_RULE_TYPES.AT_LEAST_REMAINING
             }
           ]
@@ -1193,25 +1394,25 @@ test('evaluateVictory aplica regla neutral de faccion at_least_remaining', () =>
   const victory = evaluateVictory(session);
 
   assert.equal(victory.status, VICTORY_STATUSES.FINISHED);
-  assert.equal(victory.type, VICTORY_TYPES.FACTION_RULE);
-  assert.equal(victory.reason, 'faction_rule_at_least_remaining_met');
-  assert.equal(victory.winnerFactionId, 'team_b');
+  assert.equal(victory.type, VICTORY_TYPES.ALIGNMENT_RULE);
+  assert.equal(victory.reason, 'alignment_rule_at_least_remaining_met');
+  assert.equal(victory.winnerAlignmentId, 'team_b');
   assert.equal(victory.ruleId, 'team_b_reaches_threshold');
   assert.deepEqual(victory.counts, {
-    factionInPlay: 3,
+    alignmentInPlay: 3,
     remainingInPlay: 2,
     totalInPlay: 5
   });
 });
 
-test('evaluateVictory no aplica at_least_remaining si la faccion no alcanza al resto', () => {
+test('evaluateVictory no aplica at_least_remaining si el alignment no alcanza al resto', () => {
   const session = createBaseSession({
     settings: {
       victory: {
-        factionRules: [
+        alignmentRules: [
           {
             id: 'team_b_reaches_threshold',
-            factionId: 'team_b',
+            alignmentId: 'team_b',
             condition: VICTORY_RULE_TYPES.AT_LEAST_REMAINING
           }
         ]
@@ -1224,7 +1425,7 @@ test('evaluateVictory no aplica at_least_remaining si la faccion no alcanza al r
   assert.equal(victory.type, VICTORY_TYPES.NONE);
 });
 
-test('evaluateVictory detecta victoria generica cuando solo queda una faccion', () => {
+test('evaluateVictory detecta victoria generica cuando solo queda un alignment', () => {
   const session = withInPlayState(createBaseSession(), {
     'team_b_attacker-0': false,
     'team_b_target-0': false,
@@ -1233,8 +1434,8 @@ test('evaluateVictory detecta victoria generica cuando solo queda una faccion', 
   const victory = evaluateVictory(session);
 
   assert.equal(victory.status, VICTORY_STATUSES.FINISHED);
-  assert.equal(victory.type, VICTORY_TYPES.SINGLE_FACTION);
-  assert.equal(victory.winnerFactionId, 'team_a');
+  assert.equal(victory.type, VICTORY_TYPES.SINGLE_ALIGNMENT);
+  assert.equal(victory.winnerAlignmentId, 'team_a');
   assert.deepEqual(victory.winnerRoleInstanceIds.sort(), [
     'role_inspector-0',
     'team_a_blocker-0',
@@ -1243,7 +1444,7 @@ test('evaluateVictory detecta victoria generica cuando solo queda una faccion', 
   ]);
 });
 
-test('evaluateVictory detecta victoria linked si solo quedan linked de facciones distintas', () => {
+test('evaluateVictory detecta victoria linked si solo quedan linked de alignments distintos', () => {
   const session = withInPlayState(
     createBaseSession({
       relations: [
@@ -1268,7 +1469,7 @@ test('evaluateVictory detecta victoria linked si solo quedan linked de facciones
 
   assert.equal(victory.status, VICTORY_STATUSES.FINISHED);
   assert.equal(victory.type, VICTORY_TYPES.LINKED_EXCLUSIVE_SURVIVORS);
-  assert.equal(victory.winnerFactionId, null);
+  assert.equal(victory.winnerAlignmentId, null);
   assert.deepEqual(victory.winnerRoleInstanceIds.sort(), ['team_a_target-0', 'team_b_target-0']);
   assert.equal(victory.relationId, 'linked-mixed-finalists');
 });
@@ -1444,7 +1645,7 @@ test('resolveVoteRound rechaza votar a un target relacionado por linked si la re
     session,
     relationRestrictions: [
       {
-        type: VOTE_RESTRICTION_TYPES.PREVENT_RELATED_TARGET,
+        type: VOTE_RESTRICTION_TYPES.EXCLUDE_RELATED_TARGET,
         relationType: RELATION_TYPES.LINKED
       }
     ],
@@ -1475,7 +1676,7 @@ test('resolveVoteRound ignora restricciones de relacion incompletas', () => {
     session,
     relationRestrictions: [
       {
-        type: VOTE_RESTRICTION_TYPES.PREVENT_RELATED_TARGET
+        type: VOTE_RESTRICTION_TYPES.EXCLUDE_RELATED_TARGET
       }
     ],
     votes: [

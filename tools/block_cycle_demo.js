@@ -11,7 +11,7 @@ import {
 } from '../src/lib/domain/index.js';
 
 // ---------------------------------------------------------------------------
-// Demo de block_out_of_play + resolve_pending_effects
+// Demo de block_out_of_play + close_cycle
 // ---------------------------------------------------------------------------
 //
 // Esta demo muestra el primer ciclo nocturno completo del nucleo:
@@ -19,8 +19,8 @@ import {
 //   1. block_out_of_play crea un bloqueo anticipado.
 //   2. set_in_play se produce como intento.
 //   3. si el objetivo tenia esa accion bloqueada, el intento falla.
-//   4. resolve_pending_effects cierra el ciclo y limpia bloqueos temporales.
-//   5. La restriccion prevent_repeat_target usa actionHistory para impedir
+//   4. close_cycle cierra el ciclo y limpia bloqueos temporales.
+//   5. La restriccion no_repeat_target usa actionHistory para impedir
 //      repetir objetivo en dos ciclos consecutivos.
 //
 // Seguimos usando nombres anonimos. Esto no es "lobo, medico, aldea".
@@ -35,13 +35,13 @@ const setInPlayAction = {
   id: ACTION_IDS.SET_IN_PLAY,
   phase: 'each_night',
   actor: {
-    type: 'faction_group',
-    factionId: 'team_b'
+    type: 'alignment_group',
+    alignmentId: 'team_b'
   },
   target: {
     type: 'role_instance',
     count: 1,
-    filters: ['in_play', 'not_same_faction']
+    filters: ['in_play', 'not_same_alignment']
   },
   effect: {
     type: EFFECT_TYPES.SET_PROPERTY,
@@ -71,8 +71,8 @@ const blockOutOfPlayAction = {
   },
   constraints: [
     {
-      type: CONSTRAINT_TYPES.PREVENT_REPEAT_TARGET,
-      window: CONSTRAINT_WINDOWS.CURRENT_OR_PREVIOUS_CYCLE
+      type: CONSTRAINT_TYPES.NO_REPEAT_TARGET,
+      window: CONSTRAINT_WINDOWS.CURRENT_OR_NEXT_CYCLE
     }
   ],
   effect: {
@@ -95,8 +95,8 @@ const blockOutOfPlayAction = {
 //
 // No la elige un jugador. La ejecutara el sistema cuando toque resolver las
 // consecuencias acumuladas de la noche.
-const resolvePendingEffectsAction = {
-  id: ACTION_IDS.RESOLVE_PENDING_EFFECTS,
+const closeCycleAction = {
+  id: ACTION_IDS.CLOSE_CYCLE,
   phase: 'daybreak',
   actor: {
     type: 'system'
@@ -106,7 +106,7 @@ const resolvePendingEffectsAction = {
     count: 'automatic'
   },
   effect: {
-    type: EFFECT_TYPES.RESOLVE_PENDING_EFFECTS
+    type: EFFECT_TYPES.CLOSE_CYCLE
   },
   repeat: 'each_cycle',
   consumes: null,
@@ -116,18 +116,18 @@ const resolvePendingEffectsAction = {
 // Roles anonimos usados por la demo.
 const roleDefinitions = {
   team_b_attacker: {
-    factionId: 'team_b',
+    alignmentId: 'team_b',
     actionTokens: [{ actionId: ACTION_IDS.SET_IN_PLAY }]
   },
   team_a_blocker: {
-    factionId: 'team_a',
+    alignmentId: 'team_a',
     actionTokens: [{ actionId: ACTION_IDS.BLOCK_ACTION }]
   },
   team_a_target: {
-    factionId: 'team_a'
+    alignmentId: 'team_a'
   },
   team_a_plain: {
-    factionId: 'team_a'
+    alignmentId: 'team_a'
   }
 };
 
@@ -170,10 +170,10 @@ const blockSetInPlayFalseKey = getActionBlockKey(blockOutOfPlayAction.effect.blo
 function printRoleState(session, title) {
   console.log(`\n${title} | ciclo actual: ${session.metadata?.currentCycleId ?? 1}`);
   console.table(
-    session.roleInstances.map(({ id, roleId, factionId, inPlay, flags }) => ({
+    session.roleInstances.map(({ id, roleId, alignmentId, inPlay, flags }) => ({
       id,
       roleId,
-      factionId,
+      alignmentId,
       inPlay,
       blockedSetInPlayFalse: flags?.blockedActions?.[blockSetInPlayFalseKey] === true
     }))
@@ -182,7 +182,7 @@ function printRoleState(session, title) {
 
 // Muestra el historial mecanico de acciones de la sesion.
 //
-// Nos interesa verlo porque la restriccion prevent_repeat_target se basa en
+// Nos interesa verlo porque la restriccion no_repeat_target se basa en
 // actionHistory, no en flags del actor ni del objetivo.
 function printActionHistory(session, title) {
   console.log(`\n${title}`);
@@ -229,7 +229,7 @@ console.log(
     {
       setInPlayAction,
       blockOutOfPlayAction,
-      resolvePendingEffectsAction
+      closeCycleAction
     },
     null,
     2
@@ -252,7 +252,7 @@ console.log(
   session = result.session;
   printRoleState(session, 'Despues de la accion');
 
-  result = runStep(session, '2. El sistema cierra efectos pendientes', resolvePendingEffectsAction);
+  result = runStep(session, '2. El sistema cierra efectos pendientes', closeCycleAction);
   session = result.session;
   printRoleState(session, 'Despues de cerrar efectos pendientes');
 }
@@ -280,7 +280,7 @@ console.log(
   session = result.session;
   printRoleState(session, 'Despues del intento tardio de bloqueo');
 
-  result = runStep(session, '3. El sistema cierra efectos pendientes', resolvePendingEffectsAction);
+  result = runStep(session, '3. El sistema cierra efectos pendientes', closeCycleAction);
   session = result.session;
   printRoleState(session, 'Despues de cerrar efectos pendientes');
 }
@@ -308,7 +308,7 @@ console.log(
   session = result.session;
   printRoleState(session, 'Despues de la accion fallida por bloqueo');
 
-  result = runStep(session, '3. El sistema cierra efectos pendientes', resolvePendingEffectsAction);
+  result = runStep(session, '3. El sistema cierra efectos pendientes', closeCycleAction);
   session = result.session;
   printRoleState(session, 'Despues de cerrar efectos pendientes');
   printActionHistory(session, 'Historial de acciones tras el ciclo 1');
@@ -330,7 +330,7 @@ console.log(
   });
   session = result.session;
 
-  result = runStep(session, '2. Ciclo 1: el sistema cierra la noche', resolvePendingEffectsAction);
+  result = runStep(session, '2. Ciclo 1: el sistema cierra la noche', closeCycleAction);
   session = result.session;
   printActionHistory(session, 'Historial despues del ciclo 1');
   printRoleState(session, 'Inicio del ciclo 2');

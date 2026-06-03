@@ -17,7 +17,7 @@ Para evitar el lio entre fase, paso y step, usaremos este convenio:
 
 | Palabra | Significado | Ejemplo |
 |---|---|---|
-| `pool` | bloque grande del ciclo | `poolEachDay` |
+| `pool` | bloque grande del ciclo | `poolExposed` |
 | `step` | unidad ejecutable dentro de un pool | `stepVoteOutOfPlay` |
 | `action` | accion mecanica que ejecuta un step | `vote_out_of_play` |
 | `effect` | cambio propuesto o final | `set_property inPlay=false` |
@@ -83,19 +83,19 @@ El modelo anterior ya planteaba estos pools:
 
 ```text
 poolPreparation
-poolFirstNight
-poolEachDay
-poolEachNight
-poolSpecialEvents
+poolDeployment
+poolExposed
+poolConcealed
+poolSpecial
 ```
 
 Lectura:
 
 - `poolPreparation`: preparacion inicial.
-- `poolFirstNight`: acciones que solo ocurren la primera noche.
-- `poolEachNight`: acciones recurrentes de noche.
-- `poolEachDay`: resolucion diurna recurrente.
-- `poolSpecialEvents`: interrupciones o resoluciones que pueden entrar entre pools.
+- `poolDeployment`: acciones que solo ocurren la primera noche.
+- `poolConcealed`: acciones recurrentes de noche.
+- `poolExposed`: resolucion diurna recurrente.
+- `poolSpecial`: interrupciones o resoluciones que pueden entrar entre pools.
 
 ## Orden general recuperado
 
@@ -103,13 +103,13 @@ Segun `turn_overview.md`, el bucle base es:
 
 ```mermaid
 flowchart TD
-  A[poolPreparation] --> B[poolFirstNight]
-  B --> C[poolEachDay]
-  C --> D[poolEachNight]
+  A[poolPreparation] --> B[poolDeployment]
+  B --> C[poolExposed]
+  C --> D[poolConcealed]
   D --> C
 ```
 
-Con `poolSpecialEvents` disponible para interrupciones:
+Con `poolSpecial` disponible para interrupciones:
 
 ```text
 victoria, acciones finales, efectos retardados, eventos especiales
@@ -132,7 +132,7 @@ El flujo diurno recuperado contiene:
 Para el nucleo limpio, de momento podemos expresarlo asi:
 
 ```js
-poolEachDay: [
+poolExposed: [
   {
     key: 'stepResolveCycleStart',
     status: 'enabled',
@@ -169,7 +169,7 @@ un estado de conversacion. No es una cascara vacia: organiza el flujo.
 Para la votacion diurna del juego base:
 
 ```text
-pool: poolEachDay
+pool: poolExposed
 step: stepVoteOutOfPlay
 recipe: vote_out_of_play
 effect: onWinnerAction(set_in_play false)
@@ -215,7 +215,7 @@ Forma candidata:
 
 ```js
 {
-  type: 'prevent_related_target',
+  type: 'exclude_related_target',
   relationType: 'linked'
 }
 ```

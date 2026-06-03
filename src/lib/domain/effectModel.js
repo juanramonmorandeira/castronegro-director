@@ -17,7 +17,7 @@ export const EFFECT_TYPES = Object.freeze({
   SET_PROPERTY: 'set_property',
   BLOCK_ACTION: 'block_action',
   SET_RELATION: 'set_relation',
-  RESOLVE_PENDING_EFFECTS: 'resolve_pending_effects'
+  CLOSE_CYCLE: 'close_cycle'
 });
 
 // Devuelve el ciclo actual de la sesion.
@@ -216,13 +216,13 @@ export function getRelationKey(relation = {}) {
   );
 }
 
-// Cierra la cola de efectos pendientes del ciclo actual.
+// Cierra el ciclo actual.
 //
 // En esta version todavia no tenemos una cola real de efectos pendientes. Las
 // acciones actuales resuelven y aplican sus efectos inmediatamente. Aun asi,
 // mantenemos esta funcion para cerrar ciclo, limpiar bloqueos temporales y
 // avanzar currentCycleId.
-export function applyResolvePendingEffects({ session, visibility = 'all' } = {}) {
+export function applyCloseCycle({ session, visibility = 'all' } = {}) {
   const resolvedSession = {
     ...session,
     roleInstances: (session?.roleInstances ?? []).map(clearCycleFlags)
@@ -232,7 +232,7 @@ export function applyResolvePendingEffects({ session, visibility = 'all' } = {})
   return {
     session: nextSession,
     result: {
-      type: EFFECT_TYPES.RESOLVE_PENDING_EFFECTS,
+      type: EFFECT_TYPES.CLOSE_CYCLE,
       visibility,
       finalEffects: [],
       clearedTemporaryFlags: ['blockedActions'],

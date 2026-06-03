@@ -37,7 +37,7 @@ export const VOTE_REQUIRED_POLICIES = Object.freeze({
 });
 
 export const VOTE_RESTRICTION_TYPES = Object.freeze({
-  PREVENT_RELATED_TARGET: 'prevent_related_target'
+  EXCLUDE_RELATED_TARGET: 'exclude_related_target'
 });
 
 // Crea un voto normalizado.
@@ -188,7 +188,7 @@ export function validateVotes({
 // Valida restricciones basadas en relaciones de sesion.
 //
 // Ejemplo actual:
-// - prevent_related_target + linked impide que un actor vote a su linked.
+// - exclude_related_target + linked impide que un actor vote a su linked.
 export function getRelationRestrictionErrors({
   session,
   vote,
@@ -196,7 +196,7 @@ export function getRelationRestrictionErrors({
   relationRestrictions = []
 } = {}) {
   return (relationRestrictions ?? []).flatMap((restriction) => {
-    if (restriction?.type !== VOTE_RESTRICTION_TYPES.PREVENT_RELATED_TARGET) return [];
+    if (restriction?.type !== VOTE_RESTRICTION_TYPES.EXCLUDE_RELATED_TARGET) return [];
 
     const relationType = normalizeId(restriction.relationType);
     if (!relationType) return [];

@@ -14,7 +14,7 @@ import {
 // - Una restriccion decide si una receta puede usarse en este contexto.
 //
 // Ejemplo:
-// prevent_repeat_target no significa que el target sea intrinsecamente invalido.
+// no_repeat_target no significa que el target sea intrinsecamente invalido.
 // Significa que esta receta concreta no puede repetirse sobre el mismo target
 // dentro de la ventana indicada.
 //
@@ -23,41 +23,49 @@ import {
 // -----------------------------------------------------------------------------
 
 export const CONSTRAINT_TYPES = Object.freeze({
-  PREVENT_REPEAT_TARGET: 'prevent_repeat_target',
+  NO_REPEAT_TARGET: 'no_repeat_target',
   REQUIRE_RECENT_SET_PROPERTY: 'require_recent_set_property',
   LIMITED_USES: 'limited_uses'
 });
 
 export const CONSTRAINT_WINDOWS = Object.freeze({
   CURRENT_CYCLE: 'current_cycle',
-  PREVIOUS_CYCLE: 'previous_cycle',
-  CURRENT_OR_PREVIOUS_CYCLE: 'current_or_previous_cycle',
+  NEXT_CYCLE: 'next_cycle',
+  CURRENT_OR_NEXT_CYCLE: 'current_or_next_cycle',
   SESSION: 'session'
 });
 
-export const LIMITED_USE_SCOPES = Object.freeze({
-  ACTOR_RECIPE: 'actor_recipe',
-  ACTOR: 'actor',
-  RECIPE: 'recipe'
-});
-
 // Indica si una entrada de historial cae dentro de la ventana de la restriccion.
+//
+// Importante sobre "next_cycle":
+// el historial siempre mira hacia atras desde el ciclo actual. Por eso
+// next_cycle significa: "esta entrada ocurrio en el ciclo anterior y, por tanto,
+// el ciclo actual es el siguiente ciclo donde la repeticion queda prohibida".
 export function isEntryInsideConstraintWindow(entry, currentCycleId, window) {
+  if (window === CONSTRAINT_WINDOWS.SESSION) {
+    return true;
+  }
   if (window === CONSTRAINT_WINDOWS.CURRENT_CYCLE) {
     return entry.cycleId === currentCycleId;
   }
-  if (window === CONSTRAINT_WINDOWS.PREVIOUS_CYCLE) {
+  if (window === CONSTRAINT_WINDOWS.NEXT_CYCLE) {
     return entry.cycleId === currentCycleId - 1;
   }
   return entry.cycleId === currentCycleId || entry.cycleId === currentCycleId - 1;
 }
 
-// Evalua la restriccion prevent_repeat_target.
+// Evalua la restriccion no_repeat_target.
 //
 // Regla:
 // si la misma firma de accion, del mismo actor, ya se aplico sobre el mismo
 // target dentro de la ventana indicada, este intento queda rechazado.
-export function evaluatePreventRepeatTargetConstraint({
+//
+// Ejemplos:
+// - window=current_cycle: no repetir target dentro del mismo ciclo.
+// - window=next_cycle: no repetir en el ciclo inmediatamente posterior.
+// - window=current_or_next_cycle: combina las dos anteriores.
+// - window=session: no repetir ese target nunca durante esta partida.
+export function evaluateNoRepeatTargetConstraint({
   session,
   action,
   actor,
@@ -65,7 +73,7 @@ export function evaluatePreventRepeatTargetConstraint({
   constraint
 }) {
   const currentCycleId = getCurrentCycleId(session);
-  const window = constraint.window ?? CONSTRAINT_WINDOWS.CURRENT_OR_PREVIOUS_CYCLE;
+  const window = constraint.window ?? CONSTRAINT_WINDOWS.CURRENT_OR_NEXT_CYCLE;
   const actionSignature = getActionHistorySignature(action);
 
   return (targets ?? []).flatMap((target, index) => {
@@ -85,7 +93,7 @@ export function evaluatePreventRepeatTargetConstraint({
 
     return [
       {
-        code: 'constraint/prevent_repeat_target',
+        code: 'constraint/no_repeat_target',
         message: `action "${action.id}" cannot repeat target "${target.id}" in window "${window}"`,
         constraint: constraint.type,
         targetId: target.id,
@@ -110,9 +118,9 @@ export function evaluateRequireRecentSetPropertyConstraint({ session, targets, c
   const currentCycleId = getCurrentCycleId(session);
   const window = constraint.window ?? CONSTRAINT_WINDOWS.CURRENT_CYCLE;
   const cycleIds =
-    window === CONSTRAINT_WINDOWS.PREVIOUS_CYCLE
+    window === CONSTRAINT_WINDOWS.NEXT_CYCLE
       ? [currentCycleId - 1]
-      : window === CONSTRAINT_WINDOWS.CURRENT_OR_PREVIOUS_CYCLE
+      : window === CONSTRAINT_WINDOWS.CURRENT_OR_NEXT_CYCLE
         ? [currentCycleId, currentCycleId - 1]
         : [currentCycleId];
 
@@ -153,29 +161,32 @@ export function evaluateRequireRecentSetPropertyConstraint({ session, targets, c
 
 // Indica si una entrada de historial cae dentro de la ventana de limited_uses.
 //
-// limited_uses usa las mismas ventanas que el resto de restricciones. Esto evita
-// que una definicion acepte, por ejemplo, previous_cycle pero el motor la trate
-// silenciosamente como current_cycle.
+// limited_uses usa las mismas ventanas que el resto de restricciones.
+//
+// En esta funcion, next_cycle tiene la misma lectura que en no_repeat_target:
+// una entrada del ciclo anterior bloquea un uso en el ciclo actual porque este
+// es el ciclo siguiente al uso registrado.
 export function isEntryInsideLimitedUseWindow(entry, currentCycleId, window) {
   if (window === CONSTRAINT_WINDOWS.SESSION) return true;
-  if (window === CONSTRAINT_WINDOWS.PREVIOUS_CYCLE) return entry.cycleId === currentCycleId - 1;
-  if (window === CONSTRAINT_WINDOWS.CURRENT_OR_PREVIOUS_CYCLE) {
+  if (window === CONSTRAINT_WINDOWS.NEXT_CYCLE) return entry.cycleId === currentCycleId - 1;
+  if (window === CONSTRAINT_WINDOWS.CURRENT_OR_NEXT_CYCLE) {
     return entry.cycleId === currentCycleId || entry.cycleId === currentCycleId - 1;
   }
   return entry.cycleId === currentCycleId;
 }
 
-// Indica si una entrada de historial pertenece al scope de limited_uses.
-export function isEntryInsideLimitedUseScope(entry, { actor, recipe, scope }) {
+// Indica si una entrada de historial pertenece al contador de limited_uses.
+//
+// Decision actual:
+// limited_uses siempre se cuenta por actor + receta. En datos eso significa:
+// - actorRoleInstanceId: que roleInstance uso la receta;
+// - actionKey: que receta concreta dentro del step se uso.
+//
+// No exponemos un campo "scope" en las recetas normales porque todavia no
+// tenemos una regla real que necesite contar por actor global o por receta
+// global. Si aparece, lo anadiremos con un caso de uso concreto.
+export function isEntryInsideLimitedUseCounter(entry, { actor, recipe }) {
   const actionKey = recipe?.key ?? recipe?.actionKey ?? recipe?.id ?? null;
-
-  if (scope === LIMITED_USE_SCOPES.ACTOR) {
-    return !!actor && entry.actorRoleInstanceId === actor.id;
-  }
-
-  if (scope === LIMITED_USE_SCOPES.RECIPE) {
-    return !!actionKey && entry.actionKey === actionKey;
-  }
 
   return (
     !!actor &&
@@ -189,15 +200,14 @@ export function isEntryInsideLimitedUseScope(entry, { actor, recipe, scope }) {
 //
 // Regla:
 // una receta no puede ejecutarse si el historial ya contiene tantos usos como
-// el limite configurado para el scope y ventana indicados.
+// el limite configurado para ese actor + receta dentro de la ventana indicada.
 export function evaluateLimitedUsesConstraint({ session, recipe, actor, constraint }) {
   const currentCycleId = getCurrentCycleId(session);
   const limit = Number.isInteger(constraint.limit) && constraint.limit > 0 ? constraint.limit : 1;
   const window = constraint.window ?? CONSTRAINT_WINDOWS.SESSION;
-  const scope = constraint.scope ?? LIMITED_USE_SCOPES.ACTOR_RECIPE;
   const uses = getActionHistory(session).filter((entry) => {
     if (!isEntryInsideLimitedUseWindow(entry, currentCycleId, window)) return false;
-    return isEntryInsideLimitedUseScope(entry, { actor, recipe, scope });
+    return isEntryInsideLimitedUseCounter(entry, { actor, recipe });
   });
 
   if (uses.length < limit) return [];
@@ -210,7 +220,6 @@ export function evaluateLimitedUsesConstraint({ session, recipe, actor, constrai
       limit,
       used: uses.length,
       window,
-      scope,
       actorRoleInstanceId: actor?.id ?? null,
       actionKey: recipe?.key ?? recipe?.actionKey ?? recipe?.id ?? null
     }
@@ -226,8 +235,8 @@ export function evaluateRecipeConstraints({ session, recipe, actor, targets }) {
   const constraints = Array.isArray(recipe?.constraints) ? recipe.constraints : [];
 
   return constraints.flatMap((constraint) => {
-    if (constraint?.type === CONSTRAINT_TYPES.PREVENT_REPEAT_TARGET) {
-      return evaluatePreventRepeatTargetConstraint({
+    if (constraint?.type === CONSTRAINT_TYPES.NO_REPEAT_TARGET) {
+      return evaluateNoRepeatTargetConstraint({
         session,
         action: recipe,
         actor,

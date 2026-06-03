@@ -1,4 +1,4 @@
-// phaseDefinitionModel.js
+// phaseDefinition.js
 // -----------------------------------------------------------------------------
 // Organizador/validador de definiciones de fase por skin/flavor.
 //
@@ -9,18 +9,19 @@
 // - crear phasePools listos para que phaseModel los ejecute.
 //
 // No construye el contenido de un step. Eso pertenece a
-// stepDefinitionModel.js.
+// stepDefinition.js.
 // -----------------------------------------------------------------------------
 
 import { createPhasePoolsFromDefinition } from './phaseModel.js';
+import { POOL_KEYS } from './sessionModel.js';
 
 // Pools cuyo orden interno podria ser configurable por skin/flavor.
 //
-// poolSpecialEvents queda fuera deliberadamente: sus reglas son interrupciones
+// poolSpecial queda fuera deliberadamente: sus reglas son interrupciones
 // o resoluciones especiales del motor y no deberian reordenarse por flavor.
 export const CONFIGURABLE_STEP_ORDER_POOLS = Object.freeze([
-  'poolEachDay',
-  'poolEachNight'
+  POOL_KEYS.POOL_EXPOSED,
+  POOL_KEYS.POOL_CONCEALED
 ]);
 
 // Nombre recomendado para la propiedad de orden declarativo.
@@ -129,8 +130,8 @@ export function sortPhaseDefinitionPools(definition = {}) {
 
 // Crea phasePools desde una definicion de skin/flavor ya compuesta de steps.
 //
-// stepDefinitionModel construye cada step.
-// phaseDefinitionModel los ordena por pool.
+// stepDefinition construye cada step.
+// phaseDefinition los ordena por pool.
 export function createPhasePoolsFromSkinDefinition(definition = {}) {
   const validation = validatePhaseDefinitionOrder(definition);
   if (!validation.ok) {

@@ -52,7 +52,7 @@ Entrada:
 
 ```text
 sesion actual
-acciones intentadas por jugadores, facciones o sistema
+acciones intentadas por jugadores, alignments o sistema
 ```
 
 Salida:
@@ -170,7 +170,7 @@ Ejemplos:
 Ejemplo:
 
 ```text
-despues de aplicar inPlay false, solo queda una faccion con miembros en juego
+despues de aplicar inPlay false, solo queda un alignment con miembros en juego
 -> propone set_session_status finished
 -> propone set_winner team_b
 ```
@@ -201,7 +201,7 @@ piezas de forma que no nos cierren puertas.
 
 ### Action
 
-Algo que un jugador, faccion o sistema intenta hacer.
+Algo que un jugador, alignment o sistema intenta hacer.
 
 Ejemplos:
 
@@ -296,7 +296,7 @@ Ya hemos empezado a alinear el codigo con este modelo:
 set_in_play
 -> propone/aplica set_property inPlay false
 
-resolve_pending_effects
+close_cycle
 -> cierra el ciclo y limpia bloqueos temporales
 ```
 

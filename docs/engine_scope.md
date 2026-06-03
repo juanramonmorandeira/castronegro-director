@@ -15,7 +15,7 @@ Ejemplos actuales:
 - `set_in_play`: intenta cambiar `inPlay`.
 - `block_action`: bloquea una accion concreta sobre un objetivo concreto.
 - `link_targets`: intenta enlazar varios objetivos.
-- `resolve_pending_effects`: cierra el ciclo actual.
+- `close_cycle`: cierra el ciclo actual.
 
 La accion no es narrativa. Una skin puede llamar a `link_targets` "enamorar",
 "sincronizar", "atar destinos" o cualquier otro nombre.
@@ -30,7 +30,7 @@ Ejemplos actuales:
 - `set_property`: cambia una propiedad concreta.
 - `block_action`: marca un bloqueo temporal.
 - `set_relation`: crea o actualiza una relacion de sesion.
-- `resolve_pending_effects`: limpia flags temporales y avanza ciclo.
+- `close_cycle`: limpia flags temporales y avanza ciclo.
 
 El aplicador de efectos escribe datos, pero no decide si una accion era valida.
 

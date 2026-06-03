@@ -107,7 +107,7 @@ Por ahora no usamos pesos/prioridades. Es mas claro que cada skin declare el
 orden exacto que quiere ejecutar. Si mas adelante aparece una necesidad real de
 reordenar steps dinamicamente, se puede anadir una capa explicita encima.
 
-### `phaseDefinitionModel.js`
+### `phaseDefinition.js`
 
 Documento tecnico para una pieza futura.
 
@@ -115,11 +115,11 @@ La decision acordada es:
 
 ```text
 phaseModel ejecuta arrays ya ordenados
-phaseDefinitionModel preparara esos arrays desde una definicion de skin
+phaseDefinition preparara esos arrays desde una definicion de skin
 ```
 
 Esto permitiria que una skin declare `order` para steps de pools configurables,
-por ejemplo `poolEachDay` o `poolEachNight`, sin cambiar el runtime.
+por ejemplo `poolExposed` o `poolConcealed`, sin cambiar el runtime.
 
 Regla importante:
 
@@ -130,8 +130,31 @@ dos steps del mismo pool configurable no podran compartir el mismo order
 Si eso ocurre, sera error de definicion de skin. No habra empate ni desempate
 automatico.
 
-`poolSpecialEvents` queda fuera de esta configuracion porque sus reglas deben
+`poolSpecial` queda fuera de esta configuracion porque sus reglas deben
 ser fijas del motor.
+
+Pools mecanicos actuales:
+
+```text
+poolDeployment -> configuracion jugable inicial
+poolConcealed  -> acciones ocultas o de informacion privada
+poolExposed    -> acciones publicas o visibles para el grupo
+poolSpecial    -> interrupciones y resoluciones excepcionales
+```
+
+Razonamiento de orden inicial:
+
+```text
+link_targets vive en poolDeployment porque las relaciones de destino compartido
+deben existir antes de que acciones recurrentes puedan cambiar inPlay, alignment
+u otros estados relevantes.
+
+inspect_role y block_out_of_play viven antes de group_set_out_of_play dentro de
+poolConcealed. Si block_out_of_play ocurre despues, no bloquea nada util.
+
+role_in_play_control vive despues de group_set_out_of_play porque
+restore_recent_out_of_play necesita mirar el historial del ciclo actual.
+```
 
 Ejemplo:
 
@@ -260,7 +283,7 @@ restore_recent_out_of_play
 `actionModel.js` no debe recibir la receta completa. Debe recibir la accion pura
 cuando `recipeModel.js` ya ha validado sus restricciones.
 
-### `stepDefinitionModel.js`
+### `stepDefinition.js`
 
 Construye definiciones de step.
 
@@ -286,7 +309,7 @@ linked_roles
 La unidad minima sigue siendo `roleInstance`. Un grupo solo acota que
 roleInstances pueden actuar.
 
-### `phaseDefinitionModel.js`
+### `phaseDefinition.js`
 
 Organiza steps dentro de pools.
 
@@ -330,8 +353,154 @@ Esto permitira a mecanicas futuras preguntar cosas como:
 ```text
 quien recibio inPlay=false durante este ciclo?
 desde que step ocurrio?
-el efecto se aplico o fue prevenido?
+el efecto se aplico o quedo bloqueado?
 ```
+
+`session.stepCompletionHistory` registra cierres explicitos de steps. No vive
+en `actionHistory` porque cerrar un step no es una accion de juego. Guarda quien
+pidio pasar al siguiente step:
+
+```text
+player
+director
+system
+```
+
+### `stepModel.js`
+
+Coordina el step actual.
+
+Separacion clave:
+
+```text
+resolveCurrentStep  -> ejecuta una receta del step actual
+completeCurrentStep -> cierra el step actual y avanza el cursor
+```
+
+Resolver una receta no avanza automaticamente. El step permanece abierto hasta
+que `player`, `director` o `system` pidan cierre explicito. Esto permite
+steps con varias recetas opcionales y respeta el ritmo humano de la partida.
+
+En una definicion de step:
+
+```js
+completion: {
+  mode: 'manual', // o 'automatic'
+  allowedRequesters: ['player', 'director', 'system']
+}
+```
+
+En una receta dentro del step:
+
+```js
+optional: true
+```
+
+`optional: true` significa que el step puede cerrarse aunque esa receta no se
+haya ejecutado. Si se intenta ejecutar, sus filtros y restricciones siguen
+aplicando igual.
+
+### `recipeCatalog.js`
+
+Define recetas reutilizables del nucleo. No ejecuta nada y no lee la sesion.
+
+Ejemplos:
+
+```text
+restore_recent_out_of_play
+set_out_of_play
+block_out_of_play
+vote_out_of_play
+```
+
+`recipeModel.js` recibe esas recetas, valida restricciones y las convierte en
+acciones puras para `actionModel.js`.
+
+### `stepCatalog.js`
+
+Define steps reutilizables del nucleo. No sustituye a `stepDefinition.js`.
+
+La separacion es esta:
+
+```text
+stepDefinition.js -> construye cualquier step generico
+stepCatalog.js    -> guarda steps ya preparados con recetas conocidas
+phaseDefinition.js -> coloca esos steps dentro de pools ordenados
+```
+
+Un step no queda definido por cuantas recetas contiene. Queda definido por su
+`key`, `actorScope`, `actions`, `completion`, `order` y `metadata`.
+
+`source` puede guardarse como `metadata.source`. No participa en la ejecucion
+del step. Sirve para trazabilidad: saber si el step fue construido desde una
+roleInstance, un grupo, el sistema, una skin o un evento especial.
+
+Ejemplo conceptual:
+
+```js
+createStep({
+  key: 'step_03',
+  actorScope: { type: 'role' },
+  actions: [
+    getCatalogRecipe(RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY),
+    getCatalogRecipe(RECIPE_KEYS.ONE_SHOT_SET_OUT_OF_PLAY)
+  ]
+});
+```
+
+El catalogo solo evita repetir esa composicion cuando una skin quiera reutilizar
+un patron mecanico ya conocido.
+
+Steps catalogados ahora mismo:
+
+```text
+role_inspects          -> role ejecuta inspect_role
+role_links_targets    -> role ejecuta link_targets
+role_blocks_out_of_play -> role ejecuta block_out_of_play
+role_in_play_control  -> role puede ejecutar restore_recent_out_of_play y/o set_out_of_play
+group_set_out_of_play -> role_group ejecuta set_out_of_play
+group_vote_out_of_play -> all_roles ejecutan vote_out_of_play
+system_closes_cycle   -> system ejecuta close_cycle
+```
+
+### `roleDefinition.js` y `roleCatalog.js`
+
+`roleDefinition.js` construye definiciones mecanicas de rol. Una definicion
+de rol no es una instancia en partida y no ejecuta acciones.
+
+Responsabilidades:
+
+```text
+roleDefinition -> declara que puede aportar un tipo de rol
+roleInstance   -> representa ese rol concreto dentro de una sesion
+stepDefinition -> convierte esa capacidad en una unidad ejecutable
+phaseDefinition -> ordena esos steps dentro de pools
+```
+
+`roleCatalog.js` guarda roles mecanicos predefinidos. No usa nombres de
+skin. Por ejemplo:
+
+```text
+role_inspects
+role_links_targets
+role_blocks_out_of_play
+role_in_play_control
+```
+
+Cada definicion incluye `stepDefinitions: []`. Cada entrada es un step creado
+con `createStep` o con un helper de `stepCatalog`. Puede llevar `poolKey`,
+`order`, `actions`, `actorScope`, `completion` y `metadata.orderReason`.
+
+`groupDefinition.js` y `groupCatalog.js` hacen lo mismo para grupos
+mecanicos. Por ejemplo:
+
+```text
+alignment_set_out_of_play -> grupo seleccionado por alignmentId que ejecuta group_set_out_of_play
+```
+
+Un grupo no es un alignment narrativa. Es una seleccion mecanica de
+roleInstances: por alignment, relacion, flag, todos los roles o una regla
+custom.
 
 ### `actionModel.js`
 
@@ -345,7 +514,7 @@ set_in_play
 block_action
 link_targets
 vote
-resolve_pending_effects
+close_cycle
 ```
 
 `inspect_role` significa:
@@ -417,14 +586,14 @@ Reglas actuales de esta votacion:
 
 - `requiredVotes: all_in_play`: todos los roleInstances `inPlay` deben votar.
 - `tiePolicy: null_on_tie`: si hay empate, no se aplica efecto.
-- `prevent_related_target` con `linked`: un actor no puede votar a un target
+- `exclude_related_target` con `linked`: un actor no puede votar a un target
   relacionado con el por `linked`.
 
 Importante: `vote_out_of_play` no representa todas las votaciones posibles. Una
 votacion futura para conceder una marca, cargo o accion extra debera reutilizar
 `vote` con otro `onWinnerAction`.
 
-`resolve_pending_effects` significa:
+`close_cycle` significa:
 
 ```text
 el sistema cierra el ciclo de efectos y limpia marcas temporales
@@ -441,7 +610,7 @@ Un filtro responde si un target es valido por si mismo:
 ```text
 in_play
 not_self
-not_same_faction
+not_same_alignment
 ```
 
 Una restriccion responde si esta receta concreta puede usarse en este contexto.
@@ -449,19 +618,33 @@ Una restriccion responde si esta receta concreta puede usarse en este contexto.
 Por ahora implementa:
 
 ```text
-prevent_repeat_target
+no_repeat_target
 require_recent_set_property
 limited_uses
 ```
 
-`prevent_repeat_target` usa `session.actionHistory` para impedir repetir el
+`no_repeat_target` usa `session.actionHistory` para impedir repetir el
 mismo target en la ventana configurada. No vive como filtro porque puede
 aplicarse a unas recetas si y a otras no.
+
+Ventanas principales:
+
+```text
+current_cycle         -> solo el ciclo actual
+next_cycle            -> el ciclo inmediatamente posterior al uso registrado
+current_or_next_cycle -> ciclo actual o ciclo inmediatamente posterior
+session               -> toda la partida
+```
 
 `require_recent_set_property` usa `historyModel` para exigir que el target haya
 recibido antes un cambio concreto en la ventana configurada. Por ejemplo,
 `restore_recent_out_of_play` exige que el target haya recibido `inPlay=false`
 por la receta `set_out_of_play` durante el ciclo actual.
+
+`limited_uses` cuenta usos por actor + receta. En datos significa
+`actorRoleInstanceId + actionKey`. No tiene campo `scope` por ahora: si mas
+adelante aparece una regla real que necesite contar por actor global o por
+receta global, se anadira entonces.
 
 ### `modifierModel.js`
 
@@ -544,20 +727,20 @@ Primera version implementada:
 
 ```text
 ongoing
-faction_rule
-single_faction
+alignment_rule
+single_alignment
 linked_exclusive_survivors
 draw
 ```
 
-`faction_rule` significa que una regla configurada de faccion se ha cumplido.
+`alignment_rule` significa que una regla configurada de alignment se ha cumplido.
 Por ahora existe:
 
 ```text
 at_least_remaining
 ```
 
-Esa condicion significa que los miembros `inPlay` de una faccion son al menos
+Esa condicion significa que los miembros `inPlay` de un alignment son al menos
 tantos como todos los demas roleInstances `inPlay` juntos. El nombre evita
 lenguaje de bandos buenos, malos, enemigos u hostiles.
 
@@ -566,10 +749,10 @@ Ejemplo:
 ```js
 settings: {
   victory: {
-    factionRules: [
+    alignmentRules: [
       {
-        id: 'faction_b_reaches_threshold',
-        factionId: 'faction_b',
+        id: 'alignment_b_reaches_threshold',
+        alignmentId: 'alignment_b',
         condition: 'at_least_remaining'
       }
     ]
@@ -577,15 +760,15 @@ settings: {
 }
 ```
 
-`single_faction` significa que todos los roles que siguen `inPlay` pertenecen a
-la misma faccion.
+`single_alignment` significa que todos los roles que siguen `inPlay` pertenecen
+al mismo alignment.
 
-`linked_exclusive_survivors` significa que una relacion `linked` de facciones
+`linked_exclusive_survivors` significa que una relacion `linked` de alignments
 distintas es el unico grupo que queda `inPlay`. Esto modela la parte abstracta
 de "dos destinos enlazados ganan juntos si quedan solos", sin usar nombres de
 skin.
 
-Todavia no implementa reglas especificas como paridad de facciones hostiles,
+Todavia no implementa reglas especificas como paridad de alignments hostiles,
 victoria por todos los objetivos marcados, victoria instantanea o condiciones
 individuales. Esas reglas necesitan configuracion adicional.
 

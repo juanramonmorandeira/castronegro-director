@@ -3,16 +3,16 @@
 // Este archivo evalua si una partida ha terminado.
 //
 // Mantiene la misma regla que el resto del nucleo:
-// - no sabe que es "faction_a", "faction_b" en terminos narrativos;
+// - no sabe que es "alignment_a", "alignment_b" en terminos narrativos;
 // - no muestra textos;
 // - no guarda en Firebase;
 // - solo mira datos mecanicos de la sesion.
 //
 // Version actual implementada:
 // - ongoing: la partida sigue;
-// - faction_rule: una regla configurada de faccion se cumple;
-// - single_faction: solo queda una faccion en juego;
-// - linked_exclusive_survivors: una relacion linked de facciones distintas es
+// - alignment_rule: una regla configurada de alignment se cumple;
+// - single_alignment: solo queda un alignment en juego;
+// - linked_exclusive_survivors: una relacion linked de alignments distintos es
 //   el unico grupo que queda en juego.
 // -----------------------------------------------------------------------------
 
@@ -26,8 +26,8 @@ export const VICTORY_STATUSES = Object.freeze({
 export const VICTORY_TYPES = Object.freeze({
   NONE: 'none',
   DRAW: 'draw',
-  FACTION_RULE: 'faction_rule',
-  SINGLE_FACTION: 'single_faction',
+  ALIGNMENT_RULE: 'alignment_rule',
+  SINGLE_ALIGNMENT: 'single_alignment',
   LINKED_EXCLUSIVE_SURVIVORS: 'linked_exclusive_survivors'
 });
 
@@ -44,97 +44,101 @@ export function getInPlayRoleInstances(session = {}) {
   return (session.roleInstances ?? []).filter((role) => role?.inPlay === true);
 }
 
-// Devuelve facciones unicas, ignorando valores vacios.
-export function getFactionIds(roleInstances = []) {
+export function getRoleAlignmentId(role = {}) {
+  return normalizeId(role?.alignmentId);
+}
+
+// Devuelve alignments unicos, ignorando valores vacios.
+export function getAlignmentIds(roleInstances = []) {
   return [
     ...new Set(
       (roleInstances ?? [])
-        .map((role) => normalizeId(role?.factionId))
-        .filter((factionId) => factionId.length > 0)
+        .map(getRoleAlignmentId)
+        .filter((alignmentId) => alignmentId.length > 0)
     )
   ];
 }
 
-// Devuelve las reglas de victoria por faccion configuradas en la sesion.
+// Devuelve las reglas de victoria por alignment configuradas en la sesion.
 //
 // Usamos una lista para que el orden sea explicito. Eso importa porque algunas
-// partidas pueden tener varias facciones con condiciones diferentes.
+// partidas pueden tener varios alignments con condiciones diferentes.
 //
 // Forma esperada:
 //
 // {
 //   settings: {
 //     victory: {
-//       factionRules: [
+//       alignmentRules: [
 //         {
-//           id: 'faction_b_reaches_parity',
-//           factionId: 'faction_b',
+//           id: 'alignment_b_reaches_parity',
+//           alignmentId: 'alignment_b',
 //           condition: 'at_least_remaining'
 //         }
 //       ]
 //     }
 //   }
 // }
-export function getFactionVictoryRules(session = {}) {
-  return session?.settings?.victory?.factionRules ?? session?.settings?.factionVictoryRules ?? [];
+export function getAlignmentVictoryRules(session = {}) {
+  return session?.settings?.victory?.alignmentRules ?? session?.settings?.alignmentVictoryRules ?? [];
 }
 
-// Agrupa roleInstances inPlay por faccion.
-export function getInPlayRolesByFaction(session = {}) {
+// Agrupa roleInstances inPlay por alignment.
+export function getInPlayRolesByAlignment(session = {}) {
   return getInPlayRoleInstances(session).reduce((acc, role) => {
-    const factionId = normalizeId(role?.factionId);
-    if (!factionId) return acc;
-    acc[factionId] = [...(acc[factionId] ?? []), role];
+    const alignmentId = getRoleAlignmentId(role);
+    if (!alignmentId) return acc;
+    acc[alignmentId] = [...(acc[alignmentId] ?? []), role];
     return acc;
   }, {});
 }
 
 // Resultado estandar cuando la partida sigue.
-export function createOngoingVictoryResult(reason = 'no_victory_condition_met') {
+export function getOngoingVictoryResult(reason = 'no_victory_condition_met') {
   return {
     status: VICTORY_STATUSES.ONGOING,
     type: VICTORY_TYPES.NONE,
     reason,
-    winnerFactionId: null,
+    winnerAlignmentId: null,
     winnerRoleInstanceIds: []
   };
 }
 
-// Evalua reglas configuradas de faccion.
+// Evalua reglas configuradas de alignment.
 //
 // Regla implementada:
-// - at_least_remaining: la faccion gana si sus miembros inPlay son al menos
+// - at_least_remaining: el alignment gana si sus miembros inPlay son al menos
 //   tantos como todos los demas roleInstances inPlay juntos.
 //
-// Esta es la version abstracta de reglas tipo "cuando una faccion alcanza o
-// iguala al resto de participantes, se cumple su condicion". No dice que esa
-// faccion sea enemiga, hostil, buena o mala.
-export function evaluateFactionVictoryRules(session = {}) {
+// Esta es la version abstracta de reglas tipo "cuando un alignment alcanza o
+// iguala al resto de participantes, se cumple su condicion". No dice que ese
+// alignment sea enemigo, hostil, bueno o malo.
+export function evaluateAlignmentVictoryRules(session = {}) {
   const inPlayRoles = getInPlayRoleInstances(session);
-  const rolesByFaction = getInPlayRolesByFaction(session);
+  const rolesByAlignment = getInPlayRolesByAlignment(session);
 
-  for (const rule of getFactionVictoryRules(session)) {
-    const factionId = normalizeId(rule?.factionId);
+  for (const rule of getAlignmentVictoryRules(session)) {
+    const alignmentId = normalizeId(rule?.alignmentId);
     const condition = normalizeId(rule?.condition);
-    const factionRoles = rolesByFaction[factionId] ?? [];
-    const remainingRoleCount = inPlayRoles.length - factionRoles.length;
+    const alignmentRoles = rolesByAlignment[alignmentId] ?? [];
+    const remainingRoleCount = inPlayRoles.length - alignmentRoles.length;
 
-    if (!factionId || factionRoles.length === 0) continue;
+    if (!alignmentId || alignmentRoles.length === 0) continue;
 
     if (
       condition === VICTORY_RULE_TYPES.AT_LEAST_REMAINING &&
-      factionRoles.length >= remainingRoleCount
+      alignmentRoles.length >= remainingRoleCount
     ) {
       return {
         status: VICTORY_STATUSES.FINISHED,
-        type: VICTORY_TYPES.FACTION_RULE,
-        reason: 'faction_rule_at_least_remaining_met',
+        type: VICTORY_TYPES.ALIGNMENT_RULE,
+        reason: 'alignment_rule_at_least_remaining_met',
         ruleId: rule.id ?? null,
         ruleCondition: VICTORY_RULE_TYPES.AT_LEAST_REMAINING,
-        winnerFactionId: factionId,
-        winnerRoleInstanceIds: factionRoles.map((role) => role.id),
+        winnerAlignmentId: alignmentId,
+        winnerRoleInstanceIds: alignmentRoles.map((role) => role.id),
         counts: {
-          factionInPlay: factionRoles.length,
+          alignmentInPlay: alignmentRoles.length,
           remainingInPlay: remainingRoleCount,
           totalInPlay: inPlayRoles.length
         }
@@ -149,11 +153,11 @@ export function evaluateFactionVictoryRules(session = {}) {
 //
 // Regla actual:
 // - todos los miembros de la relacion siguen inPlay;
-// - pertenecen a mas de una faccion;
+// - pertenecen a mas de un alignment;
 // - no queda nadie mas inPlay fuera de esa relacion.
 //
-// Si linked une roles de la misma faccion, no cambia la condicion de victoria:
-// ganara la faccion por la regla normal si corresponde.
+// Si linked une roles del mismo alignment, no cambia la condicion de victoria:
+// ganara ese alignment por la regla normal si corresponde.
 export function evaluateLinkedVictory(session = {}) {
   const inPlayRoles = getInPlayRoleInstances(session);
   const inPlayIds = new Set(inPlayRoles.map((role) => role.id));
@@ -167,17 +171,17 @@ export function evaluateLinkedVictory(session = {}) {
       .map((roleInstanceId) => inPlayRoles.find((role) => role.id === roleInstanceId))
       .filter(Boolean);
     const linkedIds = new Set(linkedRoles.map((role) => role.id));
-    const linkedFactionIds = getFactionIds(linkedRoles);
+    const linkedAlignmentIds = getAlignmentIds(linkedRoles);
     const allRelationMembersInPlay = relationIds.length >= 2 && linkedRoles.length === relationIds.length;
     const onlyLinkedMembersRemain =
       inPlayIds.size === linkedIds.size && [...inPlayIds].every((id) => linkedIds.has(id));
 
-    if (allRelationMembersInPlay && linkedFactionIds.length > 1 && onlyLinkedMembersRemain) {
+    if (allRelationMembersInPlay && linkedAlignmentIds.length > 1 && onlyLinkedMembersRemain) {
       return {
         status: VICTORY_STATUSES.FINISHED,
         type: VICTORY_TYPES.LINKED_EXCLUSIVE_SURVIVORS,
-        reason: 'linked_members_from_different_factions_are_last_in_play',
-        winnerFactionId: null,
+        reason: 'linked_members_from_different_alignments_are_last_in_play',
+        winnerAlignmentId: null,
         winnerRoleInstanceIds: [...linkedIds],
         relationId: relation.id
       };
@@ -187,31 +191,31 @@ export function evaluateLinkedVictory(session = {}) {
   return null;
 }
 
-// Evalua la condicion generica: solo queda una faccion en juego.
+// Evalua la condicion generica: solo queda un alignment en juego.
 //
 // Esto cubre el caso basico donde solo queda una condicion de victoria posible.
-// Las reglas mas especificas deben venir configuradas en factionRules para no
-// hardcodear el significado narrativo de cada faccion.
-export function evaluateSingleFactionVictory(session = {}) {
+// Las reglas mas especificas deben venir configuradas en alignmentRules para no
+// hardcodear el significado narrativo de cada alignment.
+export function evaluateSingleAlignmentVictory(session = {}) {
   const inPlayRoles = getInPlayRoleInstances(session);
-  const factionIds = getFactionIds(inPlayRoles);
+  const alignmentIds = getAlignmentIds(inPlayRoles);
 
   if (inPlayRoles.length === 0) {
     return {
       status: VICTORY_STATUSES.FINISHED,
       type: VICTORY_TYPES.DRAW,
       reason: 'no_role_instances_in_play',
-      winnerFactionId: null,
+      winnerAlignmentId: null,
       winnerRoleInstanceIds: []
     };
   }
 
-  if (factionIds.length === 1) {
+  if (alignmentIds.length === 1) {
     return {
       status: VICTORY_STATUSES.FINISHED,
-      type: VICTORY_TYPES.SINGLE_FACTION,
-      reason: 'single_faction_left_in_play',
-      winnerFactionId: factionIds[0],
+      type: VICTORY_TYPES.SINGLE_ALIGNMENT,
+      reason: 'single_alignment_left_in_play',
+      winnerAlignmentId: alignmentIds[0],
       winnerRoleInstanceIds: inPlayRoles.map((role) => role.id)
     };
   }
@@ -222,17 +226,17 @@ export function evaluateSingleFactionVictory(session = {}) {
 // Punto de entrada publico para evaluar victoria.
 //
 // Orden importante:
-// 1. reglas configuradas de faccion se evaluan al inicio del chequeo de
+// 1. reglas configuradas de alignment se evaluan al inicio del chequeo de
 //    victoria, justo despues de que el motor haya consumado efectos.
 // 2. linked especial cubre el caso donde una relacion cambia la lectura normal
-//    de facciones.
-// 3. faccion unica cubre el caso generico de "solo queda una faccion".
+//    de alignments.
+// 3. alignment unico cubre el caso generico de "solo queda un alignment".
 // 4. si nada encaja, la partida sigue.
 export function evaluateVictory(session = {}) {
   return (
-    evaluateFactionVictoryRules(session) ??
+    evaluateAlignmentVictoryRules(session) ??
     evaluateLinkedVictory(session) ??
-    evaluateSingleFactionVictory(session) ??
-    createOngoingVictoryResult()
+    evaluateSingleAlignmentVictory(session) ??
+    getOngoingVictoryResult()
   );
 }

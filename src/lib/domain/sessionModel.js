@@ -52,21 +52,27 @@ export const PHASE_STATUSES = Object.freeze({
   DONE: 'done'
 });
 
-// Orden por defecto de los grupos de fases.
-// Un "pool" es un bloque de fases relacionadas.
+// Pools mecanicos del flujo.
 //
-// Ejemplo:
-// - poolPreparation: preparar personajes, edificios, roles especiales.
-// - poolFirstNight: primera noche.
-// - poolEachDay: ciclo de dia.
-// - poolEachNight: ciclo de noche.
-// - poolSpecialEvents: interrupciones como cazador, sheriff, victoria, etc.
+// DEPLOYMENT: configuracion jugable inicial. Debe ejecutarse antes de que
+// acciones recurrentes puedan modificar estados, alignments o relaciones.
+// CONCEALED: acciones de informacion privada u oculta.
+// EXPOSED: acciones publicas o visibles para el grupo.
+// SPECIAL: interrupciones o resoluciones excepcionales.
+export const POOL_KEYS = Object.freeze({
+  POOL_DEPLOYMENT: 'poolDeployment',
+  POOL_CONCEALED: 'poolConcealed',
+  POOL_EXPOSED: 'poolExposed',
+  POOL_SPECIAL: 'poolSpecial'
+});
+
+// Orden por defecto de los grupos de fases.
+// Un "pool" es un bloque de steps relacionados.
 export const DEFAULT_POOL_ORDER = Object.freeze([
-  'poolPreparation',
-  'poolFirstNight',
-  'poolEachDay',
-  'poolEachNight',
-  'poolSpecialEvents'
+  POOL_KEYS.POOL_DEPLOYMENT,
+  POOL_KEYS.POOL_CONCEALED,
+  POOL_KEYS.POOL_EXPOSED,
+  POOL_KEYS.POOL_SPECIAL
 ]);
 
 // Tipos de relaciones entre instancias de rol.
@@ -158,7 +164,7 @@ export function createActionToken({
 export function createRoleInstance({
   id,
   roleId,
-  factionId = null,
+  alignmentId = null,
   playerId = null,
   seat = null,
   inPlay = true,
@@ -172,7 +178,7 @@ export function createRoleInstance({
   return {
     id: id || `${normalizedRoleId || 'role'}-0`,
     roleId: normalizedRoleId,
-    factionId: factionId ? normalizeId(factionId) : null,
+    alignmentId: alignmentId ? normalizeId(alignmentId) : null,
     playerId,
     seat,
     inPlay: !!inPlay,
@@ -259,8 +265,8 @@ export function getRelatedRoleInstanceIds(session, roleInstanceId, type = null) 
 //
 // Un paso de fase es una unidad ejecutable dentro de un pool.
 // Ejemplo:
-// - poolFirstNight / step_01
-// - poolEachDay / step_05
+// - poolDeployment / step_01
+// - poolExposed / step_05
 //
 // No contiene textos visibles. Solo IDs estables.
 // actorScope define quien puede actuar; actions define que puede hacer.
@@ -274,6 +280,7 @@ export function createPhaseStep({
   actorScope = null,
   action = null,
   actions = null,
+  completion = null,
   order = null,
   metadata = {}
 } = {}) {
@@ -287,6 +294,14 @@ export function createPhaseStep({
     key: normalizeId(key),
     status,
     actorScope: actorScope ? { ...actorScope } : null,
+    completion: completion
+      ? {
+          ...completion,
+          allowedRequesters: Array.isArray(completion.allowedRequesters)
+            ? [...completion.allowedRequesters]
+            : []
+        }
+      : null,
     actions: normalizedActions,
     action: action ? { ...action } : null,
     order: Number.isFinite(order) ? order : null,
@@ -340,6 +355,10 @@ export function createPhasePools({
 // actionHistory guarda hechos ocurridos en esta partida. No es estado temporal:
 // es memoria de sesion. Por ejemplo, nos permite saber si un actor ya
 // previno al mismo objetivo en el ciclo anterior.
+//
+// stepCompletionHistory guarda cierres manuales/explicitos de steps. No vive en
+// actionHistory porque cerrar un step no es una accion de juego: es una decision
+// de ritmo tomada por player, director o system.
 export function createGameSession({
   id,
   definitionId = null,
@@ -350,6 +369,7 @@ export function createGameSession({
   relations = [],
   phasePools = createPhasePools(),
   actionHistory = [],
+  stepCompletionHistory = [],
   log = [],
   metadata = {}
 } = {}) {
@@ -363,6 +383,7 @@ export function createGameSession({
     relations: relations.map(createRelation),
     phasePools,
     actionHistory: [...actionHistory],
+    stepCompletionHistory: [...stepCompletionHistory],
     log: [...log],
     metadata: { ...metadata }
   };
@@ -399,7 +420,7 @@ export function buildRoleInstancesFromSeats(seats = [], roleDefinitions = {}) {
     return createRoleInstance({
       id: roleInstanceId,
       roleId,
-      factionId: seatEntry.factionId ?? definition.factionId ?? null,
+      alignmentId: seatEntry.alignmentId ?? definition.alignmentId ?? null,
       playerId: seatEntry.playerId ?? seatEntry.player_id ?? null,
       seat: Number.isFinite(seatEntry.seat) ? seatEntry.seat : index,
       actionTokens,

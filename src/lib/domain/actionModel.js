@@ -8,7 +8,7 @@
 // - block_action: bloquea una accion concreta contra un objetivo.
 // - link_targets: crea una relacion mecanica entre varios objetivos.
 // - vote: resuelve una votacion y devuelve ganador/empate/nulo.
-// - resolve_pending_effects: cierra el ciclo y limpia efectos temporales.
+// - close_cycle: cierra el ciclo y limpia efectos temporales.
 //
 // Importante:
 // - No sabe que es "La Vidente".
@@ -21,7 +21,7 @@
 
 import {
   EFFECT_TYPES,
-  applyResolvePendingEffects as applyResolvePendingEffectsFromModel,
+  applyCloseCycle as applyCloseCycleFromModel,
   applySetRelationEffect,
   applySetPropertyEffect,
   getActionBlockKey,
@@ -48,7 +48,7 @@ export const ACTION_IDS = Object.freeze({
   BLOCK_ACTION: 'block_action',
   LINK_TARGETS: 'link_targets',
   VOTE: 'vote',
-  RESOLVE_PENDING_EFFECTS: 'resolve_pending_effects'
+  CLOSE_CYCLE: 'close_cycle'
 });
 
 export const VISIBILITY = Object.freeze({
@@ -80,7 +80,7 @@ export function canUseActorScopeAsSource({ action, actorScope }) {
   if (!actorScope?.type) return false;
 
   const filters = action?.target?.filters ?? [];
-  const needsIndividualActor = filters.includes('not_self') || filters.includes('not_same_faction');
+  const needsIndividualActor = filters.includes('not_self') || filters.includes('not_same_alignment');
 
   return !needsIndividualActor;
 }
@@ -91,7 +91,7 @@ export function canUseActorScopeAsSource({ action, actorScope }) {
 // set_in_play y block_action:
 // - in_play: el objetivo debe seguir participando en la partida principal.
 // - not_self: el actor no puede elegirse a si mismo.
-// - not_same_faction: actor y objetivo no pueden pertenecer a la misma faccion.
+// - not_same_alignment: actor y objetivo no pueden pertenecer al mismo alignment.
 // - distinct: se valida en validateActionTargets porque necesita ver toda la
 //   lista de objetivos, no un objetivo aislado.
 //
@@ -99,7 +99,9 @@ export function canUseActorScopeAsSource({ action, actorScope }) {
 export function targetMatchesFilter({ filter, actor, target, session, action }) {
   if (filter === 'in_play') return target?.inPlay === true;
   if (filter === 'not_self') return actor?.id !== target?.id;
-  if (filter === 'not_same_faction') return actor?.factionId !== target?.factionId;
+  if (filter === 'not_same_alignment') {
+    return actor?.alignmentId !== target?.alignmentId;
+  }
   return true;
 }
 
@@ -615,7 +617,7 @@ export function applyVote({ session, action, input = {} }) {
   };
 }
 
-// Cierra la cola de efectos pendientes del ciclo actual.
+// Cierra el ciclo actual.
 //
 // En esta version todavia no tenemos una cola real de efectos pendientes. Las
 // acciones actuales resuelven y aplican sus efectos inmediatamente. Aun asi,
@@ -624,10 +626,11 @@ export function applyVote({ session, action, input = {} }) {
 //
 // Despues limpia flags temporales para empezar el siguiente ciclo sin basura:
 // - blockedActions.
-export function applyResolvePendingEffects({ session, action }) {
+export function applyCloseCycleAction({ session, action }) {
   const visibility = action?.visibility ?? VISIBILITY.ALL;
-  return applyResolvePendingEffectsFromModel({ session, visibility });
+  return applyCloseCycleFromModel({ session, visibility });
 }
+
 
 // Ejecuta inspect_role.
 //
@@ -667,7 +670,7 @@ export function resolveInspectRole(session, action, input = {}) {
 // Flujo:
 // 1. Busca al actor.
 // 2. Busca el objetivo.
-// 3. Valida count + filtros, por ejemplo in_play y not_same_faction.
+// 3. Valida count + filtros, por ejemplo in_play y not_same_alignment.
 // 4. Ejecuta el intento de cambiar inPlay.
 // 5. Si el objetivo tenia bloqueada esa accion, no genera efecto final.
 // 6. Si no estaba bloqueada, aplica set_property inPlay=value.
@@ -800,21 +803,22 @@ export function resolveVote(session, action, input = {}) {
   };
 }
 
-// Ejecuta resolve_pending_effects.
+// Ejecuta close_cycle.
 //
-// Esta accion normalmente la ejecutara el sistema al final de la noche o al
-// inicio del dia. Por eso no exige actor ni objetivos manuales.
-export function resolvePendingEffects(session, action) {
-  const applied = applyResolvePendingEffects({ session, action });
+// Esta accion normalmente la ejecutara el sistema al cerrar un bloque de ciclo.
+// Por eso no exige actor ni objetivos manuales.
+export function resolveCloseCycle(session, action) {
+  const applied = applyCloseCycleAction({ session, action });
 
   return {
     ok: true,
-    actionId: action?.id ?? ACTION_IDS.RESOLVE_PENDING_EFFECTS,
+    actionId: action?.id ?? ACTION_IDS.CLOSE_CYCLE,
     errors: [],
     session: applied.session,
     result: applied.result
   };
 }
+
 
 // Punto de entrada generico para resolver acciones.
 //
@@ -825,7 +829,7 @@ export function resolvePendingEffects(session, action) {
 // - block_out_of_play
 // - link_targets
 // - vote
-// - resolve_pending_effects
+// - close_cycle
 //
 // Las proximas acciones genericas se conectaran aqui.
 export function resolveAction(session, action, input = {}, context = {}) {
@@ -844,8 +848,8 @@ export function resolveAction(session, action, input = {}, context = {}) {
   if (action?.id === ACTION_IDS.VOTE) {
     return resolveVote(session, action, input);
   }
-  if (action?.id === ACTION_IDS.RESOLVE_PENDING_EFFECTS) {
-    return resolvePendingEffects(session, action);
+  if (action?.id === ACTION_IDS.CLOSE_CYCLE) {
+    return resolveCloseCycle(session, action);
   }
 
   return {

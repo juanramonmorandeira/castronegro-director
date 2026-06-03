@@ -21,8 +21,21 @@ export function getRecipeKey(recipe = {}) {
   return normalizeId(recipe.key ?? recipe.actionKey ?? recipe.id);
 }
 
+// Constructor generico de receta.
+//
+// Las recetas concretas viven en recipeCatalog como datos predefinidos. Este
+// constructor solo normaliza la forma comun que recipeModel sabe resolver.
+export function createRecipe(recipe = {}) {
+  return {
+    ...recipe,
+    key: getRecipeKey(recipe),
+    optional: recipe.optional !== false,
+    constraints: [...(recipe.constraints ?? [])]
+  };
+}
+
 // Elimina metadatos propios de receta antes de llamar a actionModel.
-export function createActionFromRecipe(recipe = {}) {
+export function getActionFromRecipe(recipe = {}) {
   const { key, actionKey, constraints, onWinnerAction, ...action } = recipe;
   return action;
 }
@@ -50,7 +63,7 @@ export function hasOnWinnerAction(recipe = {}) {
 // Crea el input para la accion que debe ejecutarse sobre el ganador de una
 // votacion. Hereda el actorScope del step/receta y sustituye targets por el
 // roleInstance ganador que devolvio voteModel.
-export function createWinnerActionInput(input = {}, winnerRoleInstanceId = null, actorScope = null) {
+export function getWinnerActionInput(input = {}, winnerRoleInstanceId = null, actorScope = null) {
   return {
     ...input,
     actorScope: input.actorScope ?? actorScope ?? null,
@@ -61,7 +74,7 @@ export function createWinnerActionInput(input = {}, winnerRoleInstanceId = null,
 // Combina el resultado de una receta de voto con el resultado de su accion
 // posterior. La salida mantiene `vote` visible y expone los efectos reales de
 // onWinnerAction como efectos finales de la receta compuesta.
-export function createCompositeRecipeResult({ voteResult, winnerActionResult }) {
+export function mergeVoteRecipeResult({ voteResult, winnerActionResult }) {
   return {
     ...(winnerActionResult ?? {}),
     vote: voteResult?.vote ?? null,
@@ -108,7 +121,7 @@ export function validateRecipeConstraints({ session, recipe, input = {} }) {
 // votacion para aplicar acciones distintas segun la receta.
 export function resolveVoteRecipe(session, recipe, input = {}, context = {}) {
   const actionKey = context.actionKey ?? getRecipeKey(recipe);
-  const voteResolution = resolveAction(session, createActionFromRecipe(recipe), input, {
+  const voteResolution = resolveAction(session, getActionFromRecipe(recipe), input, {
     ...context,
     actionKey
   });
@@ -122,7 +135,7 @@ export function resolveVoteRecipe(session, recipe, input = {}, context = {}) {
   const winnerActionResolution = resolveAction(
     voteResolution.session,
     winnerAction,
-    createWinnerActionInput(input, winnerRoleInstanceId, context.actorScope ?? null),
+    getWinnerActionInput(input, winnerRoleInstanceId, context.actorScope ?? null),
     {
       ...context,
       actionKey
@@ -143,7 +156,7 @@ export function resolveVoteRecipe(session, recipe, input = {}, context = {}) {
     ...winnerActionResolution,
     actionId: recipe?.id ?? winnerActionResolution.actionId,
     actionKey,
-    result: createCompositeRecipeResult({
+    result: mergeVoteRecipeResult({
       voteResult: voteResolution.result,
       winnerActionResult: winnerActionResolution.result
     })
@@ -176,7 +189,7 @@ export function resolveRecipe(session, recipe, input = {}, context = {}) {
     });
   }
 
-  return resolveAction(session, createActionFromRecipe(recipe), input, {
+  return resolveAction(session, getActionFromRecipe(recipe), input, {
     ...context,
     actionKey
   });

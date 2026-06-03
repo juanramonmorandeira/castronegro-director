@@ -52,7 +52,7 @@ export function resolveProposedEffects({ session, proposedEffects = [] } = {}) {
 // Busca el objetivo principal de un efecto.
 //
 // Por ahora solo resolvemos role_instance porque es lo unico que usan las demos.
-// Cuando existan efectos sobre sesion, faccion o relaciones, se ampliara aqui.
+// Cuando existan efectos sobre sesion, alignment o relaciones, se ampliara aqui.
 export function findEffectTarget(session, effect) {
   if (effect?.targetType !== 'role_instance') return null;
   return (session?.roleInstances ?? []).find((role) => role.id === effect.targetId) ?? null;

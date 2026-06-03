@@ -26,7 +26,7 @@ import { PHASE_STATUSES, createPhasePools, createPhaseStep } from './sessionMode
 // Devuelve los pasos/fases que hay dentro de un pool.
 //
 // Ejemplo:
-// getPoolSteps(phasePools, 'poolFirstNight')
+// getPoolSteps(phasePools, 'poolDeployment')
 // podria devolver:
 // [
 //   { key: 'seer_inspects', status: 'enabled' },
@@ -152,9 +152,9 @@ export function hydratePhasePools(phasePools, rulesByPool = {}, sessionState = {
 //
 // "key" aqui significa identificador estable.
 // Ejemplo:
-// poolCurrent = 'poolFirstNight'
-// poolOrder = ['poolPreparation', 'poolFirstNight', 'poolEachDay']
-// getNextPoolKey(...) devuelve 'poolEachDay'
+// poolCurrent = 'poolDeployment'
+// poolOrder = ['poolDeployment', 'poolConcealed', 'poolExposed']
+// getNextPoolKey(...) devuelve 'poolExposed'
 export function getNextPoolKey(phasePools, fromPoolKey = phasePools?.poolCurrent) {
   const order = phasePools?.poolOrder ?? [];
   if (!order.length) return null;

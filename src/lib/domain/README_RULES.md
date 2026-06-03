@@ -60,7 +60,7 @@ La capa de contenido contiene:
 - imagenes;
 - traducciones;
 - ambientacion;
-- nombres de facciones;
+- nombres de alignments;
 - nombres de roles.
 
 Ejemplo:
@@ -89,7 +89,7 @@ Ejemplo:
 ```js
 {
   id: 'role_inspector',
-  defaultFactionId: 'village',
+  defaultAlignmentId: 'village',
   actions: ['inspect_role']
 }
 ```
@@ -249,7 +249,7 @@ Buenos nombres:
 - `block_action`
 - `block_out_of_play`
 - `link_targets`
-- `resolve_pending_effects`
+- `close_cycle`
 - `change_role`
 
 Malos nombres para el motor:
@@ -292,10 +292,10 @@ Ejemplos:
 El jugador que tiene ese rol.
 
 ```js
-{ type: 'faction_group', factionId: 'wolves' }
+{ type: 'alignment_group', alignmentId: 'wolves' }
 ```
 
-Todos los miembros en juego de una faccion actuan como grupo.
+Todos los miembros en juego de un alignment actuan como grupo.
 
 ```js
 { type: 'system' }
@@ -352,9 +352,9 @@ in_play
 out_of_play
 not_self
 self
-same_faction
-other_faction
-not_same_faction
+same_alignment
+other_alignment
+not_same_alignment
 distinct
 has_action_token
 ```
@@ -381,13 +381,13 @@ Ejemplo:
 ```js
 constraints: [
   {
-    type: 'prevent_repeat_target',
-    window: 'current_or_previous_cycle'
+    type: 'no_repeat_target',
+    window: 'current_or_next_cycle'
   }
 ]
 ```
 
-`prevent_repeat_target` consulta `session.actionHistory`, no los flags del actor
+`no_repeat_target` consulta `session.actionHistory`, no los flags del actor
 ni los flags del objetivo. Esto permite crear dos poderes con la misma accion
 base, uno con esta restriccion y otro sin ella.
 
@@ -456,7 +456,7 @@ target.flags.blockedActions[blockKey] = true
 
 ```js
 {
-  type: 'resolve_pending_effects'
+  type: 'close_cycle'
 }
 ```
 
@@ -596,7 +596,7 @@ Agente de inteligencia
 Mecanica generica:
 
 ```text
-Cada noche, los miembros en juego de una faccion eligen un objetivo en juego de fuera de su faccion e intentan aplicar `set_in_play(false)`.
+Cada noche, los miembros en juego de un alignment eligen un objetivo en juego de fuera de su alignment e intentan aplicar `set_in_play(false)`.
 ```
 
 Si el objetivo ya tenia bloqueada la accion `set_in_play(false)`, la accion se
@@ -610,13 +610,13 @@ Regla:
   id: 'set_in_play',
   phase: 'each_night',
   actor: {
-    type: 'faction_group',
-    factionId: 'predators'
+    type: 'alignment_group',
+    alignmentId: 'predators'
   },
   target: {
     type: 'role_instance',
     count: 1,
-    filters: ['in_play', 'not_same_faction']
+    filters: ['in_play', 'not_same_alignment']
   },
   effect: {
     type: 'set_property',
@@ -670,8 +670,8 @@ Regla:
   },
   constraints: [
     {
-      type: 'prevent_repeat_target',
-      window: 'current_or_previous_cycle'
+      type: 'no_repeat_target',
+      window: 'current_or_next_cycle'
     }
   ],
   effect: {
@@ -713,7 +713,7 @@ Regla:
 
 ```js
 {
-  id: 'resolve_pending_effects',
+  id: 'close_cycle',
   phase: 'daybreak',
   actor: {
     type: 'system'
@@ -723,7 +723,7 @@ Regla:
     count: 'automatic'
   },
   effect: {
-    type: 'resolve_pending_effects'
+    type: 'close_cycle'
   },
   repeat: 'each_cycle',
   consumes: null,
@@ -745,7 +745,7 @@ Orden recomendado:
 4. Crear demo que aplique `set_property inPlay=false`.
 5. Definir `block_action`.
 6. Crear demo donde `block_out_of_play` haga fallar `set_in_play(false)`.
-7. Definir `resolve_pending_effects`.
+7. Definir `close_cycle`.
 8. Crear demo que cierre el ciclo y limpie bloqueos temporales.
 9. Registrar `block_out_of_play` en `session.actionHistory`.
 10. Crear demo de "no bloquear al mismo objetivo dos ciclos consecutivos".
