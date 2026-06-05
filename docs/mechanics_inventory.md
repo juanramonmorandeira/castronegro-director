@@ -22,19 +22,19 @@ como referencia humana.
 | `no_repeat_target` | Protector no repite objetivo | implementada | Restriccion basada en `session.actionHistory`. |
 | `close_cycle` | cierre de noche/ciclo | implementada | Limpia flags temporales y avanza ciclo. |
 | `link_targets` | Cupido | parcial | Crea relacion `linked` entre varios objetivos. |
-| `linked` consequence | Enamorados comparten destino | parcial | Propaga `inPlay=false`; restriccion de voto linked implementada para `vote_out_of_play`. |
+| `linked` consequence | Enamorados comparten destino | parcial | Propaga `inPlay=false`; restriccion de voto linked implementada en steps con voto. |
 | `linked_victory` | Enamorados de bandos distintos | parcial | Primera version en `victoryModel.js`. |
 | `alignment_victory_rule` | condicion propia de un alignment | parcial | `at_least_remaining` configurable por sesion. |
 | `vote_count` | recuento de votacion | implementada | `voteModel.js` valida votos, suma unidades y resuelve ganador/empate. |
-| `vote_out_of_play` | votacion para dejar un rol out_of_play | implementada | Receta compuesta: `vote` + `onWinnerAction(set_in_play false)`. |
+| `group_vote` | votacion de grupo | implementada | El step vota para elegir `chosenId`; despues aplica la receta configurada. |
 
 ## Mecanicas pendientes detectadas
 
 | Mecanica abstracta candidata | Referencias humanas | Estado | Dependencias |
 |---|---|---|---|
 | `evaluate_victory` | victoria de alignments y condiciones especiales | parcial | `victoryModel.js` inicial. |
-| `configurable_vote_effect` | eleccion de cargo, otras votaciones | parcial | El protocolo `vote` + `onWinnerAction` ya existe; faltan acciones genericas como marcar o conceder recursos. |
-| `prevent_vote_out_of_play` | linked no puede votar contra linked | implementada | `vote_out_of_play` rechaza votos contra target relacionado por `linked`. |
+| `configurable_vote_effect` | eleccion de cargo, otras votaciones | parcial | El protocolo `step.voteRules` + receta aplicada al `chosenId` ya existe; faltan acciones genericas como marcar o conceder recursos. |
+| `block_related_vote_target` | linked no puede votar contra linked | implementada | El step con voto rechaza votos contra target relacionado por `linked`. |
 | `set_flag` | hechizado, infectado, revelado, acusado | pendiente | Necesita normalizar flags de estado. |
 | `change_alignment` | infeccion, conversion | pendiente | Necesita reglas de alignment y victoria. |
 | `change_role` | ladron, actor, sirvienta | pendiente | Necesita reglas de reemplazo de rol. |
@@ -42,7 +42,7 @@ como referencia humana.
 | `inspect_group` | zorro, sabueso u otras inspecciones amplias | pendiente | Ampliacion de `inspect_role`. |
 | `redirect_action` | manipulador u otras alteraciones | pendiente | Necesita resolver acciones compuestas. |
 | `delayed_effect` | caballero, pirotecnico, efectos retardados | pendiente | Necesita cola real de efectos pendientes. |
-| `instant_victory` | angel | pendiente | Necesita eventos de fase y causa de salida. |
+| `instant_victory` | angel | pendiente | Necesita eventos de step y causa de salida. |
 | `all_targets_flagged_victory` | flautista | pendiente | Necesita `set_flag` y evaluador de victoria por estado. |
 | `role_specific_last_action` | cazador | pendiente | Necesita interrupciones/special events. |
 

@@ -6,14 +6,22 @@
 // de step. El constructor unico sigue siendo createStep.
 // -----------------------------------------------------------------------------
 
-import { PHASE_STATUSES } from './sessionModel.js';
-import { ACTOR_SCOPE_TYPES, createStep } from './stepDefinition.js';
+import { RELATION_TYPES, STEP_STATUSES } from './sessionModel.js';
+import { createStep } from './stepDefinition.js';
 import {
   STEP_COMPLETION_MODES,
   STEP_COMPLETION_REQUESTED_BY,
   STEP_KEYS
 } from './stepModel.js';
 import { getCatalogRecipe, RECIPE_KEYS } from './recipeCatalog.js';
+import {
+  VOTE_ABSTAIN_RULES,
+  VOTE_REQUIRED_RULES,
+  VOTE_RESTRICTION_TYPES,
+  VOTE_TIE_RULES,
+  VOTE_UNANIMOUS_RULES,
+  createVoteRules
+} from './voteModel.js';
 
 export const STEP_CATALOG_IDS = Object.freeze({
   ROLE_INSPECTS: 'role_inspects',
@@ -21,7 +29,7 @@ export const STEP_CATALOG_IDS = Object.freeze({
   ROLE_BLOCKS_OUT_OF_PLAY: 'role_blocks_out_of_play',
   ROLE_IN_PLAY_CONTROL: 'role_in_play_control',
   GROUP_SET_OUT_OF_PLAY: 'group_set_out_of_play',
-  GROUP_VOTE_OUT_OF_PLAY: 'group_vote_out_of_play',
+  GROUP_VOTE: 'group_vote',
   SYSTEM_CLOSES_CYCLE: 'system_closes_cycle'
 });
 
@@ -35,8 +43,8 @@ export function getManualCompletion(allowedRequesters = Object.values(STEP_COMPL
 export const STEP_CATALOG = Object.freeze({
   [STEP_CATALOG_IDS.ROLE_INSPECTS]: createStep({
     key: STEP_KEYS.STEP_01,
-    status: PHASE_STATUSES.ENABLED,
-    actorScope: { type: ACTOR_SCOPE_TYPES.ROLE },
+    status: STEP_STATUSES.ENABLED,
+    actorIds: [],
     completion: getManualCompletion(),
     actions: [getCatalogRecipe(RECIPE_KEYS.INSPECT_ROLE)],
     metadata: {
@@ -46,8 +54,8 @@ export const STEP_CATALOG = Object.freeze({
 
   [STEP_CATALOG_IDS.ROLE_LINKS_TARGETS]: createStep({
     key: STEP_KEYS.STEP_02,
-    status: PHASE_STATUSES.ENABLED,
-    actorScope: { type: ACTOR_SCOPE_TYPES.ROLE },
+    status: STEP_STATUSES.ENABLED,
+    actorIds: [],
     completion: getManualCompletion(),
     actions: [getCatalogRecipe(RECIPE_KEYS.LINK_TARGETS)],
     metadata: {
@@ -57,8 +65,8 @@ export const STEP_CATALOG = Object.freeze({
 
   [STEP_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY]: createStep({
     key: STEP_KEYS.STEP_02,
-    status: PHASE_STATUSES.ENABLED,
-    actorScope: { type: ACTOR_SCOPE_TYPES.ROLE },
+    status: STEP_STATUSES.ENABLED,
+    actorIds: [],
     completion: getManualCompletion(),
     actions: [getCatalogRecipe(RECIPE_KEYS.BLOCK_OUT_OF_PLAY)],
     metadata: {
@@ -68,8 +76,8 @@ export const STEP_CATALOG = Object.freeze({
 
   [STEP_CATALOG_IDS.ROLE_IN_PLAY_CONTROL]: createStep({
     key: STEP_KEYS.STEP_03,
-    status: PHASE_STATUSES.ENABLED,
-    actorScope: { type: ACTOR_SCOPE_TYPES.ROLE },
+    status: STEP_STATUSES.ENABLED,
+    actorIds: [],
     completion: getManualCompletion(),
     actions: [
       getCatalogRecipe(RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY),
@@ -82,8 +90,8 @@ export const STEP_CATALOG = Object.freeze({
 
   [STEP_CATALOG_IDS.GROUP_SET_OUT_OF_PLAY]: createStep({
     key: STEP_KEYS.STEP_04,
-    status: PHASE_STATUSES.ENABLED,
-    actorScope: { type: ACTOR_SCOPE_TYPES.ROLE_GROUP },
+    status: STEP_STATUSES.ENABLED,
+    actorIds: [],
     completion: getManualCompletion(),
     actions: [getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY)],
     metadata: {
@@ -91,21 +99,41 @@ export const STEP_CATALOG = Object.freeze({
     }
   }),
 
-  [STEP_CATALOG_IDS.GROUP_VOTE_OUT_OF_PLAY]: createStep({
+  [STEP_CATALOG_IDS.GROUP_VOTE]: createStep({
     key: STEP_KEYS.STEP_05,
-    status: PHASE_STATUSES.ENABLED,
-    actorScope: { type: ACTOR_SCOPE_TYPES.ALL_ROLES },
+    status: STEP_STATUSES.ENABLED,
+    actorIds: [],
     completion: getManualCompletion(),
-    actions: [getCatalogRecipe(RECIPE_KEYS.VOTE_OUT_OF_PLAY)],
+    voteRules: createVoteRules({
+      required: VOTE_REQUIRED_RULES.ALL_ACTORS,
+      abstain: VOTE_ABSTAIN_RULES.NOT_ALLOWED,
+      unanimous: VOTE_UNANIMOUS_RULES.NOT_REQUIRED,
+      tie: VOTE_TIE_RULES.NULL_ON_TIE,
+      relationRestrictions: [
+        {
+          type: VOTE_RESTRICTION_TYPES.EXCLUDE_RELATED_TARGET,
+          relationType: RELATION_TYPES.LINKED
+        }
+      ]
+    }),
+    actions: [
+      getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY, {
+        target: {
+          type: 'role',
+          count: 1,
+          filters: ['in_play']
+        }
+      })
+    ],
     metadata: {
-      catalogId: STEP_CATALOG_IDS.GROUP_VOTE_OUT_OF_PLAY
+      catalogId: STEP_CATALOG_IDS.GROUP_VOTE
     }
   }),
 
   [STEP_CATALOG_IDS.SYSTEM_CLOSES_CYCLE]: createStep({
     key: STEP_KEYS.STEP_06,
-    status: PHASE_STATUSES.ENABLED,
-    actorScope: { type: 'system' },
+    status: STEP_STATUSES.ENABLED,
+    actorIds: [],
     completion: getManualCompletion([STEP_COMPLETION_REQUESTED_BY.SYSTEM]),
     actions: [getCatalogRecipe(RECIPE_KEYS.CLOSE_CYCLE)],
     metadata: {
@@ -131,12 +159,15 @@ export function getCatalogStep(stepCatalogId, overrides = {}) {
   return createStep({
     ...cloneCatalogValue(baseStep),
     ...overrides,
-    actorScope: overrides.actorScope
-      ? cloneCatalogValue(overrides.actorScope)
-      : cloneCatalogValue(baseStep.actorScope),
+    actorIds: overrides.actorIds
+      ? cloneCatalogValue(overrides.actorIds)
+      : cloneCatalogValue(baseStep.actorIds),
     completion: overrides.completion
       ? cloneCatalogValue(overrides.completion)
       : cloneCatalogValue(baseStep.completion),
+    voteRules: overrides.voteRules
+      ? cloneCatalogValue(overrides.voteRules)
+      : cloneCatalogValue(baseStep.voteRules),
     actions: overrides.actions
       ? cloneCatalogValue(overrides.actions)
       : cloneCatalogValue(baseStep.actions),

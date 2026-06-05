@@ -1,13 +1,13 @@
 # Modelo objetivo de sesion
 
-Este documento define el modelo objetivo para retomar la migracion de la pantalla de sesion. La decision base es que la partida debe tener una unica fuente de verdad para el estado de roles y una unica fuente de verdad para el avance de fases.
+Este documento define el modelo objetivo para retomar la migracion de la pantalla de sesion. La decision base es que la partida debe tener una unica fuente de verdad para el estado de roles y una unica fuente de verdad para el avance de steps.
 
 ## Objetivo
 
 La sesion en curso debe estar dirigida por:
 
 - `role_instances`: estado mecanico de cada carta/personaje en partida.
-- `phase_pools`: estado mecanico del flujo de fases.
+- `phase_pools`: estado mecanico del flujo de steps.
 - `session_log`: registro narrativo y tecnico de decisiones relevantes.
 
 `tokens`, `session_phases` y otros arrays auxiliares pueden existir durante la migracion, pero no deben decidir el flujo principal una vez completado el cambio.
@@ -16,7 +16,7 @@ La sesion en curso debe estar dirigida por:
 
 - La logica de partida no debe depender de nombres visuales, posiciones de fichas o textos traducidos.
 - Cada jugador/carta en juego debe existir como una instancia identificable, incluso si hay roles repetidos.
-- Las fases deben calcularse desde el estado real de la partida, no desde una lista fija construida al inicio.
+- Las steps deben calcularse desde el estado real de la partida, no desde una lista fija construida al inicio.
 - Los efectos del tablero deben terminar escribiendo en `role_instances`.
 - La interfaz debe renderizar el estado derivado, no mantener una segunda realidad paralela.
 - Las sesiones antiguas deben poder abrirse mediante una migracion controlada desde `session_phases` y `tokens`.
@@ -128,7 +128,7 @@ Los edificios deben ligarse a `role_instances` cuando una profesion queda asigna
 
 ## `phase_pools`
 
-`phase_pools` debe sustituir a `session_phases` como motor de avance. Un pool agrupa fases que se evalua en conjunto y permite rehidratar que pasos estan activos segun el estado actual.
+`phase_pools` debe sustituir a `session_phases` como motor de avance. Un pool agrupa steps que se evalua en conjunto y permite rehidratar que pasos estan activos segun el estado actual.
 
 Forma recomendada:
 
@@ -137,7 +137,7 @@ Forma recomendada:
   poolCurrent: 'poolPreparation',
   poolPrevious: null,
   poolNext: 'poolFirstNight',
-  poolCurrentPhaseIndex: 0,
+  poolCurrentStepIndex: 0,
   poolPreparation: [
     { key: 'hydratePreparation', status: 'enabled' },
     { key: 'phaseCharacters', status: 'enabled' },
@@ -158,26 +158,26 @@ Pools previstos:
 - `poolEachNight`: ciclo nocturno recurrente.
 - `poolSpecialEvents`: interrupciones y resoluciones pendientes, como Cazador, Caballero, Alguacil o final.
 
-Estados de fase:
+Estados de step:
 
-- `enabled`: la fase debe ejecutarse.
-- `disabled`: la fase no aplica ahora.
-- `done`: la fase ya fue completada en este ciclo.
-- `blocked`: la fase requiere una decision antes de avanzar.
+- `enabled`: la step debe ejecutarse.
+- `disabled`: la step no aplica ahora.
+- `done`: la step ya fue completada en este ciclo.
+- `blocked`: la step requiere una decision antes de avanzar.
 
 La version actual usa sobre todo `enabled` y `disabled`; `done` y `blocked` quedan como objetivo recomendado.
 
-## Avance de fases
+## Avance de steps
 
 El avance objetivo debe seguir este flujo:
 
-1. Leer `phase_pools.poolCurrent` y `poolCurrentPhaseIndex`.
-2. Resolver la fase actual mediante handlers de dominio.
+1. Leer `phase_pools.poolCurrent` y `poolCurrentStepIndex`.
+2. Resolver la step actual mediante handlers de dominio.
 3. Persistir cambios en `role_instances`, `building_instances`, contadores y log.
-4. Marcar la fase actual como `done`.
-5. Rehidratar el pool actual si la fase era de tipo `hydrate*`.
-6. Buscar la siguiente fase `enabled` en el pool actual.
-7. Si no hay siguiente fase, calcular el siguiente pool.
+4. Marcar la step actual como `done`.
+5. Rehidratar el pool actual si la step era de tipo `hydrate*`.
+6. Buscar la siguiente step `enabled` en el pool actual.
+7. Si no hay siguiente step, calcular el siguiente pool.
 8. Antes de entrar en el siguiente pool, evaluar `poolSpecialEvents`.
 9. Persistir `phase_pools`.
 
@@ -185,7 +185,7 @@ Pseudo-flujo:
 
 ```js
 async function advanceCurrentPhase(session) {
-  const current = getCurrentPhase(session.phase_pools);
+  const current = getCurrentStepCursor(session.phase_pools);
   const result = resolvePhase(current, session);
 
   const nextSession = applyPhaseResult(session, result);
@@ -252,7 +252,7 @@ Forma recomendada:
   id: 'log-001',
   at: Timestamp,
   type: 'phase' | 'action' | 'system' | 'note',
-  phaseKey: 'phaseWitch',
+  stepKey: 'phaseWitch',
   actorRoleInstanceId: 'witch-0',
   targetRoleInstanceIds: ['werewolf-0'],
   messageKey: 'session.logbook.witch_poison',
@@ -274,15 +274,15 @@ Antes de iniciar `poolPreparation/phaseCharacters`:
 
 Durante la partida:
 
-- Un rol muerto no debe activar fases futuras, salvo fases especiales de muerte.
+- Un rol muerto no debe activar steps futuras, salvo steps especiales de muerte.
 - Un poder consumido no debe volver a habilitarse salvo regla explicita.
 - `poolSpecialEvents` debe tener prioridad sobre el siguiente pool normal cuando haya eventos pendientes.
-- Los contadores `day_number` y `night_number` deben avanzar al entrar en pools diurnos/nocturnos, no en fases internas.
+- Los contadores `day_number` y `night_number` deben avanzar al entrar en pools diurnos/nocturnos, no en steps internas.
 
 Al terminar:
 
 - `status` debe ser `finished`.
-- `phase_pools.poolCurrent` debe apuntar a `poolSpecialEvents` o a una fase final equivalente.
+- `phase_pools.poolCurrent` debe apuntar a `poolSpecialEvents` o a una step final equivalente.
 - Debe existir un resultado de victoria persistido.
 
 ## Plan de migracion recomendado
@@ -294,7 +294,7 @@ Al terminar:
 5. Derivar los tokens visuales desde `role_instances` donde sea posible.
 6. Mantener `session_phases` solo como entrada de migracion.
 7. Eliminar escrituras duplicadas cuando el flujo nuevo este verificado.
-8. Anadir pruebas unitarias para reglas de fases y migracion.
+8. Anadir pruebas unitarias para reglas de steps y migracion.
 
 ## Pendientes abiertos
 
@@ -302,4 +302,4 @@ Al terminar:
 - Definir si Sheriff, Medium y Town Crier son flags de `role_instances` o entidades honorificas separadas.
 - Definir como se persistira la posicion visual de tokens: dentro de `tokens`, en local storage o en un subdocumento.
 - Definir resultado de victoria: campo unico recomendado `victory_result`.
-- Definir una funcion pura para `hydratePhasePool(poolKey, sessionState)` que pueda probarse sin Svelte ni Firebase.
+- Definir una funcion pura para `hydrateStepPool(poolKey, sessionState)` que pueda probarse sin Svelte ni Firebase.

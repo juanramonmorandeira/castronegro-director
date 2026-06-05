@@ -1,9 +1,9 @@
 // stepModel.js
 // -----------------------------------------------------------------------------
-// Este archivo conecta phaseModel con actionModel.
+// Este archivo conecta poolCursorModel con actionModel.
 //
 // Responsabilidad:
-// - leer el step actual de phaseModel;
+// - leer el step actual de poolCursorModel;
 // - comprobar que ese step es ejecutable;
 // - extraer la action declarada por el step;
 // - pedir a actionModel que la resuelva;
@@ -13,13 +13,16 @@
 // convirtiendo en una segunda actionModel. Su trabajo es coordinar, no resolver.
 // -----------------------------------------------------------------------------
 
-import { advancePhaseCursor, getCurrentPhase, isPhaseRunnable } from './phaseModel.js';
+import { advanceStepCursor, getCurrentStepCursor, isStepRunnable } from './poolCursorModel.js';
+import { appendEntry } from './historyModel.js';
 import { resolveRecipe } from './recipeModel.js';
+import { ACTION_IDS, VISIBILITY, resolveAction } from './actionModel.js';
 import { normalizeId } from './sessionModel.js';
+import { VOTE_OUTCOME_TYPES } from './voteModel.js';
 
 export const STEP_ERRORS = Object.freeze({
   MISSING_SESSION: 'step/missing-session',
-  MISSING_PHASE_POOLS: 'step/missing-phase-pools',
+  MISSING_STEP_POOLS: 'step/missing-step-pools',
   MISSING_CURRENT_STEP: 'step/missing-current-step',
   STEP_NOT_RUNNABLE: 'step/not-runnable',
   MISSING_ACTION: 'step/missing-action',
@@ -62,16 +65,14 @@ export const STEP_ACTION_KEYS = Object.freeze({
   BLOCK_OUT_OF_PLAY: 'block_out_of_play',
   SET_OUT_OF_PLAY: 'set_out_of_play',
   RESTORE_RECENT_OUT_OF_PLAY: 'restore_recent_out_of_play',
-  VOTE_OUT_OF_PLAY: 'vote_out_of_play',
   CLOSE_CYCLE: 'close_cycle'
 });
 
 // Devuelve el step actual con su contexto de pool.
 //
-// phaseModel lo llama "current phase" por compatibilidad historica, pero en el
-// modelo nuevo esa unidad se entiende como step ejecutable.
+// Devuelve el step apuntado por el cursor de pools.
 export function getCurrentStep(session) {
-  return getCurrentPhase(session?.phasePools);
+  return getCurrentStepCursor(session?.stepPools);
 }
 
 // Extrae las acciones declaradas por un step.
@@ -177,10 +178,10 @@ export function validateCurrentStep(session, { actionKey = null } = {}) {
     };
   }
 
-  if (!session.phasePools) {
+  if (!session.stepPools) {
     errors.push({
-      code: STEP_ERRORS.MISSING_PHASE_POOLS,
-      message: 'session has no phasePools'
+      code: STEP_ERRORS.MISSING_STEP_POOLS,
+      message: 'session has no stepPools'
     });
   }
 
@@ -200,12 +201,12 @@ export function validateCurrentStep(session, { actionKey = null } = {}) {
     };
   }
 
-  if (!isPhaseRunnable(currentStep.step)) {
+  if (!isStepRunnable(currentStep.step)) {
     errors.push({
       code: STEP_ERRORS.STEP_NOT_RUNNABLE,
-      message: `current step "${currentStep.phaseKey}" is not runnable`,
+      message: `current step "${currentStep.stepKey}" is not runnable`,
       poolKey: currentStep.poolKey,
-      stepKey: currentStep.phaseKey,
+      stepKey: currentStep.stepKey,
       status: currentStep.status
     });
   }
@@ -216,9 +217,9 @@ export function validateCurrentStep(session, { actionKey = null } = {}) {
   if (!selectedAction.ok) {
     errors.push({
       ...selectedAction.error,
-      message: `${selectedAction.error.message} in step "${currentStep.phaseKey}"`,
+      message: `${selectedAction.error.message} in step "${currentStep.stepKey}"`,
       poolKey: currentStep.poolKey,
-      stepKey: currentStep.phaseKey
+      stepKey: currentStep.stepKey
     });
   }
 
@@ -257,53 +258,114 @@ export function canRequesterCompleteStep(step, requestedBy) {
   return completion.allowedRequesters.includes(requestedBy);
 }
 
-// Crea una entrada de historial para el cierre de un step.
-//
-// Cerrar un step no es una accion de juego. Por eso no se registra en
-// actionHistory: vive en stepCompletionHistory para poder reconstruir quien
-// decidio pasar al siguiente step y por que.
-export function createStepCompletionEntry({
-  poolKey = null,
-  stepKey = null,
-  requestedBy = STEP_COMPLETION_REQUESTED_BY.DIRECTOR,
-  actorRoleInstanceId = null,
-  actionKey = null,
-  reason = 'manual_completion',
-  metadata = {}
-} = {}) {
-  const normalizedRequestedBy = isValidStepCompletionRequester(requestedBy)
-    ? requestedBy
-    : STEP_COMPLETION_REQUESTED_BY.DIRECTOR;
+function getStepVoteRules(step = {}) {
+  return step?.voteRules ?? null;
+}
+
+function hasStepVoteRules(step = {}) {
+  return !!getStepVoteRules(step);
+}
+
+function getVoteInputForStep(step = {}, input = {}) {
+  const voteRules = getStepVoteRules(step) ?? {};
 
   return {
-    poolKey,
-    stepKey,
-    requestedBy: normalizedRequestedBy,
-    actorRoleInstanceId,
-    actionKey,
-    reason,
-    metadata: { ...metadata }
+    actorIds: input.actorIds ?? step.actorIds ?? [],
+    votes: input.votes ?? [],
+    voteRules: {
+      ...voteRules,
+      candidateIds: input.candidateIds ?? voteRules.candidateIds ?? null
+    },
+    roundType: input.roundType
   };
 }
 
-export function appendStepCompletionHistory(session, entry) {
-  const history = Array.isArray(session?.stepCompletionHistory)
-    ? session.stepCompletionHistory
-    : [];
-  const normalizedEntry = createStepCompletionEntry(entry);
+function getRecipeInputFromVote({ step = {}, input = {}, chosenId = null }) {
+  return {
+    ...input,
+    actorIds: input.actorIds ?? step.actorIds ?? [],
+    targetIds: chosenId ? [chosenId] : []
+  };
+}
+
+function mergeVoteAndRecipeResult({ voteResult = null, recipeResult = null } = {}) {
+  return {
+    ...(recipeResult ?? {}),
+    vote: voteResult?.vote ?? null,
+    voteActionId: voteResult?.actionId ?? null,
+    proposedEffects: recipeResult?.proposedEffects ?? [],
+    finalEffects: recipeResult?.finalEffects ?? [],
+    blockedActions: recipeResult?.blockedActions ?? [],
+    blockedEffects: recipeResult?.blockedEffects ?? []
+  };
+}
+
+function resolveVoteStepRecipe(session, step, recipe, input = {}, context = {}) {
+  const voteResolution = resolveAction(
+    session,
+    {
+      id: ACTION_IDS.VOTE,
+      visibility: recipe?.visibility ?? VISIBILITY.ALL
+    },
+    getVoteInputForStep(step, input),
+    context
+  );
+
+  if (!voteResolution.ok) return voteResolution;
+
+  const chosenId = voteResolution.result?.vote?.chosenId ?? null;
+  if (voteResolution.result?.vote?.type !== VOTE_OUTCOME_TYPES.CHOSEN || !chosenId) {
+    return voteResolution;
+  }
+
+  const recipeResolution = resolveRecipe(
+    voteResolution.session,
+    recipe,
+    getRecipeInputFromVote({ step, input, chosenId }),
+    context
+  );
+
+  if (!recipeResolution.ok) {
+    return {
+      ...recipeResolution,
+      result: {
+        ...(recipeResolution.result ?? {}),
+        vote: voteResolution.result?.vote ?? null
+      }
+    };
+  }
 
   return {
-    ...session,
-    stepCompletionHistory: [
-      ...history,
-      {
-        ...normalizedEntry,
-        id:
-          normalizedEntry.id ??
-          `step-completion-${normalizedEntry.stepKey ?? 'step'}-${history.length}`
-      }
-    ]
+    ...recipeResolution,
+    result: mergeVoteAndRecipeResult({
+      voteResult: voteResolution.result,
+      recipeResult: recipeResolution.result
+    })
   };
+}
+
+// Anade una entrada al historial de steps.
+//
+// Cerrar un step no es una accion de juego. Por eso no se registra en
+// actionHistory: vive en stepHistory para poder reconstruir quien decidio pasar
+// al siguiente step y por que.
+export function appendStepHistory(session, entry = {}) {
+  const requestedBy = isValidStepCompletionRequester(entry.requestedBy)
+    ? entry.requestedBy
+    : STEP_COMPLETION_REQUESTED_BY.DIRECTOR;
+  const normalizedEntry = {
+    poolKey: entry.poolKey ?? null,
+    stepKey: entry.stepKey ?? null,
+    requestedBy,
+    actorIds: [...(entry.actorIds ?? [])],
+    actionKey: entry.actionKey ?? null,
+    reason: entry.reason ?? 'manual_completion',
+    metadata: { ...(entry.metadata ?? {}) }
+  };
+
+  return appendEntry(session, 'stepHistory', normalizedEntry, {
+    getId: (item, history) => `step-completion-${item.stepKey ?? 'step'}-${history.length}`
+  });
 }
 
 // Cierra el step actual y avanza el cursor.
@@ -327,22 +389,22 @@ export function completeCurrentStep(session, input = {}) {
       ],
       session,
       step: null,
-      phaseAdvance: null
+      stepAdvance: null
     };
   }
 
-  if (!session.phasePools) {
+  if (!session.stepPools) {
     return {
       ok: false,
       errors: [
         {
-          code: STEP_ERRORS.MISSING_PHASE_POOLS,
-          message: 'session has no phasePools'
+          code: STEP_ERRORS.MISSING_STEP_POOLS,
+          message: 'session has no stepPools'
         }
       ],
       session,
       step: null,
-      phaseAdvance: null
+      stepAdvance: null
     };
   }
 
@@ -357,25 +419,25 @@ export function completeCurrentStep(session, input = {}) {
       ],
       session,
       step: null,
-      phaseAdvance: null
+      stepAdvance: null
     };
   }
 
-  if (!isPhaseRunnable(currentStep.step)) {
+  if (!isStepRunnable(currentStep.step)) {
     return {
       ok: false,
       errors: [
         {
           code: STEP_ERRORS.STEP_NOT_RUNNABLE,
-          message: `current step "${currentStep.phaseKey}" is not runnable`,
+          message: `current step "${currentStep.stepKey}" is not runnable`,
           poolKey: currentStep.poolKey,
-          stepKey: currentStep.phaseKey,
+          stepKey: currentStep.stepKey,
           status: currentStep.status
         }
       ],
       session,
       step: currentStep,
-      phaseAdvance: null
+      stepAdvance: null
     };
   }
 
@@ -389,30 +451,30 @@ export function completeCurrentStep(session, input = {}) {
       errors: [
         {
           code: STEP_ERRORS.COMPLETION_NOT_ALLOWED,
-          message: `requester "${requestedBy}" cannot complete step "${currentStep.phaseKey}"`,
+          message: `requester "${requestedBy}" cannot complete step "${currentStep.stepKey}"`,
           poolKey: currentStep.poolKey,
-          stepKey: currentStep.phaseKey,
+          stepKey: currentStep.stepKey,
           requestedBy,
           allowedRequesters: getStepCompletionDefinition(currentStep.step).allowedRequesters
         }
       ],
       session,
       step: currentStep,
-      phaseAdvance: null
+      stepAdvance: null
     };
   }
 
-  const phaseAdvance = advancePhaseCursor(session.phasePools);
-  const sessionWithCompletion = appendStepCompletionHistory(
+  const stepAdvance = advanceStepCursor(session.stepPools);
+  const sessionWithCompletion = appendStepHistory(
     {
       ...session,
-      phasePools: phaseAdvance.phasePools
+      stepPools: stepAdvance.stepPools
     },
     {
       poolKey: currentStep.poolKey,
-      stepKey: currentStep.phaseKey,
+      stepKey: currentStep.stepKey,
       requestedBy,
-      actorRoleInstanceId: input.actorRoleInstanceId ?? null,
+      actorIds: [...(input.actorIds ?? [])],
       actionKey: input.actionKey ?? null,
       reason: input.reason ?? 'manual_completion',
       metadata: input.metadata ?? {}
@@ -424,8 +486,8 @@ export function completeCurrentStep(session, input = {}) {
     errors: [],
     session: sessionWithCompletion,
     step: currentStep,
-    phaseAdvance,
-    completion: sessionWithCompletion.stepCompletionHistory.at(-1)
+    stepAdvance,
+    completion: sessionWithCompletion.stepHistory.at(-1)
   };
 }
 
@@ -455,28 +517,40 @@ export function resolveCurrentStep(session, input = {}, options = {}) {
       session,
       result: null,
       step: stepValidation.currentStep,
-      phaseAdvance: null
+      stepAdvance: null
     };
   }
 
-  const actionResolution = resolveRecipe(session, stepValidation.action, input, {
+  const recipeInput = {
+    ...input,
+    actorIds: input.actorIds ?? stepValidation.currentStep.step?.actorIds ?? []
+  };
+  const resolutionContext = {
     poolKey: stepValidation.currentStep.poolKey,
-    stepKey: stepValidation.currentStep.phaseKey,
-    actionKey: stepValidation.actionKey,
-    actorScope: stepValidation.currentStep.step?.actorScope ?? null
-  });
+    stepKey: stepValidation.currentStep.stepKey,
+    actionKey: stepValidation.actionKey
+  };
+  const actionResolution = hasStepVoteRules(stepValidation.currentStep.step)
+    ? resolveVoteStepRecipe(
+        session,
+        stepValidation.currentStep.step,
+        stepValidation.action,
+        recipeInput,
+        resolutionContext
+      )
+    : resolveRecipe(session, stepValidation.action, recipeInput, resolutionContext);
 
   if (!actionResolution.ok || !advanceOnSuccess) {
     return {
       ...actionResolution,
       step: stepValidation.currentStep,
-      phaseAdvance: null
+      stepAdvance: null
     };
   }
 
   const completion = completeCurrentStep(actionResolution.session, {
     requestedBy: options.requestedBy ?? STEP_COMPLETION_REQUESTED_BY.SYSTEM,
-    actorRoleInstanceId: input.actorRoleInstanceId ?? null,
+    actorIds: [...(input.actorIds ?? [])],
     actionKey: stepValidation.actionKey,
     reason: options.completionReason ?? 'auto_advance_on_success'
   });
@@ -485,7 +559,7 @@ export function resolveCurrentStep(session, input = {}, options = {}) {
     return {
       ...actionResolution,
       step: stepValidation.currentStep,
-      phaseAdvance: null,
+      stepAdvance: null,
       completion
     };
   }
@@ -494,7 +568,7 @@ export function resolveCurrentStep(session, input = {}, options = {}) {
     ...actionResolution,
     session: completion.session,
     step: stepValidation.currentStep,
-    phaseAdvance: completion.phaseAdvance,
+    stepAdvance: completion.stepAdvance,
     completion: completion.completion
   };
 }

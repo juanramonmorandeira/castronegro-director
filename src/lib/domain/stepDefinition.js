@@ -4,80 +4,67 @@
 //
 // Este archivo describe "que es un step":
 // - que slot ocupa;
-// - que actorScope puede actuar;
+// - que roles concretos pueden actuar, si ya se conocen;
 // - que acciones ofrece;
 // - que metadatos de definicion arrastra.
 //
 // No decide en que pool vive ni en que posicion se ejecuta. Esa organizacion
-// pertenece a phaseDefinition.js.
+// pertenece a poolDefinition.js.
 // -----------------------------------------------------------------------------
 
-import { PHASE_STATUSES, normalizeId } from './sessionModel.js';
+import { STEP_STATUSES, normalizeId } from './sessionModel.js';
 import {
   STEP_COMPLETION_MODES,
   STEP_COMPLETION_REQUESTED_BY
 } from './stepModel.js';
-
-export const ACTOR_SCOPE_TYPES = Object.freeze({
-  ROLE: 'role',
-  ROLE_GROUP: 'role_group',
-  ALL_ROLES: 'all_roles',
-  LINKED_ROLES: 'linked_roles'
-});
+import { createVoteRules } from './voteModel.js';
 
 export const STEP_SOURCE_TYPES = Object.freeze({
-  ROLE_INSTANCE: 'role_instance',
-  GROUP_INSTANCE: 'group_instance',
+  ROLE: 'role',
+  GROUP: 'group',
   SYSTEM: 'system',
   SKIN: 'skin',
   EVENT: 'event'
 });
 
-export function createStepSource({ type = null, id = null, metadata = {} } = {}) {
-  return {
-    type: type ? normalizeId(type) : null,
-    id: id ? normalizeId(id) : null,
-    metadata: { ...metadata }
-  };
+// Normaliza los actores concretos de un step.
+//
+// Los ids de roles runtime se tratan como opacos. No se pasan por normalizeId
+// porque eso cambiaria ids validos como role_key-0 a role_key_0.
+function defineActorIds(actorIds = []) {
+  return [...new Set((actorIds ?? []).filter(Boolean))];
 }
 
-// Crea una definicion normalizada de actorScope.
+// Prepara una receta para vivir dentro de step.actions.
 //
-// La unidad mecanica sigue siendo roleInstance. Un scope solo acota que
-// roleInstances pueden actuar en este step.
-export function createActorScope({
-  type = ACTOR_SCOPE_TYPES.ROLE,
-  roleInstanceId = null,
-  groupId = null,
-  relationType = null,
-  metadata = {}
-} = {}) {
-  return {
-    type: normalizeId(type),
-    roleInstanceId,
-    groupId: groupId ? normalizeId(groupId) : null,
-    relationType: relationType ? normalizeId(relationType) : null,
-    metadata: { ...metadata }
-  };
-}
-
-// Crea una receta de accion dentro de un step.
-//
-// action.id puede ser generico, por ejemplo set_in_play.
-// action.key distingue la receta concreta dentro del step.
-// optional=true significa que el step puede cerrarse aunque esta receta no se
-// haya ejecutado. Si se intenta ejecutar, conserva filtros y restricciones.
-export function createStepActionDefinition(action = {}) {
-  const actionKey = normalizeId(action.key ?? action.actionKey ?? action.id);
+// No crea la receta: normalmente ya viene de recipeCatalog o de createRecipe.
+// Aqui solo garantizamos la key mecanica que stepModel usara para seleccionarla
+// y el valor optional por defecto.
+function prepareRecipe(recipe = {}) {
+  const actionKey = normalizeId(recipe.key ?? recipe.actionKey ?? recipe.id);
 
   return {
-    ...action,
+    ...recipe,
     key: actionKey,
-    optional: action.optional !== false
+    optional: recipe.optional !== false
   };
 }
 
-export function createStepCompletionDefinition({
+// Normaliza las reglas de voto asociadas al step.
+//
+// El voto no es una receta: es un mecanismo del step para elegir target. Estas
+// reglas le dicen a voteModel como contar decisiones antes de ejecutar la receta
+// declarada en step.actions sobre el chosenId resultante.
+function prepareVoteRules(voteRules = null) {
+  if (!voteRules) return null;
+  return createVoteRules(voteRules);
+}
+
+// Valida y completa la configuracion de cierre de un step.
+//
+// completion no ejecuta nada. Solo define quien puede pedir avanzar al
+// siguiente step y si el cierre es manual o automatico.
+function validateStepCompletion({
   mode = STEP_COMPLETION_MODES.MANUAL,
   allowedRequesters = Object.values(STEP_COMPLETION_REQUESTED_BY)
 } = {}) {
@@ -97,30 +84,38 @@ export function createStepCompletionDefinition({
   };
 }
 
-// Crea una definicion de step lista para que phaseDefinition la organice.
+// Crea una definicion de step lista para que poolDefinition la organice.
 //
 // order es declarativo: sirve para construir arrays antes de crear la sesion.
-// phaseModel no lo usa durante la ejecucion.
+// poolCursorModel no lo usa durante la ejecucion.
 export function createStep({
   key,
   poolKey = null,
-  status = PHASE_STATUSES.DISABLED,
-  actorScope = {},
+  status = STEP_STATUSES.DISABLED,
+  actorIds = [],
   completion = {},
+  voteRules = null,
   actions = [],
   order = null,
   source = null,
   metadata = {}
 } = {}) {
-  const normalizedSource = source ? createStepSource(source) : null;
+  const normalizedSource = source
+    ? {
+        type: source.type ? normalizeId(source.type) : null,
+        id: source.id ? normalizeId(source.id) : null,
+        metadata: { ...(source.metadata ?? {}) }
+      }
+    : null;
 
   return {
     key: normalizeId(key),
     poolKey: poolKey ?? null,
     status,
-    actorScope: createActorScope(actorScope),
-    completion: createStepCompletionDefinition(completion),
-    actions: (actions ?? []).map(createStepActionDefinition),
+    actorIds: defineActorIds(actorIds),
+    completion: validateStepCompletion(completion),
+    voteRules: prepareVoteRules(voteRules),
+    actions: (actions ?? []).map(prepareRecipe),
     order: Number.isFinite(order) ? order : null,
     metadata: {
       ...metadata,

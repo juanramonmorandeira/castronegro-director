@@ -35,13 +35,13 @@ export const VICTORY_RULE_TYPES = Object.freeze({
   AT_LEAST_REMAINING: 'at_least_remaining'
 });
 
-// Devuelve los roleInstances que siguen participando en el juego principal.
+// Devuelve los roles que siguen participando en el juego principal.
 //
 // Usamos `inPlay` porque es el termino anonimo acordado. No presupone muerte:
 // un rol puede estar arrestado, expulsado, eyectado o fuera de la ronda por
 // cualquier motivo narrativo de la skin.
-export function getInPlayRoleInstances(session = {}) {
-  return (session.roleInstances ?? []).filter((role) => role?.inPlay === true);
+export function getInPlayRoles(session = {}) {
+  return (session.roles ?? []).filter((role) => role?.inPlay === true);
 }
 
 export function getRoleAlignmentId(role = {}) {
@@ -49,10 +49,10 @@ export function getRoleAlignmentId(role = {}) {
 }
 
 // Devuelve alignments unicos, ignorando valores vacios.
-export function getAlignmentIds(roleInstances = []) {
+export function getAlignmentIds(roles = []) {
   return [
     ...new Set(
-      (roleInstances ?? [])
+      (roles ?? [])
         .map(getRoleAlignmentId)
         .filter((alignmentId) => alignmentId.length > 0)
     )
@@ -83,9 +83,9 @@ export function getAlignmentVictoryRules(session = {}) {
   return session?.settings?.victory?.alignmentRules ?? session?.settings?.alignmentVictoryRules ?? [];
 }
 
-// Agrupa roleInstances inPlay por alignment.
+// Agrupa roles inPlay por alignment.
 export function getInPlayRolesByAlignment(session = {}) {
-  return getInPlayRoleInstances(session).reduce((acc, role) => {
+  return getInPlayRoles(session).reduce((acc, role) => {
     const alignmentId = getRoleAlignmentId(role);
     if (!alignmentId) return acc;
     acc[alignmentId] = [...(acc[alignmentId] ?? []), role];
@@ -100,7 +100,7 @@ export function getOngoingVictoryResult(reason = 'no_victory_condition_met') {
     type: VICTORY_TYPES.NONE,
     reason,
     winnerAlignmentId: null,
-    winnerRoleInstanceIds: []
+    winnerIds: []
   };
 }
 
@@ -108,13 +108,13 @@ export function getOngoingVictoryResult(reason = 'no_victory_condition_met') {
 //
 // Regla implementada:
 // - at_least_remaining: el alignment gana si sus miembros inPlay son al menos
-//   tantos como todos los demas roleInstances inPlay juntos.
+//   tantos como todos los demas roles inPlay juntos.
 //
 // Esta es la version abstracta de reglas tipo "cuando un alignment alcanza o
 // iguala al resto de participantes, se cumple su condicion". No dice que ese
 // alignment sea enemigo, hostil, bueno o malo.
 export function evaluateAlignmentVictoryRules(session = {}) {
-  const inPlayRoles = getInPlayRoleInstances(session);
+  const inPlayRoles = getInPlayRoles(session);
   const rolesByAlignment = getInPlayRolesByAlignment(session);
 
   for (const rule of getAlignmentVictoryRules(session)) {
@@ -136,7 +136,7 @@ export function evaluateAlignmentVictoryRules(session = {}) {
         ruleId: rule.id ?? null,
         ruleCondition: VICTORY_RULE_TYPES.AT_LEAST_REMAINING,
         winnerAlignmentId: alignmentId,
-        winnerRoleInstanceIds: alignmentRoles.map((role) => role.id),
+        winnerIds: alignmentRoles.map((role) => role.id),
         counts: {
           alignmentInPlay: alignmentRoles.length,
           remainingInPlay: remainingRoleCount,
@@ -159,16 +159,16 @@ export function evaluateAlignmentVictoryRules(session = {}) {
 // Si linked une roles del mismo alignment, no cambia la condicion de victoria:
 // ganara ese alignment por la regla normal si corresponde.
 export function evaluateLinkedVictory(session = {}) {
-  const inPlayRoles = getInPlayRoleInstances(session);
+  const inPlayRoles = getInPlayRoles(session);
   const inPlayIds = new Set(inPlayRoles.map((role) => role.id));
   const activeLinkedRelations = (session.relations ?? []).filter(
     (relation) => relation?.active && relation.type === RELATION_TYPES.LINKED
   );
 
   for (const relation of activeLinkedRelations) {
-    const relationIds = relation.roleInstanceIds ?? [];
+    const relationIds = relation.roleIds ?? [];
     const linkedRoles = relationIds
-      .map((roleInstanceId) => inPlayRoles.find((role) => role.id === roleInstanceId))
+      .map((roleId) => inPlayRoles.find((role) => role.id === roleId))
       .filter(Boolean);
     const linkedIds = new Set(linkedRoles.map((role) => role.id));
     const linkedAlignmentIds = getAlignmentIds(linkedRoles);
@@ -182,7 +182,7 @@ export function evaluateLinkedVictory(session = {}) {
         type: VICTORY_TYPES.LINKED_EXCLUSIVE_SURVIVORS,
         reason: 'linked_members_from_different_alignments_are_last_in_play',
         winnerAlignmentId: null,
-        winnerRoleInstanceIds: [...linkedIds],
+        winnerIds: [...linkedIds],
         relationId: relation.id
       };
     }
@@ -197,16 +197,16 @@ export function evaluateLinkedVictory(session = {}) {
 // Las reglas mas especificas deben venir configuradas en alignmentRules para no
 // hardcodear el significado narrativo de cada alignment.
 export function evaluateSingleAlignmentVictory(session = {}) {
-  const inPlayRoles = getInPlayRoleInstances(session);
+  const inPlayRoles = getInPlayRoles(session);
   const alignmentIds = getAlignmentIds(inPlayRoles);
 
   if (inPlayRoles.length === 0) {
     return {
       status: VICTORY_STATUSES.FINISHED,
       type: VICTORY_TYPES.DRAW,
-      reason: 'no_role_instances_in_play',
+      reason: 'no_roles_in_play',
       winnerAlignmentId: null,
-      winnerRoleInstanceIds: []
+      winnerIds: []
     };
   }
 
@@ -216,7 +216,7 @@ export function evaluateSingleAlignmentVictory(session = {}) {
       type: VICTORY_TYPES.SINGLE_ALIGNMENT,
       reason: 'single_alignment_left_in_play',
       winnerAlignmentId: alignmentIds[0],
-      winnerRoleInstanceIds: inPlayRoles.map((role) => role.id)
+      winnerIds: inPlayRoles.map((role) => role.id)
     };
   }
 

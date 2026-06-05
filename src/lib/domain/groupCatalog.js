@@ -8,7 +8,7 @@
 
 import { POOL_KEYS } from './sessionModel.js';
 import { getCatalogStep, STEP_CATALOG_IDS } from './stepCatalog.js';
-import { createGroup, GROUP_SELECTOR_TYPES } from './groupDefinition.js';
+import { createGroup, GROUP_MEMBERSHIP_RULE_TYPES } from './groupDefinition.js';
 
 export const GROUP_CATALOG_IDS = Object.freeze({
   ALIGNMENT_SET_OUT_OF_PLAY: 'alignment_set_out_of_play'
@@ -17,8 +17,8 @@ export const GROUP_CATALOG_IDS = Object.freeze({
 export const GROUP_CATALOG = Object.freeze({
   [GROUP_CATALOG_IDS.ALIGNMENT_SET_OUT_OF_PLAY]: createGroup({
     key: GROUP_CATALOG_IDS.ALIGNMENT_SET_OUT_OF_PLAY,
-    selector: {
-      type: GROUP_SELECTOR_TYPES.ALIGNMENT,
+    membershipRule: {
+      type: GROUP_MEMBERSHIP_RULE_TYPES.ALIGNMENT,
       alignmentId: 'alignment_b'
     },
     stepDefinitions: [
@@ -51,9 +51,9 @@ export function getCatalogGroup(groupCatalogId, overrides = {}) {
   return createGroup({
     ...cloneCatalogValue(baseGroup),
     ...overrides,
-    selector: overrides.selector
-      ? cloneCatalogValue(overrides.selector)
-      : cloneCatalogValue(baseGroup.selector),
+    membershipRule: overrides.membershipRule
+      ? cloneCatalogValue(overrides.membershipRule)
+      : cloneCatalogValue(baseGroup.membershipRule),
     stepDefinitions: overrides.stepDefinitions
       ? cloneCatalogValue(overrides.stepDefinitions)
       : cloneCatalogValue(baseGroup.stepDefinitions),

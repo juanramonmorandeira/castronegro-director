@@ -7,7 +7,7 @@
 // - set_in_play: intenta cambiar si un objetivo sigue en el juego principal.
 // - block_action: bloquea una accion concreta contra un objetivo.
 // - link_targets: crea una relacion mecanica entre varios objetivos.
-// - vote: resuelve una votacion y devuelve ganador/empate/nulo.
+// - vote: resuelve una votacion y devuelve chosen/empate/nulo.
 // - close_cycle: cierra el ciclo y limpia efectos temporales.
 //
 // Importante:
@@ -35,10 +35,8 @@ import {
 } from './historyModel.js';
 import { resolveProposedEffects } from './resolverModel.js';
 import {
-  VOTE_REQUIRED_POLICIES,
   VOTE_OUTCOME_TYPES,
   VOTE_ROUND_TYPES,
-  VOTE_TIE_POLICIES,
   resolveVoteRound
 } from './voteModel.js';
 
@@ -58,27 +56,24 @@ export const VISIBILITY = Object.freeze({
   HIDDEN: 'hidden'
 });
 
-// Busca una instancia de rol por id dentro de una sesion.
+// Busca un rol de sesion por id.
 //
-// Una instancia de rol es una carta/personaje concreto en la partida:
+// Un rol de sesion es una carta/personaje concreto en la partida:
 // role_inspector-0, hidden_role-0, enemy-0, etc.
-export function findRoleInstance(session, roleInstanceId) {
-  return (session?.roleInstances ?? []).find((role) => role.id === roleInstanceId) ?? null;
+export function findRole(session, roleId) {
+  return (session?.roles ?? []).find((role) => role.id === roleId) ?? null;
 }
 
-export function getActionActor(session, action, actorRoleInstanceId) {
-  return findRoleInstance(session, actorRoleInstanceId);
+export function getActionActors(session, actorIds = []) {
+  return (actorIds ?? []).map((actorId) => findRole(session, actorId));
 }
 
-// Devuelve true si una accion puede ejecutarse usando el actorScope heredado
-// del step en vez de un actor individual.
+// Devuelve true si una accion puede resolverse sin actor individual.
 //
 // Ejemplo: una votacion all_roles puede derivar un set_in_play(false). Esa
-// accion no tiene un unico actorRoleInstanceId, pero si tiene un origen
-// mecanico claro: el actorScope del step.
-export function canUseActorScopeAsSource({ action, actorScope }) {
-  if (!actorScope?.type) return false;
-
+// accion no tiene un unico actorId. Es valida mientras la propia accion no
+// necesite comparar target contra actor, como ocurre con not_self.
+export function canResolveWithoutActor(action) {
   const filters = action?.target?.filters ?? [];
   const needsIndividualActor = filters.includes('not_self') || filters.includes('not_same_alignment');
 
@@ -115,15 +110,20 @@ export function targetMatchesFilter({ filter, actor, target, session, action }) 
 //
 // No lanza errores porque queremos poder mostrar problemas de forma clara en UI
 // o en demos.
-export function validateActionTargets({ session, action, actor, actorScope = null, targets }) {
+export function validateActionTargets({
+  session,
+  action,
+  actor,
+  targets
+}) {
   const errors = [];
   const expectedCount = action?.target?.count ?? 0;
   const filters = action?.target?.filters ?? [];
 
-  if (!actor && !canUseActorScopeAsSource({ action, actorScope })) {
+  if (!actor && !canResolveWithoutActor(action)) {
     errors.push({
       code: 'action/missing-actor',
-      message: 'action has no actor role instance'
+      message: 'action has no actor role'
     });
   }
 
@@ -200,10 +200,10 @@ export function validateActionDefinition(action) {
         message: 'set_in_play requires a set_property effect'
       });
     }
-    if (effect.targetType !== 'role_instance') {
+    if (effect.targetType !== 'role') {
       errors.push({
         code: 'action/invalid-effect-target-type',
-        message: 'set_in_play currently requires targetType "role_instance"'
+        message: 'set_in_play currently requires targetType "role"'
       });
     }
     if (effect.property !== 'inPlay') {
@@ -270,9 +270,19 @@ export function validateActionDefinition(action) {
 //
 // Las restricciones no se validan aqui. Pertenecen a recipeModel porque son
 // condiciones de uso de una receta, no de la accion pura.
-export function validateActionResolution({ session, action, actor, actorScope = null, targets }) {
+export function validateActionResolution({
+  session,
+  action,
+  actor,
+  targets
+}) {
   const definitionValidation = validateActionDefinition(action);
-  const targetValidation = validateActionTargets({ session, action, actor, actorScope, targets });
+  const targetValidation = validateActionTargets({
+    session,
+    action,
+    actor,
+    targets
+  });
   const errors = [...definitionValidation.errors, ...targetValidation.errors];
 
   return {
@@ -287,7 +297,7 @@ export function validateActionResolution({ session, action, actor, actorScope = 
 // alguien.
 //
 // Ejemplo:
-// reveal_property roleId sobre hidden_role-0 devuelve que su roleId es enemy.
+// reveal_property roleKey sobre hidden_role-0 devuelve que su roleKey es enemy.
 export function applyRevealPropertyEffect({ action, actor, targets }) {
   const property = action?.effect?.property;
   const visibility = action?.visibility ?? VISIBILITY.ACTOR_ONLY;
@@ -295,9 +305,9 @@ export function applyRevealPropertyEffect({ action, actor, targets }) {
   return {
     type: EFFECT_TYPES.REVEAL_PROPERTY,
     visibility,
-    actorRoleInstanceId: actor.id,
+    actorIds: [actor.id],
     reveals: targets.map((target) => ({
-      targetRoleInstanceId: target.id,
+      targetId: target.id,
       property,
       value: target?.[property]
     }))
@@ -333,7 +343,7 @@ export function getBlockableActionDescriptor(action) {
 //
 // En datos queda dividido asi:
 // - action.effect.blocks guarda set_in_play + params;
-// - input.targetRoleInstanceIds guarda target;
+// - input.targetIds guarda target;
 // - role.flags.blockedActions guarda la clave en el propio objetivo.
 export function getBlockedActionDescriptor(action) {
   return action?.effect?.blocks ?? {
@@ -388,7 +398,6 @@ export function applyFinalEffects({ session, finalEffects = [] }) {
 export function resolveSetInPlayEffect({ session, action, actor, targets, context = {} }) {
   const visibility = action?.visibility ?? VISIBILITY.STORYTELLER_ONLY;
   const currentCycleId = getCurrentCycleId(session);
-  const actorScope = context.actorScope ?? null;
   const blockedTargetIds = new Set(
     targets
       .filter((target) => isActionBlockedForTarget({ action, target }))
@@ -414,9 +423,8 @@ export function resolveSetInPlayEffect({ session, action, actor, targets, contex
     actionKey: context.actionKey ?? action.key ?? action.id,
     actionId: action.id,
     actionSignature: getActionHistorySignature(action),
-    actorRoleInstanceId: actor?.id ?? null,
-    actorScope,
-    targetRoleInstanceIds: targets.map((target) => target.id),
+    actorIds: actor ? [actor.id] : [],
+    targetIds: targets.map((target) => target.id),
     proposedEffects,
     finalEffects,
     blockedActions,
@@ -433,10 +441,9 @@ export function resolveSetInPlayEffect({ session, action, actor, targets, contex
       type: 'action_resolution',
       visibility,
       actionId: action.id,
-      actorRoleInstanceId: actor?.id ?? null,
-      actorScope,
+      actorIds: actor ? [actor.id] : [],
       targets: targets.map((target) => ({
-        targetRoleInstanceId: target.id,
+        targetId: target.id,
         actionAttempted: true,
         actionBlocked: blockedTargetIds.has(target.id),
         failureReason: blockedTargetIds.has(target.id) ? 'blocked_action' : null
@@ -471,7 +478,7 @@ export function applyBlockAction({ session, action, actor, targets, context = {}
 
   const sessionWithBlock = {
     ...session,
-    roleInstances: (session.roleInstances ?? []).map((role) => {
+    roles: (session.roles ?? []).map((role) => {
       if (!targetIds.has(role.id)) return role;
 
       const blockedActions = {
@@ -496,8 +503,8 @@ export function applyBlockAction({ session, action, actor, targets, context = {}
     actionKey: context.actionKey ?? action.key ?? action.id,
     actionId: action?.id ?? ACTION_IDS.BLOCK_ACTION,
     actionSignature: getActionHistorySignature(action),
-    actorRoleInstanceId: actor.id,
-    targetRoleInstanceIds: targets.map((target) => target.id),
+    actorIds: [actor.id],
+    targetIds: targets.map((target) => target.id),
     blockKey,
     blockedAction,
     result: HISTORY_RESULTS.APPLIED
@@ -508,12 +515,12 @@ export function applyBlockAction({ session, action, actor, targets, context = {}
     result: {
       type: EFFECT_TYPES.BLOCK_ACTION,
       visibility,
-      actorRoleInstanceId: actor.id,
+      actorIds: [actor.id],
       blockKey,
       blockedAction,
       cycleId: currentCycleId,
       targets: targets.map((target) => ({
-        targetRoleInstanceId: target.id,
+        targetId: target.id,
         blockedAction: blockKey
       }))
     }
@@ -532,7 +539,7 @@ export function applyLinkTargets({ session, action, actor, targets }) {
   const proposedEffects = [
     {
       ...action.effect,
-      roleInstanceIds: targets.map((target) => target.id),
+      roleIds: targets.map((target) => target.id),
       sourceActionId: action.id
     }
   ];
@@ -545,10 +552,10 @@ export function applyLinkTargets({ session, action, actor, targets }) {
       type: 'action_resolution',
       visibility,
       actionId: action.id,
-      actorRoleInstanceId: actor.id,
+      actorIds: [actor.id],
       cycleId: currentCycleId,
       targets: targets.map((target) => ({
-        targetRoleInstanceId: target.id
+        targetId: target.id
       })),
       proposedEffects: effectResolution.proposedEffects,
       finalEffects: effectResolution.finalEffects,
@@ -559,20 +566,17 @@ export function applyLinkTargets({ session, action, actor, targets }) {
 
 // Resuelve una votacion pura.
 //
-// voteModel solo cuenta votos y decide ganador/empate/nulo. No aplica efectos.
-// Si una receta quiere hacer algo con el ganador, debe definir onWinnerAction y
-// dejar que recipeModel ejecute esa accion despues.
+// voteModel solo cuenta votos y decide chosen/empate/nulo. No aplica efectos.
+// Si un step quiere hacer algo con el chosen, stepModel aplicara despues la
+// receta normal configurada en ese step.
 export function applyVote({ session, action, input = {} }) {
   const visibility = action?.visibility ?? VISIBILITY.ALL;
   const voteResolution = resolveVoteRound({
     session,
+    actorIds: input.actorIds ?? [],
     votes: input.votes ?? [],
-    tiePolicy: action?.tiePolicy ?? input.tiePolicy ?? VOTE_TIE_POLICIES.NULL_ON_TIE,
-    roundType: input.roundType ?? VOTE_ROUND_TYPES.INITIAL,
-    allowedTargetRoleInstanceIds:
-      input.allowedTargetRoleInstanceIds ?? action?.allowedTargetRoleInstanceIds ?? null,
-    requiredVotes: action?.requiredVotes ?? input.requiredVotes ?? VOTE_REQUIRED_POLICIES.OPTIONAL,
-    relationRestrictions: action?.relationRestrictions ?? input.relationRestrictions ?? []
+    voteRules: input.voteRules ?? action?.voteRules ?? {},
+    roundType: input.roundType ?? VOTE_ROUND_TYPES.INITIAL
   });
 
   if (!voteResolution.ok) {
@@ -584,7 +588,7 @@ export function applyVote({ session, action, input = {} }) {
     };
   }
 
-  if (voteResolution.result.type !== VOTE_OUTCOME_TYPES.WINNER) {
+  if (voteResolution.result.type !== VOTE_OUTCOME_TYPES.CHOSEN) {
     return {
       ok: true,
       errors: [],
@@ -642,8 +646,9 @@ export function applyCloseCycleAction({ session, action }) {
 //
 // No modifica la sesion porque inspeccionar solo revela informacion.
 export function resolveInspectRole(session, action, input = {}) {
-  const actor = getActionActor(session, action, input.actorRoleInstanceId);
-  const targets = (input.targetRoleInstanceIds ?? []).map((id) => findRoleInstance(session, id));
+  const actors = getActionActors(session, input.actorIds ?? []);
+  const actor = actors[0] ?? null;
+  const targets = (input.targetIds ?? []).map((id) => findRole(session, id));
   const validation = validateActionResolution({ session, action, actor, targets });
 
   if (!validation.ok) {
@@ -675,10 +680,15 @@ export function resolveInspectRole(session, action, input = {}) {
 // 5. Si el objetivo tenia bloqueada esa accion, no genera efecto final.
 // 6. Si no estaba bloqueada, aplica set_property inPlay=value.
 export function resolveSetInPlay(session, action, input = {}, context = {}) {
-  const actor = getActionActor(session, action, input.actorRoleInstanceId);
-  const targets = (input.targetRoleInstanceIds ?? []).map((id) => findRoleInstance(session, id));
-  const actorScope = input.actorScope ?? context.actorScope ?? action.actorScope ?? null;
-  const validation = validateActionResolution({ session, action, actor, actorScope, targets });
+  const actors = getActionActors(session, input.actorIds ?? []);
+  const actor = actors[0] ?? null;
+  const targets = (input.targetIds ?? []).map((id) => findRole(session, id));
+  const validation = validateActionResolution({
+    session,
+    action,
+    actor,
+    targets
+  });
 
   if (!validation.ok) {
     return {
@@ -695,10 +705,7 @@ export function resolveSetInPlay(session, action, input = {}, context = {}) {
     action,
     actor,
     targets,
-    context: {
-      ...context,
-      actorScope
-    }
+    context
   });
 
   return {
@@ -719,8 +726,9 @@ export function resolveSetInPlay(session, action, input = {}, context = {}) {
 // 4. Marca al objetivo como prevenido contra la accion indicada.
 // 5. Registra el bloqueo aplicado en session.actionHistory.
 export function resolveBlockAction(session, action, input = {}, context = {}) {
-  const actor = getActionActor(session, action, input.actorRoleInstanceId);
-  const targets = (input.targetRoleInstanceIds ?? []).map((id) => findRoleInstance(session, id));
+  const actors = getActionActors(session, input.actorIds ?? []);
+  const actor = actors[0] ?? null;
+  const targets = (input.targetIds ?? []).map((id) => findRole(session, id));
   const validation = validateActionResolution({ session, action, actor, targets });
 
   if (!validation.ok) {
@@ -750,8 +758,9 @@ export function resolveBlockAction(session, action, input = {}, context = {}) {
 // relacion mecanica en session.relations. Por ejemplo, una skin podria llamarlo
 // enamorar, sincronizar, esposar, conectar destinos o cualquier otra fantasia.
 export function resolveLinkTargets(session, action, input = {}) {
-  const actor = getActionActor(session, action, input.actorRoleInstanceId);
-  const targets = (input.targetRoleInstanceIds ?? []).map((id) => findRoleInstance(session, id));
+  const actors = getActionActors(session, input.actorIds ?? []);
+  const actor = actors[0] ?? null;
+  const targets = (input.targetIds ?? []).map((id) => findRole(session, id));
   const validation = validateActionResolution({ session, action, actor, targets });
 
   if (!validation.ok) {
@@ -778,7 +787,7 @@ export function resolveLinkTargets(session, action, input = {}) {
 // Ejecuta vote.
 //
 // La accion no recibe un actor unico porque representa una ronda colectiva de
-// votos. Cada voto individual ya trae su actorRoleInstanceId.
+// votos. Cada voto individual ya trae su actorId.
 export function resolveVote(session, action, input = {}) {
   const definitionValidation = validateActionDefinition(action);
 

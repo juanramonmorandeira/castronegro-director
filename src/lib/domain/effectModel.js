@@ -10,7 +10,8 @@
 // traducciones ni logica visual.
 // -----------------------------------------------------------------------------
 
-import { createRelation, normalizeId } from './sessionModel.js';
+import { createRelation } from './relationDefinition.js';
+import { normalizeId } from './sessionModel.js';
 
 export const EFFECT_TYPES = Object.freeze({
   REVEAL_PROPERTY: 'reveal_property',
@@ -23,7 +24,7 @@ export const EFFECT_TYPES = Object.freeze({
 // Devuelve el ciclo actual de la sesion.
 //
 // Lo guardamos en metadata para no introducir todavia una estructura grande de
-// calendario/fases. Si no existe, asumimos ciclo 1.
+// calendario/steps. Si no existe, asumimos ciclo 1.
 export function getCurrentCycleId(session) {
   const rawCycleId = session?.metadata?.currentCycleId ?? session?.cycleId ?? 1;
   const numericCycleId = Number(rawCycleId);
@@ -59,13 +60,13 @@ export function advanceSessionCycle(session) {
 //
 // Nota sobre target:
 // el objetivo no forma parte de esta clave porque la clave se guarda dentro del
-// propio roleInstance objetivo:
+// propio role objetivo:
 //
 // role.flags.blockedActions['set_in_play:property:inPlay:value:false'] = true
 //
 // Por eso block_action(set_in_play, params; target) se representa como:
 // - params dentro del bloqueo;
-// - target dentro de targetRoleInstanceIds y del roleInstance que recibe el flag.
+// - target dentro de targetIds y del role que recibe el flag.
 //
 // Para una receta como block_out_of_play, la clave resultante bloquea solo:
 //
@@ -137,11 +138,11 @@ export function clearCycleFlags(role) {
 // Esta funcion pertenece al rol de Effect Applier: no decide si el efecto debe
 // ocurrir. Solo cambia el dato indicado porque otra parte ya lo decidio.
 export function applySetPropertyEffect({ session, effect }) {
-  if (effect?.targetType !== 'role_instance') return session;
+  if (effect?.targetType !== 'role') return session;
 
   return {
     ...session,
-    roleInstances: (session.roleInstances ?? []).map((role) =>
+    roles: (session.roles ?? []).map((role) =>
       role.id === effect.targetId
         ? {
             ...role,
@@ -156,18 +157,18 @@ export function applySetPropertyEffect({ session, effect }) {
 //
 // set_relation es el efecto anonimo que usa una accion como link_targets.
 // No guarda "amor", "hermandad", "maldicion" ni ningun texto narrativo.
-// Solo registra que varias instancias de rol comparten una relacion mecanica.
+// Solo registra que varios roles de sesion comparten una relacion mecanica.
 export function applySetRelationEffect({ session, effect }) {
   if (effect?.targetType !== 'relation') return session;
 
   const relationType = normalizeId(effect.relationType);
-  const roleInstanceIds = normalizeRelationMemberIds(effect.roleInstanceIds);
-  if (!relationType || roleInstanceIds.length < 2) return session;
+  const roleIds = normalizeRelationMemberIds(effect.roleIds);
+  if (!relationType || roleIds.length < 2) return session;
 
   const relation = createRelation({
     id: effect.relationId,
     type: relationType,
-    roleInstanceIds,
+    roleIds,
     active: effect.active ?? true,
     createdCycleId: getCurrentCycleId(session),
     sourceActionId: effect.sourceActionId ?? null,
@@ -201,8 +202,8 @@ export function applySetRelationEffect({ session, effect }) {
 }
 
 // Normaliza miembros de una relacion para que A+B y B+A sean el mismo vinculo.
-export function normalizeRelationMemberIds(roleInstanceIds = []) {
-  return [...new Set((roleInstanceIds ?? []).filter(Boolean))].sort();
+export function normalizeRelationMemberIds(roleIds = []) {
+  return [...new Set((roleIds ?? []).filter(Boolean))].sort();
 }
 
 // Clave interna para detectar relaciones mecanicamente equivalentes.
@@ -211,7 +212,7 @@ export function normalizeRelationMemberIds(roleInstanceIds = []) {
 // - tipo de relacion;
 // - conjunto de miembros.
 export function getRelationKey(relation = {}) {
-  return [normalizeId(relation.type), ...normalizeRelationMemberIds(relation.roleInstanceIds)].join(
+  return [normalizeId(relation.type), ...normalizeRelationMemberIds(relation.roleIds)].join(
     ':'
   );
 }
@@ -225,7 +226,7 @@ export function getRelationKey(relation = {}) {
 export function applyCloseCycle({ session, visibility = 'all' } = {}) {
   const resolvedSession = {
     ...session,
-    roleInstances: (session?.roleInstances ?? []).map(clearCycleFlags)
+    roles: (session?.roles ?? []).map(clearCycleFlags)
   };
   const nextSession = advanceSessionCycle(resolvedSession);
 

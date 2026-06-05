@@ -2,7 +2,7 @@
 
 ## Contexto
 
-El proyecto actual contiene mucho conocimiento util: flujos, assets, reglas investigadas, roles especiales y soluciones parciales. El problema es que la logica del juego crecio dentro de componentes Svelte, especialmente `Session.svelte`, mezclando UI, Firebase, i18n, tokens visuales, fases y reglas.
+El proyecto actual contiene mucho conocimiento util: flujos, assets, reglas investigadas, roles especiales y soluciones parciales. El problema es que la logica del juego crecio dentro de componentes Svelte, especialmente `Session.svelte`, mezclando UI, Firebase, i18n, tokens visuales, steps y reglas.
 
 Seguir anadiendo reglas ahi aumenta el riesgo de romper comportamiento existente. Empezar un proyecto completamente nuevo tambien tiene riesgo: perderiamos decisiones y conocimiento ya recuperado.
 
@@ -53,7 +53,7 @@ No se conectara aun a la UI.
 
 1. Crear modelos puros.
 2. Crear validaciones puras.
-3. Crear reglas de fase puras.
+3. Crear reglas de step puras.
 4. Crear condiciones de victoria puras.
 5. Crear adaptador desde el modelo actual (`settings.roles`, `player_roles`, `seating_order`) al modelo nuevo.
 6. Hacer que `Configure/Match` genere datos compatibles.
@@ -68,7 +68,7 @@ El nucleo sera correcto cuando podamos simular una partida minima desde Node, si
 2. asignar roles;
 3. construir `roleInstances`;
 4. validar Match;
-5. avanzar fases;
+5. avanzar steps;
 6. resolver acciones;
 7. evaluar victoria;
 8. persistir el estado con un adaptador local.

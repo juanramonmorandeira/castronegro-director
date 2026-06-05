@@ -47,68 +47,62 @@ export function getActionHistorySignature(action = {}) {
   return action.id ?? 'unknown';
 }
 
-// Crea una entrada normalizada de historial.
+// Anade una entrada a una coleccion de historial dentro de la sesion.
+//
+// Esta es la mecanica comun de escritura. Los modelos concretos siguen
+// preparando sus entradas antes de llamar aqui, porque actionHistory y
+// stepHistory no guardan el mismo tipo de hecho.
+export function appendEntry(session, collectionName, entry, { getId } = {}) {
+  const history = Array.isArray(session?.[collectionName]) ? session[collectionName] : [];
+  const normalizedEntry = { ...entry };
+
+  return {
+    ...session,
+    [collectionName]: [
+      ...history,
+      {
+        ...normalizedEntry,
+        id:
+          normalizedEntry.id ??
+          (typeof getId === 'function'
+            ? getId(normalizedEntry, history)
+            : `${collectionName}-${history.length}`)
+      }
+    ]
+  };
+}
+
+// Anade una entrada al historial de acciones de la sesion.
 //
 // La entrada guarda datos mecanicos, no textos visibles. Esto permite que una
 // regla futura pregunte cosas como:
 // - quien fue afectado en este ciclo?
 // - que step lo produjo?
 // - hubo efectos finales o la accion fue bloqueada?
-export function createActionHistoryEntry({
-  id = null,
-  cycleId = 0,
-  poolKey = null,
-  stepKey = null,
-  actionKey = null,
-  actionId = null,
-  actionSignature = null,
-  actorRoleInstanceId = null,
-  actorScope = null,
-  targetRoleInstanceIds = [],
-  proposedEffects = [],
-  finalEffects = [],
-  blockedActions = [],
-  blockedEffects = [],
-  result = HISTORY_RESULTS.NO_EFFECT,
-  metadata = {}
-} = {}) {
-  return {
-    id,
-    cycleId,
-    poolKey,
-    stepKey,
-    actionKey,
-    actionId,
-    actionSignature,
-    actorRoleInstanceId,
-    actorScope: actorScope ? { ...actorScope } : null,
-    targetRoleInstanceIds: [...targetRoleInstanceIds],
-    proposedEffects: [...proposedEffects],
-    finalEffects: [...finalEffects],
-    blockedActions: [...blockedActions],
-    blockedEffects: [...blockedEffects],
-    result,
-    metadata: { ...metadata }
-  };
-}
-
-// Anade una entrada al historial de acciones de la sesion.
-export function appendActionHistory(session, entry) {
+export function appendActionHistory(session, entry = {}) {
   const history = getActionHistory(session);
-  const normalizedEntry = createActionHistoryEntry(entry);
-
-  return {
-    ...session,
-    actionHistory: [
-      ...history,
-      {
-        ...normalizedEntry,
-        id:
-          normalizedEntry.id ??
-          `${normalizedEntry.actionId ?? 'action'}-${normalizedEntry.cycleId}-${history.length}`
-      }
-    ]
+  const normalizedEntry = {
+    id: entry.id ?? null,
+    cycleId: entry.cycleId ?? 0,
+    poolKey: entry.poolKey ?? null,
+    stepKey: entry.stepKey ?? null,
+    actionKey: entry.actionKey ?? null,
+    actionId: entry.actionId ?? null,
+    actionSignature: entry.actionSignature ?? null,
+    actorIds: [...(entry.actorIds ?? [])],
+    actor: entry.actor ? { ...entry.actor } : null,
+    targetIds: [...(entry.targetIds ?? [])],
+    proposedEffects: [...(entry.proposedEffects ?? [])],
+    finalEffects: [...(entry.finalEffects ?? [])],
+    blockedActions: [...(entry.blockedActions ?? [])],
+    blockedEffects: [...(entry.blockedEffects ?? [])],
+    result: entry.result ?? HISTORY_RESULTS.NO_EFFECT,
+    metadata: { ...(entry.metadata ?? {}) }
   };
+
+  return appendEntry(session, 'actionHistory', normalizedEntry, {
+    getId: (item) => `${item.actionId ?? 'action'}-${item.cycleId}-${history.length}`
+  });
 }
 
 // Devuelve entradas que aplicaron un cambio concreto de propiedad en un ciclo.

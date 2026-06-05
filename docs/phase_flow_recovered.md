@@ -1,29 +1,29 @@
-# Logica recuperada de fases
+# Logica recuperada de steps
 
-Este documento consolida la logica de fases que ya estaba definida en el
+Este documento consolida la logica de steps que ya estaba definida en el
 proyecto. No sustituye al motor; sirve para no volver a repensar desde cero el
 flujo que ya estaba acotado.
 
 Fuentes revisadas:
 
 - `docs/modelo_objetivo_sesion.md`
-- `src/lib/domain/phaseModel.js`
+- `src/lib/domain/poolCursorModel.js`
 - `reference-data/rulesets/turn_overview.md`
 - `docs/historial_codex_resumen.md`
 
 ## Convenio de palabras
 
-Para evitar el lio entre fase, paso y step, usaremos este convenio:
+Para evitar el lio entre step, paso y step, usaremos este convenio:
 
 | Palabra | Significado | Ejemplo |
 |---|---|---|
 | `pool` | bloque grande del ciclo | `poolExposed` |
 | `step` | unidad ejecutable dentro de un pool | `stepVoteOutOfPlay` |
-| `action` | accion mecanica que ejecuta un step | `vote_out_of_play` |
+| `action` | accion mecanica que ejecuta un step | `obsolete_composite_vote_recipe` |
 | `effect` | cambio propuesto o final | `set_property inPlay=false` |
 | `cycle` | vuelta completa recurrente | noche/dia actual |
 
-Evitaria usar "fase" para todo. Si hablamos tecnicamente:
+Evitaria usar "step" para todo. Si hablamos tecnicamente:
 
 ```text
 pool -> step -> action -> effect
@@ -33,17 +33,17 @@ pool -> step -> action -> effect
 
 ```mermaid
 flowchart TD
-  A[phasePools] --> B[pool actual]
+  A[stepPools] --> B[pool actual]
   B --> C[step actual]
   C --> D[action configurada]
   D --> E[resolver de accion]
   E --> F[effects]
   F --> G[session actualizada]
   G --> H[evaluateVictory]
-  H --> I[advancePhaseCursor]
+  H --> I[advanceStepCursor]
 ```
 
-### `phaseModel.js`
+### `poolCursorModel.js`
 
 Solo debe responder:
 
@@ -62,7 +62,7 @@ Ejecuta la accion configurada por el step actual.
 Ejemplo:
 
 ```text
-stepVoteOutOfPlay -> vote_out_of_play recipe
+stepVoteOutOfPlay -> obsolete_composite_vote_recipe recipe
 ```
 
 ### `victoryModel.js`
@@ -72,7 +72,7 @@ Se consulta despues de consumar efectos relevantes.
 Ejemplo:
 
 ```text
-vote_out_of_play = vote + onWinnerAction(set_in_play false)
+obsolete_composite_vote_recipe = vote + obsolete_followup_action(set_in_play false)
 linked puede propagar inPlay=false
 victoryModel comprueba si termino la partida
 ```
@@ -146,7 +146,7 @@ poolExposed: [
   {
     key: 'stepVoteOutOfPlay',
     status: 'enabled',
-    actionKey: 'vote_out_of_play',
+    actionKey: 'obsolete_composite_vote_recipe',
     actionId: 'vote',
     config: {
       tiePolicy: 'null_on_tie',
@@ -171,8 +171,8 @@ Para la votacion diurna del juego base:
 ```text
 pool: poolExposed
 step: stepVoteOutOfPlay
-recipe: vote_out_of_play
-effect: onWinnerAction(set_in_play false)
+recipe: obsolete_composite_vote_recipe
+effect: obsolete_followup_action(set_in_play false)
 votan: todos los roleInstances inPlay
 obligatorio: si
 abstencion: no
@@ -224,16 +224,16 @@ El validador comprobaria:
 
 ```text
 si actorRoleInstanceId esta linked con targetRoleInstanceId
-y la receta es vote_out_of_play
+y la receta es obsolete_composite_vote_recipe
 entonces el voto es invalido
 ```
 
 Estado actual: implementado en `voteModel.js` como `relationRestrictions` y
-usado por `vote_out_of_play`.
+usado por `obsolete_composite_vote_recipe`.
 
 ## Votaciones Configurables
 
-Aunque hoy solo hemos conectado `vote_out_of_play`, el modelo deja abierta la
+Aunque hoy solo hemos conectado `obsolete_composite_vote_recipe`, el modelo deja abierta la
 puerta a otras votaciones:
 
 ```text

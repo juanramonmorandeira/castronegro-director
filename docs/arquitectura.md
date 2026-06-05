@@ -2,7 +2,7 @@
 
 > Documento de trabajo. Los diagramas Mermaid se renderizan en GitHub y en la vista previa de VS Code.
 
-> Referencia de migracion: el modelo objetivo para la nueva gestion de fases y roles esta documentado en [`modelo_objetivo_sesion.md`](./modelo_objetivo_sesion.md).
+> Referencia de migracion: el modelo objetivo para la nueva gestion de steps y roles esta documentado en [`modelo_objetivo_sesion.md`](./modelo_objetivo_sesion.md).
 
 > Memoria recuperada: el resumen de transcripciones antiguas de Codex esta en [`historial_codex_resumen.md`](./historial_codex_resumen.md).
 

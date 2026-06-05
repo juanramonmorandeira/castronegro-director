@@ -1,6 +1,6 @@
 # Inventario provisional: legacy phase -> step
 
-Este documento lista los nombres antiguos de fases encontrados en
+Este documento lista los nombres antiguos de steps encontrados en
 `Session.svelte` y propone nombres anonimizados de `step`.
 
 No es una migracion automatica. Es una tabla de referencia para revisar conforme
@@ -15,7 +15,7 @@ pool -> step -> recipe -> action/effect
 Ejemplo:
 
 ```text
-poolEachDay -> stepVoteOutOfPlay -> vote_out_of_play -> vote + onWinnerAction(set_in_play false)
+poolEachDay -> stepVoteOutOfPlay -> obsolete_composite_vote_recipe -> vote + obsolete_followup_action(set_in_play false)
 ```
 
 ## Ya acordados
@@ -25,7 +25,7 @@ poolEachDay -> stepVoteOutOfPlay -> vote_out_of_play -> vote + onWinnerAction(se
 | `poolFirstNight` / `poolEachNight` | `phaseSeer` | `stepInspectRole` | `inspect_role` | acordado |
 | `poolFirstNight` | `phaseCupid` | `stepLinkTargets` | `link_targets` | acordado |
 | `poolFirstNight` / `poolEachNight` | `phaseDefender` | `stepBlockOutOfPlay` | `block_out_of_play` | acordado |
-| `poolEachDay` / `poolSpecialEvents` | `phaseVote` | `stepVoteOutOfPlay` | `vote_out_of_play` recipe | acordado |
+| `poolEachDay` / `poolSpecialEvents` | `phaseVote` | `stepVoteOutOfPlay` | `obsolete_composite_vote_recipe` recipe | acordado |
 
 ## Preparation
 

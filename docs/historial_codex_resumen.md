@@ -24,9 +24,9 @@ La historia del proyecto muestra tres lineas de trabajo que acabaron mezclandose
 
 - Flujo de producto: login, registro, seleccion de sesion, sala de espera, configuracion, match, share y dashboard.
 - Capa visual: sistema de diseno, modales, tarjetas, footbar/topbar, paletas, marcadores y tokens.
-- Motor de juego: seleccion de roles, emparejamiento, distribucion, fases, tokens de accion, efectos nocturnos/diurnos, condiciones de victoria y roles especiales.
+- Motor de juego: seleccion de roles, emparejamiento, distribucion, steps, tokens de accion, efectos nocturnos/diurnos, condiciones de victoria y roles especiales.
 
-El problema actual viene de que el motor de juego crecio desde la UI de `Session.svelte`: muchas reglas se anadieron directamente en la pantalla, usando tokens visuales, arrays locales y fases antiguas. Despues empezo una migracion hacia `role_instances` y `phase_pools`, pero quedo incompleta.
+El problema actual viene de que el motor de juego crecio desde la UI de `Session.svelte`: muchas reglas se anadieron directamente en la pantalla, usando tokens visuales, arrays locales y steps antiguas. Despues empezo una migracion hacia `role_instances` y `phase_pools`, pero quedo incompleta.
 
 ## Cronologia resumida
 
@@ -122,7 +122,7 @@ Decision recuperada:
 
 Impacto actual:
 
-- La migracion de fases deberia hacerse creando primero funciones puras y testeables fuera de Svelte.
+- La migracion de steps deberia hacerse creando primero funciones puras y testeables fuera de Svelte.
 - Una refactorizacion puramente visual no resolvera el fallo estructural del juego.
 
 ### 2025-11-25 a 2025-12-01: Firebase, diseno y modales
@@ -160,7 +160,7 @@ Hilo principal:
 
 Resumen recuperado:
 
-- Se anadio normalizacion de roles y alias para activar pasos de fase aunque los roles vinieran con variantes de nombre.
+- Se anadio normalizacion de roles y alias para activar pasos de step aunque los roles vinieran con variantes de nombre.
 - Ejemplos de alias recuperados:
   - `big_bad_wolf` -> `bad`
   - `wolf_hound` -> `hound`
@@ -184,7 +184,7 @@ Se empezo tambien a implementar una paleta de tokens de accion en `Session.svelt
 Se implemento un flujo de resolucion visual:
 
 - Los tokens especiales se colocaban sobre fichas de personaje.
-- Al cerrar el dia/fase, `resolveBoardEffects` detectaba objetivos por proximidad en el tablero.
+- Al cerrar el dia/step, `resolveBoardEffects` detectaba objetivos por proximidad en el tablero.
 - Se persistian/actualizaban efectos como `loversLinks`, `protectedTargets`, `pendingDeaths`, `infectedTargets`, `consumedSpecialIds`.
 
 Tambien se trabajo intensamente en `Selection.svelte`:
@@ -197,14 +197,14 @@ Tambien se trabajo intensamente en `Selection.svelte`:
 
 Decisiones recuperadas:
 
-- El orden de fases debia derivarse de roles seleccionados y normalizados.
+- El orden de steps debia derivarse de roles seleccionados y normalizados.
 - Los tokens de accion eran una solucion UI-operativa, pero terminaron conteniendo logica real.
 - La deteccion por proximidad en tablero fue una solucion practica, no necesariamente el modelo final.
-- Actor y Thief introducen roles virtuales/reservados que afectan seleccion, fases y poderes.
+- Actor y Thief introducen roles virtuales/reservados que afectan seleccion, steps y poderes.
 
 Impacto actual:
 
-- Hay que separar `PHASE ORDER` visual de motor de fases.
+- Hay que separar `PHASE ORDER` visual de motor de steps.
 - La normalizacion de slugs debe vivir en un modulo de dominio, no repartida por componentes.
 - Los efectos de tokens deben escribir en `role_instances`, no solo en arrays visuales.
 - Actor y Thief necesitan modelo explicito dentro de `role_instances` o una estructura auxiliar formal.
@@ -291,7 +291,7 @@ Resumen:
 Impacto actual:
 
 - No afecta al motor de juego.
-- No debe bloquear la migracion de fases.
+- No debe bloquear la migracion de steps.
 
 ### 2025-12-22: White Werewolf
 
@@ -314,7 +314,7 @@ Reglas recuperadas:
 Decision recuperada:
 
 - White tiene doble pertenencia operacional:
-  - Cuenta como lobo para fase de manada y paridad.
+  - Cuenta como lobo para step de manada y paridad.
   - Tiene condicion de victoria propia y excluyente.
 
 Impacto actual:
@@ -374,14 +374,14 @@ Resumen:
   - `src/lib/i18n.js`
   - `src/pages/Configure.svelte`
   - `src/pages/Session.svelte`
-- Se confirmo que la nueva gestion de fases esta incompleta.
+- Se confirmo que la nueva gestion de steps esta incompleta.
 - Se documento el modelo objetivo en `docs/modelo_objetivo_sesion.md`.
 
 Decision recuperada:
 
 - El modelo objetivo queda definido como:
   - `role_instances` = fuente de verdad del estado de roles.
-  - `phase_pools` = fuente de verdad del avance de fases.
+  - `phase_pools` = fuente de verdad del avance de steps.
   - `tokens` = capa visual.
   - `session_phases` = compatibilidad temporal.
 
@@ -398,7 +398,7 @@ Fuente:
 Relevancia:
 
 - Explica la aparicion de alias y normalizacion de roles.
-- Explica por que algunas fases no aparecian para Judge/Bad.
+- Explica por que algunas steps no aparecian para Judge/Bad.
 - Es antecedente directo de `PHASE_RULES`, `PHASE_LABELS`, `roleAliases` y normalizaciones en `Session.svelte`.
 
 ### 2. Selection, Actor y Thief
@@ -452,7 +452,7 @@ Fuente:
 Relevancia:
 
 - Define una condicion de victoria especial.
-- Obliga a separar alineacion, fases activas y condicion de victoria.
+- Obliga a separar alineacion, steps activas y condicion de victoria.
 
 ### 6. Match persistente
 
@@ -508,7 +508,7 @@ Estado actual probable:
 
 Riesgo:
 
-- Actor/Thief no son solo UI: generan roles potenciales que deben afectar fases y tokens.
+- Actor/Thief no son solo UI: generan roles potenciales que deben afectar steps y tokens.
 
 ### `Match.svelte`
 
@@ -547,20 +547,20 @@ Riesgo:
 Responsabilidad historica acumulada:
 
 - Renderizar tablero.
-- Mostrar orden de fases.
+- Mostrar orden de steps.
 - Gestionar tokens de accion.
 - Detectar objetivos por posicion.
 - Resolver efectos.
 - Registrar log.
 - Calcular victoria.
-- Gestionar fases.
+- Gestionar steps.
 - Gestionar estados de roles especiales.
 
 Estado actual probable:
 
 - Es el archivo mas critico.
 - Contiene mezcla de UI, reglas, persistencia y migracion.
-- Tiene dos motores de fase conviviendo: `session_phases` y `phase_pools`.
+- Tiene dos motores de step conviviendo: `session_phases` y `phase_pools`.
 
 Riesgo:
 
@@ -593,12 +593,12 @@ Riesgo:
 
 - Tienen token de garras.
 - Deben poder marcar victima nocturna.
-- Algunos roles cuentan como lobos para fases/victoria aunque tengan condicion especial.
+- Algunos roles cuentan como lobos para steps/victoria aunque tengan condicion especial.
 
 ### Cursed Wolf Father
 
 - Puede infectar.
-- La infeccion hace que el infectado cuente como lobo para ciertas fases/efectos.
+- La infeccion hace que el infectado cuente como lobo para ciertas steps/efectos.
 
 ### White Werewolf
 
@@ -624,7 +624,7 @@ Riesgo:
 ### Sheriff
 
 - Es un estado/honor asociado a un rol/jugador.
-- Si cae, puede activar sucesion/interfase.
+- Si cae, puede activar sucesion/interstep.
 
 ### Wild Child
 
@@ -643,7 +643,7 @@ Riesgo:
 3. `Match` debe crear `role_instances` completos y validos.
 4. `phase_pools` debe sustituir al avance por `session_phases`.
 5. `tokens` y markers deben ser derivados visuales.
-6. Hay que mover normalizacion de slugs y reglas de fase a modulos en `src/lib/`.
+6. Hay que mover normalizacion de slugs y reglas de step a modulos en `src/lib/`.
 7. Las condiciones de victoria deben ser una funcion de dominio sobre `role_instances`.
 8. La migracion debe mantener compatibilidad con sesiones antiguas, pero no escribir dos modelos indefinidamente.
 
@@ -664,9 +664,9 @@ Primeras funciones candidatas:
 normalizeRoleSlug(role)
 buildRoleInstancesFromMatch(matchState)
 isMatchComplete(roleInstances)
-hydratePhasePool(poolKey, sessionState)
-getCurrentPhase(phasePools)
-advancePhaseCursor(phasePools, sessionState)
+hydrateStepPool(poolKey, sessionState)
+getCurrentStepCursor(stepPools)
+advanceStepCursor(stepPools, sessionState)
 evaluateVictory(roleInstances, sessionState)
 ```
 

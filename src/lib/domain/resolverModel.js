@@ -12,7 +12,7 @@
 // -----------------------------------------------------------------------------
 
 import { EFFECT_TYPES } from './effectModel.js';
-import { RELATION_TYPES, getRelatedRoleInstanceIds } from './sessionModel.js';
+import { RELATION_TYPES, getRelatedRoleIds } from './sessionModel.js';
 
 // Resuelve una lista de efectos propuestos contra el estado actual.
 //
@@ -51,21 +51,21 @@ export function resolveProposedEffects({ session, proposedEffects = [] } = {}) {
 
 // Busca el objetivo principal de un efecto.
 //
-// Por ahora solo resolvemos role_instance porque es lo unico que usan las demos.
+// Por ahora solo resolvemos role porque es lo unico que usan las demos.
 // Cuando existan efectos sobre sesion, alignment o relaciones, se ampliara aqui.
 export function findEffectTarget(session, effect) {
-  if (effect?.targetType !== 'role_instance') return null;
-  return (session?.roleInstances ?? []).find((role) => role.id === effect.targetId) ?? null;
+  if (effect?.targetType !== 'role') return null;
+  return (session?.roles ?? []).find((role) => role.id === effect.targetId) ?? null;
 }
 
-// Devuelve true si el efecto significa "este roleInstance sale del juego activo".
+// Devuelve true si el efecto significa "este role sale del juego activo".
 //
-// No lo llamamos kill_target porque no describe una accion narrativa. Describe
-// el cambio mecanico que el aplicador podra escribir en la sesion.
+// No usamos un nombre narrativo porque aqui solo importa el cambio mecanico que
+// el aplicador podra escribir en la sesion.
 export function isSetInPlayFalseEffect(effect) {
   return (
     effect?.type === EFFECT_TYPES.SET_PROPERTY &&
-    effect?.targetType === 'role_instance' &&
+    effect?.targetType === 'role' &&
     effect?.property === 'inPlay' &&
     effect?.value === false &&
     !!effect?.targetId
@@ -85,7 +85,7 @@ export function isSetInPlayFalseEffect(effect) {
 export function getLinkedSetInPlayFalseEffects({ session, effect, seenEffectKeys = new Set() }) {
   if (!isSetInPlayFalseEffect(effect)) return [];
 
-  return getRelatedRoleInstanceIds(session, effect.targetId, RELATION_TYPES.LINKED)
+  return getRelatedRoleIds(session, effect.targetId, RELATION_TYPES.LINKED)
     .map((targetId) => ({
       ...effect,
       targetId,
@@ -110,6 +110,6 @@ export function getEffectKey(effect = {}) {
     effect.property ?? '',
     String(effect.value),
     effect.relationType ?? '',
-    (effect.roleInstanceIds ?? []).slice().sort().join(',')
+    (effect.roleIds ?? []).slice().sort().join(',')
   ].join(':');
 }

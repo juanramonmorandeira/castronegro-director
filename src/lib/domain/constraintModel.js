@@ -35,6 +35,18 @@ export const CONSTRAINT_WINDOWS = Object.freeze({
   SESSION: 'session'
 });
 
+// Crea una restriccion mecanica normalizada.
+//
+// Una restriccion no ejecuta acciones. Solo declara una regla que recipeModel
+// debe comprobar antes de entregar una accion pura a actionModel.
+export function createConstraint({ type, metadata = {}, ...params } = {}) {
+  return {
+    type,
+    ...params,
+    metadata: { ...metadata }
+  };
+}
+
 // Indica si una entrada de historial cae dentro de la ventana de la restriccion.
 //
 // Importante sobre "next_cycle":
@@ -80,8 +92,8 @@ export function evaluateNoRepeatTargetConstraint({
     if (!actor || !target) return [];
 
     const repeated = getActionHistory(session).some((entry) => {
-      const sameActor = entry.actorRoleInstanceId === actor.id;
-      const sameTarget = (entry.targetRoleInstanceIds ?? []).includes(target.id);
+      const sameActor = (entry.actorIds ?? []).includes(actor.id);
+      const sameTarget = (entry.targetIds ?? []).includes(target.id);
       const sameAction = entry.actionSignature === actionSignature;
       const successful = entry.result === 'applied';
       const insideWindow = isEntryInsideConstraintWindow(entry, currentCycleId, window);
@@ -179,7 +191,7 @@ export function isEntryInsideLimitedUseWindow(entry, currentCycleId, window) {
 //
 // Decision actual:
 // limited_uses siempre se cuenta por actor + receta. En datos eso significa:
-// - actorRoleInstanceId: que roleInstance uso la receta;
+// - actorIds: que roles usaron la receta;
 // - actionKey: que receta concreta dentro del step se uso.
 //
 // No exponemos un campo "scope" en las recetas normales porque todavia no
@@ -191,7 +203,7 @@ export function isEntryInsideLimitedUseCounter(entry, { actor, recipe }) {
   return (
     !!actor &&
     !!actionKey &&
-    entry.actorRoleInstanceId === actor.id &&
+    (entry.actorIds ?? []).includes(actor.id) &&
     entry.actionKey === actionKey
   );
 }
@@ -220,7 +232,7 @@ export function evaluateLimitedUsesConstraint({ session, recipe, actor, constrai
       limit,
       used: uses.length,
       window,
-      actorRoleInstanceId: actor?.id ?? null,
+      actorIds: actor ? [actor.id] : [],
       actionKey: recipe?.key ?? recipe?.actionKey ?? recipe?.id ?? null
     }
   ];

@@ -14,7 +14,7 @@ restricciones y convierte la receta en accion pura.
 
 `recipeCatalog.js` contiene recetas reutilizables ya definidas. No ejecuta
 nada: solo devuelve objetos de receta para que una skin, roleDefinition o
-phaseDefinition los coloque dentro de un step.
+poolDefinition los coloque dentro de un step.
 
 Separacion:
 
@@ -274,32 +274,35 @@ por la receta set_out_of_play. El mismo actor solo puede usar esta receta una
 vez en la partida.
 ```
 
-### `vote_out_of_play`
+### Voto + receta
 
-Accion pura:
-
-```text
-vote
-```
-
-Configuracion principal:
+`vote` ya no es una receta de catalogo. Es un mecanismo de step:
 
 ```text
-requiredVotes: all_in_play
-tiePolicy: null_on_tie
-relationRestrictions: exclude_related_target linked
-onWinnerAction: set_in_play(inPlay=false)
+step.voteRules -> voteModel -> chosenId / empate / nulo
 ```
 
-Restricciones:
+Si hay `chosenId`, `stepModel` ejecuta la receta normal declarada en
+`step.actions` usando ese `chosenId` como `targetId`.
+
+Ejemplo actual:
 
 ```text
-ninguna por ahora
+group_vote
+  voteRules:
+    required: all_actors
+    abstain: not_allowed
+    unanimous: not_required
+    tie: null_on_tie
+    candidateIds: null -> todos los roles inPlay
+    relationRestrictions: exclude_related_target linked
+  actions:
+    set_out_of_play
 ```
 
-Nota: `vote` solo devuelve ganador/empate/nulo. `onWinnerAction` define que
-accion se aplica al ganador. Otras votaciones podran reutilizar `vote` con otra
-accion posterior.
+Lectura: el voto elige un target; la receta `set_out_of_play` aplica
+`set_in_play(inPlay=false)` sobre ese target. La misma estructura podra votar
+para aplicar otra receta distinta sin crear una receta compuesta nueva.
 
 ### `close_cycle`
 

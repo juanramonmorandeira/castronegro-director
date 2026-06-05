@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 
 import {
   ACTION_IDS,
-  ACTOR_SCOPE_TYPES,
   EFFECT_TYPES,
   HISTORY_RESULTS,
   CONSTRAINT_TYPES,
@@ -12,27 +11,39 @@ import {
   VICTORY_RULE_TYPES,
   VICTORY_STATUSES,
   VICTORY_TYPES,
+  VOTE_ABSTAIN_RULES,
+  VOTE_UNANIMOUS_RULES,
   VOTE_OUTCOME_TYPES,
-  VOTE_REQUIRED_POLICIES,
+  VOTE_REQUIRED_RULES,
   VOTE_RESTRICTION_TYPES,
   VOTE_ROUND_TYPES,
-  VOTE_TIE_POLICIES,
-  buildRoleInstancesFromSeats,
+  VOTE_TIE_RULES,
+  buildPools,
+  buildInitialGroups,
+  buildRolesFromSeats,
+  buildSession,
+  buildStepPool,
   completeCurrentStep,
-  createPhasePools,
-  createPhasePoolsFromSkinDefinition,
-  createGameSession,
+  createPool,
+  organizePoolSteps,
+  createVoteRules,
+  createSession,
   createRelation,
+  createGroup,
+  addRoleToGroup,
   getCoreGroupCatalog,
+  getGroupRoles,
   getCoreRoleCatalog,
+  removeRoleFromGroup,
   createStep,
   evaluateVictory,
   findAppliedSetPropertyHistory,
   getActionBlockKey,
-  PHASE_STATUSES,
-  PHASE_DEFINITION_ERRORS,
+  STEP_STATUSES,
+  POOL_DEFINITION_ERRORS,
   POOL_KEYS,
   GROUP_CATALOG_IDS,
+  GROUP_MEMBERSHIP_RULE_TYPES,
   ROLE_CATALOG_IDS,
   RECIPE_KEYS,
   resolveVoteRound,
@@ -46,7 +57,7 @@ import {
   STEP_KEYS,
   getCatalogRecipe,
   getCatalogStep,
-  validateGameSession
+  validateSession
 } from '../index.js';
 
 const tests = [];
@@ -83,47 +94,67 @@ const setInPlayFalseAction = getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY);
 const restoreRecentOutOfPlayAction = getCatalogRecipe(RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY);
 const blockOutOfPlayRecipe = getCatalogRecipe(RECIPE_KEYS.BLOCK_OUT_OF_PLAY);
 const linkTargetsAction = getCatalogRecipe(RECIPE_KEYS.LINK_TARGETS);
-const voteOutOfPlayAction = getCatalogRecipe(RECIPE_KEYS.VOTE_OUT_OF_PLAY);
+const setOutOfPlayAfterVoteRecipe = getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY, {
+  target: {
+    type: 'role',
+    count: 1,
+    filters: ['in_play']
+  },
+  visibility: VISIBILITY.ALL
+});
 const closeCycleAction = getCatalogRecipe(RECIPE_KEYS.CLOSE_CYCLE);
+
+const voteOutOfPlayRules = createVoteRules({
+  required: VOTE_REQUIRED_RULES.ALL_ACTORS,
+  abstain: VOTE_ABSTAIN_RULES.NOT_ALLOWED,
+  unanimous: VOTE_UNANIMOUS_RULES.NOT_REQUIRED,
+  tie: VOTE_TIE_RULES.NULL_ON_TIE,
+  relationRestrictions: [
+    {
+      type: VOTE_RESTRICTION_TYPES.EXCLUDE_RELATED_TARGET,
+      relationType: RELATION_TYPES.LINKED
+    }
+  ]
+});
 
 function createBaseSession({ relations = [], settings = {} } = {}) {
   const roleDefinitions = {
-    team_b_attacker: {
-      alignmentId: 'team_b'
+    alignment_b_attacker: {
+      alignmentId: 'alignment_b'
     },
-    team_a_blocker: {
-      alignmentId: 'team_a'
+    alignment_a_blocker: {
+      alignmentId: 'alignment_a'
     },
-    team_a_target: {
-      alignmentId: 'team_a'
+    alignment_a_target: {
+      alignmentId: 'alignment_a'
     },
-    team_a_plain: {
-      alignmentId: 'team_a'
+    alignment_a_plain: {
+      alignmentId: 'alignment_a'
     },
-    team_b_target: {
-      alignmentId: 'team_b'
+    alignment_b_target: {
+      alignmentId: 'alignment_b'
     },
     role_inspector: {
-      alignmentId: 'team_a'
+      alignmentId: 'alignment_a'
     },
     hidden_enemy: {
-      alignmentId: 'team_b'
+      alignmentId: 'alignment_b'
     }
   };
-  const roleInstances = buildRoleInstancesFromSeats(
+  const roles = buildRolesFromSeats(
     [
-      { seat: 0, playerId: 'player-1', role: 'team_b_attacker' },
-      { seat: 1, playerId: 'player-2', role: 'team_a_blocker' },
-      { seat: 2, playerId: 'player-3', role: 'team_a_target' },
-      { seat: 3, playerId: 'player-4', role: 'team_a_plain' },
-      { seat: 4, playerId: 'player-5', role: 'team_b_target' },
+      { seat: 0, playerId: 'player-1', role: 'alignment_b_attacker' },
+      { seat: 1, playerId: 'player-2', role: 'alignment_a_blocker' },
+      { seat: 2, playerId: 'player-3', role: 'alignment_a_target' },
+      { seat: 3, playerId: 'player-4', role: 'alignment_a_plain' },
+      { seat: 4, playerId: 'player-5', role: 'alignment_b_target' },
       { seat: 5, playerId: 'player-6', role: 'role_inspector' },
       { seat: 6, playerId: 'player-7', role: 'hidden_enemy' }
     ],
     roleDefinitions
   );
 
-  return createGameSession({
+  return createSession({
     id: 'domain-test-session',
     definitionId: 'domain-test',
     players: Array.from({ length: 7 }, (_, index) => ({
@@ -132,38 +163,65 @@ function createBaseSession({ relations = [], settings = {} } = {}) {
       connected: true,
       ready: true
     })),
-    roleInstances,
+    roles,
     relations,
     settings
   });
 }
 
-function roleById(session, roleInstanceId) {
-  return session.roleInstances.find((role) => role.id === roleInstanceId);
+function roleById(session, roleKey) {
+  return session.roles.find((role) => role.id === roleKey);
 }
 
-function withPhasePools(session, phasePools) {
+function withStepPools(session, stepPools) {
   return {
     ...session,
-    phasePools
+    stepPools
   };
 }
 
-function withInPlayState(session, inPlayByRoleInstanceId = {}) {
+function createVoteOutOfPlayStep(overrides = {}) {
+  return createStep({
+    key: STEP_KEYS.STEP_05,
+    status: STEP_STATUSES.ENABLED,
+    actorIds: [],
+    voteRules: voteOutOfPlayRules,
+    actions: [actionRecipe(setOutOfPlayAfterVoteRecipe, STEP_ACTION_KEYS.SET_OUT_OF_PLAY)],
+    ...overrides
+  });
+}
+
+function resolveVoteOutOfPlayStep(session, input = {}, stepOverrides = {}) {
+  const sessionWithVoteStep = withStepPools(
+    session,
+    createPool({
+      poolOrder: ['poolExposed'],
+      poolCurrent: 'poolExposed',
+      poolNext: 'poolExposed',
+      pools: {
+        poolExposed: [createVoteOutOfPlayStep(stepOverrides)]
+      }
+    })
+  );
+
+  return resolveCurrentStep(sessionWithVoteStep, input);
+}
+
+function withInPlayState(session, inPlayByRoleId = {}) {
   return {
     ...session,
-    roleInstances: session.roleInstances.map((role) => ({
+    roles: session.roles.map((role) => ({
       ...role,
-      inPlay: inPlayByRoleInstanceId[role.id] ?? role.inPlay
+      inPlay: inPlayByRoleId[role.id] ?? role.inPlay
     }))
   };
 }
 
-function createVotes(votesByActorRoleInstanceId = {}) {
-  return Object.entries(votesByActorRoleInstanceId).map(
-    ([actorRoleInstanceId, targetRoleInstanceId]) => ({
-      actorRoleInstanceId,
-      targetRoleInstanceId
+function createVotes(votesByActorRoleId = {}) {
+  return Object.entries(votesByActorRoleId).map(
+    ([actorId, targetId]) => ({
+      actorId,
+      targetId
     })
   );
 }
@@ -177,35 +235,32 @@ function actionRecipe(action, key) {
 
 function collectiveVoteInput(input = {}) {
   return {
-    ...input,
-    actorScope: {
-      type: ACTOR_SCOPE_TYPES.ALL_ROLES
-    }
+    ...input
   };
 }
 
-test('inspect_role revela roleId sin modificar la sesion', () => {
+test('inspect_role revela roleKey sin modificar la sesion', () => {
   const session = createBaseSession();
   const resolved = resolveAction(session, inspectRoleAction, {
-    actorRoleInstanceId: 'role_inspector-0',
-    targetRoleInstanceIds: ['hidden_enemy-0']
+    actorIds: ['role_inspector-0'],
+    targetIds: ['hidden_enemy-0']
   });
 
   assert.equal(resolved.ok, true);
   assert.equal(resolved.session, session);
   assert.deepEqual(resolved.result.reveals, [
     {
-      targetRoleInstanceId: 'hidden_enemy-0',
-      property: 'roleId',
+      targetId: 'hidden_enemy-0',
+      property: 'roleKey',
       value: 'hidden_enemy'
     }
   ]);
 });
 
 test('resolveCurrentStep ejecuta receta y completeCurrentStep avanza el cursor', () => {
-  const session = withPhasePools(
+  const session = withStepPools(
     createBaseSession(),
-    createPhasePools({
+    createPool({
       poolOrder: ['poolDeployment'],
       poolCurrent: 'poolDeployment',
       poolNext: 'poolDeployment',
@@ -213,12 +268,12 @@ test('resolveCurrentStep ejecuta receta y completeCurrentStep avanza el cursor',
         poolDeployment: [
           {
             key: STEP_KEYS.STEP_01,
-            status: PHASE_STATUSES.ENABLED,
+            status: STEP_STATUSES.ENABLED,
             actions: [actionRecipe(inspectRoleAction, STEP_ACTION_KEYS.INSPECT_ROLE)]
           },
           {
             key: STEP_KEYS.STEP_02,
-            status: PHASE_STATUSES.ENABLED,
+            status: STEP_STATUSES.ENABLED,
             actions: [actionRecipe(linkTargetsAction, STEP_ACTION_KEYS.LINK_TARGETS)]
           }
         ]
@@ -226,17 +281,17 @@ test('resolveCurrentStep ejecuta receta y completeCurrentStep avanza el cursor',
     })
   );
   const inspectedAction = resolveCurrentStep(session, {
-    actorRoleInstanceId: 'role_inspector-0',
-    targetRoleInstanceIds: ['hidden_enemy-0']
+    actorIds: ['role_inspector-0'],
+    targetIds: ['hidden_enemy-0']
   });
   const inspected = completeCurrentStep(inspectedAction.session, {
     requestedBy: STEP_COMPLETION_REQUESTED_BY.PLAYER,
-    actorRoleInstanceId: 'role_inspector-0',
+    actorIds: ['role_inspector-0'],
     reason: 'player_finished_step'
   });
   const linkedAction = resolveCurrentStep(inspected.session, {
-    actorRoleInstanceId: 'role_inspector-0',
-    targetRoleInstanceIds: ['team_a_target-0', 'team_a_plain-0']
+    actorIds: ['role_inspector-0'],
+    targetIds: ['alignment_a_target-0', 'alignment_a_plain-0']
   });
   const linked = completeCurrentStep(linkedAction.session, {
     requestedBy: STEP_COMPLETION_REQUESTED_BY.DIRECTOR,
@@ -244,30 +299,30 @@ test('resolveCurrentStep ejecuta receta y completeCurrentStep avanza el cursor',
   });
 
   assert.equal(inspectedAction.ok, true);
-  assert.equal(inspectedAction.step.phaseKey, STEP_KEYS.STEP_01);
+  assert.equal(inspectedAction.step.stepKey, STEP_KEYS.STEP_01);
   assert.equal(inspectedAction.result.reveals[0].value, 'hidden_enemy');
-  assert.equal(inspectedAction.phaseAdvance, null);
+  assert.equal(inspectedAction.stepAdvance, null);
   assert.equal(inspected.ok, true);
   assert.equal(
-    inspected.session.phasePools.pools.poolDeployment[0].status,
-    PHASE_STATUSES.DONE
+    inspected.session.stepPools.pools.poolDeployment[0].status,
+    STEP_STATUSES.DONE
   );
-  assert.equal(inspected.phaseAdvance.reason, 'next-phase-in-current-pool');
-  assert.equal(inspected.phaseAdvance.next.phaseKey, STEP_KEYS.STEP_02);
+  assert.equal(inspected.stepAdvance.reason, 'next-step-in-current-pool');
+  assert.equal(inspected.stepAdvance.next.stepKey, STEP_KEYS.STEP_02);
   assert.equal(linkedAction.ok, true);
   assert.equal(linkedAction.session.relations[0].type, RELATION_TYPES.LINKED);
-  assert.equal(linkedAction.phaseAdvance, null);
+  assert.equal(linkedAction.stepAdvance, null);
   assert.equal(linked.ok, true);
-  assert.equal(linked.phaseAdvance.reason, 'no-runnable-phase');
-  assert.equal(linked.session.stepCompletionHistory.length, 2);
-  assert.equal(linked.session.stepCompletionHistory[0].requestedBy, STEP_COMPLETION_REQUESTED_BY.PLAYER);
-  assert.equal(linked.session.stepCompletionHistory[1].requestedBy, STEP_COMPLETION_REQUESTED_BY.DIRECTOR);
+  assert.equal(linked.stepAdvance.reason, 'no-runnable-step');
+  assert.equal(linked.session.stepHistory.length, 2);
+  assert.equal(linked.session.stepHistory[0].requestedBy, STEP_COMPLETION_REQUESTED_BY.PLAYER);
+  assert.equal(linked.session.stepHistory[1].requestedBy, STEP_COMPLETION_REQUESTED_BY.DIRECTOR);
 });
 
 test('resolveCurrentStep rechaza un step ejecutable sin action declarada', () => {
-  const session = withPhasePools(
+  const session = withStepPools(
     createBaseSession(),
-    createPhasePools({
+    createPool({
       poolOrder: ['poolDeployment'],
       poolCurrent: 'poolDeployment',
       poolNext: 'poolDeployment',
@@ -275,7 +330,7 @@ test('resolveCurrentStep rechaza un step ejecutable sin action declarada', () =>
         poolDeployment: [
           {
             key: 'stepMissingAction',
-            status: PHASE_STATUSES.ENABLED
+            status: STEP_STATUSES.ENABLED
           }
         ]
       }
@@ -286,39 +341,34 @@ test('resolveCurrentStep rechaza un step ejecutable sin action declarada', () =>
   assert.equal(resolved.ok, false);
   assert.equal(resolved.errors[0].code, 'step/missing-action');
   assert.equal(
-    resolved.session.phasePools.pools.poolDeployment[0].status,
-    PHASE_STATUSES.ENABLED
+    resolved.session.stepPools.pools.poolDeployment[0].status,
+    STEP_STATUSES.ENABLED
   );
 });
 
-test('phaseDefinition organiza steps construidos por stepDefinition', () => {
+test('poolDefinition organiza steps construidos por stepDefinition', () => {
   const lateStep = createStep({
     key: STEP_KEYS.STEP_02,
-    status: PHASE_STATUSES.ENABLED,
+    status: STEP_STATUSES.ENABLED,
     order: 20,
-    actorScope: {
-      type: ACTOR_SCOPE_TYPES.ROLE,
-      roleInstanceId: 'role_inspector-0'
-    },
+    actorIds: ['role_inspector-0'],
     actions: [actionRecipe(inspectRoleAction, STEP_ACTION_KEYS.INSPECT_ROLE)]
   });
   const earlyStep = createStep({
     key: STEP_KEYS.STEP_01,
-    status: PHASE_STATUSES.ENABLED,
+    status: STEP_STATUSES.ENABLED,
     order: 10,
-    actorScope: {
-      type: ACTOR_SCOPE_TYPES.ALL_ROLES
-    },
-    actions: [actionRecipe(voteOutOfPlayAction, STEP_ACTION_KEYS.VOTE_OUT_OF_PLAY)]
+    actorIds: ['alignment_a_target-0', 'alignment_a_plain-0'],
+    actions: [actionRecipe(setOutOfPlayAfterVoteRecipe, STEP_ACTION_KEYS.SET_OUT_OF_PLAY)]
   });
-  const created = createPhasePoolsFromSkinDefinition({
+  const created = organizePoolSteps({
     poolOrder: ['poolExposed'],
     poolCurrent: 'poolExposed',
     pools: {
       poolExposed: [lateStep, earlyStep]
     }
   });
-  const duplicated = createPhasePoolsFromSkinDefinition({
+  const duplicated = organizePoolSteps({
     poolOrder: ['poolExposed'],
     pools: {
       poolExposed: [
@@ -329,21 +379,21 @@ test('phaseDefinition organiza steps construidos por stepDefinition', () => {
   });
 
   assert.equal(created.ok, true);
-  assert.equal(created.phasePools.pools.poolExposed[0].key, STEP_KEYS.STEP_01);
-  assert.equal(created.phasePools.pools.poolExposed[0].actorScope.type, ACTOR_SCOPE_TYPES.ALL_ROLES);
-  assert.equal(created.phasePools.pools.poolExposed[1].key, STEP_KEYS.STEP_02);
+  assert.equal(created.stepPools.pools.poolExposed[0].key, STEP_KEYS.STEP_01);
+  assert.deepEqual(created.stepPools.pools.poolExposed[0].actorIds, [
+    'alignment_a_target-0',
+    'alignment_a_plain-0'
+  ]);
+  assert.equal(created.stepPools.pools.poolExposed[1].key, STEP_KEYS.STEP_02);
   assert.equal(duplicated.ok, false);
-  assert.equal(duplicated.errors[0].code, PHASE_DEFINITION_ERRORS.DUPLICATE_ORDER);
+  assert.equal(duplicated.errors[0].code, POOL_DEFINITION_ERRORS.DUPLICATE_ORDER);
 });
 
 test('stepDefinition define completion y recetas opcionales', () => {
   const step = createStep({
     key: STEP_KEYS.STEP_03,
-    status: PHASE_STATUSES.ENABLED,
-    actorScope: {
-      type: ACTOR_SCOPE_TYPES.ROLE,
-      roleInstanceId: 'team_a_blocker-0'
-    },
+    status: STEP_STATUSES.ENABLED,
+    actorIds: ['alignment_a_blocker-0'],
     completion: {
       mode: STEP_COMPLETION_MODES.MANUAL,
       allowedRequesters: [
@@ -375,15 +425,11 @@ test('stepDefinition define completion y recetas opcionales', () => {
 test('stepCatalog crea un step reutilizable de control inPlay', () => {
   const step = getCatalogStep(STEP_CATALOG_IDS.ROLE_IN_PLAY_CONTROL, {
     key: STEP_KEYS.STEP_03,
-    actorScope: {
-      type: ACTOR_SCOPE_TYPES.ROLE,
-      roleInstanceId: 'team_a_blocker-0'
-    }
+    actorIds: ['alignment_a_blocker-0']
   });
 
   assert.equal(step.key, STEP_KEYS.STEP_03);
-  assert.equal(step.actorScope.type, ACTOR_SCOPE_TYPES.ROLE);
-  assert.equal(step.actorScope.roleInstanceId, 'team_a_blocker-0');
+  assert.deepEqual(step.actorIds, ['alignment_a_blocker-0']);
   assert.equal(step.completion.mode, STEP_COMPLETION_MODES.MANUAL);
   assert.deepEqual(step.completion.allowedRequesters, [
     STEP_COMPLETION_REQUESTED_BY.PLAYER,
@@ -405,7 +451,7 @@ test('stepCatalog expone los steps mecanicos ya definidos', () => {
     getCatalogStep(STEP_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY, { key: STEP_KEYS.STEP_02 }),
     getCatalogStep(STEP_CATALOG_IDS.ROLE_IN_PLAY_CONTROL, { key: STEP_KEYS.STEP_03 }),
     getCatalogStep(STEP_CATALOG_IDS.GROUP_SET_OUT_OF_PLAY, { key: STEP_KEYS.STEP_04 }),
-    getCatalogStep(STEP_CATALOG_IDS.GROUP_VOTE_OUT_OF_PLAY, { key: STEP_KEYS.STEP_05 }),
+    getCatalogStep(STEP_CATALOG_IDS.GROUP_VOTE, { key: STEP_KEYS.STEP_05 }),
     getCatalogStep(STEP_CATALOG_IDS.SYSTEM_CLOSES_CYCLE, { key: STEP_KEYS.STEP_06 })
   ];
 
@@ -417,17 +463,11 @@ test('stepCatalog expone los steps mecanicos ya definidos', () => {
       [STEP_ACTION_KEYS.BLOCK_OUT_OF_PLAY],
       [STEP_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY, STEP_ACTION_KEYS.SET_OUT_OF_PLAY],
       [STEP_ACTION_KEYS.SET_OUT_OF_PLAY],
-      [STEP_ACTION_KEYS.VOTE_OUT_OF_PLAY],
+      [STEP_ACTION_KEYS.SET_OUT_OF_PLAY],
       [STEP_ACTION_KEYS.CLOSE_CYCLE]
     ]
   );
-  assert.equal(steps[0].actorScope.type, ACTOR_SCOPE_TYPES.ROLE);
-  assert.equal(steps[1].actorScope.type, ACTOR_SCOPE_TYPES.ROLE);
-  assert.equal(steps[2].actorScope.type, ACTOR_SCOPE_TYPES.ROLE);
-  assert.equal(steps[3].actorScope.type, ACTOR_SCOPE_TYPES.ROLE);
-  assert.equal(steps[4].actorScope.type, ACTOR_SCOPE_TYPES.ROLE_GROUP);
-  assert.equal(steps[5].actorScope.type, ACTOR_SCOPE_TYPES.ALL_ROLES);
-  assert.equal(steps[6].actorScope.type, 'system');
+  assert.deepEqual(steps.map((step) => step.actorIds), [[], [], [], [], [], [], []]);
   assert.deepEqual(steps[6].completion.allowedRequesters, [STEP_COMPLETION_REQUESTED_BY.SYSTEM]);
 });
 
@@ -462,8 +502,8 @@ test('groupCatalog declara grupos mecanicos y razones de orden', () => {
   const stepDefinition = group.stepDefinitions[0];
 
   assert.equal(group.key, GROUP_CATALOG_IDS.ALIGNMENT_SET_OUT_OF_PLAY);
-  assert.equal(group.selector.type, 'alignment');
-  assert.equal(group.selector.alignmentId, 'alignment_b');
+  assert.equal(group.membershipRule.type, 'alignment');
+  assert.equal(group.membershipRule.alignmentId, 'alignment_b');
   assert.equal(stepDefinition.poolKey, POOL_KEYS.POOL_CONCEALED);
   assert.equal(stepDefinition.order, 30);
   assert.deepEqual(
@@ -473,10 +513,168 @@ test('groupCatalog declara grupos mecanicos y razones de orden', () => {
   assert.equal(stepDefinition.metadata.orderReason.includes('after blockers'), true);
 });
 
+test('buildStepPool construye steps asociados a un pool concreto', () => {
+  const steps = buildStepPool({
+    poolKey: POOL_KEYS.POOL_CONCEALED,
+    steps: [
+      getCatalogStep(STEP_CATALOG_IDS.ROLE_INSPECTS, {
+        order: 10
+      })
+    ]
+  });
+
+  assert.equal(steps.length, 1);
+  assert.equal(steps[0].poolKey, POOL_KEYS.POOL_CONCEALED);
+  assert.equal(steps[0].order, 10);
+  assert.equal(steps[0].actions[0].key, STEP_ACTION_KEYS.INSPECT_ROLE);
+});
+
+test('buildPools ensambla steps desde roles y grupos', () => {
+  const roleDefinitions = getCoreRoleCatalog();
+  const groupDefinitions = getCoreGroupCatalog();
+  const roleDefinitionMap = Object.fromEntries(roleDefinitions.map((role) => [role.key, role]));
+  const session = createSession({
+    roles: buildRolesFromSeats(
+      [
+        { seat: 0, role: ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS, alignmentId: 'alignment_a' },
+        { seat: 1, role: ROLE_CATALOG_IDS.ROLE_INSPECTS, alignmentId: 'alignment_a' },
+        { seat: 2, role: ROLE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY, alignmentId: 'alignment_a' },
+        { seat: 3, role: ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL, alignmentId: 'alignment_b' }
+      ],
+      roleDefinitionMap
+    )
+  });
+  const sessionWithGroups = {
+    ...session,
+    groups: buildInitialGroups(session, groupDefinitions)
+  };
+  const built = buildPools({
+    session: sessionWithGroups,
+    roleDefinitions,
+    groupDefinitions
+  });
+
+  assert.equal(built.ok, true);
+  assert.equal(built.stepPools.pools.poolDeployment.length, 1);
+  assert.equal(built.stepPools.pools.poolConcealed.length, 4);
+  assert.deepEqual(built.stepPools.pools.poolDeployment[0].actorIds, [
+    `${ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS}-0`
+  ]);
+  assert.deepEqual(
+    built.stepPools.pools.poolConcealed.map((step) => step.order),
+    [10, 20, 30, 40]
+  );
+  assert.deepEqual(built.stepPools.pools.poolConcealed[2].actorIds, [
+    `${ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL}-0`
+  ]);
+});
+
+test('buildSession crea roles y stepPools desde configuracion', () => {
+  const selectedRoles = getCoreRoleCatalog().filter((role) =>
+    [ROLE_CATALOG_IDS.ROLE_INSPECTS, ROLE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY].includes(role.key)
+  );
+  const built = buildSession({
+    id: 'built-session',
+    players: [
+      { id: 'player-1', displayName: 'Player 1' },
+      { id: 'player-2', displayName: 'Player 2' }
+    ],
+    seats: [
+      { seat: 0, playerId: 'player-1', role: ROLE_CATALOG_IDS.ROLE_INSPECTS },
+      { seat: 1, playerId: 'player-2', role: ROLE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY }
+    ],
+    roleDefinitions: selectedRoles,
+    groupDefinitions: []
+  });
+
+  assert.equal(built.ok, true);
+  assert.equal(built.session.id, 'built-session');
+  assert.equal(built.session.roles.length, 2);
+  assert.equal(built.session.roles[0].roleKey, ROLE_CATALOG_IDS.ROLE_INSPECTS);
+  assert.equal(built.session.groups.length, 0);
+  assert.equal(built.session.stepPools.pools.poolDeployment.length, 0);
+  assert.equal(built.session.stepPools.pools.poolConcealed.length, 2);
+});
+
+test('buildSession rechaza steps enabled creados desde grupos sin actores', () => {
+  const selectedRoles = getCoreRoleCatalog().filter((role) =>
+    [ROLE_CATALOG_IDS.ROLE_INSPECTS].includes(role.key)
+  );
+  const built = buildSession({
+    id: 'empty-group-step-session',
+    players: [{ id: 'player-1', displayName: 'Player 1' }],
+    seats: [{ seat: 0, playerId: 'player-1', role: ROLE_CATALOG_IDS.ROLE_INSPECTS }],
+    roleDefinitions: selectedRoles,
+    groupDefinitions: getCoreGroupCatalog()
+  });
+
+  assert.equal(built.ok, false);
+  assert.equal(built.errors[0].code, POOL_DEFINITION_ERRORS.EMPTY_ACTOR_IDS);
+  assert.equal(built.errors[0].source.type, 'group');
+});
+
+test('buildSession crea grupos con miembros resueltos desde membershipRules', () => {
+  const session = createBaseSession();
+  const built = buildSession({
+    id: 'group-built-session',
+    players: session.players,
+    roles: session.roles,
+    groupDefinitions: [
+      createGroup({
+        key: 'all_roles',
+        membershipRule: { type: GROUP_MEMBERSHIP_RULE_TYPES.ALL_ROLES }
+      }),
+      createGroup({
+        key: 'alignment_b_roles',
+        membershipRule: {
+          type: GROUP_MEMBERSHIP_RULE_TYPES.ALIGNMENT,
+          alignmentId: 'alignment_b'
+        }
+      })
+    ]
+  });
+
+  const byKey = Object.fromEntries(built.session.groups.map((group) => [group.key, group]));
+
+  assert.equal(built.ok, true);
+  assert.equal(byKey.all_roles.membershipRule, undefined);
+  assert.equal(byKey.all_roles.roleIds.length, session.roles.length);
+  assert.deepEqual(byKey.alignment_b_roles.roleIds.sort(), [
+    'alignment_b_attacker-0',
+    'alignment_b_target-0',
+    'hidden_enemy-0'
+  ]);
+});
+
+test('groupModel anade y elimina roles de grupos persistentes de sesion', () => {
+  const session = createSession({
+    id: 'group-runtime-session',
+    roles: createBaseSession().roles,
+    groups: [
+      createGroup({
+        key: 'linked_roles',
+        roleIds: ['alignment_a_target-0']
+      })
+    ]
+  });
+  const withAddedRole = addRoleToGroup(session, 'linked_roles', 'alignment_b_target-0');
+  const withRemovedRole = removeRoleFromGroup(
+    withAddedRole,
+    'linked_roles',
+    'alignment_a_target-0'
+  );
+
+  assert.deepEqual(
+    getGroupRoles(withAddedRole, 'linked_roles').map((role) => role.id).sort(),
+    ['alignment_a_target-0', 'alignment_b_target-0']
+  );
+  assert.deepEqual(withRemovedRole.groups[0].roleIds, ['alignment_b_target-0']);
+});
+
 test('resolveCurrentStep exige actionKey cuando un step ofrece varias acciones', () => {
-  const session = withPhasePools(
+  const session = withStepPools(
     createBaseSession(),
-    createPhasePools({
+    createPool({
       poolOrder: ['poolConcealed'],
       poolCurrent: 'poolConcealed',
       poolNext: 'poolConcealed',
@@ -484,7 +682,7 @@ test('resolveCurrentStep exige actionKey cuando un step ofrece varias acciones',
         poolConcealed: [
           {
             key: STEP_KEYS.STEP_03,
-            status: PHASE_STATUSES.ENABLED,
+            status: STEP_STATUSES.ENABLED,
             actions: [
               actionRecipe(
                 {
@@ -504,13 +702,13 @@ test('resolveCurrentStep exige actionKey cuando un step ofrece varias acciones',
     })
   );
   const missingActionKey = resolveCurrentStep(session, {
-    actorRoleInstanceId: 'team_b_attacker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_b_attacker-0'],
+    targetIds: ['alignment_a_target-0']
   });
   const selectedAction = resolveCurrentStep(session, {
     actionKey: STEP_ACTION_KEYS.SET_OUT_OF_PLAY,
-    actorRoleInstanceId: 'team_b_attacker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_b_attacker-0'],
+    targetIds: ['alignment_a_target-0']
   });
 
   assert.equal(missingActionKey.ok, false);
@@ -521,13 +719,13 @@ test('resolveCurrentStep exige actionKey cuando un step ofrece varias acciones',
     selectedAction.session.actionHistory.at(-1).actionKey,
     STEP_ACTION_KEYS.SET_OUT_OF_PLAY
   );
-  assert.equal(roleById(selectedAction.session, 'team_a_target-0').inPlay, false);
+  assert.equal(roleById(selectedAction.session, 'alignment_a_target-0').inPlay, false);
 });
 
-test('resolveCurrentStep ejecuta step_05 con receta vote_out_of_play', () => {
-  const session = withPhasePools(
+test('resolveCurrentStep ejecuta step_05 con voto y receta set_out_of_play', () => {
+  const session = withStepPools(
     createBaseSession(),
-    createPhasePools({
+    createPool({
       poolOrder: ['poolExposed'],
       poolCurrent: 'poolExposed',
       poolNext: 'poolExposed',
@@ -535,11 +733,10 @@ test('resolveCurrentStep ejecuta step_05 con receta vote_out_of_play', () => {
         poolExposed: [
           {
             key: STEP_KEYS.STEP_05,
-            status: PHASE_STATUSES.ENABLED,
-            actorScope: {
-              type: ACTOR_SCOPE_TYPES.ALL_ROLES
-            },
-            actions: [actionRecipe(voteOutOfPlayAction, STEP_ACTION_KEYS.VOTE_OUT_OF_PLAY)]
+            status: STEP_STATUSES.ENABLED,
+            actorIds: [],
+            voteRules: voteOutOfPlayRules,
+            actions: [actionRecipe(setOutOfPlayAfterVoteRecipe, STEP_ACTION_KEYS.SET_OUT_OF_PLAY)]
           }
         ]
       }
@@ -547,13 +744,13 @@ test('resolveCurrentStep ejecuta step_05 con receta vote_out_of_play', () => {
   );
   const resolved = resolveCurrentStep(session, {
     votes: createVotes({
-      'team_b_attacker-0': 'team_a_target-0',
-      'team_a_blocker-0': 'team_a_target-0',
-      'team_a_target-0': 'team_a_target-0',
-      'team_a_plain-0': 'team_a_target-0',
-      'team_b_target-0': 'team_a_target-0',
-      'role_inspector-0': 'team_a_target-0',
-      'hidden_enemy-0': 'team_a_target-0'
+      'alignment_b_attacker-0': 'alignment_a_target-0',
+      'alignment_a_blocker-0': 'alignment_a_target-0',
+      'alignment_a_target-0': 'alignment_a_target-0',
+      'alignment_a_plain-0': 'alignment_a_target-0',
+      'alignment_b_target-0': 'alignment_a_target-0',
+      'role_inspector-0': 'alignment_a_target-0',
+      'hidden_enemy-0': 'alignment_a_target-0'
     })
   });
   const completed = completeCurrentStep(resolved.session, {
@@ -562,22 +759,53 @@ test('resolveCurrentStep ejecuta step_05 con receta vote_out_of_play', () => {
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.step.phaseKey, STEP_KEYS.STEP_05);
-  assert.equal(resolved.result.vote.type, VOTE_OUTCOME_TYPES.WINNER);
-  assert.equal(roleById(resolved.session, 'team_a_target-0').inPlay, false);
-  assert.equal(resolved.phaseAdvance, null);
+  assert.equal(resolved.step.stepKey, STEP_KEYS.STEP_05);
+  assert.equal(resolved.result.vote.type, VOTE_OUTCOME_TYPES.CHOSEN);
+  assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
+  assert.equal(resolved.stepAdvance, null);
   assert.equal(completed.ok, true);
   assert.equal(
-    completed.session.phasePools.pools.poolExposed[0].status,
-    PHASE_STATUSES.DONE
+    completed.session.stepPools.pools.poolExposed[0].status,
+    STEP_STATUSES.DONE
   );
-  assert.equal(completed.phaseAdvance.reason, 'no-runnable-phase');
+  assert.equal(completed.stepAdvance.reason, 'no-runnable-step');
+});
+
+test('resolveCurrentStep usa actorIds del step como participantes de vote', () => {
+  const session = withStepPools(
+    createBaseSession(),
+    createPool({
+      poolOrder: ['poolExposed'],
+      poolCurrent: 'poolExposed',
+      poolNext: 'poolExposed',
+      pools: {
+        poolExposed: [
+          {
+            key: STEP_KEYS.STEP_05,
+            status: STEP_STATUSES.ENABLED,
+            actorIds: ['alignment_b_attacker-0', 'alignment_a_blocker-0'],
+            voteRules: voteOutOfPlayRules,
+            actions: [actionRecipe(setOutOfPlayAfterVoteRecipe, STEP_ACTION_KEYS.SET_OUT_OF_PLAY)]
+          }
+        ]
+      }
+    })
+  );
+  const resolved = resolveCurrentStep(session, {
+    votes: createVotes({
+      'alignment_b_attacker-0': 'alignment_a_target-0'
+    })
+  });
+
+  assert.equal(resolved.ok, false);
+  assert.equal(resolved.errors[0].code, 'vote/missing-required-votes');
+  assert.deepEqual(resolved.errors[0].missingActorIds, ['alignment_a_blocker-0']);
 });
 
 test('resolveCurrentStep ejecuta step_02 con receta block_out_of_play', () => {
-  const session = withPhasePools(
+  const session = withStepPools(
     createBaseSession(),
-    createPhasePools({
+    createPool({
       poolOrder: ['poolConcealed'],
       poolCurrent: 'poolConcealed',
       poolNext: 'poolConcealed',
@@ -585,7 +813,7 @@ test('resolveCurrentStep ejecuta step_02 con receta block_out_of_play', () => {
         poolConcealed: [
           {
             key: STEP_KEYS.STEP_02,
-            status: PHASE_STATUSES.ENABLED,
+            status: STEP_STATUSES.ENABLED,
             actions: [actionRecipe(blockOutOfPlayRecipe, STEP_ACTION_KEYS.BLOCK_OUT_OF_PLAY)]
           }
         ]
@@ -593,37 +821,37 @@ test('resolveCurrentStep ejecuta step_02 con receta block_out_of_play', () => {
     })
   );
   const blocking = resolveCurrentStep(session, {
-    actorRoleInstanceId: 'team_a_blocker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_a_target-0']
   });
   const attackAfterBlocking = resolveAction(blocking.session, setInPlayFalseAction, {
-    actorRoleInstanceId: 'team_b_attacker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_b_attacker-0'],
+    targetIds: ['alignment_a_target-0']
   });
 
   assert.equal(blocking.ok, true);
-  assert.equal(blocking.step.phaseKey, STEP_KEYS.STEP_02);
-  assert.equal(blocking.phaseAdvance, null);
+  assert.equal(blocking.step.stepKey, STEP_KEYS.STEP_02);
+  assert.equal(blocking.stepAdvance, null);
   const completed = completeCurrentStep(blocking.session, {
     requestedBy: STEP_COMPLETION_REQUESTED_BY.PLAYER,
-    actorRoleInstanceId: 'team_a_blocker-0'
+    actorIds: ['alignment_a_blocker-0']
   });
   assert.equal(completed.ok, true);
   assert.equal(
-    completed.session.phasePools.pools.poolConcealed[0].status,
-    PHASE_STATUSES.DONE
+    completed.session.stepPools.pools.poolConcealed[0].status,
+    STEP_STATUSES.DONE
   );
-  assert.equal(completed.phaseAdvance.reason, 'no-runnable-phase');
+  assert.equal(completed.stepAdvance.reason, 'no-runnable-step');
   assert.equal(attackAfterBlocking.ok, true);
-  assert.equal(roleById(attackAfterBlocking.session, 'team_a_target-0').inPlay, true);
+  assert.equal(roleById(attackAfterBlocking.session, 'alignment_a_target-0').inPlay, true);
   assert.deepEqual(attackAfterBlocking.result.proposedEffects, []);
   assert.equal(attackAfterBlocking.result.blockedActions[0].reason, 'blocked_action');
 });
 
 test('resolveCurrentStep ejecuta step_04 con receta set_out_of_play', () => {
-  const session = withPhasePools(
+  const session = withStepPools(
     createBaseSession(),
-    createPhasePools({
+    createPool({
       poolOrder: ['poolConcealed'],
       poolCurrent: 'poolConcealed',
       poolNext: 'poolConcealed',
@@ -631,12 +859,12 @@ test('resolveCurrentStep ejecuta step_04 con receta set_out_of_play', () => {
         poolConcealed: [
           {
             key: STEP_KEYS.STEP_02,
-            status: PHASE_STATUSES.ENABLED,
+            status: STEP_STATUSES.ENABLED,
             actions: [actionRecipe(blockOutOfPlayRecipe, STEP_ACTION_KEYS.BLOCK_OUT_OF_PLAY)]
           },
           {
             key: STEP_KEYS.STEP_04,
-            status: PHASE_STATUSES.ENABLED,
+            status: STEP_STATUSES.ENABLED,
             actions: [actionRecipe(setInPlayFalseAction, STEP_ACTION_KEYS.SET_OUT_OF_PLAY)]
           }
         ]
@@ -644,24 +872,24 @@ test('resolveCurrentStep ejecuta step_04 con receta set_out_of_play', () => {
     })
   );
   const blocking = resolveCurrentStep(session, {
-    actorRoleInstanceId: 'team_a_blocker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_a_target-0']
   });
   const blockingCompleted = completeCurrentStep(blocking.session, {
     requestedBy: STEP_COMPLETION_REQUESTED_BY.PLAYER,
-    actorRoleInstanceId: 'team_a_blocker-0'
+    actorIds: ['alignment_a_blocker-0']
   });
   const blockedAttempt = resolveCurrentStep(blockingCompleted.session, {
-    actorRoleInstanceId: 'team_b_attacker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_b_attacker-0'],
+    targetIds: ['alignment_a_target-0']
   });
 
   assert.equal(blocking.ok, true);
-  assert.equal(blocking.phaseAdvance, null);
-  assert.equal(blockingCompleted.phaseAdvance.next.phaseKey, STEP_KEYS.STEP_04);
+  assert.equal(blocking.stepAdvance, null);
+  assert.equal(blockingCompleted.stepAdvance.next.stepKey, STEP_KEYS.STEP_04);
   assert.equal(blockedAttempt.ok, true);
-  assert.equal(blockedAttempt.step.phaseKey, STEP_KEYS.STEP_04);
-  assert.equal(roleById(blockedAttempt.session, 'team_a_target-0').inPlay, true);
+  assert.equal(blockedAttempt.step.stepKey, STEP_KEYS.STEP_04);
+  assert.equal(roleById(blockedAttempt.session, 'alignment_a_target-0').inPlay, true);
   assert.deepEqual(blockedAttempt.result.proposedEffects, []);
   assert.equal(blockedAttempt.result.blockedActions[0].reason, 'blocked_action');
   const blockedCompleted = completeCurrentStep(blockedAttempt.session, {
@@ -669,15 +897,15 @@ test('resolveCurrentStep ejecuta step_04 con receta set_out_of_play', () => {
   });
   assert.equal(blockedCompleted.ok, true);
   assert.equal(
-    blockedCompleted.session.phasePools.pools.poolConcealed[1].status,
-    PHASE_STATUSES.DONE
+    blockedCompleted.session.stepPools.pools.poolConcealed[1].status,
+    STEP_STATUSES.DONE
   );
 });
 
 test('actionHistory registra step, efectos finales y acciones bloqueadas', () => {
-  const session = withPhasePools(
+  const session = withStepPools(
     createBaseSession(),
-    createPhasePools({
+    createPool({
       poolOrder: ['poolConcealed'],
       poolCurrent: 'poolConcealed',
       poolNext: 'poolConcealed',
@@ -685,7 +913,7 @@ test('actionHistory registra step, efectos finales y acciones bloqueadas', () =>
         poolConcealed: [
           {
             key: STEP_KEYS.STEP_04,
-            status: PHASE_STATUSES.ENABLED,
+            status: STEP_STATUSES.ENABLED,
             actions: [actionRecipe(setInPlayFalseAction, STEP_ACTION_KEYS.SET_OUT_OF_PLAY)]
           }
         ]
@@ -693,15 +921,15 @@ test('actionHistory registra step, efectos finales y acciones bloqueadas', () =>
     })
   );
   const resolved = resolveCurrentStep(session, {
-    actorRoleInstanceId: 'team_b_attacker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_b_attacker-0'],
+    targetIds: ['alignment_a_target-0']
   });
   const historyEntry = resolved.session.actionHistory.at(-1);
   const appliedEntries = findAppliedSetPropertyHistory(resolved.session, {
     cycleId: historyEntry.cycleId,
     property: 'inPlay',
     value: false,
-    targetId: 'team_a_target-0',
+    targetId: 'alignment_a_target-0',
     stepKey: STEP_KEYS.STEP_04,
     actionKey: STEP_ACTION_KEYS.SET_OUT_OF_PLAY
   });
@@ -717,9 +945,9 @@ test('actionHistory registra step, efectos finales y acciones bloqueadas', () =>
 });
 
 test('restore_recent_out_of_play ejecuta set_in_play(true) solo sobre un set_out_of_play previo', () => {
-  const session = withPhasePools(
+  const session = withStepPools(
     createBaseSession(),
-    createPhasePools({
+    createPool({
       poolOrder: ['poolConcealed'],
       poolCurrent: 'poolConcealed',
       poolNext: 'poolConcealed',
@@ -727,12 +955,12 @@ test('restore_recent_out_of_play ejecuta set_in_play(true) solo sobre un set_out
         poolConcealed: [
           {
             key: STEP_KEYS.STEP_02,
-            status: PHASE_STATUSES.ENABLED,
+            status: STEP_STATUSES.ENABLED,
             actions: [actionRecipe(setInPlayFalseAction, STEP_ACTION_KEYS.SET_OUT_OF_PLAY)]
           },
           {
             key: STEP_KEYS.STEP_03,
-            status: PHASE_STATUSES.ENABLED,
+            status: STEP_STATUSES.ENABLED,
             actions: [
               actionRecipe(
                 restoreRecentOutOfPlayAction,
@@ -746,8 +974,8 @@ test('restore_recent_out_of_play ejecuta set_in_play(true) solo sobre un set_out
     })
   );
   const setOutOfPlay = resolveCurrentStep(session, {
-    actorRoleInstanceId: 'team_b_attacker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_b_attacker-0'],
+    targetIds: ['alignment_a_target-0']
   });
   const setOutStepClosed = completeCurrentStep(setOutOfPlay.session, {
     requestedBy: STEP_COMPLETION_REQUESTED_BY.DIRECTOR,
@@ -755,21 +983,21 @@ test('restore_recent_out_of_play ejecuta set_in_play(true) solo sobre un set_out
   });
   const restored = resolveCurrentStep(setOutStepClosed.session, {
     actionKey: STEP_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
-    actorRoleInstanceId: 'team_a_blocker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_a_target-0']
   });
 
   assert.equal(setOutOfPlay.ok, true);
-  assert.equal(roleById(setOutOfPlay.session, 'team_a_target-0').inPlay, false);
-  assert.equal(setOutOfPlay.phaseAdvance, null);
+  assert.equal(roleById(setOutOfPlay.session, 'alignment_a_target-0').inPlay, false);
+  assert.equal(setOutOfPlay.stepAdvance, null);
   assert.equal(setOutStepClosed.ok, true);
-  assert.equal(setOutStepClosed.phaseAdvance.next.phaseKey, STEP_KEYS.STEP_03);
+  assert.equal(setOutStepClosed.stepAdvance.next.stepKey, STEP_KEYS.STEP_03);
   assert.equal(restored.ok, true);
-  assert.equal(roleById(restored.session, 'team_a_target-0').inPlay, true);
-  assert.equal(restored.phaseAdvance, null);
+  assert.equal(roleById(restored.session, 'alignment_a_target-0').inPlay, true);
+  assert.equal(restored.stepAdvance, null);
   assert.equal(
-    restored.session.phasePools.pools.poolConcealed[1].status,
-    PHASE_STATUSES.ENABLED
+    restored.session.stepPools.pools.poolConcealed[1].status,
+    STEP_STATUSES.ENABLED
   );
   assert.equal(restored.session.actionHistory.at(-1).stepKey, STEP_KEYS.STEP_03);
   assert.equal(
@@ -784,8 +1012,8 @@ test('un step con recetas opcionales permanece abierto hasta cierre explicito', 
     createBaseSession(),
     actionRecipe(setInPlayFalseAction, STEP_ACTION_KEYS.SET_OUT_OF_PLAY),
     {
-      actorRoleInstanceId: 'team_b_attacker-0',
-      targetRoleInstanceIds: ['team_a_target-0']
+      actorIds: ['alignment_b_attacker-0'],
+      targetIds: ['alignment_a_target-0']
     }
   );
   const optionalSetOutRecipe = actionRecipe(
@@ -801,9 +1029,9 @@ test('un step con recetas opcionales permanece abierto hasta cierre explicito', 
     },
     STEP_ACTION_KEYS.SET_OUT_OF_PLAY
   );
-  const session = withPhasePools(
+  const session = withStepPools(
     preStepSetOut.session,
-    createPhasePools({
+    createPool({
       poolOrder: ['poolConcealed'],
       poolCurrent: 'poolConcealed',
       poolNext: 'poolConcealed',
@@ -811,7 +1039,7 @@ test('un step con recetas opcionales permanece abierto hasta cierre explicito', 
         poolConcealed: [
           {
             key: STEP_KEYS.STEP_03,
-            status: PHASE_STATUSES.ENABLED,
+            status: STEP_STATUSES.ENABLED,
             actions: [
               actionRecipe(
                 restoreRecentOutOfPlayAction,
@@ -826,13 +1054,13 @@ test('un step con recetas opcionales permanece abierto hasta cierre explicito', 
   );
   const restored = resolveCurrentStep(session, {
     actionKey: STEP_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
-    actorRoleInstanceId: 'team_a_blocker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_a_target-0']
   });
   const setOut = resolveCurrentStep(restored.session, {
     actionKey: STEP_ACTION_KEYS.SET_OUT_OF_PLAY,
-    actorRoleInstanceId: 'team_a_blocker-0',
-    targetRoleInstanceIds: ['team_b_target-0']
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_b_target-0']
   });
   const completed = completeCurrentStep(setOut.session, {
     requestedBy: STEP_COMPLETION_REQUESTED_BY.DIRECTOR,
@@ -841,20 +1069,20 @@ test('un step con recetas opcionales permanece abierto hasta cierre explicito', 
 
   assert.equal(preStepSetOut.ok, true);
   assert.equal(restored.ok, true);
-  assert.equal(roleById(restored.session, 'team_a_target-0').inPlay, true);
-  assert.equal(restored.phaseAdvance, null);
+  assert.equal(roleById(restored.session, 'alignment_a_target-0').inPlay, true);
+  assert.equal(restored.stepAdvance, null);
   assert.equal(
-    restored.session.phasePools.pools.poolConcealed[0].status,
-    PHASE_STATUSES.ENABLED
+    restored.session.stepPools.pools.poolConcealed[0].status,
+    STEP_STATUSES.ENABLED
   );
   assert.equal(setOut.ok, true);
-  assert.equal(roleById(setOut.session, 'team_b_target-0').inPlay, false);
-  assert.equal(setOut.phaseAdvance, null);
+  assert.equal(roleById(setOut.session, 'alignment_b_target-0').inPlay, false);
+  assert.equal(setOut.stepAdvance, null);
   assert.equal(completed.ok, true);
-  assert.equal(completed.phaseAdvance.reason, 'no-runnable-phase');
+  assert.equal(completed.stepAdvance.reason, 'no-runnable-step');
   assert.equal(
-    completed.session.phasePools.pools.poolConcealed[0].status,
-    PHASE_STATUSES.DONE
+    completed.session.stepPools.pools.poolConcealed[0].status,
+    STEP_STATUSES.DONE
   );
   assert.equal(completed.completion.requestedBy, STEP_COMPLETION_REQUESTED_BY.DIRECTOR);
 });
@@ -862,16 +1090,16 @@ test('un step con recetas opcionales permanece abierto hasta cierre explicito', 
 test('completeCurrentStep respeta allowedRequesters del step', () => {
   const step = createStep({
     key: STEP_KEYS.STEP_03,
-    status: PHASE_STATUSES.ENABLED,
+    status: STEP_STATUSES.ENABLED,
     completion: {
       mode: STEP_COMPLETION_MODES.MANUAL,
       allowedRequesters: [STEP_COMPLETION_REQUESTED_BY.DIRECTOR]
     },
     actions: [actionRecipe(restoreRecentOutOfPlayAction, STEP_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY)]
   });
-  const session = withPhasePools(
+  const session = withStepPools(
     createBaseSession(),
-    createPhasePools({
+    createPool({
       poolOrder: ['poolConcealed'],
       poolCurrent: 'poolConcealed',
       poolNext: 'poolConcealed',
@@ -882,7 +1110,7 @@ test('completeCurrentStep respeta allowedRequesters del step', () => {
   );
   const actorClose = completeCurrentStep(session, {
     requestedBy: STEP_COMPLETION_REQUESTED_BY.PLAYER,
-    actorRoleInstanceId: 'team_a_blocker-0'
+    actorIds: ['alignment_a_blocker-0']
   });
   const directorClose = completeCurrentStep(session, {
     requestedBy: STEP_COMPLETION_REQUESTED_BY.DIRECTOR
@@ -896,11 +1124,11 @@ test('completeCurrentStep respeta allowedRequesters del step', () => {
 });
 
 test('restore_recent_out_of_play rechaza targets sin set_out_of_play aplicado este ciclo', () => {
-  const session = withPhasePools(
+  const session = withStepPools(
     withInPlayState(createBaseSession(), {
-      'team_a_target-0': false
+      'alignment_a_target-0': false
     }),
-    createPhasePools({
+    createPool({
       poolOrder: ['poolConcealed'],
       poolCurrent: 'poolConcealed',
       poolNext: 'poolConcealed',
@@ -908,7 +1136,7 @@ test('restore_recent_out_of_play rechaza targets sin set_out_of_play aplicado es
         poolConcealed: [
           {
             key: STEP_KEYS.STEP_03,
-            status: PHASE_STATUSES.ENABLED,
+            status: STEP_STATUSES.ENABLED,
             actions: [
               actionRecipe(
                 restoreRecentOutOfPlayAction,
@@ -922,19 +1150,19 @@ test('restore_recent_out_of_play rechaza targets sin set_out_of_play aplicado es
   );
   const restored = resolveCurrentStep(session, {
     actionKey: STEP_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
-    actorRoleInstanceId: 'team_a_blocker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_a_target-0']
   });
 
   assert.equal(restored.ok, false);
   assert.equal(restored.errors[0].code, 'constraint/require_recent_set_property');
-  assert.equal(roleById(restored.session, 'team_a_target-0').inPlay, false);
+  assert.equal(roleById(restored.session, 'alignment_a_target-0').inPlay, false);
 });
 
 test('restore_recent_out_of_play rechaza un set_out_of_play bloqueado', () => {
-  const session = withPhasePools(
+  const session = withStepPools(
     createBaseSession(),
-    createPhasePools({
+    createPool({
       poolOrder: ['poolConcealed'],
       poolCurrent: 'poolConcealed',
       poolNext: 'poolConcealed',
@@ -942,17 +1170,17 @@ test('restore_recent_out_of_play rechaza un set_out_of_play bloqueado', () => {
         poolConcealed: [
           {
             key: STEP_KEYS.STEP_01,
-            status: PHASE_STATUSES.ENABLED,
+            status: STEP_STATUSES.ENABLED,
             actions: [actionRecipe(blockOutOfPlayRecipe, STEP_ACTION_KEYS.BLOCK_OUT_OF_PLAY)]
           },
           {
             key: STEP_KEYS.STEP_02,
-            status: PHASE_STATUSES.ENABLED,
+            status: STEP_STATUSES.ENABLED,
             actions: [actionRecipe(setInPlayFalseAction, STEP_ACTION_KEYS.SET_OUT_OF_PLAY)]
           },
           {
             key: STEP_KEYS.STEP_03,
-            status: PHASE_STATUSES.ENABLED,
+            status: STEP_STATUSES.ENABLED,
             actions: [
               actionRecipe(
                 restoreRecentOutOfPlayAction,
@@ -965,31 +1193,31 @@ test('restore_recent_out_of_play rechaza un set_out_of_play bloqueado', () => {
     })
   );
   const blocking = resolveCurrentStep(session, {
-    actorRoleInstanceId: 'team_a_blocker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_a_target-0']
   });
   const blockingClosed = completeCurrentStep(blocking.session, {
     requestedBy: STEP_COMPLETION_REQUESTED_BY.PLAYER,
-    actorRoleInstanceId: 'team_a_blocker-0'
+    actorIds: ['alignment_a_blocker-0']
   });
   const blockedSetOutOfPlay = resolveCurrentStep(blockingClosed.session, {
-    actorRoleInstanceId: 'team_b_attacker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_b_attacker-0'],
+    targetIds: ['alignment_a_target-0']
   });
   const blockedSetOutClosed = completeCurrentStep(blockedSetOutOfPlay.session, {
     requestedBy: STEP_COMPLETION_REQUESTED_BY.DIRECTOR
   });
   const restored = resolveCurrentStep(blockedSetOutClosed.session, {
     actionKey: STEP_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
-    actorRoleInstanceId: 'team_a_blocker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_a_target-0']
   });
 
   assert.equal(blocking.ok, true);
   assert.equal(blockingClosed.ok, true);
   assert.equal(blockedSetOutOfPlay.ok, true);
   assert.deepEqual(blockedSetOutOfPlay.result.finalEffects, []);
-  assert.equal(roleById(blockedSetOutOfPlay.session, 'team_a_target-0').inPlay, true);
+  assert.equal(roleById(blockedSetOutOfPlay.session, 'alignment_a_target-0').inPlay, true);
   assert.equal(blockedSetOutClosed.ok, true);
   assert.equal(restored.ok, false);
   assert.equal(restored.errors[0].code, 'constraint/require_recent_set_property');
@@ -1002,20 +1230,20 @@ test('limited_uses bloquea una segunda ejecucion de la misma receta por el mismo
     STEP_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY
   );
   const firstSetOut = resolveRecipe(createBaseSession(), setOutRecipe, {
-    actorRoleInstanceId: 'team_b_attacker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_b_attacker-0'],
+    targetIds: ['alignment_a_target-0']
   });
   const firstRestore = resolveRecipe(firstSetOut.session, restoreRecipe, {
-    actorRoleInstanceId: 'team_a_blocker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_a_target-0']
   });
   const secondSetOut = resolveRecipe(firstRestore.session, setOutRecipe, {
-    actorRoleInstanceId: 'team_b_attacker-0',
-    targetRoleInstanceIds: ['team_a_plain-0']
+    actorIds: ['alignment_b_attacker-0'],
+    targetIds: ['alignment_a_plain-0']
   });
   const secondRestore = resolveRecipe(secondSetOut.session, restoreRecipe, {
-    actorRoleInstanceId: 'team_a_blocker-0',
-    targetRoleInstanceIds: ['team_a_plain-0']
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_a_plain-0']
   });
 
   assert.equal(firstRestore.ok, true);
@@ -1042,26 +1270,26 @@ test('limited_uses con ventana current_cycle permite reutilizar en otro ciclo', 
     STEP_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY
   );
   const firstSetOut = resolveRecipe(createBaseSession(), setOutRecipe, {
-    actorRoleInstanceId: 'team_b_attacker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_b_attacker-0'],
+    targetIds: ['alignment_a_target-0']
   });
   const firstRestore = resolveRecipe(firstSetOut.session, restorePerCycleRecipe, {
-    actorRoleInstanceId: 'team_a_blocker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_a_target-0']
   });
   const nextCycle = resolveAction(firstRestore.session, closeCycleAction);
   const secondSetOut = resolveRecipe(nextCycle.session, setOutRecipe, {
-    actorRoleInstanceId: 'team_b_attacker-0',
-    targetRoleInstanceIds: ['team_a_plain-0']
+    actorIds: ['alignment_b_attacker-0'],
+    targetIds: ['alignment_a_plain-0']
   });
   const secondRestore = resolveRecipe(secondSetOut.session, restorePerCycleRecipe, {
-    actorRoleInstanceId: 'team_a_blocker-0',
-    targetRoleInstanceIds: ['team_a_plain-0']
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_a_plain-0']
   });
 
   assert.equal(firstRestore.ok, true);
   assert.equal(secondRestore.ok, true);
-  assert.equal(roleById(secondRestore.session, 'team_a_plain-0').inPlay, true);
+  assert.equal(roleById(secondRestore.session, 'alignment_a_plain-0').inPlay, true);
 });
 
 test('limited_uses con ventana next_cycle cuenta usos del ciclo anterior', () => {
@@ -1081,21 +1309,21 @@ test('limited_uses con ventana next_cycle cuenta usos del ciclo anterior', () =>
     STEP_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY
   );
   const firstSetOut = resolveRecipe(createBaseSession(), setOutRecipe, {
-    actorRoleInstanceId: 'team_b_attacker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_b_attacker-0'],
+    targetIds: ['alignment_a_target-0']
   });
   const firstRestore = resolveRecipe(firstSetOut.session, restoreNextCycleRecipe, {
-    actorRoleInstanceId: 'team_a_blocker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_a_target-0']
   });
   const nextCycle = resolveAction(firstRestore.session, closeCycleAction);
   const secondSetOut = resolveRecipe(nextCycle.session, setOutRecipe, {
-    actorRoleInstanceId: 'team_b_attacker-0',
-    targetRoleInstanceIds: ['team_a_plain-0']
+    actorIds: ['alignment_b_attacker-0'],
+    targetIds: ['alignment_a_plain-0']
   });
   const secondRestore = resolveRecipe(secondSetOut.session, restoreNextCycleRecipe, {
-    actorRoleInstanceId: 'team_a_blocker-0',
-    targetRoleInstanceIds: ['team_a_plain-0']
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_a_plain-0']
   });
 
   assert.equal(firstRestore.ok, true);
@@ -1122,21 +1350,21 @@ test('limited_uses con ventana current_or_next_cycle cuenta el ciclo actual y el
     STEP_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY
   );
   const firstSetOut = resolveRecipe(createBaseSession(), setOutRecipe, {
-    actorRoleInstanceId: 'team_b_attacker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_b_attacker-0'],
+    targetIds: ['alignment_a_target-0']
   });
   const firstRestore = resolveRecipe(firstSetOut.session, restoreCurrentOrNextRecipe, {
-    actorRoleInstanceId: 'team_a_blocker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_a_target-0']
   });
   const nextCycle = resolveAction(firstRestore.session, closeCycleAction);
   const secondSetOut = resolveRecipe(nextCycle.session, setOutRecipe, {
-    actorRoleInstanceId: 'team_b_attacker-0',
-    targetRoleInstanceIds: ['team_a_plain-0']
+    actorIds: ['alignment_b_attacker-0'],
+    targetIds: ['alignment_a_plain-0']
   });
   const secondRestore = resolveRecipe(secondSetOut.session, restoreCurrentOrNextRecipe, {
-    actorRoleInstanceId: 'team_a_blocker-0',
-    targetRoleInstanceIds: ['team_a_plain-0']
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_a_plain-0']
   });
 
   assert.equal(firstRestore.ok, true);
@@ -1161,16 +1389,16 @@ test('limited_uses cuenta una receta aunque su efecto quede bloqueado', () => {
     STEP_ACTION_KEYS.SET_OUT_OF_PLAY
   );
   const blocking = resolveAction(createBaseSession(), blockOutOfPlayRecipe, {
-    actorRoleInstanceId: 'team_a_blocker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_a_target-0']
   });
   const blockedUse = resolveRecipe(blocking.session, limitedSetOutRecipe, {
-    actorRoleInstanceId: 'team_b_attacker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_b_attacker-0'],
+    targetIds: ['alignment_a_target-0']
   });
   const secondUse = resolveRecipe(blockedUse.session, limitedSetOutRecipe, {
-    actorRoleInstanceId: 'team_b_attacker-0',
-    targetRoleInstanceIds: ['team_a_plain-0']
+    actorIds: ['alignment_b_attacker-0'],
+    targetIds: ['alignment_a_plain-0']
   });
 
   assert.equal(blockedUse.ok, true);
@@ -1183,13 +1411,13 @@ test('limited_uses cuenta una receta aunque su efecto quede bloqueado', () => {
 test('set_in_play(false) cambia inPlay solo en el objetivo directo', () => {
   const session = createBaseSession();
   const resolved = resolveAction(session, setInPlayFalseAction, {
-    actorRoleInstanceId: 'team_b_attacker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_b_attacker-0'],
+    targetIds: ['alignment_a_target-0']
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(roleById(resolved.session, 'team_a_target-0').inPlay, false);
-  assert.equal(roleById(resolved.session, 'team_a_plain-0').inPlay, true);
+  assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
+  assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, true);
   assert.equal(resolved.result.proposedEffects.length, 1);
   assert.equal(resolved.result.blockedActions.length, 0);
 });
@@ -1197,66 +1425,66 @@ test('set_in_play(false) cambia inPlay solo en el objetivo directo', () => {
 test('block_out_of_play bloquea set_in_play(false) solo sobre su target', () => {
   const session = createBaseSession();
   const blocking = resolveAction(session, blockOutOfPlayRecipe, {
-    actorRoleInstanceId: 'team_a_blocker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_a_target-0']
   });
   const blockedTarget = resolveAction(blocking.session, setInPlayFalseAction, {
-    actorRoleInstanceId: 'team_b_attacker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_b_attacker-0'],
+    targetIds: ['alignment_a_target-0']
   });
   const unblockedTarget = resolveAction(blocking.session, setInPlayFalseAction, {
-    actorRoleInstanceId: 'team_b_attacker-0',
-    targetRoleInstanceIds: ['team_a_plain-0']
+    actorIds: ['alignment_b_attacker-0'],
+    targetIds: ['alignment_a_plain-0']
   });
 
   assert.equal(blocking.ok, true);
   assert.equal(blockedTarget.ok, true);
-  assert.equal(roleById(blockedTarget.session, 'team_a_target-0').inPlay, true);
+  assert.equal(roleById(blockedTarget.session, 'alignment_a_target-0').inPlay, true);
   assert.deepEqual(blockedTarget.result.proposedEffects, []);
   assert.deepEqual(blockedTarget.result.finalEffects, []);
   assert.deepEqual(blockedTarget.result.blockedActions, [
     {
       actionId: ACTION_IDS.SET_IN_PLAY,
       reason: 'blocked_action',
-      targetId: 'team_a_target-0'
+      targetId: 'alignment_a_target-0'
     }
   ]);
 
   assert.equal(unblockedTarget.ok, true);
-  assert.equal(roleById(unblockedTarget.session, 'team_a_plain-0').inPlay, false);
+  assert.equal(roleById(unblockedTarget.session, 'alignment_a_plain-0').inPlay, false);
 });
 
 test('close_cycle limpia bloqueos temporales y avanza ciclo', () => {
   const session = createBaseSession();
   const blockingKey = getActionBlockKey(blockOutOfPlayRecipe.effect.blocks);
   const blocking = resolveAction(session, blockOutOfPlayRecipe, {
-    actorRoleInstanceId: 'team_a_blocker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_a_target-0']
   });
   const closed = resolveAction(blocking.session, closeCycleAction);
 
   assert.equal(
-    roleById(blocking.session, 'team_a_target-0').flags.blockedActions[blockingKey],
+    roleById(blocking.session, 'alignment_a_target-0').flags.blockedActions[blockingKey],
     true
   );
-  assert.equal(roleById(closed.session, 'team_a_target-0').flags.blockedActions, undefined);
+  assert.equal(roleById(closed.session, 'alignment_a_target-0').flags.blockedActions, undefined);
   assert.equal(closed.result.nextCycleId, 2);
 });
 
 test('no_repeat_target impide repetir el mismo bloqueo sobre el mismo target', () => {
   const session = createBaseSession();
   const firstBlocking = resolveRecipe(session, blockOutOfPlayRecipe, {
-    actorRoleInstanceId: 'team_a_blocker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_a_target-0']
   });
   const nextCycle = resolveAction(firstBlocking.session, closeCycleAction);
   const repeatedBlocking = resolveRecipe(nextCycle.session, blockOutOfPlayRecipe, {
-    actorRoleInstanceId: 'team_a_blocker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_a_target-0']
   });
   const otherTargetBlocking = resolveRecipe(nextCycle.session, blockOutOfPlayRecipe, {
-    actorRoleInstanceId: 'team_a_blocker-0',
-    targetRoleInstanceIds: ['team_a_plain-0']
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_a_plain-0']
   });
 
   assert.equal(repeatedBlocking.ok, false);
@@ -1275,18 +1503,18 @@ test('no_repeat_target con ventana session impide repetir target durante toda la
     ]
   };
   const firstBlocking = resolveRecipe(createBaseSession(), sessionOnlyRecipe, {
-    actorRoleInstanceId: 'team_a_blocker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_a_target-0']
   });
   const cycle2 = resolveAction(firstBlocking.session, closeCycleAction);
   const cycle3 = resolveAction(cycle2.session, closeCycleAction);
   const repeatedBlocking = resolveRecipe(cycle3.session, sessionOnlyRecipe, {
-    actorRoleInstanceId: 'team_a_blocker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_a_target-0']
   });
   const otherTargetBlocking = resolveRecipe(cycle3.session, sessionOnlyRecipe, {
-    actorRoleInstanceId: 'team_a_blocker-0',
-    targetRoleInstanceIds: ['team_a_plain-0']
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_a_plain-0']
   });
 
   assert.equal(firstBlocking.ok, true);
@@ -1299,16 +1527,16 @@ test('no_repeat_target con ventana session impide repetir target durante toda la
 test('link_targets crea una relacion linked en la sesion', () => {
   const session = createBaseSession();
   const linked = resolveAction(session, linkTargetsAction, {
-    actorRoleInstanceId: 'role_inspector-0',
-    targetRoleInstanceIds: ['team_a_target-0', 'team_a_plain-0']
+    actorIds: ['role_inspector-0'],
+    targetIds: ['alignment_a_target-0', 'alignment_a_plain-0']
   });
 
   assert.equal(linked.ok, true);
   assert.equal(linked.session.relations.length, 1);
   assert.deepEqual(linked.session.relations[0], {
-    id: 'linked-team_a_plain-0-team_a_target-0',
+    id: 'linked-alignment_a_plain-0-alignment_a_target-0',
     type: RELATION_TYPES.LINKED,
-    roleInstanceIds: ['team_a_plain-0', 'team_a_target-0'],
+    roleIds: ['alignment_a_plain-0', 'alignment_a_target-0'],
     active: true,
     createdCycleId: 1,
     sourceActionId: ACTION_IDS.LINK_TARGETS,
@@ -1317,43 +1545,43 @@ test('link_targets crea una relacion linked en la sesion', () => {
   assert.equal(linked.result.finalEffects[0].type, EFFECT_TYPES.SET_RELATION);
 });
 
-test('linked deriva inPlay=false hacia los roleInstances enlazados', () => {
+test('linked deriva inPlay=false hacia los roles enlazados', () => {
   const session = createBaseSession();
   const linked = resolveAction(session, linkTargetsAction, {
-    actorRoleInstanceId: 'role_inspector-0',
-    targetRoleInstanceIds: ['team_a_target-0', 'team_a_plain-0']
+    actorIds: ['role_inspector-0'],
+    targetIds: ['alignment_a_target-0', 'alignment_a_plain-0']
   });
   const resolved = resolveAction(linked.session, setInPlayFalseAction, {
-    actorRoleInstanceId: 'team_b_attacker-0',
-    targetRoleInstanceIds: ['team_a_target-0']
+    actorIds: ['alignment_b_attacker-0'],
+    targetIds: ['alignment_a_target-0']
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(roleById(resolved.session, 'team_a_target-0').inPlay, false);
-  assert.equal(roleById(resolved.session, 'team_a_plain-0').inPlay, false);
+  assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
+  assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, false);
   assert.equal(resolved.result.finalEffects.length, 2);
   assert.deepEqual(resolved.result.finalEffects[1].derivedFrom, {
     type: 'relation',
     relationType: RELATION_TYPES.LINKED,
-    sourceTargetId: 'team_a_target-0'
+    sourceTargetId: 'alignment_a_target-0'
   });
 });
 
-test('validateGameSession detecta relaciones que apuntan a roles inexistentes', () => {
+test('validateSession detecta relaciones que apuntan a roles inexistentes', () => {
   const session = createBaseSession({
     relations: [
       createRelation({
         id: 'broken-link',
         type: RELATION_TYPES.LINKED,
-        roleInstanceIds: ['team_a_target-0', 'missing-role-0']
+        roleIds: ['alignment_a_target-0', 'missing-role-0']
       })
     ]
   });
-  const validation = validateGameSession(session, { requireAssigned: true });
+  const validation = validateSession(session, { requireAssigned: true });
 
   assert.equal(validation.ok, false);
   assert.equal(
-    validation.errors.some((error) => error.code === 'relation/missing-role-instance'),
+    validation.errors.some((error) => error.code === 'relation/missing-role'),
     true
   );
 });
@@ -1367,7 +1595,7 @@ test('evaluateVictory devuelve ongoing cuando quedan varios alignments en juego'
     type: VICTORY_TYPES.NONE,
     reason: 'no_victory_condition_met',
     winnerAlignmentId: null,
-    winnerRoleInstanceIds: []
+    winnerIds: []
   });
 });
 
@@ -1378,8 +1606,8 @@ test('evaluateVictory aplica regla neutral de alignment at_least_remaining', () 
         victory: {
           alignmentRules: [
             {
-              id: 'team_b_reaches_threshold',
-              alignmentId: 'team_b',
+              id: 'alignment_b_reaches_threshold',
+              alignmentId: 'alignment_b',
               condition: VICTORY_RULE_TYPES.AT_LEAST_REMAINING
             }
           ]
@@ -1387,7 +1615,7 @@ test('evaluateVictory aplica regla neutral de alignment at_least_remaining', () 
       }
     }),
     {
-      'team_a_plain-0': false,
+      'alignment_a_plain-0': false,
       'role_inspector-0': false
     }
   );
@@ -1396,8 +1624,8 @@ test('evaluateVictory aplica regla neutral de alignment at_least_remaining', () 
   assert.equal(victory.status, VICTORY_STATUSES.FINISHED);
   assert.equal(victory.type, VICTORY_TYPES.ALIGNMENT_RULE);
   assert.equal(victory.reason, 'alignment_rule_at_least_remaining_met');
-  assert.equal(victory.winnerAlignmentId, 'team_b');
-  assert.equal(victory.ruleId, 'team_b_reaches_threshold');
+  assert.equal(victory.winnerAlignmentId, 'alignment_b');
+  assert.equal(victory.ruleId, 'alignment_b_reaches_threshold');
   assert.deepEqual(victory.counts, {
     alignmentInPlay: 3,
     remainingInPlay: 2,
@@ -1411,8 +1639,8 @@ test('evaluateVictory no aplica at_least_remaining si el alignment no alcanza al
       victory: {
         alignmentRules: [
           {
-            id: 'team_b_reaches_threshold',
-            alignmentId: 'team_b',
+            id: 'alignment_b_reaches_threshold',
+            alignmentId: 'alignment_b',
             condition: VICTORY_RULE_TYPES.AT_LEAST_REMAINING
           }
         ]
@@ -1427,20 +1655,20 @@ test('evaluateVictory no aplica at_least_remaining si el alignment no alcanza al
 
 test('evaluateVictory detecta victoria generica cuando solo queda un alignment', () => {
   const session = withInPlayState(createBaseSession(), {
-    'team_b_attacker-0': false,
-    'team_b_target-0': false,
+    'alignment_b_attacker-0': false,
+    'alignment_b_target-0': false,
     'hidden_enemy-0': false
   });
   const victory = evaluateVictory(session);
 
   assert.equal(victory.status, VICTORY_STATUSES.FINISHED);
   assert.equal(victory.type, VICTORY_TYPES.SINGLE_ALIGNMENT);
-  assert.equal(victory.winnerAlignmentId, 'team_a');
-  assert.deepEqual(victory.winnerRoleInstanceIds.sort(), [
-    'role_inspector-0',
-    'team_a_blocker-0',
-    'team_a_plain-0',
-    'team_a_target-0'
+  assert.equal(victory.winnerAlignmentId, 'alignment_a');
+  assert.deepEqual(victory.winnerIds.sort(), [
+    'alignment_a_blocker-0',
+    'alignment_a_plain-0',
+    'alignment_a_target-0',
+    'role_inspector-0'
   ]);
 });
 
@@ -1451,16 +1679,16 @@ test('evaluateVictory detecta victoria linked si solo quedan linked de alignment
         createRelation({
           id: 'linked-mixed-finalists',
           type: RELATION_TYPES.LINKED,
-          roleInstanceIds: ['team_a_target-0', 'team_b_target-0'],
+          roleIds: ['alignment_a_target-0', 'alignment_b_target-0'],
           active: true,
           sourceActionId: ACTION_IDS.LINK_TARGETS
         })
       ]
     }),
     {
-      'team_b_attacker-0': false,
-      'team_a_blocker-0': false,
-      'team_a_plain-0': false,
+      'alignment_b_attacker-0': false,
+      'alignment_a_blocker-0': false,
+      'alignment_a_plain-0': false,
       'role_inspector-0': false,
       'hidden_enemy-0': false
     }
@@ -1470,7 +1698,7 @@ test('evaluateVictory detecta victoria linked si solo quedan linked de alignment
   assert.equal(victory.status, VICTORY_STATUSES.FINISHED);
   assert.equal(victory.type, VICTORY_TYPES.LINKED_EXCLUSIVE_SURVIVORS);
   assert.equal(victory.winnerAlignmentId, null);
-  assert.deepEqual(victory.winnerRoleInstanceIds.sort(), ['team_a_target-0', 'team_b_target-0']);
+  assert.deepEqual(victory.winnerIds.sort(), ['alignment_a_target-0', 'alignment_b_target-0']);
   assert.equal(victory.relationId, 'linked-mixed-finalists');
 });
 
@@ -1481,15 +1709,15 @@ test('evaluateVictory no activa linked si queda un tercero en juego', () => {
         createRelation({
           id: 'linked-with-third-player',
           type: RELATION_TYPES.LINKED,
-          roleInstanceIds: ['team_a_target-0', 'team_b_target-0'],
+          roleIds: ['alignment_a_target-0', 'alignment_b_target-0'],
           active: true,
           sourceActionId: ACTION_IDS.LINK_TARGETS
         })
       ]
     }),
     {
-      'team_b_attacker-0': false,
-      'team_a_blocker-0': false,
+      'alignment_b_attacker-0': false,
+      'alignment_a_blocker-0': false,
       'role_inspector-0': false,
       'hidden_enemy-0': false
     }
@@ -1500,23 +1728,23 @@ test('evaluateVictory no activa linked si queda un tercero en juego', () => {
   assert.equal(victory.type, VICTORY_TYPES.NONE);
 });
 
-test('resolveVoteRound detecta ganador unico por mayoria simple', () => {
+test('resolveVoteRound detecta chosen unico por mayoria simple', () => {
   const session = createBaseSession();
   const resolved = resolveVoteRound({
     session,
     votes: [
-      { actorRoleInstanceId: 'team_b_attacker-0', targetRoleInstanceId: 'team_a_target-0' },
-      { actorRoleInstanceId: 'team_a_blocker-0', targetRoleInstanceId: 'team_a_target-0' },
-      { actorRoleInstanceId: 'team_a_plain-0', targetRoleInstanceId: 'team_b_target-0' }
+      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
+      { actorId: 'alignment_a_blocker-0', targetId: 'alignment_a_target-0' },
+      { actorId: 'alignment_a_plain-0', targetId: 'alignment_b_target-0' }
     ]
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.WINNER);
-  assert.equal(resolved.result.winnerRoleInstanceId, 'team_a_target-0');
+  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.chosenId, 'alignment_a_target-0');
   assert.deepEqual(resolved.result.tally, [
-    { targetRoleInstanceId: 'team_a_target-0', voteCount: 2 },
-    { targetRoleInstanceId: 'team_b_target-0', voteCount: 1 }
+    { targetId: 'alignment_a_target-0', voteCount: 2 },
+    { targetId: 'alignment_b_target-0', voteCount: 1 }
   ]);
 });
 
@@ -1525,8 +1753,8 @@ test('resolveVoteRound rechaza actores que votan mas de una vez', () => {
   const resolved = resolveVoteRound({
     session,
     votes: [
-      { actorRoleInstanceId: 'team_b_attacker-0', targetRoleInstanceId: 'team_a_target-0' },
-      { actorRoleInstanceId: 'team_b_attacker-0', targetRoleInstanceId: 'team_a_plain-0' }
+      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
+      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_plain-0' }
     ]
   });
 
@@ -1538,19 +1766,19 @@ test('resolveVoteRound declara nula una votacion empatada con null_on_tie', () =
   const session = createBaseSession();
   const resolved = resolveVoteRound({
     session,
-    tiePolicy: VOTE_TIE_POLICIES.NULL_ON_TIE,
+    voteRules: { tie: VOTE_TIE_RULES.NULL_ON_TIE },
     votes: [
-      { actorRoleInstanceId: 'team_b_attacker-0', targetRoleInstanceId: 'team_a_target-0' },
-      { actorRoleInstanceId: 'team_a_blocker-0', targetRoleInstanceId: 'team_a_plain-0' }
+      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
+      { actorId: 'alignment_a_blocker-0', targetId: 'alignment_a_plain-0' }
     ]
   });
 
   assert.equal(resolved.ok, true);
   assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.NULL);
   assert.equal(resolved.result.reason, 'tied_vote');
-  assert.deepEqual(resolved.result.tiedTargetRoleInstanceIds, [
-    'team_a_plain-0',
-    'team_a_target-0'
+  assert.deepEqual(resolved.result.tiedTargetIds, [
+    'alignment_a_plain-0',
+    'alignment_a_target-0'
   ]);
 });
 
@@ -1558,10 +1786,10 @@ test('resolveVoteRound pide runoff cuando la politica de empate lo permite', () 
   const session = createBaseSession();
   const resolved = resolveVoteRound({
     session,
-    tiePolicy: VOTE_TIE_POLICIES.RUNOFF_ON_TIE,
+    voteRules: { tie: VOTE_TIE_RULES.RUNOFF_ON_TIE },
     votes: [
-      { actorRoleInstanceId: 'team_b_attacker-0', targetRoleInstanceId: 'team_a_target-0' },
-      { actorRoleInstanceId: 'team_a_blocker-0', targetRoleInstanceId: 'team_a_plain-0' }
+      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
+      { actorId: 'alignment_a_blocker-0', targetId: 'alignment_a_plain-0' }
     ]
   });
 
@@ -1570,7 +1798,7 @@ test('resolveVoteRound pide runoff cuando la politica de empate lo permite', () 
   assert.equal(resolved.result.reason, 'runoff_required');
   assert.deepEqual(resolved.result.nextRound, {
     roundType: VOTE_ROUND_TYPES.RUNOFF,
-    allowedTargetRoleInstanceIds: ['team_a_plain-0', 'team_a_target-0']
+    candidateIds: ['alignment_a_plain-0', 'alignment_a_target-0']
   });
 });
 
@@ -1579,14 +1807,16 @@ test('resolveVoteRound limita runoff a los objetivos empatados', () => {
   const resolved = resolveVoteRound({
     session,
     roundType: VOTE_ROUND_TYPES.RUNOFF,
-    allowedTargetRoleInstanceIds: ['team_a_plain-0', 'team_a_target-0'],
+    voteRules: {
+      candidateIds: ['alignment_a_plain-0', 'alignment_a_target-0']
+    },
     votes: [
-      { actorRoleInstanceId: 'team_b_attacker-0', targetRoleInstanceId: 'team_b_target-0' }
+      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_b_target-0' }
     ]
   });
 
   assert.equal(resolved.ok, false);
-  assert.equal(resolved.errors[0].code, 'vote/target-not-allowed');
+  assert.equal(resolved.errors[0].code, 'vote/target-not-candidate');
 });
 
 test('resolveVoteRound declara nulo un runoff que vuelve a empatar', () => {
@@ -1594,11 +1824,13 @@ test('resolveVoteRound declara nulo un runoff que vuelve a empatar', () => {
   const resolved = resolveVoteRound({
     session,
     roundType: VOTE_ROUND_TYPES.RUNOFF,
-    tiePolicy: VOTE_TIE_POLICIES.RUNOFF_ON_TIE,
-    allowedTargetRoleInstanceIds: ['team_a_plain-0', 'team_a_target-0'],
+    voteRules: {
+      tie: VOTE_TIE_RULES.RUNOFF_ON_TIE,
+      candidateIds: ['alignment_a_plain-0', 'alignment_a_target-0']
+    },
     votes: [
-      { actorRoleInstanceId: 'team_b_attacker-0', targetRoleInstanceId: 'team_a_target-0' },
-      { actorRoleInstanceId: 'team_a_blocker-0', targetRoleInstanceId: 'team_a_plain-0' }
+      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
+      { actorId: 'alignment_a_blocker-0', targetId: 'alignment_a_plain-0' }
     ]
   });
 
@@ -1607,26 +1839,133 @@ test('resolveVoteRound declara nulo un runoff que vuelve a empatar', () => {
   assert.equal(resolved.result.reason, 'runoff_tied');
 });
 
-test('resolveVoteRound exige voto de todos los roleInstances inPlay cuando requiredVotes es all_in_play', () => {
+test('resolveVoteRound exige voto de todos los roles inPlay cuando voteRules.required es all_actors', () => {
   const session = createBaseSession();
   const resolved = resolveVoteRound({
     session,
-    requiredVotes: VOTE_REQUIRED_POLICIES.ALL_IN_PLAY,
+    voteRules: { required: VOTE_REQUIRED_RULES.ALL_ACTORS },
     votes: [
-      { actorRoleInstanceId: 'team_b_attacker-0', targetRoleInstanceId: 'team_a_target-0' }
+      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' }
     ]
   });
 
   assert.equal(resolved.ok, false);
   assert.equal(resolved.errors[0].code, 'vote/missing-required-votes');
-  assert.deepEqual(resolved.errors[0].missingActorRoleInstanceIds.sort(), [
+  assert.deepEqual(resolved.errors[0].missingActorIds.sort(), [
+    'alignment_a_blocker-0',
+    'alignment_a_plain-0',
+    'alignment_a_target-0',
+    'alignment_b_target-0',
     'hidden_enemy-0',
-    'role_inspector-0',
-    'team_a_blocker-0',
-    'team_a_plain-0',
-    'team_a_target-0',
-    'team_b_target-0'
+    'role_inspector-0'
   ]);
+});
+
+test('resolveVoteRound permite abstencion explicita cuando la politica lo permite', () => {
+  const session = createBaseSession();
+  const resolved = resolveVoteRound({
+    session,
+    actorIds: ['alignment_b_attacker-0', 'alignment_a_blocker-0'],
+    voteRules: {
+      required: VOTE_REQUIRED_RULES.ALL_ACTORS,
+      abstain: VOTE_ABSTAIN_RULES.ALLOWED
+    },
+    votes: [
+      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
+      { actorId: 'alignment_a_blocker-0', abstain: true }
+    ]
+  });
+
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.chosenId, 'alignment_a_target-0');
+  assert.deepEqual(resolved.result.abstentions, [
+    {
+      actorId: 'alignment_a_blocker-0',
+      targetId: null,
+      abstain: true,
+      value: 1,
+      roundId: VOTE_ROUND_TYPES.INITIAL,
+      metadata: {}
+    }
+  ]);
+});
+
+test('resolveVoteRound rechaza abstencion cuando la politica no la permite', () => {
+  const session = createBaseSession();
+  const resolved = resolveVoteRound({
+    session,
+    actorIds: ['alignment_b_attacker-0'],
+    voteRules: { required: VOTE_REQUIRED_RULES.ALL_ACTORS },
+    votes: [{ actorId: 'alignment_b_attacker-0', abstain: true }]
+  });
+
+  assert.equal(resolved.ok, false);
+  assert.equal(resolved.errors[0].code, 'vote/abstain-not-allowed');
+});
+
+test('resolveVoteRound declara nula la votacion si todos se abstienen', () => {
+  const session = createBaseSession();
+  const resolved = resolveVoteRound({
+    session,
+    actorIds: ['alignment_b_attacker-0', 'alignment_a_blocker-0'],
+    voteRules: {
+      required: VOTE_REQUIRED_RULES.ALL_ACTORS,
+      abstain: VOTE_ABSTAIN_RULES.ALLOWED
+    },
+    votes: [
+      { actorId: 'alignment_b_attacker-0', abstain: true },
+      { actorId: 'alignment_a_blocker-0', abstain: true }
+    ]
+  });
+
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.reason, 'all_abstained');
+  assert.deepEqual(resolved.result.tally, []);
+});
+
+test('resolveVoteRound exige unanimidad cuando voteRules.unanimous es required', () => {
+  const session = createBaseSession();
+  const resolved = resolveVoteRound({
+    session,
+    actorIds: ['alignment_b_attacker-0', 'alignment_a_blocker-0'],
+    voteRules: {
+      required: VOTE_REQUIRED_RULES.ALL_ACTORS,
+      unanimous: VOTE_UNANIMOUS_RULES.REQUIRED
+    },
+    votes: [
+      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
+      { actorId: 'alignment_a_blocker-0', targetId: 'alignment_a_target-0' }
+    ]
+  });
+
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.reason, 'unanimous_target');
+  assert.equal(resolved.result.chosenId, 'alignment_a_target-0');
+});
+
+test('resolveVoteRound declara nula una decision no unanime', () => {
+  const session = createBaseSession();
+  const resolved = resolveVoteRound({
+    session,
+    actorIds: ['alignment_b_attacker-0', 'alignment_a_blocker-0'],
+    voteRules: {
+      required: VOTE_REQUIRED_RULES.ALL_ACTORS,
+      unanimous: VOTE_UNANIMOUS_RULES.REQUIRED,
+      abstain: VOTE_ABSTAIN_RULES.ALLOWED
+    },
+    votes: [
+      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
+      { actorId: 'alignment_a_blocker-0', abstain: true }
+    ]
+  });
+
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.reason, 'not_unanimous');
+  assert.equal(resolved.result.chosenId, null);
 });
 
 test('resolveVoteRound rechaza votar a un target relacionado por linked si la restriccion esta activa', () => {
@@ -1635,7 +1974,7 @@ test('resolveVoteRound rechaza votar a un target relacionado por linked si la re
       createRelation({
         id: 'linked-vote-restriction',
         type: RELATION_TYPES.LINKED,
-        roleInstanceIds: ['team_a_target-0', 'team_a_plain-0'],
+        roleIds: ['alignment_a_target-0', 'alignment_a_plain-0'],
         active: true,
         sourceActionId: ACTION_IDS.LINK_TARGETS
       })
@@ -1643,21 +1982,23 @@ test('resolveVoteRound rechaza votar a un target relacionado por linked si la re
   });
   const resolved = resolveVoteRound({
     session,
-    relationRestrictions: [
-      {
-        type: VOTE_RESTRICTION_TYPES.EXCLUDE_RELATED_TARGET,
-        relationType: RELATION_TYPES.LINKED
-      }
-    ],
+    voteRules: {
+      relationRestrictions: [
+        {
+          type: VOTE_RESTRICTION_TYPES.EXCLUDE_RELATED_TARGET,
+          relationType: RELATION_TYPES.LINKED
+        }
+      ]
+    },
     votes: [
-      { actorRoleInstanceId: 'team_a_plain-0', targetRoleInstanceId: 'team_a_target-0' }
+      { actorId: 'alignment_a_plain-0', targetId: 'alignment_a_target-0' }
     ]
   });
 
   assert.equal(resolved.ok, false);
   assert.equal(resolved.errors[0].code, 'vote/restricted-related-target');
-  assert.equal(resolved.errors[0].actorRoleInstanceId, 'team_a_plain-0');
-  assert.equal(resolved.errors[0].targetRoleInstanceId, 'team_a_target-0');
+  assert.equal(resolved.errors[0].actorId, 'alignment_a_plain-0');
+  assert.equal(resolved.errors[0].targetId, 'alignment_a_target-0');
 });
 
 test('resolveVoteRound ignora restricciones de relacion incompletas', () => {
@@ -1666,7 +2007,7 @@ test('resolveVoteRound ignora restricciones de relacion incompletas', () => {
       createRelation({
         id: 'linked-incomplete-restriction',
         type: RELATION_TYPES.LINKED,
-        roleInstanceIds: ['team_a_target-0', 'team_a_plain-0'],
+        roleIds: ['alignment_a_target-0', 'alignment_a_plain-0'],
         active: true,
         sourceActionId: ACTION_IDS.LINK_TARGETS
       })
@@ -1674,45 +2015,49 @@ test('resolveVoteRound ignora restricciones de relacion incompletas', () => {
   });
   const resolved = resolveVoteRound({
     session,
-    relationRestrictions: [
-      {
-        type: VOTE_RESTRICTION_TYPES.EXCLUDE_RELATED_TARGET
-      }
-    ],
+    voteRules: {
+      relationRestrictions: [
+        {
+          type: VOTE_RESTRICTION_TYPES.EXCLUDE_RELATED_TARGET
+        }
+      ]
+    },
     votes: [
-      { actorRoleInstanceId: 'team_a_plain-0', targetRoleInstanceId: 'team_a_target-0' }
+      { actorId: 'alignment_a_plain-0', targetId: 'alignment_a_target-0' }
     ]
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.WINNER);
+  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.CHOSEN);
 });
 
-test('vote puro devuelve ganador sin aplicar efectos', () => {
+test('vote puro devuelve chosen sin aplicar efectos', () => {
   const session = createBaseSession();
   const resolved = resolveAction(session, {
     id: ACTION_IDS.VOTE,
-    tiePolicy: VOTE_TIE_POLICIES.NULL_ON_TIE,
-    requiredVotes: VOTE_REQUIRED_POLICIES.ALL_IN_PLAY,
+    voteRules: {
+      tie: VOTE_TIE_RULES.NULL_ON_TIE,
+      required: VOTE_REQUIRED_RULES.ALL_ACTORS
+    },
     visibility: VISIBILITY.ALL
   }, {
     votes: createVotes({
-      'team_b_attacker-0': 'team_a_target-0',
-      'team_a_blocker-0': 'team_a_target-0',
-      'team_a_target-0': 'team_a_target-0',
-      'team_a_plain-0': 'team_a_target-0',
-      'team_b_target-0': 'team_a_target-0',
-      'role_inspector-0': 'team_a_target-0',
-      'hidden_enemy-0': 'team_a_target-0'
+      'alignment_b_attacker-0': 'alignment_a_target-0',
+      'alignment_a_blocker-0': 'alignment_a_target-0',
+      'alignment_a_target-0': 'alignment_a_target-0',
+      'alignment_a_plain-0': 'alignment_a_target-0',
+      'alignment_b_target-0': 'alignment_a_target-0',
+      'role_inspector-0': 'alignment_a_target-0',
+      'hidden_enemy-0': 'alignment_a_target-0'
     })
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.vote.type, VOTE_OUTCOME_TYPES.WINNER);
-  assert.equal(resolved.result.vote.winnerRoleInstanceId, 'team_a_target-0');
+  assert.equal(resolved.result.vote.type, VOTE_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.vote.chosenId, 'alignment_a_target-0');
   assert.deepEqual(resolved.result.proposedEffects, []);
   assert.deepEqual(resolved.result.finalEffects, []);
-  assert.equal(roleById(resolved.session, 'team_a_target-0').inPlay, true);
+  assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, true);
 });
 
 test('vote puro no aplica restricciones linked por defecto', () => {
@@ -1721,7 +2066,7 @@ test('vote puro no aplica restricciones linked por defecto', () => {
       createRelation({
         id: 'linked-generic-vote',
         type: RELATION_TYPES.LINKED,
-        roleInstanceIds: ['team_a_target-0', 'team_a_plain-0'],
+        roleIds: ['alignment_a_target-0', 'alignment_a_plain-0'],
         active: true,
         sourceActionId: ACTION_IDS.LINK_TARGETS
       })
@@ -1729,72 +2074,69 @@ test('vote puro no aplica restricciones linked por defecto', () => {
   });
   const resolved = resolveAction(session, {
     id: ACTION_IDS.VOTE,
-    tiePolicy: VOTE_TIE_POLICIES.NULL_ON_TIE,
+    voteRules: { tie: VOTE_TIE_RULES.NULL_ON_TIE },
     visibility: VISIBILITY.ALL
   }, {
     votes: [
       {
-        actorRoleInstanceId: 'team_a_plain-0',
-        targetRoleInstanceId: 'team_a_target-0'
+        actorId: 'alignment_a_plain-0',
+        targetId: 'alignment_a_target-0'
       }
     ]
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.vote.type, VOTE_OUTCOME_TYPES.WINNER);
-  assert.equal(resolved.result.vote.winnerRoleInstanceId, 'team_a_target-0');
+  assert.equal(resolved.result.vote.type, VOTE_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.vote.chosenId, 'alignment_a_target-0');
 });
 
-test('vote_out_of_play aplica inPlay=false al ganador de la votacion', () => {
+test('step con voto y set_out_of_play aplica inPlay=false al chosen de la votacion', () => {
   const session = createBaseSession();
-  const resolved = resolveRecipe(
+  const resolved = resolveVoteOutOfPlayStep(
     session,
-    actionRecipe(voteOutOfPlayAction, STEP_ACTION_KEYS.VOTE_OUT_OF_PLAY),
     collectiveVoteInput({
       votes: createVotes({
-        'team_b_attacker-0': 'team_a_target-0',
-        'team_a_blocker-0': 'team_a_target-0',
-        'team_a_target-0': 'team_a_target-0',
-        'team_a_plain-0': 'team_a_target-0',
-        'team_b_target-0': 'team_a_target-0',
-        'role_inspector-0': 'team_a_target-0',
-        'hidden_enemy-0': 'team_a_target-0'
+        'alignment_b_attacker-0': 'alignment_a_target-0',
+        'alignment_a_blocker-0': 'alignment_a_target-0',
+        'alignment_a_target-0': 'alignment_a_target-0',
+        'alignment_a_plain-0': 'alignment_a_target-0',
+        'alignment_b_target-0': 'alignment_a_target-0',
+        'role_inspector-0': 'alignment_a_target-0',
+        'hidden_enemy-0': 'alignment_a_target-0'
       })
     })
   );
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.vote.type, VOTE_OUTCOME_TYPES.WINNER);
-  assert.equal(resolved.result.vote.winnerRoleInstanceId, 'team_a_target-0');
-  assert.equal(roleById(resolved.session, 'team_a_target-0').inPlay, false);
-  assert.equal(resolved.session.actionHistory.at(-1).actorRoleInstanceId, null);
-  assert.equal(resolved.session.actionHistory.at(-1).actorScope.type, ACTOR_SCOPE_TYPES.ALL_ROLES);
+  assert.equal(resolved.result.vote.type, VOTE_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.vote.chosenId, 'alignment_a_target-0');
+  assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
+  assert.deepEqual(resolved.session.actionHistory.at(-1).actorIds, []);
   assert.deepEqual(resolved.result.proposedEffects, [
     {
       type: EFFECT_TYPES.SET_PROPERTY,
-      targetType: 'role_instance',
+      targetType: 'role',
       property: 'inPlay',
       value: false,
-      targetId: 'team_a_target-0'
+      targetId: 'alignment_a_target-0'
     }
   ]);
 });
 
-test('vote_out_of_play empatado no aplica efecto con null_on_tie', () => {
+test('step con voto y set_out_of_play empatado no aplica efecto con null_on_tie', () => {
   const session = withInPlayState(createBaseSession(), {
     'hidden_enemy-0': false
   });
-  const resolved = resolveRecipe(
+  const resolved = resolveVoteOutOfPlayStep(
     session,
-    actionRecipe(voteOutOfPlayAction, STEP_ACTION_KEYS.VOTE_OUT_OF_PLAY),
     collectiveVoteInput({
       votes: createVotes({
-        'team_b_attacker-0': 'team_a_target-0',
-        'team_a_blocker-0': 'team_a_plain-0',
-        'team_a_target-0': 'team_a_target-0',
-        'team_a_plain-0': 'team_a_plain-0',
-        'team_b_target-0': 'team_a_target-0',
-        'role_inspector-0': 'team_a_plain-0'
+        'alignment_b_attacker-0': 'alignment_a_target-0',
+        'alignment_a_blocker-0': 'alignment_a_plain-0',
+        'alignment_a_target-0': 'alignment_a_target-0',
+        'alignment_a_plain-0': 'alignment_a_plain-0',
+        'alignment_b_target-0': 'alignment_a_target-0',
+        'role_inspector-0': 'alignment_a_plain-0'
       })
     })
   );
@@ -1803,58 +2145,165 @@ test('vote_out_of_play empatado no aplica efecto con null_on_tie', () => {
   assert.equal(resolved.result.vote.type, VOTE_OUTCOME_TYPES.NULL);
   assert.deepEqual(resolved.result.proposedEffects, []);
   assert.deepEqual(resolved.result.finalEffects, []);
-  assert.equal(roleById(resolved.session, 'team_a_target-0').inPlay, true);
-  assert.equal(roleById(resolved.session, 'team_a_plain-0').inPlay, true);
+  assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, true);
+  assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, true);
 });
 
-test('vote_out_of_play propaga inPlay=false por linked cuando el ganador esta enlazado', () => {
+test('step con voto y set_out_of_play permite cerrar el step cuando todos se abstienen', () => {
+  const session = createBaseSession();
+  const resolved = resolveVoteOutOfPlayStep(
+    session,
+    collectiveVoteInput({
+      votes: [
+        { actorId: 'alignment_b_attacker-0', abstain: true },
+        { actorId: 'alignment_a_blocker-0', abstain: true },
+        { actorId: 'alignment_a_target-0', abstain: true },
+        { actorId: 'alignment_a_plain-0', abstain: true },
+        { actorId: 'alignment_b_target-0', abstain: true },
+        { actorId: 'role_inspector-0', abstain: true },
+        { actorId: 'hidden_enemy-0', abstain: true }
+      ]
+    }),
+    {
+      voteRules: createVoteRules({
+        ...voteOutOfPlayRules,
+        abstain: VOTE_ABSTAIN_RULES.ALLOWED
+      })
+    }
+  );
+  const completed = completeCurrentStep(resolved.session, {
+    requestedBy: STEP_COMPLETION_REQUESTED_BY.DIRECTOR,
+    reason: 'director_closed_null_vote_step'
+  });
+
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.result.vote.type, VOTE_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.vote.reason, 'all_abstained');
+  assert.equal(resolved.result.vote.chosenId, null);
+  assert.deepEqual(resolved.result.proposedEffects, []);
+  assert.deepEqual(resolved.result.finalEffects, []);
+  assert.equal(resolved.stepAdvance, null);
+  assert.equal(completed.ok, true);
+  assert.equal(completed.stepAdvance.reason, 'no-runnable-step');
+});
+
+test('step con voto y set_out_of_play trata un empate sin regla especial como null', () => {
+  const session = withInPlayState(createBaseSession(), {
+    'hidden_enemy-0': false
+  });
+  const resolved = resolveVoteOutOfPlayStep(
+    session,
+    collectiveVoteInput({
+      votes: createVotes({
+        'alignment_b_attacker-0': 'alignment_a_target-0',
+        'alignment_a_blocker-0': 'alignment_a_plain-0',
+        'alignment_a_target-0': 'alignment_a_target-0',
+        'alignment_a_plain-0': 'alignment_a_plain-0',
+        'alignment_b_target-0': 'alignment_a_target-0',
+        'role_inspector-0': 'alignment_a_plain-0'
+      })
+    }),
+    {
+      voteRules: createVoteRules({
+        required: VOTE_REQUIRED_RULES.ALL_ACTORS
+      })
+    }
+  );
+
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.result.vote.type, VOTE_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.vote.reason, 'tied_vote');
+  assert.equal(resolved.result.vote.chosenId, null);
+  assert.deepEqual(resolved.result.proposedEffects, []);
+  assert.deepEqual(resolved.result.finalEffects, []);
+  assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, true);
+  assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, true);
+});
+
+test('step con voto y set_out_of_play puede pedir runoff limitado por empate', () => {
+  const session = withInPlayState(createBaseSession(), {
+    'hidden_enemy-0': false
+  });
+  const resolved = resolveVoteOutOfPlayStep(
+    session,
+    collectiveVoteInput({
+      votes: createVotes({
+        'alignment_b_attacker-0': 'alignment_a_target-0',
+        'alignment_a_blocker-0': 'alignment_a_plain-0',
+        'alignment_a_target-0': 'alignment_a_target-0',
+        'alignment_a_plain-0': 'alignment_a_plain-0',
+        'alignment_b_target-0': 'alignment_a_target-0',
+        'role_inspector-0': 'alignment_a_plain-0'
+      })
+    }),
+    {
+      voteRules: createVoteRules({
+        ...voteOutOfPlayRules,
+        tie: VOTE_TIE_RULES.RUNOFF_ON_TIE
+      })
+    }
+  );
+
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.result.vote.type, VOTE_OUTCOME_TYPES.TIE);
+  assert.equal(resolved.result.vote.reason, 'runoff_required');
+  assert.equal(resolved.result.vote.chosenId, null);
+  assert.deepEqual(resolved.result.vote.nextRound, {
+    roundType: VOTE_ROUND_TYPES.RUNOFF,
+    candidateIds: ['alignment_a_plain-0', 'alignment_a_target-0']
+  });
+  assert.deepEqual(resolved.result.proposedEffects, []);
+  assert.deepEqual(resolved.result.finalEffects, []);
+  assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, true);
+  assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, true);
+});
+
+test('step con voto y set_out_of_play propaga inPlay=false por linked cuando el chosen esta enlazado', () => {
   const session = createBaseSession({
     relations: [
       createRelation({
         id: 'linked-vote-target',
         type: RELATION_TYPES.LINKED,
-        roleInstanceIds: ['team_a_target-0', 'team_a_plain-0'],
+        roleIds: ['alignment_a_target-0', 'alignment_a_plain-0'],
         active: true,
         sourceActionId: ACTION_IDS.LINK_TARGETS
       })
     ]
   });
-  const resolved = resolveRecipe(
+  const resolved = resolveVoteOutOfPlayStep(
     session,
-    actionRecipe(voteOutOfPlayAction, STEP_ACTION_KEYS.VOTE_OUT_OF_PLAY),
     collectiveVoteInput({
       votes: createVotes({
-        'team_b_attacker-0': 'team_a_target-0',
-        'team_a_blocker-0': 'team_a_target-0',
-        'team_a_target-0': 'team_a_target-0',
-        'team_a_plain-0': 'team_b_target-0',
-        'team_b_target-0': 'team_a_target-0',
-        'role_inspector-0': 'team_a_target-0',
-        'hidden_enemy-0': 'team_a_target-0'
+        'alignment_b_attacker-0': 'alignment_a_target-0',
+        'alignment_a_blocker-0': 'alignment_a_target-0',
+        'alignment_a_target-0': 'alignment_a_target-0',
+        'alignment_a_plain-0': 'alignment_b_target-0',
+        'alignment_b_target-0': 'alignment_a_target-0',
+        'role_inspector-0': 'alignment_a_target-0',
+        'hidden_enemy-0': 'alignment_a_target-0'
       })
     })
   );
 
   assert.equal(resolved.ok, true);
-  assert.equal(roleById(resolved.session, 'team_a_target-0').inPlay, false);
-  assert.equal(roleById(resolved.session, 'team_a_plain-0').inPlay, false);
+  assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
+  assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, false);
   assert.equal(resolved.result.finalEffects.length, 2);
   assert.deepEqual(resolved.result.finalEffects[1].derivedFrom, {
     type: 'relation',
     relationType: RELATION_TYPES.LINKED,
-    sourceTargetId: 'team_a_target-0'
+    sourceTargetId: 'alignment_a_target-0'
   });
 });
 
-test('vote_out_of_play rechaza la ronda si falta un voto obligatorio', () => {
+test('step con voto y set_out_of_play rechaza la ronda si falta un voto obligatorio', () => {
   const session = createBaseSession();
-  const resolved = resolveRecipe(
+  const resolved = resolveVoteOutOfPlayStep(
     session,
-    actionRecipe(voteOutOfPlayAction, STEP_ACTION_KEYS.VOTE_OUT_OF_PLAY),
     collectiveVoteInput({
       votes: createVotes({
-        'team_b_attacker-0': 'team_a_target-0',
-        'team_a_blocker-0': 'team_a_target-0'
+        'alignment_b_attacker-0': 'alignment_a_target-0',
+        'alignment_a_blocker-0': 'alignment_a_target-0'
       })
     })
   );
@@ -1863,65 +2312,63 @@ test('vote_out_of_play rechaza la ronda si falta un voto obligatorio', () => {
   assert.equal(resolved.errors[0].code, 'vote/missing-required-votes');
 });
 
-test('vote_out_of_play rechaza votar a un roleInstance linked', () => {
+test('step con voto y set_out_of_play rechaza votar a un role linked', () => {
   const session = createBaseSession({
     relations: [
       createRelation({
         id: 'linked-vote-out-of-play',
         type: RELATION_TYPES.LINKED,
-        roleInstanceIds: ['team_a_target-0', 'team_a_plain-0'],
+        roleIds: ['alignment_a_target-0', 'alignment_a_plain-0'],
         active: true,
         sourceActionId: ACTION_IDS.LINK_TARGETS
       })
     ]
   });
-  const resolved = resolveRecipe(
+  const resolved = resolveVoteOutOfPlayStep(
     session,
-    actionRecipe(voteOutOfPlayAction, STEP_ACTION_KEYS.VOTE_OUT_OF_PLAY),
     collectiveVoteInput({
       votes: createVotes({
-        'team_b_attacker-0': 'team_a_target-0',
-        'team_a_blocker-0': 'team_a_target-0',
-        'team_a_target-0': 'team_a_target-0',
-        'team_a_plain-0': 'team_a_target-0',
-        'team_b_target-0': 'team_a_target-0',
-        'role_inspector-0': 'team_a_target-0',
-        'hidden_enemy-0': 'team_a_target-0'
+        'alignment_b_attacker-0': 'alignment_a_target-0',
+        'alignment_a_blocker-0': 'alignment_a_target-0',
+        'alignment_a_target-0': 'alignment_a_target-0',
+        'alignment_a_plain-0': 'alignment_a_target-0',
+        'alignment_b_target-0': 'alignment_a_target-0',
+        'role_inspector-0': 'alignment_a_target-0',
+        'hidden_enemy-0': 'alignment_a_target-0'
       })
     })
   );
 
   assert.equal(resolved.ok, false);
   assert.equal(resolved.errors[0].code, 'vote/restricted-related-target');
-  assert.equal(resolved.errors[0].actorRoleInstanceId, 'team_a_plain-0');
-  assert.equal(resolved.errors[0].targetRoleInstanceId, 'team_a_target-0');
+  assert.equal(resolved.errors[0].actorId, 'alignment_a_plain-0');
+  assert.equal(resolved.errors[0].targetId, 'alignment_a_target-0');
 });
 
-test('vote_out_of_play no permite desactivar restricciones estructurales desde input', () => {
+test('step con voto y set_out_of_play no permite desactivar restricciones estructurales desde input', () => {
   const session = createBaseSession({
     relations: [
       createRelation({
         id: 'linked-vote-input-override',
         type: RELATION_TYPES.LINKED,
-        roleInstanceIds: ['team_a_target-0', 'team_a_plain-0'],
+        roleIds: ['alignment_a_target-0', 'alignment_a_plain-0'],
         active: true,
         sourceActionId: ACTION_IDS.LINK_TARGETS
       })
     ]
   });
-  const resolved = resolveRecipe(
+  const resolved = resolveVoteOutOfPlayStep(
     session,
-    actionRecipe(voteOutOfPlayAction, STEP_ACTION_KEYS.VOTE_OUT_OF_PLAY),
     collectiveVoteInput({
       relationRestrictions: [],
       votes: createVotes({
-        'team_b_attacker-0': 'team_a_target-0',
-        'team_a_blocker-0': 'team_a_target-0',
-        'team_a_target-0': 'team_a_target-0',
-        'team_a_plain-0': 'team_a_target-0',
-        'team_b_target-0': 'team_a_target-0',
-        'role_inspector-0': 'team_a_target-0',
-        'hidden_enemy-0': 'team_a_target-0'
+        'alignment_b_attacker-0': 'alignment_a_target-0',
+        'alignment_a_blocker-0': 'alignment_a_target-0',
+        'alignment_a_target-0': 'alignment_a_target-0',
+        'alignment_a_plain-0': 'alignment_a_target-0',
+        'alignment_b_target-0': 'alignment_a_target-0',
+        'role_inspector-0': 'alignment_a_target-0',
+        'hidden_enemy-0': 'alignment_a_target-0'
       })
     })
   );

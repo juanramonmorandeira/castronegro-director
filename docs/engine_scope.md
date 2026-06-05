@@ -1,9 +1,16 @@
 # Scope del motor
 
-Este documento define los limites del nucleo limpio de juego. La idea es evitar
-que el motor vuelva a mezclar reglas, historia, interfaz y almacenamiento.
+Este documento define los limites del nucleo limpio de juego. La regla central
+es sencilla:
 
-## Capas
+```text
+estado de sesion + accion intentada -> nueva sesion + reporte mecanico
+```
+
+El motor no conoce Svelte, Firebase, i18n, imagenes, CSS ni nombres narrativos
+de una skin concreta.
+
+## Responsabilidades
 
 ### Acciones
 
@@ -15,51 +22,108 @@ Ejemplos actuales:
 - `set_in_play`: intenta cambiar `inPlay`.
 - `block_action`: bloquea una accion concreta sobre un objetivo concreto.
 - `link_targets`: intenta enlazar varios objetivos.
+- `vote`: cuenta elecciones y devuelve un resultado.
 - `close_cycle`: cierra el ciclo actual.
 
-La accion no es narrativa. Una skin puede llamar a `link_targets` "enamorar",
-"sincronizar", "atar destinos" o cualquier otro nombre.
+La accion no es narrativa. Una skin puede presentar `link_targets` como
+"enamorar", "sincronizar" o "atar destinos"; el motor solo ve la accion.
 
-### Efectos
+### Recetas
 
-Un efecto representa una salida mecanica ya aceptada por el resolver.
+Una receta combina una accion pura con parametros y restricciones.
+
+Ejemplo:
+
+```text
+restore_recent_out_of_play = set_in_play(true) + require_recent_set_property
+```
+
+La receta no decide en que momento se ejecuta. Esa ubicacion vive en `Step` y
+`Pool`.
+
+### Restricciones
+
+Una restriccion decide si una receta puede usarse en un contexto concreto.
 
 Ejemplos actuales:
 
-- `reveal_property`: devuelve informacion visible.
-- `set_property`: cambia una propiedad concreta.
-- `block_action`: marca un bloqueo temporal.
-- `set_relation`: crea o actualiza una relacion de sesion.
-- `close_cycle`: limpia flags temporales y avanza ciclo.
+- `limited_uses`
+- `no_repeat_target`
+- `require_recent_set_property`
+
+Las restricciones no cambian estado directamente.
+
+### Resolucion
+
+La resolucion decide que efectos sobreviven, fallan o derivan consecuencias.
+
+Ejemplo:
+
+```text
+set_in_play(false) sobre A
+A esta linked con B
+```
+
+El resolver puede derivar:
+
+```text
+set_property A.inPlay false
+set_property B.inPlay false
+```
+
+### Efectos
+
+Un efecto representa una salida mecanica ya aceptada.
+
+Ejemplos actuales:
+
+- `reveal_property`
+- `set_property`
+- `block_action`
+- `set_relation`
+- `close_cycle`
 
 El aplicador de efectos escribe datos, pero no decide si una accion era valida.
 
-### Relaciones
+### Estado de sesion
 
-Una relacion es estado compartido de partida y vive en `session.relations`.
+La sesion es el estado vivo de la partida:
 
-Ejemplo actual:
+- `players`
+- `roleInstances`
+- `relations`
+- `stepPools`
+- `actionHistory`
+- `stepHistory`
+- `settings`
+- `status`
 
-- `linked`: varios `roleInstances` comparten una consecuencia mecanica.
+## Flujo
 
-La relacion no pertenece a un unico actor ni a un unico objetivo. Por eso no se
-guarda dentro del rol que la crea ni dentro de los roles afectados.
+```text
+Step actual
+-> Recipe
+-> Constraint
+-> Action
+-> Resolver
+-> Effect
+-> Session
+-> Victory
+```
 
-### Consecuencias sistemicas
+`resolveCurrentStep` ejecuta una receta, pero no cierra el step. `completeCurrentStep`
+marca el step como `done` y avanza el cursor.
 
-Una consecuencia sistemica es una regla del motor que deriva efectos nuevos a
-partir de efectos finales.
+## Regla de nombres
 
-Ejemplo actual:
+Preferimos nombres mecanicos y anonimos:
 
-- Si un efecto final hace `set_property inPlay=false` sobre un rol linked, el
-  resolver deriva otro `set_property inPlay=false` para sus relacionados.
+```text
+set_property inPlay false
+set_relation linked true
+block_action set_in_play false
+```
 
-Esto no pertenece a `link_targets`. La accion solo crea la relacion. La
-consecuencia ocurre mas tarde, si algun efecto activa esa relacion.
-
-## Regla de oro
-
-El motor recibe acciones y estado de sesion. Devuelve efectos, estado actualizado
-y explicaciones mecanicas. No conoce textos visibles, skins, Svelte, Firebase ni
-assets.
+Evitamos nombres narrativos o ligados a una ambientacion. La skin decide si
+`inPlay: false` se presenta como muerto, capturado, expulsado, infectado o fuera
+de combate.

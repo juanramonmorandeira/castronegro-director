@@ -17,22 +17,22 @@
 // Comprueba si el Match esta completo.
 //
 // En este nucleo, "Match completo" significa:
-// - existe al menos una instancia de rol;
-// - cada instancia tiene id;
-// - cada instancia tiene roleId;
-// - cada instancia tiene playerId;
-// - cada instancia tiene seat.
+// - existe al menos un rol de sesion;
+// - cada rol tiene id;
+// - cada rol tiene roleKey;
+// - cada rol tiene playerId;
+// - cada rol tiene seat.
 //
 // Esto equivale a decir: cada carta/rol en juego esta asignada a un jugador y a
 // una posicion de mesa.
-export function isMatchComplete(roleInstances = []) {
+export function isMatchComplete(roles = []) {
   return (
-    Array.isArray(roleInstances) &&
-    roleInstances.length > 0 &&
-    roleInstances.every(
+    Array.isArray(roles) &&
+    roles.length > 0 &&
+    roles.every(
       (role) =>
         role?.id &&
-        role?.roleId &&
+        role?.roleKey &&
         role?.playerId &&
         role?.seat !== null &&
         role?.seat !== undefined
@@ -77,11 +77,11 @@ export function validateUniqueIds(items = [], label = 'item') {
   return errors;
 }
 
-// Valida las instancias de rol.
+// Valida los roles de sesion.
 //
 // Comprueba:
 // - IDs duplicados;
-// - roleId ausente;
+// - roleKey ausente;
 // - playerId ausente, si requireAssigned es true;
 // - seat ausente, si requireAssigned es true;
 // - seats duplicados.
@@ -89,16 +89,16 @@ export function validateUniqueIds(items = [], label = 'item') {
 // requireAssigned permite usar la misma funcion en dos momentos distintos:
 // - durante configuracion: puede haber roles todavia sin jugador;
 // - antes de empezar partida: todo debe estar asignado.
-export function validateRoleInstances(roleInstances = [], options = {}) {
+export function validateRoles(roles = [], options = {}) {
   const requireAssigned = options.requireAssigned ?? false;
-  const errors = [...validateUniqueIds(roleInstances, 'role-instance')];
+  const errors = [...validateUniqueIds(roles, 'role')];
   const usedSeats = new Map();
 
-  (roleInstances ?? []).forEach((role, index) => {
-    if (!role?.roleId) {
+  (roles ?? []).forEach((role, index) => {
+    if (!role?.roleKey) {
       errors.push({
-        code: 'role-instance/missing-role',
-        message: `role instance at index ${index} has no roleId`,
+        code: 'role/missing-role',
+        message: `role at index ${index} has no roleKey`,
         id: role?.id ?? null,
         index
       });
@@ -106,8 +106,8 @@ export function validateRoleInstances(roleInstances = [], options = {}) {
 
     if (requireAssigned && !role?.playerId) {
       errors.push({
-        code: 'role-instance/missing-player',
-        message: `role instance "${role?.id ?? index}" has no playerId`,
+        code: 'role/missing-player',
+        message: `role "${role?.id ?? index}" has no playerId`,
         id: role?.id ?? null,
         index
       });
@@ -115,8 +115,8 @@ export function validateRoleInstances(roleInstances = [], options = {}) {
 
     if (requireAssigned && (role?.seat === null || role?.seat === undefined)) {
       errors.push({
-        code: 'role-instance/missing-seat',
-        message: `role instance "${role?.id ?? index}" has no seat`,
+        code: 'role/missing-seat',
+        message: `role "${role?.id ?? index}" has no seat`,
         id: role?.id ?? null,
         index
       });
@@ -125,8 +125,8 @@ export function validateRoleInstances(roleInstances = [], options = {}) {
     if (role?.seat !== null && role?.seat !== undefined) {
       if (usedSeats.has(role.seat)) {
         errors.push({
-          code: 'role-instance/duplicate-seat',
-          message: `seat "${role.seat}" is used by more than one role instance`,
+          code: 'role/duplicate-seat',
+          message: `seat "${role.seat}" is used by more than one role`,
           seat: role.seat,
           ids: [usedSeats.get(role.seat), role.id].filter(Boolean),
           index
@@ -140,16 +140,16 @@ export function validateRoleInstances(roleInstances = [], options = {}) {
   return errors;
 }
 
-// Valida relaciones entre instancias de rol.
+// Valida relaciones entre roles de sesion.
 //
 // Comprueba:
 // - IDs duplicados;
 // - type ausente;
 // - que cada relacion apunte a instancias existentes;
 // - que una relacion tenga al menos dos participantes.
-export function validateRelations(relations = [], roleInstances = []) {
+export function validateRelations(relations = [], roles = []) {
   const errors = [...validateUniqueIds(relations, 'relation')];
-  const roleInstanceIds = new Set((roleInstances ?? []).map((role) => role.id));
+  const roleIds = new Set((roles ?? []).map((role) => role.id));
 
   (relations ?? []).forEach((relation, index) => {
     if (!relation?.type) {
@@ -161,23 +161,57 @@ export function validateRelations(relations = [], roleInstances = []) {
       });
     }
 
-    if (!Array.isArray(relation?.roleInstanceIds) || relation.roleInstanceIds.length < 2) {
+    if (!Array.isArray(relation?.roleIds) || relation.roleIds.length < 2) {
       errors.push({
         code: 'relation/not-enough-members',
-        message: `relation "${relation?.id ?? index}" needs at least two roleInstanceIds`,
+        message: `relation "${relation?.id ?? index}" needs at least two roleIds`,
         id: relation?.id ?? null,
         index
       });
       return;
     }
 
-    relation.roleInstanceIds.forEach((roleInstanceId) => {
-      if (!roleInstanceIds.has(roleInstanceId)) {
+    relation.roleIds.forEach((roleId) => {
+      if (!roleIds.has(roleId)) {
         errors.push({
-          code: 'relation/missing-role-instance',
-          message: `relation "${relation?.id ?? index}" references missing role instance "${roleInstanceId}"`,
+          code: 'relation/missing-role',
+          message: `relation "${relation?.id ?? index}" references missing role "${roleId}"`,
           id: relation?.id ?? null,
-          roleInstanceId,
+          roleId,
+          index
+        });
+      }
+    });
+  });
+
+  return errors;
+}
+
+// Valida grupos de sesion.
+//
+// Un grupo puede estar vacio: relation/linked o flag pueden llenarse mas tarde.
+// Lo que si validamos es que, si declara miembros, esos roleIds existan.
+export function validateGroups(groups = [], roles = []) {
+  const errors = [...validateUniqueIds(groups, 'group')];
+  const roleIds = new Set((roles ?? []).map((role) => role.id));
+
+  (groups ?? []).forEach((group, index) => {
+    if (!group?.key) {
+      errors.push({
+        code: 'group/missing-key',
+        message: `group at index ${index} has no key`,
+        id: group?.id ?? null,
+        index
+      });
+    }
+
+    (group.roleIds ?? []).forEach((roleId) => {
+      if (!roleIds.has(roleId)) {
+        errors.push({
+          code: 'group/missing-role',
+          message: `group "${group?.key ?? index}" references missing role "${roleId}"`,
+          groupKey: group?.key ?? null,
+          roleId,
           index
         });
       }
@@ -192,8 +226,8 @@ export function validateRelations(relations = [], roleInstances = []) {
 // Por ahora solo valida lo esencial:
 // - la sesion tiene id;
 // - los jugadores no tienen IDs duplicados;
-// - las roleInstances son coherentes.
-// - las relaciones apuntan a roleInstances existentes.
+// - las roles son coherentes.
+// - las relaciones apuntan a roles existentes.
 //
 // Devuelve siempre un objeto con esta forma:
 // {
@@ -203,7 +237,7 @@ export function validateRelations(relations = [], roleInstances = []) {
 //
 // Esto es mas comodo que lanzar errores, porque la UI puede mostrar una lista de
 // problemas al usuario en vez de romper la pantalla.
-export function validateGameSession(session = {}, options = {}) {
+export function validateSession(session = {}, options = {}) {
   const errors = [];
 
   if (!session?.id) {
@@ -214,8 +248,9 @@ export function validateGameSession(session = {}, options = {}) {
   }
 
   errors.push(...validateUniqueIds(session.players ?? [], 'player'));
-  errors.push(...validateRoleInstances(session.roleInstances ?? [], options));
-  errors.push(...validateRelations(session.relations ?? [], session.roleInstances ?? []));
+  errors.push(...validateRoles(session.roles ?? [], options));
+  errors.push(...validateGroups(session.groups ?? [], session.roles ?? []));
+  errors.push(...validateRelations(session.relations ?? [], session.roles ?? []));
 
   return {
     ok: errors.length === 0,
