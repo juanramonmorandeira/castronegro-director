@@ -130,9 +130,9 @@ window:
 - session
 ```
 
-Cuenta cualquier intento registrado con el mismo `actorRoleInstanceId` y el
-mismo `actionKey` dentro de la ventana. Si el efecto queda bloqueado, tambien
-consume uso.
+Cuenta cualquier intento registrado con el mismo role actor y el mismo
+`actionKey` dentro de la ventana. Si el efecto queda bloqueado, tambien consume
+uso.
 
 ## Recetas definidas
 
@@ -294,6 +294,11 @@ group_vote
     abstain: not_allowed
     unanimous: not_required
     tie: null_on_tie
+    runoff: tied_candidates
+    nullResult: end_as_null
+    repeatLimit: 1
+    abstainResolution: ignore
+    supportThreshold: none
     candidateIds: null -> todos los roles inPlay
     relationRestrictions: exclude_related_target linked
   actions:

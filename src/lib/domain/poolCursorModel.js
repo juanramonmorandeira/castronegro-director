@@ -1,4 +1,4 @@
-import { STEP_STATUSES } from './sessionModel.js';
+import { POOL_KEYS, STEP_STATUSES } from './sessionModel.js';
 
 // poolCursorModel.js
 // -----------------------------------------------------------------------------
@@ -37,6 +37,10 @@ export function getPoolSteps(stepPools, poolKey = stepPools?.poolCurrent) {
   return stepPools.pools?.[poolKey] ?? [];
 }
 
+function isFinishSessionSpecialStep(step = {}) {
+  return step?.metadata?.specialPriority === 'finish_session';
+}
+
 // Devuelve el step actual segun el cursor.
 //
 // El cursor se compone de:
@@ -48,7 +52,12 @@ export function getCurrentStepCursor(stepPools) {
   const index = Number.isFinite(stepPools.poolCurrentStepIndex)
     ? stepPools.poolCurrentStepIndex
     : 0;
-  const step = steps[index] ?? null;
+  const priorityIndex =
+    stepPools.poolCurrent === POOL_KEYS.POOL_SPECIAL
+      ? steps.findIndex((step) => isStepRunnable(step) && isFinishSessionSpecialStep(step))
+      : -1;
+  const resolvedIndex = priorityIndex >= 0 ? priorityIndex : index;
+  const step = steps[resolvedIndex] ?? null;
 
   if (!step) return null;
 
@@ -56,7 +65,7 @@ export function getCurrentStepCursor(stepPools) {
     poolKey: stepPools.poolCurrent,
     stepKey: step.key,
     status: step.status,
-    index,
+    index: resolvedIndex,
     step
   };
 }

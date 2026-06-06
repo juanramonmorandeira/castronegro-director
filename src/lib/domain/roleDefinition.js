@@ -26,6 +26,7 @@ export function createRole({
   type = ROLE_DEFINITION_TYPES.ROLE,
   alignmentId = null,
   stepDefinitions = [],
+  reactions = [],
   metadata = {}
 } = {}) {
   const normalizedKey = normalizeId(key);
@@ -35,6 +36,17 @@ export function createRole({
     type: normalizeId(type),
     alignmentId: alignmentId ? normalizeId(alignmentId) : null,
     stepDefinitions: (stepDefinitions ?? []).map(createStep),
+    // Las reacciones son definicion mecanica del rol: "si ocurre X, puedo
+    // responder con Y". eventModel sera quien las evalue durante la sesion.
+    reactions: (reactions ?? []).map((reaction) => ({
+      ...reaction,
+      trigger: { ...(reaction.trigger ?? {}) },
+      response: {
+        ...(reaction.response ?? {}),
+        step: reaction.response?.step ? createStep(reaction.response.step) : null
+      },
+      metadata: { ...(reaction.metadata ?? {}) }
+    })),
     metadata: { ...metadata }
   };
 }
@@ -47,6 +59,7 @@ export function createSessionRole({
   seat = null,
   inPlay = true,
   revealed = false,
+  reactions = [],
   actionTokens = [],
   flags = {},
   counters = {},
@@ -62,6 +75,15 @@ export function createSessionRole({
     seat,
     inPlay: !!inPlay,
     revealed: !!revealed,
+    reactions: (reactions ?? []).map((reaction) => ({
+      ...reaction,
+      trigger: { ...(reaction.trigger ?? {}) },
+      response: {
+        ...(reaction.response ?? {}),
+        step: reaction.response?.step ? createStep(reaction.response.step) : null
+      },
+      metadata: { ...(reaction.metadata ?? {}) }
+    })),
     actionTokens: actionTokens.map(createActionToken),
     flags: { ...flags },
     counters: { ...counters },
@@ -96,6 +118,7 @@ export function buildRolesFromSeats(seats = [], roleDefinitions = {}) {
       alignmentId: seatEntry.alignmentId ?? definition.alignmentId ?? null,
       playerId: seatEntry.playerId ?? seatEntry.player_id ?? null,
       seat: Number.isFinite(seatEntry.seat) ? seatEntry.seat : index,
+      reactions: definition.reactions ?? [],
       actionTokens,
       flags: definition.defaultFlags ?? {},
       counters: definition.defaultCounters ?? {},

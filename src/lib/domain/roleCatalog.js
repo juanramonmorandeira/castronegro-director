@@ -9,12 +9,18 @@
 import { POOL_KEYS } from './sessionModel.js';
 import { getCatalogStep, STEP_CATALOG_IDS } from './stepCatalog.js';
 import { createRole, ROLE_DEFINITION_TYPES } from './roleDefinition.js';
+import {
+  EVENT_RESPONSE_TYPES,
+  EVENT_TRIGGER_TARGETS,
+  EVENT_TYPES
+} from './eventModel.js';
 
 export const ROLE_CATALOG_IDS = Object.freeze({
   ROLE_INSPECTS: 'role_inspects',
   ROLE_LINKS_TARGETS: 'role_links_targets',
   ROLE_BLOCKS_OUT_OF_PLAY: 'role_blocks_out_of_play',
-  ROLE_IN_PLAY_CONTROL: 'role_in_play_control'
+  ROLE_IN_PLAY_CONTROL: 'role_in_play_control',
+  ROLE_REACTIVE: 'role_reactive'
 });
 
 export const ROLE_CATALOG = Object.freeze({
@@ -76,6 +82,38 @@ export const ROLE_CATALOG = Object.freeze({
         }
       })
     ]
+  }),
+
+  [ROLE_CATALOG_IDS.ROLE_REACTIVE]: createRole({
+    key: ROLE_CATALOG_IDS.ROLE_REACTIVE,
+    type: ROLE_DEFINITION_TYPES.ROLE,
+    stepDefinitions: [],
+    reactions: [
+      {
+        key: 'self_out_of_play_creates_special_step',
+        trigger: {
+          eventType: EVENT_TYPES.PROPERTY_CHANGED,
+          targetType: 'role',
+          target: EVENT_TRIGGER_TARGETS.SELF,
+          property: 'inPlay',
+          to: false
+        },
+        response: {
+          type: EVENT_RESPONSE_TYPES.CREATE_STEP,
+          poolKey: POOL_KEYS.POOL_SPECIAL,
+          step: getCatalogStep(STEP_CATALOG_IDS.ROLE_REACTIVE_RESPONSE, {
+            poolKey: POOL_KEYS.POOL_SPECIAL,
+            metadata: {
+              orderReason:
+                'Created only after this role receives a final inPlay=false effect.'
+            }
+          })
+        }
+      }
+    ],
+    metadata: {
+      mechanicalFamily: 'reactive'
+    }
   })
 });
 
@@ -102,7 +140,10 @@ export function getCatalogRole(roleCatalogId, overrides = {}) {
     metadata: {
       ...cloneCatalogValue(baseRole.metadata ?? {}),
       ...(overrides.metadata ?? {})
-    }
+    },
+    reactions: overrides.reactions
+      ? cloneCatalogValue(overrides.reactions)
+      : cloneCatalogValue(baseRole.reactions ?? [])
   });
 }
 
@@ -111,6 +152,7 @@ export function getCoreRoleCatalog() {
     getCatalogRole(ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS),
     getCatalogRole(ROLE_CATALOG_IDS.ROLE_INSPECTS),
     getCatalogRole(ROLE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY),
-    getCatalogRole(ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL)
+    getCatalogRole(ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL),
+    getCatalogRole(ROLE_CATALOG_IDS.ROLE_REACTIVE)
   ];
 }

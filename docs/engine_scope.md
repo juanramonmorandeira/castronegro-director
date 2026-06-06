@@ -90,7 +90,8 @@ El aplicador de efectos escribe datos, pero no decide si una accion era valida.
 La sesion es el estado vivo de la partida:
 
 - `players`
-- `roleInstances`
+- `roles`
+- `groups`
 - `relations`
 - `stepPools`
 - `actionHistory`
@@ -108,8 +109,13 @@ Step actual
 -> Resolver
 -> Effect
 -> Session
+-> Event
 -> Victory
+-> finish_session si la partida termina
 ```
+
+Los steps especiales se registran en `poolSpecial`. Si existe un step
+`finish_session`, tiene prioridad al resolver ese pool.
 
 `resolveCurrentStep` ejecuta una receta, pero no cierra el step. `completeCurrentStep`
 marca el step como `done` y avanza el cursor.

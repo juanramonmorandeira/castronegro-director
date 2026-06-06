@@ -82,6 +82,8 @@ Ejemplos:
 - `actionModel.js`: resuelve acciones puras.
 - `resolverModel.js`: deriva o bloquea efectos propuestos.
 - `effectModel.js`: aplica efectos finales a la sesion.
+- `eventModel.js`: convierte efectos finales en eventos y crea respuestas como
+  steps especiales.
 - `victoryModel.js`: evalua condiciones de victoria.
 - `voteModel.js`: cuenta votos.
 
@@ -122,6 +124,17 @@ Los steps de catalogo son abstractos. Los steps de sesion deben tener actores
 reales en `actorIds`, salvo steps de sistema. Si un grupo esta vacio, no puede
 crear un step enabled jugable.
 
+Un rol tambien puede declarar `reactions`. Una reaccion no se ejecuta por si
+misma: `eventModel.js` la evalua cuando un efecto final produce un evento. El
+primer caso implementado es `role_reactive`: cuando ese rol recibe un cambio
+real a `inPlay=false`, se crea un step en `poolSpecial` para que pueda ejecutar
+una respuesta.
+
+Despues de insertar respuestas en `poolSpecial`, `stepModel.js` evalua victoria.
+Si la partida queda `finished`, se anade tambien un step especial
+`finish_session`. Al resolver `poolSpecial`, ese step de cierre tiene prioridad
+sobre los demas eventos pendientes.
+
 `vote` es el primer modelo de decision multi-actor:
 
 - los participantes salen de `step.actorIds`;
@@ -134,6 +147,15 @@ crear un step enabled jugable.
 - `voteRules.tie` decide que ocurre si dos o mas targets quedan empatados. Usamos
   `tie`, no `even`, porque es el termino tecnico habitual en ingles para un
   empate de votacion.
+- `voteRules.candidateIds` acota que roleIds pueden recibir votos. Si no se
+  define, todos los roles `inPlay` son candidatos.
+- `voteRules.runoff` decide que candidatos pasan a una segunda ronda.
+- `voteRules.repeatLimit` limita cuantas rondas adicionales puede pedir una
+  votacion.
+- `voteRules.supportThreshold` define el minimo de votos necesario para aceptar
+  el `chosen` provisional. Si no se alcanza, la votacion queda `null`.
+- `voteRules.abstainResolution` decide si las abstenciones se ignoran o si una
+  abstencion claramente superior a cualquier target anula la votacion.
 
 ## Estado vivo
 

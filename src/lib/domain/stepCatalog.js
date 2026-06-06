@@ -28,6 +28,7 @@ export const STEP_CATALOG_IDS = Object.freeze({
   ROLE_LINKS_TARGETS: 'role_links_targets',
   ROLE_BLOCKS_OUT_OF_PLAY: 'role_blocks_out_of_play',
   ROLE_IN_PLAY_CONTROL: 'role_in_play_control',
+  ROLE_REACTIVE_RESPONSE: 'role_reactive_response',
   GROUP_SET_OUT_OF_PLAY: 'group_set_out_of_play',
   GROUP_VOTE: 'group_vote',
   SYSTEM_CLOSES_CYCLE: 'system_closes_cycle'
@@ -85,6 +86,26 @@ export const STEP_CATALOG = Object.freeze({
     ],
     metadata: {
       catalogId: STEP_CATALOG_IDS.ROLE_IN_PLAY_CONTROL
+    }
+  }),
+
+  [STEP_CATALOG_IDS.ROLE_REACTIVE_RESPONSE]: createStep({
+    key: STEP_KEYS.STEP_07,
+    status: STEP_STATUSES.ENABLED,
+    actorIds: [],
+    completion: getManualCompletion(),
+    actions: [
+      getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY, {
+        actor: { type: 'role_holder' },
+        target: {
+          type: 'role',
+          count: 1,
+          filters: ['in_play', 'not_self']
+        }
+      })
+    ],
+    metadata: {
+      catalogId: STEP_CATALOG_IDS.ROLE_REACTIVE_RESPONSE
     }
   }),
 

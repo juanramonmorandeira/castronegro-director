@@ -22,6 +22,7 @@
 import {
   EFFECT_TYPES,
   applyCloseCycle as applyCloseCycleFromModel,
+  applyFinishSession as applyFinishSessionFromModel,
   applySetRelationEffect,
   applySetPropertyEffect,
   getActionBlockKey,
@@ -46,7 +47,8 @@ export const ACTION_IDS = Object.freeze({
   BLOCK_ACTION: 'block_action',
   LINK_TARGETS: 'link_targets',
   VOTE: 'vote',
-  CLOSE_CYCLE: 'close_cycle'
+  CLOSE_CYCLE: 'close_cycle',
+  FINISH_SESSION: 'finish_session'
 });
 
 export const VISIBILITY = Object.freeze({
@@ -254,6 +256,15 @@ export function validateActionDefinition(action) {
       errors.push({
         code: 'action/missing-relation-type',
         message: 'link_targets requires effect.relationType'
+      });
+    }
+  }
+
+  if (action?.id === ACTION_IDS.FINISH_SESSION) {
+    if (action?.effect?.type !== EFFECT_TYPES.FINISH_SESSION) {
+      errors.push({
+        code: 'action/invalid-effect-type',
+        message: 'finish_session requires a finish_session effect'
       });
     }
   }
@@ -635,6 +646,19 @@ export function applyCloseCycleAction({ session, action }) {
   return applyCloseCycleFromModel({ session, visibility });
 }
 
+// Ejecuta finish_session.
+//
+// Esta accion normalmente vive en poolSpecial. Permite que el final de partida
+// sea visible y ordenable dentro de la misma mecanica de steps.
+export function applyFinishSessionAction({ session, action, input = {} }) {
+  const visibility = action?.visibility ?? VISIBILITY.ALL;
+  return applyFinishSessionFromModel({
+    session,
+    visibility,
+    victory: input.victory ?? action?.effect?.victory ?? session?.metadata?.pendingVictory ?? null
+  });
+}
+
 
 // Ejecuta inspect_role.
 //
@@ -828,6 +852,30 @@ export function resolveCloseCycle(session, action) {
   };
 }
 
+export function resolveFinishSession(session, action, input = {}) {
+  const definitionValidation = validateActionDefinition(action);
+
+  if (!definitionValidation.ok) {
+    return {
+      ok: false,
+      actionId: action?.id ?? ACTION_IDS.FINISH_SESSION,
+      errors: definitionValidation.errors,
+      session,
+      result: null
+    };
+  }
+
+  const applied = applyFinishSessionAction({ session, action, input });
+
+  return {
+    ok: true,
+    actionId: action?.id ?? ACTION_IDS.FINISH_SESSION,
+    errors: [],
+    session: applied.session,
+    result: applied.result
+  };
+}
+
 
 // Punto de entrada generico para resolver acciones.
 //
@@ -859,6 +907,9 @@ export function resolveAction(session, action, input = {}, context = {}) {
   }
   if (action?.id === ACTION_IDS.CLOSE_CYCLE) {
     return resolveCloseCycle(session, action);
+  }
+  if (action?.id === ACTION_IDS.FINISH_SESSION) {
+    return resolveFinishSession(session, action, input);
   }
 
   return {

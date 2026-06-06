@@ -28,6 +28,8 @@ flowchart TD
   Session[Session]
   Victory[victoryModel]
   Finished{Finished}
+  Event[eventModel]
+  SpecialStep[poolSpecial step]
   Result[Result]
 
   Skin --> RoleCatalog
@@ -52,16 +54,19 @@ flowchart TD
   Action --> Resolver
   Resolver --> Effect
   Effect --> Session
-  Session --> Victory
+  Session --> Event
+  Event -->|reaccion crea step| SpecialStep
+  SpecialStep --> StepPools
+  Event --> Victory
   Victory --> Finished
   Finished -->|No| CurrentStep
-  Finished -->|Si| Result
+  Finished -->|Si| SpecialStep
 ```
 
 Lectura corta:
 
 ```text
-skin/setup -> buildSession -> roles + groups + stepPools -> step actual -> receta -> restricciones -> accion pura -> resolver -> aplicar efectos -> victoria
+skin/setup -> buildSession -> roles + groups + stepPools -> step actual -> receta -> restricciones -> accion pura -> resolver -> aplicar efectos -> eventos/reacciones -> victoria -> poolSpecial
 ```
 
 ## Capas del motor
@@ -89,6 +94,7 @@ skin/setup -> buildSession -> roles + groups + stepPools -> step actual -> recet
 | Acciones | `actionModel.js` | Validar y resolver acciones puras | Evaluar restricciones de receta |
 | Resolver | `resolverModel.js` | Decidir que efectos propuestos sobreviven, se bloquean o generan efectos derivados | Escribir cambios en sesion |
 | Efectos | `effectModel.js` | Escribir efectos finales sobre la sesion | Decidir si un efecto debe existir |
+| Eventos | `eventModel.js` | Convertir efectos finales en eventos y activar reacciones declaradas por roles | Ejecutar la receta del step especial |
 | Victoria | `victoryModel.js` | Evaluar si la partida termina | Modificar la sesion |
 | Voto | `voteModel.js` | Contar elecciones y resolver chosen/empate | Aplicar el efecto de la votacion |
 
@@ -352,6 +358,16 @@ graph LR
   C --> D[Efectos finales]
   D --> E[Aplicador de efectos]
   E --> F[Sesion actualizada]
+  F --> G[eventModel crea eventos]
+  G --> H{Hay reacciones}
+  H -->|Si| I[Crear steps especiales FIFO]
+  H -->|No| J[evaluateVictory]
+  I --> J
+  J --> K{Partida finished}
+  K -->|Si| L[Crear step finish_session]
+  K -->|No| M[Continuar]
+  L --> N[poolSpecial]
+  I --> N
 ```
 
 Regla importante:
@@ -359,6 +375,14 @@ Regla importante:
 ```text
 Una accion no deberia escribir directamente cualquier cosa en la sesion.
 Debe proponer efectos, resolverlos y aplicar solo efectos finales.
+```
+
+Regla de `poolSpecial`:
+
+```text
+Los eventos especiales se registran y crean sus steps. Si evaluateVictory
+declara finished, se anade tambien un step especial finish_session. Al resolver
+poolSpecial, finish_session tiene prioridad sobre los demas steps pendientes.
 ```
 
 Excepcion actual:
@@ -460,6 +484,11 @@ Orden actual:
 3. Victoria por unica alignment restante.
 4. Partida en curso.
 
+Si el resultado es `finished`, `stepModel` crea un step especial
+`finish_session` en `poolSpecial`. Ese step es quien marca la sesion como
+`finished` y guarda el resultado en `session.metadata.victory`. Al resolverse
+`poolSpecial`, este step tiene prioridad sobre otros eventos pendientes.
+
 ## Pipeline recomendado para nuevas mecanicas
 
 Cuando aparezca una mecanica nueva, seguir este orden:
@@ -531,6 +560,16 @@ Ejemplo conceptual:
     abstain: 'not_allowed',
     unanimous: 'not_required',
     tie: 'null_on_tie',
+    runoff: 'tied_candidates',
+    nullResult: 'end_as_null',
+    repeatLimit: 1,
+    abstainResolution: {
+      type: 'ignore'
+    },
+    supportThreshold: {
+      type: 'none',
+      base: 'cast_votes'
+    },
     candidateIds: null,
     relationRestrictions: [
       {
@@ -610,6 +649,11 @@ Reglas actuales de esa votacion:
 ```text
 voteRules.required: all_actors
 voteRules.tie: null_on_tie
+voteRules.runoff: tied_candidates
+voteRules.nullResult: end_as_null
+voteRules.repeatLimit: 1
+voteRules.abstainResolution: ignore
+voteRules.supportThreshold: none
 voteRules.candidateIds: null -> todos los roles inPlay
 relationRestrictions: exclude_related_target linked
 ```
@@ -656,11 +700,11 @@ null:
 tie:
   - Si voteRules.tie no define otra cosa, se trata como null.
   - Si voteRules.tie = runoff_on_tie, voteModel devuelve nextRound con
-    candidateIds limitado a los targets empatados.
+    candidateIds definido por voteRules.runoff.
   - La receta no se ejecuta hasta que una ronda posterior produzca chosen.
 ```
 
-Reglas de voto pendientes de concretar:
+Reglas de voto ya previstas:
 
 ```text
 candidateIds:
@@ -669,18 +713,39 @@ candidateIds:
   - En una segunda ronda puede cambiar, por ejemplo limitandose a los roleIds
     que recibieron votos o a los roleIds empatados.
 
+runoff:
+  - tied_candidates: segunda ronda solo entre los roleIds empatados.
+  - voted_candidates: segunda ronda entre todos los roleIds que recibieron
+    al menos un voto.
+  - same_candidates: segunda ronda con los mismos candidatos de la ronda actual.
+
+nullResult:
+  - end_as_null: la votacion nula no pide otra ronda.
+  - repeat_on_null: la votacion nula puede pedir otra ronda si repeatLimit lo
+    permite.
+
+repeatLimit:
+  - Numero maximo de rondas adicionales que puede pedir voteModel.
+  - Por defecto es 1: una votacion inicial puede pedir una segunda ronda, pero
+    si esa segunda ronda vuelve a empatar o quedar nula, termina como null.
+
 supportThreshold:
-  - Regla futura para exigir un minimo de votos antes de aceptar chosen.
-  - Ejemplos: mitad + 1, dos tercios, unanimidad estricta.
+  - Minimo de votos necesarios para aceptar el chosen provisional.
+  - none: acepta el chosen provisional sin exigir minimo adicional.
+  - majority: exige mitad + 1.
+  - fraction: exige una fraccion, por ejemplo 2/3.
+  - base cast_votes: calcula el minimo sobre votos emitidos no abstenidos.
+  - base actor_count: calcula el minimo sobre los actores obligados o definidos
+    para el step.
+  - Si no alcanza el minimo, el resultado pasa a null con reason
+    insufficient_support y la receta no se ejecuta.
 
 abstainResolution:
-  - Regla futura para decidir que ocurre si la abstencion supera a cualquier
-    targetId. La opcion base sera tratar la votacion como null.
-
-runoffRules:
-  - Regla futura para decidir como se construye la segunda ronda.
-  - Ejemplos: repetir con los mismos candidatos, limitar a targets votados,
-    limitar solo a targets empatados.
+  - ignore: las abstenciones no entran en el recuento de chosen.
+  - null_if_highest: si la abstencion tiene mas votos que cualquier targetId,
+    la votacion queda null con reason abstention_highest.
+  - Si la abstencion empata con el target mas votado, esta regla no actua por
+    ahora; queda espacio para definir nuevos tipos mas adelante.
 ```
 
 ## Regla de orientacion

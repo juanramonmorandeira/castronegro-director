@@ -11,14 +11,15 @@
 // -----------------------------------------------------------------------------
 
 import { createRelation } from './relationDefinition.js';
-import { normalizeId } from './sessionModel.js';
+import { SESSION_STATUSES, normalizeId } from './sessionModel.js';
 
 export const EFFECT_TYPES = Object.freeze({
   REVEAL_PROPERTY: 'reveal_property',
   SET_PROPERTY: 'set_property',
   BLOCK_ACTION: 'block_action',
   SET_RELATION: 'set_relation',
-  CLOSE_CYCLE: 'close_cycle'
+  CLOSE_CYCLE: 'close_cycle',
+  FINISH_SESSION: 'finish_session'
 });
 
 // Devuelve el ciclo actual de la sesion.
@@ -238,6 +239,29 @@ export function applyCloseCycle({ session, visibility = 'all' } = {}) {
       finalEffects: [],
       clearedTemporaryFlags: ['blockedActions'],
       nextCycleId: getCurrentCycleId(nextSession)
+    }
+  };
+}
+
+// Cierra la sesion con un resultado de victoria ya calculado.
+//
+// Esta escritura vive como efecto para que el fin de partida sea un step
+// especial ejecutable, no un corte silencioso del motor antes de poolSpecial.
+export function applyFinishSession({ session, victory = null, visibility = 'all' } = {}) {
+  return {
+    session: {
+      ...session,
+      status: SESSION_STATUSES.FINISHED,
+      metadata: {
+        ...(session?.metadata ?? {}),
+        victory
+      }
+    },
+    result: {
+      type: EFFECT_TYPES.FINISH_SESSION,
+      visibility,
+      finalEffects: [],
+      victory
     }
   };
 }

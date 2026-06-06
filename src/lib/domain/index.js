@@ -148,8 +148,22 @@ export {
   clearCycleFlags,
   applySetPropertyEffect,
   applySetRelationEffect,
-  applyCloseCycle
+  applyCloseCycle,
+  applyFinishSession
 } from './effectModel.js';
+export {
+  EVENT_TYPES,
+  EVENT_TRIGGER_TARGETS,
+  EVENT_RESPONSE_TYPES,
+  SPECIAL_STEP_PRIORITIES,
+  getEventsFromActionResult,
+  getTriggeredReactions,
+  resolveEventResponses,
+  applyEventResponses,
+  createFinishSessionStep,
+  appendFinishSessionEventResponse,
+  processActionResultEvents
+} from './eventModel.js';
 export { resolveProposedEffects } from './resolverModel.js';
 export {
   ACTION_IDS,
@@ -178,14 +192,21 @@ export {
 } from './victoryModel.js';
 export {
   VOTE_OUTCOME_TYPES,
+  VOTE_ABSTAIN_RESOLUTION_TYPES,
   VOTE_ABSTAIN_RULES,
   VOTE_UNANIMOUS_RULES,
+  VOTE_NULL_RULES,
+  VOTE_RUNOFF_RULES,
+  VOTE_SUPPORT_BASES,
+  VOTE_SUPPORT_THRESHOLD_TYPES,
   VOTE_TIE_RULES,
   VOTE_ROUND_TYPES,
   VOTE_REQUIRED_RULES,
   VOTE_RESTRICTION_TYPES,
   createVote,
+  createAbstainResolution,
   createVoteRules,
+  createSupportThreshold,
   getDefaultVoteCandidateIds,
   validateVotes,
   tallyVotes,

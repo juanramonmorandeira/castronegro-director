@@ -17,7 +17,9 @@ import { advanceStepCursor, getCurrentStepCursor, isStepRunnable } from './poolC
 import { appendEntry } from './historyModel.js';
 import { resolveRecipe } from './recipeModel.js';
 import { ACTION_IDS, VISIBILITY, resolveAction } from './actionModel.js';
-import { normalizeId } from './sessionModel.js';
+import { appendFinishSessionEventResponse, processActionResultEvents } from './eventModel.js';
+import { SESSION_STATUSES, normalizeId } from './sessionModel.js';
+import { VICTORY_STATUSES, evaluateVictory } from './victoryModel.js';
 import { VOTE_OUTCOME_TYPES } from './voteModel.js';
 
 export const STEP_ERRORS = Object.freeze({
@@ -52,7 +54,9 @@ export const STEP_KEYS = Object.freeze({
   STEP_03: 'step_03',
   STEP_04: 'step_04',
   STEP_05: 'step_05',
-  STEP_06: 'step_06'
+  STEP_06: 'step_06',
+  STEP_07: 'step_07',
+  STEP_08: 'step_08'
 });
 
 // Claves de receta dentro de un step.
@@ -65,7 +69,8 @@ export const STEP_ACTION_KEYS = Object.freeze({
   BLOCK_OUT_OF_PLAY: 'block_out_of_play',
   SET_OUT_OF_PLAY: 'set_out_of_play',
   RESTORE_RECENT_OUT_OF_PLAY: 'restore_recent_out_of_play',
-  CLOSE_CYCLE: 'close_cycle'
+  CLOSE_CYCLE: 'close_cycle',
+  FINISH_SESSION: 'finish_session'
 });
 
 // Devuelve el step actual con su contexto de pool.
@@ -276,7 +281,8 @@ function getVoteInputForStep(step = {}, input = {}) {
       ...voteRules,
       candidateIds: input.candidateIds ?? voteRules.candidateIds ?? null
     },
-    roundType: input.roundType
+    roundType: input.roundType,
+    roundIndex: input.roundIndex ?? 0
   };
 }
 
@@ -539,16 +545,53 @@ export function resolveCurrentStep(session, input = {}, options = {}) {
         resolutionContext
       )
     : resolveRecipe(session, stepValidation.action, recipeInput, resolutionContext);
+  const eventProcessing = actionResolution.ok
+    ? processActionResultEvents({
+        previousSession: session,
+        session: actionResolution.session,
+        actionResult: actionResolution.result,
+        context: resolutionContext
+      })
+    : null;
+  const shouldEvaluateVictory =
+    actionResolution.ok &&
+    actionResolution.actionId !== ACTION_IDS.FINISH_SESSION &&
+    eventProcessing.session?.status !== SESSION_STATUSES.FINISHED;
+  const victory = shouldEvaluateVictory ? evaluateVictory(eventProcessing.session) : null;
+  const sessionWithSpecialSteps =
+    victory?.status === VICTORY_STATUSES.FINISHED
+      ? appendFinishSessionEventResponse({
+          session: eventProcessing.session,
+          victory
+        }).session
+      : eventProcessing?.session;
+  const resolutionWithEvents = eventProcessing
+    ? {
+        ...actionResolution,
+        session: sessionWithSpecialSteps,
+        result: {
+          ...(actionResolution.result ?? {}),
+          victory,
+          events: eventProcessing.events,
+          eventResponses: [
+            ...eventProcessing.responses,
+            ...(victory?.status === VICTORY_STATUSES.FINISHED
+              ? [{ type: 'create_step', poolKey: 'poolSpecial', reason: 'victory_finished' }]
+              : [])
+          ]
+        }
+      }
+    : actionResolution;
 
-  if (!actionResolution.ok || !advanceOnSuccess) {
+  if (!resolutionWithEvents.ok || !advanceOnSuccess) {
     return {
-      ...actionResolution,
+      ...resolutionWithEvents,
       step: stepValidation.currentStep,
       stepAdvance: null
     };
   }
 
-  const completion = completeCurrentStep(actionResolution.session, {
+  const completion = completeCurrentStep(resolutionWithEvents.session, {
     requestedBy: options.requestedBy ?? STEP_COMPLETION_REQUESTED_BY.SYSTEM,
     actorIds: [...(input.actorIds ?? [])],
     actionKey: stepValidation.actionKey,
@@ -557,7 +600,7 @@ export function resolveCurrentStep(session, input = {}, options = {}) {
 
   if (!completion.ok) {
     return {
-      ...actionResolution,
+      ...resolutionWithEvents,
       step: stepValidation.currentStep,
       stepAdvance: null,
       completion
@@ -565,7 +608,7 @@ export function resolveCurrentStep(session, input = {}, options = {}) {
   }
 
   return {
-    ...actionResolution,
+    ...resolutionWithEvents,
     session: completion.session,
     step: stepValidation.currentStep,
     stepAdvance: completion.stepAdvance,
