@@ -150,7 +150,7 @@ Configuracion principal:
 
 ```text
 effect: reveal_property roleId
-target: 1 role_instance
+target: 1 role
 filters: in_play, not_self
 ```
 
@@ -172,7 +172,7 @@ Configuracion principal:
 
 ```text
 effect: set_relation linked
-target: 2 role_instances
+target: 2 roles
 filters: in_play, distinct
 ```
 
@@ -194,7 +194,7 @@ Configuracion principal:
 
 ```text
 blocks: set_in_play(property=inPlay, value=false)
-target: 1 role_instance
+target: 1 role
 filters: in_play, not_self
 ```
 
@@ -221,7 +221,7 @@ Configuracion principal:
 
 ```text
 effect: set_property inPlay=false
-target: 1 role_instance
+target: 1 role
 ```
 
 Restricciones base:
@@ -231,6 +231,41 @@ ninguna
 ```
 
 Nota: una skin puede anadir restricciones propias, por ejemplo `limited_uses`.
+
+### `one_shot_set_out_of_play`
+
+Accion pura:
+
+```text
+set_in_play
+```
+
+Configuracion principal:
+
+```text
+effect: set_property inPlay=false
+target: 1 role
+```
+
+Restricciones:
+
+```js
+[
+  {
+    type: 'limited_uses',
+    limit: 1,
+    window: 'session'
+  }
+]
+```
+
+Lectura:
+
+```text
+Es una receta distinta de set_out_of_play aunque use la misma accion pura.
+Su actionKey propio permite contar limited_uses sin mezclarla con otros
+set_in_play(false) de la partida.
+```
 
 ### `restore_recent_out_of_play`
 
@@ -244,7 +279,7 @@ Configuracion principal:
 
 ```text
 effect: set_property inPlay=true
-target: 1 role_instance
+target: 1 role
 ```
 
 Restricciones:

@@ -14,7 +14,12 @@
 import { createStep } from './stepDefinition.js';
 import { EFFECT_TYPES } from './effectModel.js';
 import { getCatalogRecipe, RECIPE_KEYS } from './recipeCatalog.js';
-import { POOL_KEYS, STEP_STATUSES, normalizeId } from './sessionModel.js';
+import {
+  POOL_KEYS,
+  SPECIAL_STEP_PRIORITIES,
+  STEP_STATUSES,
+  normalizeId
+} from './sessionModel.js';
 
 export const EVENT_TYPES = Object.freeze({
   PROPERTY_CHANGED: 'property_changed'
@@ -26,10 +31,6 @@ export const EVENT_TRIGGER_TARGETS = Object.freeze({
 
 export const EVENT_RESPONSE_TYPES = Object.freeze({
   CREATE_STEP: 'create_step'
-});
-
-export const SPECIAL_STEP_PRIORITIES = Object.freeze({
-  FINISH_SESSION: 'finish_session'
 });
 
 function findRole(session = {}, roleId = null) {

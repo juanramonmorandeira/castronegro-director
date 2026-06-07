@@ -21,6 +21,23 @@ export const ROLE_DEFINITION_TYPES = Object.freeze({
   SYSTEM: 'system'
 });
 
+// Normaliza una reaction tanto en definicion de rol como en rol de sesion.
+//
+// Mantener una sola puerta evita que una reaction catalogada y una reaction ya
+// materializada diverjan en forma. El step de respuesta se vuelve a pasar por
+// createStep para preservar los defaults de stepDefinition.
+function createRoleReaction(reaction = {}) {
+  return {
+    ...reaction,
+    trigger: { ...(reaction.trigger ?? {}) },
+    response: {
+      ...(reaction.response ?? {}),
+      step: reaction.response?.step ? createStep(reaction.response.step) : null
+    },
+    metadata: { ...(reaction.metadata ?? {}) }
+  };
+}
+
 export function createRole({
   key,
   type = ROLE_DEFINITION_TYPES.ROLE,
@@ -38,15 +55,7 @@ export function createRole({
     stepDefinitions: (stepDefinitions ?? []).map(createStep),
     // Las reacciones son definicion mecanica del rol: "si ocurre X, puedo
     // responder con Y". eventModel sera quien las evalue durante la sesion.
-    reactions: (reactions ?? []).map((reaction) => ({
-      ...reaction,
-      trigger: { ...(reaction.trigger ?? {}) },
-      response: {
-        ...(reaction.response ?? {}),
-        step: reaction.response?.step ? createStep(reaction.response.step) : null
-      },
-      metadata: { ...(reaction.metadata ?? {}) }
-    })),
+    reactions: (reactions ?? []).map(createRoleReaction),
     metadata: { ...metadata }
   };
 }
@@ -75,15 +84,7 @@ export function createSessionRole({
     seat,
     inPlay: !!inPlay,
     revealed: !!revealed,
-    reactions: (reactions ?? []).map((reaction) => ({
-      ...reaction,
-      trigger: { ...(reaction.trigger ?? {}) },
-      response: {
-        ...(reaction.response ?? {}),
-        step: reaction.response?.step ? createStep(reaction.response.step) : null
-      },
-      metadata: { ...(reaction.metadata ?? {}) }
-    })),
+    reactions: (reactions ?? []).map(createRoleReaction),
     actionTokens: actionTokens.map(createActionToken),
     flags: { ...flags },
     counters: { ...counters },

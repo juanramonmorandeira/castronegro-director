@@ -60,6 +60,7 @@ import {
   STEP_COMPLETION_MODES,
   STEP_COMPLETION_REQUESTED_BY,
   STEP_KEYS,
+  SPECIAL_STEP_PRIORITIES,
   SESSION_STATUSES,
   getCatalogRecipe,
   getCatalogStep,
@@ -444,7 +445,7 @@ test('stepCatalog crea un step reutilizable de control inPlay', () => {
   ]);
   assert.deepEqual(
     step.actions.map((action) => action.key),
-    [STEP_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY, STEP_ACTION_KEYS.SET_OUT_OF_PLAY]
+    [STEP_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY, STEP_ACTION_KEYS.ONE_SHOT_SET_OUT_OF_PLAY]
   );
   assert.equal(step.actions.every((action) => action.optional === true), true);
   assert.equal(step.metadata.catalogId, 'role_in_play_control');
@@ -468,7 +469,7 @@ test('stepCatalog expone los steps mecanicos ya definidos', () => {
       [STEP_ACTION_KEYS.INSPECT_ROLE],
       [STEP_ACTION_KEYS.LINK_TARGETS],
       [STEP_ACTION_KEYS.BLOCK_OUT_OF_PLAY],
-      [STEP_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY, STEP_ACTION_KEYS.SET_OUT_OF_PLAY],
+      [STEP_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY, STEP_ACTION_KEYS.ONE_SHOT_SET_OUT_OF_PLAY],
       [STEP_ACTION_KEYS.SET_OUT_OF_PLAY],
       [STEP_ACTION_KEYS.SET_OUT_OF_PLAY],
       [STEP_ACTION_KEYS.SET_OUT_OF_PLAY],
@@ -705,10 +706,13 @@ test('poolSpecial prioriza finish_session aunque existan otros steps especiales 
   );
   assert.equal(
     resolved.session.stepPools.pools.poolSpecial[1].metadata.specialPriority,
-    'finish_session'
+    SPECIAL_STEP_PRIORITIES.FINISH_SESSION
   );
   assert.equal(completed.stepAdvance.next.poolKey, POOL_KEYS.POOL_SPECIAL);
-  assert.equal(completed.stepAdvance.next.step.metadata.specialPriority, 'finish_session');
+  assert.equal(
+    completed.stepAdvance.next.step.metadata.specialPriority,
+    SPECIAL_STEP_PRIORITIES.FINISH_SESSION
+  );
   assert.equal(finished.ok, true);
   assert.equal(finished.session.status, SESSION_STATUSES.FINISHED);
   assert.equal(finished.result.type, EFFECT_TYPES.FINISH_SESSION);

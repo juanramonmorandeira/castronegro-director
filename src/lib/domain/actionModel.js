@@ -9,6 +9,7 @@
 // - link_targets: crea una relacion mecanica entre varios objetivos.
 // - vote: resuelve una votacion y devuelve chosen/empate/nulo.
 // - close_cycle: cierra el ciclo y limpia efectos temporales.
+// - finish_session: cierra la sesion desde un step especial de final.
 //
 // Importante:
 // - No sabe que es "La Vidente".

@@ -68,6 +68,7 @@ export const STEP_ACTION_KEYS = Object.freeze({
   LINK_TARGETS: 'link_targets',
   BLOCK_OUT_OF_PLAY: 'block_out_of_play',
   SET_OUT_OF_PLAY: 'set_out_of_play',
+  ONE_SHOT_SET_OUT_OF_PLAY: 'one_shot_set_out_of_play',
   RESTORE_RECENT_OUT_OF_PLAY: 'restore_recent_out_of_play',
   CLOSE_CYCLE: 'close_cycle',
   FINISH_SESSION: 'finish_session'
@@ -350,6 +351,72 @@ function resolveVoteStepRecipe(session, step, recipe, input = {}, context = {}) 
   };
 }
 
+function shouldEvaluateVictoryAfterAction({ actionResolution, eventSession }) {
+  return (
+    actionResolution.ok &&
+    actionResolution.actionId !== ACTION_IDS.FINISH_SESSION &&
+    eventSession?.status !== SESSION_STATUSES.FINISHED
+  );
+}
+
+function appendVictorySpecialStepIfNeeded({ session, victory }) {
+  if (victory?.status !== VICTORY_STATUSES.FINISHED) {
+    return {
+      session,
+      finishSessionResponse: null
+    };
+  }
+
+  const appended = appendFinishSessionEventResponse({ session, victory });
+
+  return {
+    session: appended.session,
+    finishSessionResponse: appended.response
+  };
+}
+
+function getPostActionEventAndVictoryState({
+  previousSession,
+  actionResolution,
+  context
+}) {
+  if (!actionResolution.ok) {
+    return {
+      session: actionResolution.session,
+      victory: null,
+      events: [],
+      eventResponses: []
+    };
+  }
+
+  const eventProcessing = processActionResultEvents({
+    previousSession,
+    session: actionResolution.session,
+    actionResult: actionResolution.result,
+    context
+  });
+  const victory = shouldEvaluateVictoryAfterAction({
+    actionResolution,
+    eventSession: eventProcessing.session
+  })
+    ? evaluateVictory(eventProcessing.session)
+    : null;
+  const specialStepState = appendVictorySpecialStepIfNeeded({
+    session: eventProcessing.session,
+    victory
+  });
+
+  return {
+    session: specialStepState.session,
+    victory,
+    events: eventProcessing.events,
+    eventResponses: [
+      ...eventProcessing.responses,
+      ...(specialStepState.finishSessionResponse ? [specialStepState.finishSessionResponse] : [])
+    ]
+  };
+}
+
 // Anade una entrada al historial de steps.
 //
 // Cerrar un step no es una accion de juego. Por eso no se registra en
@@ -545,40 +612,20 @@ export function resolveCurrentStep(session, input = {}, options = {}) {
         resolutionContext
       )
     : resolveRecipe(session, stepValidation.action, recipeInput, resolutionContext);
-  const eventProcessing = actionResolution.ok
-    ? processActionResultEvents({
-        previousSession: session,
-        session: actionResolution.session,
-        actionResult: actionResolution.result,
-        context: resolutionContext
-      })
-    : null;
-  const shouldEvaluateVictory =
-    actionResolution.ok &&
-    actionResolution.actionId !== ACTION_IDS.FINISH_SESSION &&
-    eventProcessing.session?.status !== SESSION_STATUSES.FINISHED;
-  const victory = shouldEvaluateVictory ? evaluateVictory(eventProcessing.session) : null;
-  const sessionWithSpecialSteps =
-    victory?.status === VICTORY_STATUSES.FINISHED
-      ? appendFinishSessionEventResponse({
-          session: eventProcessing.session,
-          victory
-        }).session
-      : eventProcessing?.session;
-  const resolutionWithEvents = eventProcessing
+  const postActionState = getPostActionEventAndVictoryState({
+    previousSession: session,
+    actionResolution,
+    context: resolutionContext
+  });
+  const resolutionWithEvents = actionResolution.ok
     ? {
         ...actionResolution,
-        session: sessionWithSpecialSteps,
+        session: postActionState.session,
         result: {
           ...(actionResolution.result ?? {}),
-          victory,
-          events: eventProcessing.events,
-          eventResponses: [
-            ...eventProcessing.responses,
-            ...(victory?.status === VICTORY_STATUSES.FINISHED
-              ? [{ type: 'create_step', poolKey: 'poolSpecial', reason: 'victory_finished' }]
-              : [])
-          ]
+          victory: postActionState.victory,
+          events: postActionState.events,
+          eventResponses: postActionState.eventResponses
         }
       }
     : actionResolution;

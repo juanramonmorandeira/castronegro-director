@@ -84,6 +84,15 @@ export const RELATION_TYPES = Object.freeze({
   LINKED: 'linked'
 });
 
+// Prioridades internas de steps especiales.
+//
+// poolSpecial funciona como cola FIFO, salvo que exista un cierre de sesion:
+// ese step debe resolverse antes que otros eventos pendientes porque la partida
+// ya tiene un resultado final.
+export const SPECIAL_STEP_PRIORITIES = Object.freeze({
+  FINISH_SESSION: 'finish_session'
+});
+
 // Convierte cualquier texto en un identificador estable.
 //
 // Ejemplos:

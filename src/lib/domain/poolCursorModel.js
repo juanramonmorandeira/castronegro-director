@@ -1,4 +1,4 @@
-import { POOL_KEYS, STEP_STATUSES } from './sessionModel.js';
+import { POOL_KEYS, SPECIAL_STEP_PRIORITIES, STEP_STATUSES } from './sessionModel.js';
 
 // poolCursorModel.js
 // -----------------------------------------------------------------------------
@@ -38,7 +38,7 @@ export function getPoolSteps(stepPools, poolKey = stepPools?.poolCurrent) {
 }
 
 function isFinishSessionSpecialStep(step = {}) {
-  return step?.metadata?.specialPriority === 'finish_session';
+  return step?.metadata?.specialPriority === SPECIAL_STEP_PRIORITIES.FINISH_SESSION;
 }
 
 // Devuelve el step actual segun el cursor.

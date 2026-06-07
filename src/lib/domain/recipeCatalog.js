@@ -69,7 +69,7 @@ export const RECIPE_CATALOG = Object.freeze({
   },
 
   [RECIPE_KEYS.ONE_SHOT_SET_OUT_OF_PLAY]: {
-    key: RECIPE_KEYS.SET_OUT_OF_PLAY,
+    key: RECIPE_KEYS.ONE_SHOT_SET_OUT_OF_PLAY,
     optional: true,
     id: ACTION_IDS.SET_IN_PLAY,
     actor: {
