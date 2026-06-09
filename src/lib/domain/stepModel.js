@@ -17,9 +17,9 @@ import { advanceStepCursor, getCurrentStepCursor, isStepRunnable } from './poolC
 import { appendEntry } from './historyModel.js';
 import { resolveRecipe } from './recipeModel.js';
 import { ACTION_IDS, VISIBILITY, resolveAction } from './actionModel.js';
-import { appendFinishSessionEventResponse, processActionResultEvents } from './eventModel.js';
-import { SESSION_STATUSES, normalizeId } from './sessionModel.js';
-import { VICTORY_STATUSES, evaluateVictory } from './victoryModel.js';
+import { appendConcludePlayEventResponse, processActionResultEvents } from './eventModel.js';
+import { SPECIAL_STEP_PRIORITIES, normalizeId } from './sessionModel.js';
+import { OBJECTIVE_EVALUATION_STATUSES, checkObjectives } from './objectiveModel.js';
 import { VOTE_OUTCOME_TYPES } from './voteModel.js';
 
 export const STEP_ERRORS = Object.freeze({
@@ -71,7 +71,7 @@ export const STEP_ACTION_KEYS = Object.freeze({
   ONE_SHOT_SET_OUT_OF_PLAY: 'one_shot_set_out_of_play',
   RESTORE_RECENT_OUT_OF_PLAY: 'restore_recent_out_of_play',
   CLOSE_CYCLE: 'close_cycle',
-  FINISH_SESSION: 'finish_session'
+  CONCLUDE_PLAY: 'conclude_play'
 });
 
 // Devuelve el step actual con su contexto de pool.
@@ -351,31 +351,51 @@ function resolveVoteStepRecipe(session, step, recipe, input = {}, context = {}) 
   };
 }
 
-function shouldEvaluateVictoryAfterAction({ actionResolution, eventSession }) {
-  return (
-    actionResolution.ok &&
-    actionResolution.actionId !== ACTION_IDS.FINISH_SESSION &&
-    eventSession?.status !== SESSION_STATUSES.FINISHED
-  );
-}
-
-function appendVictorySpecialStepIfNeeded({ session, victory }) {
-  if (victory?.status !== VICTORY_STATUSES.FINISHED) {
+function appendConcludePlaySpecialStepIfNeeded({ session, objectiveEvaluation }) {
+  if (
+    objectiveEvaluation?.status !== OBJECTIVE_EVALUATION_STATUSES.FULFILLED ||
+    !objectiveEvaluation?.playOutcome?.conclusive
+  ) {
     return {
       session,
-      finishSessionResponse: null
+      concludePlayResponse: null
     };
   }
 
-  const appended = appendFinishSessionEventResponse({ session, victory });
+  if (session?.playOutcome) {
+    return {
+      session,
+      concludePlayResponse: null
+    };
+  }
+
+  const hasConcludePlayStep = Object.values(session?.stepPools?.pools ?? {}).some((steps) =>
+    (steps ?? []).some((step) => step?.metadata?.specialPriority === SPECIAL_STEP_PRIORITIES.CONCLUDE_PLAY)
+  );
+
+  if (hasConcludePlayStep) {
+    return {
+      session,
+      concludePlayResponse: null
+    };
+  }
+
+  const appended = appendConcludePlayEventResponse({
+    session,
+    playOutcome: objectiveEvaluation.playOutcome
+  });
 
   return {
     session: appended.session,
-    finishSessionResponse: appended.response
+    concludePlayResponse: appended.response
   };
 }
 
-function getPostActionEventAndVictoryState({
+function shouldCheckObjectivesAfterStepCompletion(stepAdvance) {
+  return ['next-pool', 'no-runnable-step'].includes(stepAdvance?.reason);
+}
+
+function getPostActionEventState({
   previousSession,
   actionResolution,
   context
@@ -383,7 +403,6 @@ function getPostActionEventAndVictoryState({
   if (!actionResolution.ok) {
     return {
       session: actionResolution.session,
-      victory: null,
       events: [],
       eventResponses: []
     };
@@ -395,25 +414,42 @@ function getPostActionEventAndVictoryState({
     actionResult: actionResolution.result,
     context
   });
-  const victory = shouldEvaluateVictoryAfterAction({
-    actionResolution,
-    eventSession: eventProcessing.session
-  })
-    ? evaluateVictory(eventProcessing.session)
-    : null;
-  const specialStepState = appendVictorySpecialStepIfNeeded({
+
+  return {
     session: eventProcessing.session,
-    victory
+    events: eventProcessing.events,
+    eventResponses: eventProcessing.responses
+  };
+}
+
+function getPostCompletionObjectiveState({ session, stepAdvance }) {
+  if (!shouldCheckObjectivesAfterStepCompletion(stepAdvance)) {
+    return {
+      session,
+      stepAdvance,
+      objectiveEvaluation: null,
+      playOutcome: null,
+      eventResponses: []
+    };
+  }
+
+  const objectiveEvaluation = checkObjectives(session);
+  const specialStepState = appendConcludePlaySpecialStepIfNeeded({
+    session,
+    objectiveEvaluation
   });
+  const finalStepAdvance = {
+    ...stepAdvance,
+    stepPools: specialStepState.session.stepPools,
+    next: getCurrentStepCursor(specialStepState.session.stepPools)
+  };
 
   return {
     session: specialStepState.session,
-    victory,
-    events: eventProcessing.events,
-    eventResponses: [
-      ...eventProcessing.responses,
-      ...(specialStepState.finishSessionResponse ? [specialStepState.finishSessionResponse] : [])
-    ]
+    stepAdvance: finalStepAdvance,
+    objectiveEvaluation,
+    playOutcome: objectiveEvaluation?.playOutcome ?? null,
+    eventResponses: specialStepState.concludePlayResponse ? [specialStepState.concludePlayResponse] : []
   };
 }
 
@@ -553,14 +589,21 @@ export function completeCurrentStep(session, input = {}) {
       metadata: input.metadata ?? {}
     }
   );
+  const objectiveState = getPostCompletionObjectiveState({
+    session: sessionWithCompletion,
+    stepAdvance
+  });
 
   return {
     ok: true,
     errors: [],
-    session: sessionWithCompletion,
+    session: objectiveState.session,
     step: currentStep,
-    stepAdvance,
-    completion: sessionWithCompletion.stepHistory.at(-1)
+    stepAdvance: objectiveState.stepAdvance,
+    completion: objectiveState.session.stepHistory.at(-1),
+    objectiveEvaluation: objectiveState.objectiveEvaluation,
+    playOutcome: objectiveState.playOutcome,
+    eventResponses: objectiveState.eventResponses
   };
 }
 
@@ -612,7 +655,7 @@ export function resolveCurrentStep(session, input = {}, options = {}) {
         resolutionContext
       )
     : resolveRecipe(session, stepValidation.action, recipeInput, resolutionContext);
-  const postActionState = getPostActionEventAndVictoryState({
+  const postActionState = getPostActionEventState({
     previousSession: session,
     actionResolution,
     context: resolutionContext
@@ -623,7 +666,6 @@ export function resolveCurrentStep(session, input = {}, options = {}) {
         session: postActionState.session,
         result: {
           ...(actionResolution.result ?? {}),
-          victory: postActionState.victory,
           events: postActionState.events,
           eventResponses: postActionState.eventResponses
         }

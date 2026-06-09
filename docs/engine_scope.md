@@ -96,6 +96,9 @@ La sesion es el estado vivo de la partida:
 - `stepPools`
 - `actionHistory`
 - `stepHistory`
+- `sessionObjectiveRules`
+- `achievedObjectives`
+- `playOutcome`
 - `settings`
 - `status`
 
@@ -110,12 +113,16 @@ Step actual
 -> Effect
 -> Session
 -> Event
--> Victory
--> finish_session si la partida termina
+-> check_objectives
+-> conclude_play si la parte jugable concluye
 ```
 
 Los steps especiales se registran en `poolSpecial`. Si existe un step
-`finish_session`, tiene prioridad al resolver ese pool.
+`conclude_play`, tiene prioridad al resolver ese pool.
+
+`conclude_play` no cierra administrativamente la session. Solo gestiona la
+conclusion de la parte jugable. El cierre de la session corresponde al creador o
+al flujo de administracion de la aplicacion.
 
 `resolveCurrentStep` ejecuta una receta, pero no cierra el step. `completeCurrentStep`
 marca el step como `done` y avanza el cursor.

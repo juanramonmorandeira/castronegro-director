@@ -8,9 +8,8 @@ import {
   CONSTRAINT_WINDOWS,
   RELATION_TYPES,
   VISIBILITY,
-  VICTORY_RULE_TYPES,
-  VICTORY_STATUSES,
-  VICTORY_TYPES,
+  OBJECTIVE_CONDITIONS,
+  OBJECTIVE_EVALUATION_STATUSES,
   VOTE_ABSTAIN_RESOLUTION_TYPES,
   VOTE_ABSTAIN_RULES,
   VOTE_UNANIMOUS_RULES,
@@ -41,7 +40,7 @@ import {
   getCoreRoleCatalog,
   removeRoleFromGroup,
   createStep,
-  evaluateVictory,
+  checkObjectives,
   findAppliedSetPropertyHistory,
   getActionBlockKey,
   STEP_STATUSES,
@@ -89,7 +88,7 @@ function test(name, fn) {
 // - link_targets crea una relacion linked en la sesion.
 // - linked deriva inPlay=false hacia roles relacionados.
 // - no_repeat_target impide repetir bloqueo sobre el mismo target.
-// - victoryModel detecta victoria generica y victoria especial linked.
+// - objectiveModel detecta objetivos concluyentes genericos y linked.
 // - voteModel cuenta votos y resuelve empates configurables.
 // - stepModel conecta el step actual con actionModel y avanza el cursor.
 //
@@ -124,7 +123,12 @@ const voteOutOfPlayRules = createVoteRules({
   ]
 });
 
-function createBaseSession({ relations = [], settings = {} } = {}) {
+function createBaseSession({
+  groups = [],
+  relations = [],
+  sessionObjectiveRules = [],
+  settings = {}
+} = {}) {
   const roleDefinitions = {
     alignment_b_attacker: {
       alignmentId: 'alignment_b'
@@ -171,9 +175,38 @@ function createBaseSession({ relations = [], settings = {} } = {}) {
       ready: true
     })),
     roles,
+    groups,
     relations,
+    sessionObjectiveRules,
     settings
   });
+}
+
+function createAlignmentGroup(alignmentId, roleIds = []) {
+  return createGroup({
+    key: `group_${alignmentId}`,
+    roleIds,
+    metadata: {
+      alignmentId
+    }
+  });
+}
+
+function createConclusiveObjectiveRule({ key, holder, condition }) {
+  return {
+    key,
+    holder,
+    condition,
+    onFulfilled: [
+      {
+        conclusive: true,
+        beneficiaries: {
+          type: 'holder'
+        }
+      }
+    ],
+    conflictRules: []
+  };
 }
 
 function roleById(session, roleKey) {
@@ -653,7 +686,7 @@ test('role reactive crea un step especial al recibir inPlay=false final', () => 
   assert.equal(roleById(specialResolution.session, `${ROLE_CATALOG_IDS.ROLE_INSPECTS}-0`).inPlay, false);
 });
 
-test('poolSpecial prioriza finish_session aunque existan otros steps especiales pendientes', () => {
+test('poolSpecial prioriza conclude_play aunque existan otros steps especiales pendientes', () => {
   const roleDefinitions = getCoreRoleCatalog();
   const roleDefinitionMap = Object.fromEntries(roleDefinitions.map((role) => [role.key, role]));
   const session = withStepPools(
@@ -669,7 +702,22 @@ test('poolSpecial prioriza finish_session aunque existan otros steps especiales 
           { seat: 1, playerId: 'player-2', role: ROLE_CATALOG_IDS.ROLE_REACTIVE, alignmentId: 'alignment_a' }
         ],
         roleDefinitionMap
-      )
+      ),
+      groups: [
+        createAlignmentGroup('alignment_b', [`${ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL}-0`])
+      ],
+      sessionObjectiveRules: [
+        createConclusiveObjectiveRule({
+          key: 'alignment_b_only_group_remains',
+          holder: {
+            type: 'group',
+            id: 'group_alignment_b'
+          },
+          condition: {
+            type: OBJECTIVE_CONDITIONS.ONLY_HOLDER_GROUP_REMAINS_IN_PLAY
+          }
+        })
+      ]
     }),
     createPool({
       poolOrder: [POOL_KEYS.POOL_CONCEALED, POOL_KEYS.POOL_SPECIAL],
@@ -698,24 +746,27 @@ test('poolSpecial prioriza finish_session aunque existan otros steps especiales 
 
   assert.equal(resolved.ok, true);
   assert.equal(resolved.session.status, SESSION_STATUSES.DRAFT);
-  assert.equal(resolved.result.victory.status, VICTORY_STATUSES.FINISHED);
-  assert.equal(resolved.session.stepPools.pools.poolSpecial.length, 2);
+  assert.equal(resolved.result.objectiveEvaluation, undefined);
+  assert.equal(resolved.session.stepPools.pools.poolSpecial.length, 1);
   assert.equal(
     resolved.session.stepPools.pools.poolSpecial[0].metadata.source.metadata.reactionKey,
     'self_out_of_play_creates_special_step'
   );
+  assert.equal(completed.objectiveEvaluation.status, OBJECTIVE_EVALUATION_STATUSES.FULFILLED);
+  assert.equal(completed.session.stepPools.pools.poolSpecial.length, 2);
   assert.equal(
-    resolved.session.stepPools.pools.poolSpecial[1].metadata.specialPriority,
-    SPECIAL_STEP_PRIORITIES.FINISH_SESSION
+    completed.session.stepPools.pools.poolSpecial[1].metadata.specialPriority,
+    SPECIAL_STEP_PRIORITIES.CONCLUDE_PLAY
   );
   assert.equal(completed.stepAdvance.next.poolKey, POOL_KEYS.POOL_SPECIAL);
   assert.equal(
     completed.stepAdvance.next.step.metadata.specialPriority,
-    SPECIAL_STEP_PRIORITIES.FINISH_SESSION
+    SPECIAL_STEP_PRIORITIES.CONCLUDE_PLAY
   );
   assert.equal(finished.ok, true);
-  assert.equal(finished.session.status, SESSION_STATUSES.FINISHED);
-  assert.equal(finished.result.type, EFFECT_TYPES.FINISH_SESSION);
+  assert.equal(finished.session.status, SESSION_STATUSES.DRAFT);
+  assert.equal(finished.result.type, EFFECT_TYPES.CONCLUDE_PLAY);
+  assert.equal(finished.session.playOutcome.conclusive, true);
   assert.equal(finished.session.stepPools.pools.poolSpecial.length, 2);
 });
 
@@ -1736,85 +1787,130 @@ test('validateSession detecta relaciones que apuntan a roles inexistentes', () =
   );
 });
 
-test('evaluateVictory devuelve ongoing cuando quedan varios alignments en juego', () => {
+test('checkObjectives devuelve ongoing cuando quedan varios alignments en juego', () => {
   const session = createBaseSession();
-  const victory = evaluateVictory(session);
+  const objectiveEvaluation = checkObjectives(session);
 
-  assert.deepEqual(victory, {
-    status: VICTORY_STATUSES.ONGOING,
-    type: VICTORY_TYPES.NONE,
-    reason: 'no_victory_condition_met',
-    winnerAlignmentId: null,
-    winnerIds: []
+  assert.deepEqual(objectiveEvaluation, {
+    status: OBJECTIVE_EVALUATION_STATUSES.ONGOING,
+    reason: 'no_objective_condition_met',
+    fulfilledRules: [],
+    achievedObjectives: [],
+    playOutcome: null
   });
 });
 
-test('evaluateVictory aplica regla neutral de alignment at_least_remaining', () => {
+test('checkObjectives aplica regla de group holder_reaches_in_play_parity', () => {
   const session = withInPlayState(
     createBaseSession({
-      settings: {
-        victory: {
-          alignmentRules: [
-            {
-              id: 'alignment_b_reaches_threshold',
-              alignmentId: 'alignment_b',
-              condition: VICTORY_RULE_TYPES.AT_LEAST_REMAINING
-            }
-          ]
-        }
-      }
+      groups: [
+        createAlignmentGroup('alignment_b', [
+          'alignment_b_attacker-0',
+          'alignment_b_target-0',
+          'hidden_enemy-0'
+        ])
+      ],
+      sessionObjectiveRules: [
+        createConclusiveObjectiveRule({
+          key: 'alignment_b_reaches_threshold',
+          holder: {
+            type: 'group',
+            id: 'group_alignment_b'
+          },
+          condition: {
+            type: OBJECTIVE_CONDITIONS.HOLDER_REACHES_IN_PLAY_PARITY
+          }
+        })
+      ]
     }),
     {
       'alignment_a_plain-0': false,
       'role_inspector-0': false
     }
   );
-  const victory = evaluateVictory(session);
+  const objectiveEvaluation = checkObjectives(session);
 
-  assert.equal(victory.status, VICTORY_STATUSES.FINISHED);
-  assert.equal(victory.type, VICTORY_TYPES.ALIGNMENT_RULE);
-  assert.equal(victory.reason, 'alignment_rule_at_least_remaining_met');
-  assert.equal(victory.winnerAlignmentId, 'alignment_b');
-  assert.equal(victory.ruleId, 'alignment_b_reaches_threshold');
-  assert.deepEqual(victory.counts, {
-    alignmentInPlay: 3,
-    remainingInPlay: 2,
-    totalInPlay: 5
-  });
-});
-
-test('evaluateVictory no aplica at_least_remaining si el alignment no alcanza al resto', () => {
-  const session = createBaseSession({
-    settings: {
-      victory: {
-        alignmentRules: [
-          {
-            id: 'alignment_b_reaches_threshold',
-            alignmentId: 'alignment_b',
-            condition: VICTORY_RULE_TYPES.AT_LEAST_REMAINING
-          }
-        ]
-      }
+  assert.equal(objectiveEvaluation.status, OBJECTIVE_EVALUATION_STATUSES.FULFILLED);
+  assert.equal(objectiveEvaluation.reason, 'single_conclusive_objective');
+  assert.equal(objectiveEvaluation.fulfilledRules[0].condition, OBJECTIVE_CONDITIONS.HOLDER_REACHES_IN_PLAY_PARITY);
+  assert.equal(objectiveEvaluation.fulfilledRules[0].key, 'alignment_b_reaches_threshold');
+  assert.deepEqual(objectiveEvaluation.playOutcome.beneficiaries, [
+    {
+      type: 'group',
+      ids: ['group_alignment_b'],
+      roleIds: ['alignment_b_attacker-0', 'alignment_b_target-0', 'hidden_enemy-0']
     }
+  ]);
+  assert.deepEqual(objectiveEvaluation.fulfilledRules[0].details, {
+    holderInPlayCount: 3,
+    nonHolderInPlayCount: 2,
+    totalInPlayCount: 5
   });
-  const victory = evaluateVictory(session);
-
-  assert.equal(victory.status, VICTORY_STATUSES.ONGOING);
-  assert.equal(victory.type, VICTORY_TYPES.NONE);
 });
 
-test('evaluateVictory detecta victoria generica cuando solo queda un alignment', () => {
-  const session = withInPlayState(createBaseSession(), {
-    'alignment_b_attacker-0': false,
-    'alignment_b_target-0': false,
-    'hidden_enemy-0': false
+test('checkObjectives no aplica holder_reaches_in_play_parity si el group no alcanza al resto', () => {
+  const session = createBaseSession({
+    groups: [
+      createAlignmentGroup('alignment_b', [
+        'alignment_b_attacker-0',
+        'alignment_b_target-0',
+        'hidden_enemy-0'
+      ])
+    ],
+    sessionObjectiveRules: [
+      createConclusiveObjectiveRule({
+        key: 'alignment_b_reaches_threshold',
+        holder: {
+          type: 'group',
+          id: 'group_alignment_b'
+        },
+        condition: {
+          type: OBJECTIVE_CONDITIONS.HOLDER_REACHES_IN_PLAY_PARITY
+        }
+      })
+    ]
   });
-  const victory = evaluateVictory(session);
+  const objectiveEvaluation = checkObjectives(session);
 
-  assert.equal(victory.status, VICTORY_STATUSES.FINISHED);
-  assert.equal(victory.type, VICTORY_TYPES.SINGLE_ALIGNMENT);
-  assert.equal(victory.winnerAlignmentId, 'alignment_a');
-  assert.deepEqual(victory.winnerIds.sort(), [
+  assert.equal(objectiveEvaluation.status, OBJECTIVE_EVALUATION_STATUSES.ONGOING);
+  assert.deepEqual(objectiveEvaluation.fulfilledRules, []);
+});
+
+test('checkObjectives detecta only_holder_group_remains_in_play con group de alignment', () => {
+  const session = withInPlayState(
+    createBaseSession({
+      groups: [
+        createAlignmentGroup('alignment_a', [
+          'alignment_a_blocker-0',
+          'alignment_a_target-0',
+          'alignment_a_plain-0',
+          'role_inspector-0'
+        ])
+      ],
+      sessionObjectiveRules: [
+        createConclusiveObjectiveRule({
+          key: 'alignment_a_only_group_remains',
+          holder: {
+            type: 'group',
+            id: 'group_alignment_a'
+          },
+          condition: {
+            type: OBJECTIVE_CONDITIONS.ONLY_HOLDER_GROUP_REMAINS_IN_PLAY
+          }
+        })
+      ]
+    }),
+    {
+      'alignment_b_attacker-0': false,
+      'alignment_b_target-0': false,
+      'hidden_enemy-0': false
+    }
+  );
+  const objectiveEvaluation = checkObjectives(session);
+
+  assert.equal(objectiveEvaluation.status, OBJECTIVE_EVALUATION_STATUSES.FULFILLED);
+  assert.equal(objectiveEvaluation.fulfilledRules[0].condition, OBJECTIVE_CONDITIONS.ONLY_HOLDER_GROUP_REMAINS_IN_PLAY);
+  assert.deepEqual(objectiveEvaluation.fulfilledRules[0].details.holderInPlayRoleIds.sort(), [
     'alignment_a_blocker-0',
     'alignment_a_plain-0',
     'alignment_a_target-0',
@@ -1822,7 +1918,7 @@ test('evaluateVictory detecta victoria generica cuando solo queda un alignment',
   ]);
 });
 
-test('evaluateVictory detecta victoria linked si solo quedan linked de alignments distintos', () => {
+test('checkObjectives detecta only_holder_group_remains_in_play con group linked explicito', () => {
   const session = withInPlayState(
     createBaseSession({
       relations: [
@@ -1833,6 +1929,27 @@ test('evaluateVictory detecta victoria linked si solo quedan linked de alignment
           active: true,
           sourceActionId: ACTION_IDS.LINK_TARGETS
         })
+      ],
+      groups: [
+        createGroup({
+          key: 'group_linked_finalists',
+          roleIds: ['alignment_a_target-0', 'alignment_b_target-0'],
+          metadata: {
+            relationId: 'linked-mixed-finalists'
+          }
+        })
+      ],
+      sessionObjectiveRules: [
+        createConclusiveObjectiveRule({
+          key: 'linked_group_only_group_remains',
+          holder: {
+            type: 'group',
+            id: 'group_linked_finalists'
+          },
+          condition: {
+            type: OBJECTIVE_CONDITIONS.ONLY_HOLDER_GROUP_REMAINS_IN_PLAY
+          }
+        })
       ]
     }),
     {
@@ -1843,16 +1960,17 @@ test('evaluateVictory detecta victoria linked si solo quedan linked de alignment
       'hidden_enemy-0': false
     }
   );
-  const victory = evaluateVictory(session);
+  const objectiveEvaluation = checkObjectives(session);
 
-  assert.equal(victory.status, VICTORY_STATUSES.FINISHED);
-  assert.equal(victory.type, VICTORY_TYPES.LINKED_EXCLUSIVE_SURVIVORS);
-  assert.equal(victory.winnerAlignmentId, null);
-  assert.deepEqual(victory.winnerIds.sort(), ['alignment_a_target-0', 'alignment_b_target-0']);
-  assert.equal(victory.relationId, 'linked-mixed-finalists');
+  assert.equal(objectiveEvaluation.status, OBJECTIVE_EVALUATION_STATUSES.FULFILLED);
+  assert.equal(objectiveEvaluation.fulfilledRules[0].condition, OBJECTIVE_CONDITIONS.ONLY_HOLDER_GROUP_REMAINS_IN_PLAY);
+  assert.deepEqual(objectiveEvaluation.fulfilledRules[0].details.holderInPlayRoleIds.sort(), [
+    'alignment_a_target-0',
+    'alignment_b_target-0'
+  ]);
 });
 
-test('evaluateVictory no activa linked si queda un tercero en juego', () => {
+test('checkObjectives no activa only_holder_group_remains_in_play si queda un tercero en juego', () => {
   const session = withInPlayState(
     createBaseSession({
       relations: [
@@ -1863,6 +1981,24 @@ test('evaluateVictory no activa linked si queda un tercero en juego', () => {
           active: true,
           sourceActionId: ACTION_IDS.LINK_TARGETS
         })
+      ],
+      groups: [
+        createGroup({
+          key: 'group_linked_with_third',
+          roleIds: ['alignment_a_target-0', 'alignment_b_target-0']
+        })
+      ],
+      sessionObjectiveRules: [
+        createConclusiveObjectiveRule({
+          key: 'linked_group_only_group_remains',
+          holder: {
+            type: 'group',
+            id: 'group_linked_with_third'
+          },
+          condition: {
+            type: OBJECTIVE_CONDITIONS.ONLY_HOLDER_GROUP_REMAINS_IN_PLAY
+          }
+        })
       ]
     }),
     {
@@ -1872,10 +2008,10 @@ test('evaluateVictory no activa linked si queda un tercero en juego', () => {
       'hidden_enemy-0': false
     }
   );
-  const victory = evaluateVictory(session);
+  const objectiveEvaluation = checkObjectives(session);
 
-  assert.equal(victory.status, VICTORY_STATUSES.ONGOING);
-  assert.equal(victory.type, VICTORY_TYPES.NONE);
+  assert.equal(objectiveEvaluation.status, OBJECTIVE_EVALUATION_STATUSES.ONGOING);
+  assert.deepEqual(objectiveEvaluation.fulfilledRules, []);
 });
 
 test('resolveVoteRound detecta chosen unico por mayoria simple', () => {

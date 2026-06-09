@@ -9,7 +9,7 @@
 // - link_targets: crea una relacion mecanica entre varios objetivos.
 // - vote: resuelve una votacion y devuelve chosen/empate/nulo.
 // - close_cycle: cierra el ciclo y limpia efectos temporales.
-// - finish_session: cierra la sesion desde un step especial de final.
+// - conclude_play: concluye la parte jugable desde un step especial.
 //
 // Importante:
 // - No sabe que es "La Vidente".
@@ -22,8 +22,8 @@
 
 import {
   EFFECT_TYPES,
+  applyConcludePlay as applyConcludePlayFromModel,
   applyCloseCycle as applyCloseCycleFromModel,
-  applyFinishSession as applyFinishSessionFromModel,
   applySetRelationEffect,
   applySetPropertyEffect,
   getActionBlockKey,
@@ -49,7 +49,7 @@ export const ACTION_IDS = Object.freeze({
   LINK_TARGETS: 'link_targets',
   VOTE: 'vote',
   CLOSE_CYCLE: 'close_cycle',
-  FINISH_SESSION: 'finish_session'
+  CONCLUDE_PLAY: 'conclude_play'
 });
 
 export const VISIBILITY = Object.freeze({
@@ -261,11 +261,11 @@ export function validateActionDefinition(action) {
     }
   }
 
-  if (action?.id === ACTION_IDS.FINISH_SESSION) {
-    if (action?.effect?.type !== EFFECT_TYPES.FINISH_SESSION) {
+  if (action?.id === ACTION_IDS.CONCLUDE_PLAY) {
+    if (action?.effect?.type !== EFFECT_TYPES.CONCLUDE_PLAY) {
       errors.push({
         code: 'action/invalid-effect-type',
-        message: 'finish_session requires a finish_session effect'
+        message: 'conclude_play requires a conclude_play effect'
       });
     }
   }
@@ -647,19 +647,23 @@ export function applyCloseCycleAction({ session, action }) {
   return applyCloseCycleFromModel({ session, visibility });
 }
 
-// Ejecuta finish_session.
+// Ejecuta conclude_play.
 //
-// Esta accion normalmente vive en poolSpecial. Permite que el final de partida
-// sea visible y ordenable dentro de la misma mecanica de steps.
-export function applyFinishSessionAction({ session, action, input = {} }) {
+// Esta accion normalmente vive en poolSpecial. Permite que la conclusion de la
+// parte jugable sea visible y ordenable dentro de la misma mecanica de steps.
+export function applyConcludePlayAction({ session, action, input = {} }) {
   const visibility = action?.visibility ?? VISIBILITY.ALL;
-  return applyFinishSessionFromModel({
+  return applyConcludePlayFromModel({
     session,
     visibility,
-    victory: input.victory ?? action?.effect?.victory ?? session?.metadata?.pendingVictory ?? null
+    playOutcome:
+      input.playOutcome ??
+      action?.effect?.playOutcome ??
+      session?.playOutcome ??
+      session?.metadata?.pendingPlayOutcome ??
+      null
   });
 }
-
 
 // Ejecuta inspect_role.
 //
@@ -853,30 +857,29 @@ export function resolveCloseCycle(session, action) {
   };
 }
 
-export function resolveFinishSession(session, action, input = {}) {
+export function resolveConcludePlay(session, action, input = {}) {
   const definitionValidation = validateActionDefinition(action);
 
   if (!definitionValidation.ok) {
     return {
       ok: false,
-      actionId: action?.id ?? ACTION_IDS.FINISH_SESSION,
+      actionId: action?.id ?? ACTION_IDS.CONCLUDE_PLAY,
       errors: definitionValidation.errors,
       session,
       result: null
     };
   }
 
-  const applied = applyFinishSessionAction({ session, action, input });
+  const applied = applyConcludePlayAction({ session, action, input });
 
   return {
     ok: true,
-    actionId: action?.id ?? ACTION_IDS.FINISH_SESSION,
+    actionId: action?.id ?? ACTION_IDS.CONCLUDE_PLAY,
     errors: [],
     session: applied.session,
     result: applied.result
   };
 }
-
 
 // Punto de entrada generico para resolver acciones.
 //
@@ -909,8 +912,8 @@ export function resolveAction(session, action, input = {}, context = {}) {
   if (action?.id === ACTION_IDS.CLOSE_CYCLE) {
     return resolveCloseCycle(session, action);
   }
-  if (action?.id === ACTION_IDS.FINISH_SESSION) {
-    return resolveFinishSession(session, action, input);
+  if (action?.id === ACTION_IDS.CONCLUDE_PLAY) {
+    return resolveConcludePlay(session, action, input);
   }
 
   return {

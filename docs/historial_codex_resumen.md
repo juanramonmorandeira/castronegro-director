@@ -24,7 +24,7 @@ La historia del proyecto muestra tres lineas de trabajo que acabaron mezclandose
 
 - Flujo de producto: login, registro, seleccion de sesion, sala de espera, configuracion, match, share y dashboard.
 - Capa visual: sistema de diseno, modales, tarjetas, footbar/topbar, paletas, marcadores y tokens.
-- Motor de juego: seleccion de roles, emparejamiento, distribucion, steps, tokens de accion, efectos nocturnos/diurnos, condiciones de victoria y roles especiales.
+- Motor de juego: seleccion de roles, emparejamiento, distribucion, steps, recursos de accion, efectos nocturnos/diurnos, objectives y roles especiales.
 
 El problema actual viene de que el motor de juego crecio desde la UI de `Session.svelte`: muchas reglas se anadieron directamente en la pantalla, usando tokens visuales, arrays locales y steps antiguas. Despues empezo una migracion hacia `role_instances` y `phase_pools`, pero quedo incompleta.
 
@@ -305,7 +305,7 @@ Reglas recuperadas:
 - `white-claw` no esta activo en la primera noche.
 - En cada noche recurrente alterna una noche activa y una no activa.
 - `white` se levanta y actua con los hombres lobo.
-- A efectos de victoria de hombres lobo, `white` cuenta como hombre lobo.
+- A efectos de objective del grupo tematico, `white` cuenta como parte de ese grupo.
 - `white` no gana si ganan los hombres lobo.
 - `white` gana solo si todos mueren menos el.
 - `white-claw` solo es efectiva contra hombres lobo.
@@ -315,11 +315,11 @@ Decision recuperada:
 
 - White tiene doble pertenencia operacional:
   - Cuenta como lobo para step de manada y paridad.
-  - Tiene condicion de victoria propia y excluyente.
+  - Tiene objective propio y excluyente.
 
 Impacto actual:
 
-- El motor de victoria debe soportar objetivos por rol, no solo alineaciones.
+- El motor de objectives debe soportar objetivos por rol, no solo alignments.
 - `role_instances` necesita poder distinguir `alignment` de `winCondition`.
 - El token `white-claw` debe habilitarse por numero de noche y por estado vivo de `white`.
 
@@ -451,8 +451,8 @@ Fuente:
 
 Relevancia:
 
-- Define una condicion de victoria especial.
-- Obliga a separar alineacion, steps activas y condicion de victoria.
+- Define un objective especial.
+- Obliga a separar alignment, steps activas y objective.
 
 ### 6. Match persistente
 
@@ -552,7 +552,7 @@ Responsabilidad historica acumulada:
 - Detectar objetivos por posicion.
 - Resolver efectos.
 - Registrar log.
-- Calcular victoria.
+- Calcular objectives.
 - Gestionar steps.
 - Gestionar estados de roles especiales.
 
@@ -593,7 +593,7 @@ Riesgo:
 
 - Tienen token de garras.
 - Deben poder marcar victima nocturna.
-- Algunos roles cuentan como lobos para steps/victoria aunque tengan condicion especial.
+- Algunos roles cuentan como grupo tematico para steps/objectives aunque tengan condicion especial.
 
 ### Cursed Wolf Father
 
@@ -605,7 +605,7 @@ Riesgo:
 - Actua con la manada.
 - Tiene `white-claw` en noches alternas, no en primera noche.
 - Cuenta como lobo para paridad.
-- No comparte victoria con lobos.
+- No comparte objective con el grupo tematico.
 - Solo gana si es el unico superviviente.
 - Su garra especial solo debe afectar a lobos.
 
@@ -634,7 +634,7 @@ Riesgo:
 ### Piper
 
 - Encanta jugadores.
-- Tiene condicion de victoria propia si todos los vivos salvo Piper estan encantados.
+- Tiene objective propio si todos los roles inPlay salvo Piper estan encantados.
 
 ## Conclusiones para continuar
 
@@ -644,7 +644,7 @@ Riesgo:
 4. `phase_pools` debe sustituir al avance por `session_phases`.
 5. `tokens` y markers deben ser derivados visuales.
 6. Hay que mover normalizacion de slugs y reglas de step a modulos en `src/lib/`.
-7. Las condiciones de victoria deben ser una funcion de dominio sobre `role_instances`.
+7. Los objectives deben ser una funcion de dominio sobre roles de sesion.
 8. La migracion debe mantener compatibilidad con sesiones antiguas, pero no escribir dos modelos indefinidamente.
 
 ## Proxima accion recomendada
@@ -655,7 +655,7 @@ Crear una primera capa de dominio, sin cambiar UI:
 src/lib/domain/roles.js
 src/lib/domain/phases.js
 src/lib/domain/sessionState.js
-src/lib/domain/victory.js
+src/lib/domain/objectiveModel.js
 ```
 
 Primeras funciones candidatas:
@@ -667,7 +667,7 @@ isMatchComplete(roleInstances)
 hydrateStepPool(poolKey, sessionState)
 getCurrentStepCursor(stepPools)
 advanceStepCursor(stepPools, sessionState)
-evaluateVictory(roleInstances, sessionState)
+checkObjectives(session)
 ```
 
 Despues de eso, `Session.svelte` puede empezar a delegar sin perder comportamiento visible.

@@ -26,8 +26,8 @@ flowchart TD
   Resolver[resolverModel]
   Effect[effectModel]
   Session[Session]
-  Victory[victoryModel]
-  Finished{Finished}
+  Objectives[objectiveModel]
+  PlayOutcome{playOutcome}
   Event[eventModel]
   SpecialStep[poolSpecial step]
   Result[Result]
@@ -57,16 +57,16 @@ flowchart TD
   Session --> Event
   Event -->|reaccion crea step| SpecialStep
   SpecialStep --> StepPools
-  Event --> Victory
-  Victory --> Finished
-  Finished -->|No| CurrentStep
-  Finished -->|Si| SpecialStep
+  Event --> Objectives
+  Objectives --> PlayOutcome
+  PlayOutcome -->|No concluyente| CurrentStep
+  PlayOutcome -->|Concluyente| SpecialStep
 ```
 
 Lectura corta:
 
 ```text
-skin/setup -> buildSession -> roles + groups + stepPools -> step actual -> receta -> restricciones -> accion pura -> resolver -> aplicar efectos -> eventos/reacciones -> victoria -> poolSpecial
+skin/setup -> buildSession -> roles + groups + stepPools -> step actual -> receta -> restricciones -> accion pura -> resolver -> aplicar efectos -> eventos/reacciones -> check_objectives -> poolSpecial
 ```
 
 ## Capas del motor
@@ -95,7 +95,7 @@ skin/setup -> buildSession -> roles + groups + stepPools -> step actual -> recet
 | Resolver | `resolverModel.js` | Decidir que efectos propuestos sobreviven, se bloquean o generan efectos derivados | Escribir cambios en sesion |
 | Efectos | `effectModel.js` | Escribir efectos finales sobre la sesion | Decidir si un efecto debe existir |
 | Eventos | `eventModel.js` | Convertir efectos finales en eventos y activar reacciones declaradas por roles | Ejecutar la receta del step especial |
-| Victoria | `victoryModel.js` | Evaluar si la partida termina | Modificar la sesion |
+| Objectives | `objectiveModel.js` | Evaluar objetivos y playOutcome | Cerrar administrativamente la session |
 | Voto | `voteModel.js` | Contar elecciones y resolver chosen/empate | Aplicar el efecto de la votacion |
 
 ## Construccion de sesion
@@ -347,7 +347,7 @@ aplicador:
 | Una accion queda bloqueada? | `actionModel.js` | `block_action` bloquea `set_in_play(false)` contra un target |
 | Un efecto genera consecuencias globales? | `resolverModel.js` | `linked` propaga `inPlay=false` |
 | Como se escribe un cambio final? | `effectModel.js` | `set_property`, `set_relation` |
-| La partida ha terminado? | `victoryModel.js` | `at_least_remaining`, `single_alignment`, `linked_exclusive_survivors` |
+| La parte jugable ha concluido? | `objectiveModel.js` | `holder_reaches_in_play_parity`, `only_holder_group_remains_in_play`, `no_roles_in_play` |
 
 ## Flujo de efectos
 
@@ -361,10 +361,10 @@ graph LR
   F --> G[eventModel crea eventos]
   G --> H{Hay reacciones}
   H -->|Si| I[Crear steps especiales FIFO]
-  H -->|No| J[evaluateVictory]
+  H -->|No| J[check_objectives]
   I --> J
-  J --> K{Partida finished}
-  K -->|Si| L[Crear step finish_session]
+  J --> K{playOutcome concluyente}
+  K -->|Si| L[Crear step conclude_play]
   K -->|No| M[Continuar]
   L --> N[poolSpecial]
   I --> N
@@ -380,9 +380,10 @@ Debe proponer efectos, resolverlos y aplicar solo efectos finales.
 Regla de `poolSpecial`:
 
 ```text
-Los eventos especiales se registran y crean sus steps. Si evaluateVictory
-declara finished, se anade tambien un step especial finish_session. Al resolver
-poolSpecial, finish_session tiene prioridad sobre los demas steps pendientes.
+Los eventos especiales se registran y crean sus steps. Si check_objectives emite
+un playOutcome concluyente, se anade tambien un step especial conclude_play. Al
+resolver poolSpecial, conclude_play tiene prioridad sobre los demas steps
+pendientes.
 ```
 
 Excepcion actual:
@@ -463,38 +464,69 @@ link_targets solo crea una relacion.
 La relacion linked tiene consecuencias cuando otro efecto la activa.
 ```
 
-## Flujo de victoria
+## Flujo de objectives
 
 ```mermaid
 graph TD
-  A[Efectos consumados] --> B[evaluateVictory]
-  B --> C{Reglas de alignment}
-  C -->|at_least_remaining cumplida| D[Victoria por regla de alignment]
-  C -->|No| E{Linked exclusivo}
-  E -->|Si| F[Victoria linked]
-  E -->|No| G{Una alignment inPlay}
-  G -->|Si| H[Victoria single_alignment]
-  G -->|No| I[ongoing]
+  A[Efectos del pool consumados] --> B[check_objectives]
+  B --> C[Evaluar sessionObjectiveRules]
+  C --> D{Alguna objectiveRule cumplida}
+  D -->|No| E[Parte jugable continua]
+  D -->|Si| F[objectiveResolution]
+  F --> G{playOutcome concluyente}
+  G -->|No| H[Registrar achievedObjectives]
+  G -->|Si| I[Crear step conclude_play en poolSpecial]
+```
+
+Orden objetivo:
+
+1. Evaluar `sessionObjectiveRules`.
+2. Registrar `achievedObjectives` no concluyentes.
+3. Resolver conflictos entre objectives concluyentes.
+4. Emitir `playOutcome` si la parte jugable queda concluida.
+5. Crear `conclude_play` en `poolSpecial` si hay `playOutcome` concluyente.
+
+Regla importante:
+
+```text
+check_objectives se ejecuta al final de cada pool, no despues de cada step
+normal, porque steps posteriores del mismo pool pueden modificar el resultado
+de steps anteriores.
+```
+
+Flujo actual de comprobacion de objetivos:
+
+```mermaid
+graph TD
+  A[Efectos consumados] --> B[checkObjectives]
+  B --> C[Leer sessionObjectiveRules]
+  C --> D[Evaluar cada condition contra su holder]
+  D --> E{Alguna regla cumplida}
+  E -->|No| F[ongoing]
+  E -->|Si| G[fulfilledRules]
+  G --> H{Alguna regla concluyente}
+  H -->|No| I[achievedObjectives]
+  H -->|Si| J[playOutcome]
 ```
 
 Orden actual:
 
-1. Reglas configuradas de alignment.
-2. Victoria especial por `linked`.
-3. Victoria por unica alignment restante.
-4. Partida en curso.
+1. Leer `sessionObjectiveRules`.
+2. Resolver el `holder` de cada regla.
+3. Evaluar la `condition`.
+4. Devolver `fulfilledRules`.
+5. Emitir `achievedObjectives` o `playOutcome` segun `onFulfilled`.
 
-Si el resultado es `finished`, `stepModel` crea un step especial
-`finish_session` en `poolSpecial`. Ese step es quien marca la sesion como
-`finished` y guarda el resultado en `session.metadata.victory`. Al resolverse
-`poolSpecial`, este step tiene prioridad sobre otros eventos pendientes.
+`objectiveModel` no crea reglas implicitas de alignment o linked. Si un
+alignment o relation linked necesita objective, primero debe existir un group
+holder que represente ese sujeto.
 
 ## Pipeline recomendado para nuevas mecanicas
 
 Cuando aparezca una mecanica nueva, seguir este orden:
 
 1. Nombrar la mecanica de forma abstracta.
-2. Decidir si es accion, modificador, efecto, relacion, consecuencia o victoria.
+2. Decidir si es accion, modificador, efecto, relacion, consecuencia u objective.
 3. Escribir un ejemplo minimo de datos.
 4. Implementar la pieza mas pequena posible.
 5. Anadir un test real en `src/lib/domain/__test__/domain.test.js`.
@@ -510,8 +542,8 @@ Cuando aparezca una mecanica nueva, seguir este orden:
 | No puede bloquear al mismo objetivo dos ciclos seguidos | restriccion `no_repeat_target` | `constraintModel.js` |
 | Cupido enlaza dos jugadores | accion `link_targets` + efecto `set_relation` | `actionModel.js` + `effectModel.js` |
 | Si un linked sale de juego, el otro tambien | consecuencia sistemica | `resolverModel.js` |
-| Si solo quedan linked de alignments distintos, ganan | victoria especial | `victoryModel.js` |
-| Una alignment gana si alcanza al resto | regla de alignment `at_least_remaining` | `victoryModel.js` |
+| Si solo quedan linked de alignments distintos, cumplen objective especial | objectiveRule sobre group linked | `sessionObjectiveRules` |
+| Un group de alignment alcanza al resto | `holder_reaches_in_play_parity` | `sessionObjectiveRules` |
 | Un jugador no puede votar contra su linked | restriccion de voto | `step.voteRules.relationRestrictions` |
 
 ## Modelo de voto
@@ -777,7 +809,7 @@ probablemente pertenece a `effectModel.js`.
 Si responde a:
 
 ```text
-ha terminado la partida?
+se ha cumplido un objetivo concluyente?
 ```
 
-probablemente pertenece a `victoryModel.js`.
+probablemente pertenece a `objectiveModel.js`.

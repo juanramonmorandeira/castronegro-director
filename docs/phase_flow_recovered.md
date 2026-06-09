@@ -39,7 +39,7 @@ flowchart TD
   D --> E[resolver de accion]
   E --> F[effects]
   F --> G[session actualizada]
-  G --> H[evaluateVictory]
+  G --> H[checkObjectives]
   H --> I[advanceStepCursor]
 ```
 
@@ -53,7 +53,7 @@ que step viene despues?
 que pool viene despues?
 ```
 
-No debe contar votos, aplicar efectos, evaluar linked ni decidir victoria.
+No debe contar votos, aplicar efectos, evaluar linked ni decidir objectives.
 
 ### `actionModel.js`
 
@@ -65,7 +65,7 @@ Ejemplo:
 stepVoteOutOfPlay -> obsolete_composite_vote_recipe recipe
 ```
 
-### `victoryModel.js`
+### `objectiveModel.js`
 
 Se consulta despues de consumar efectos relevantes.
 
@@ -74,7 +74,7 @@ Ejemplo:
 ```text
 obsolete_composite_vote_recipe = vote + obsolete_followup_action(set_in_play false)
 linked puede propagar inPlay=false
-victoryModel comprueba si termino la partida
+objectiveModel comprueba si hay un playOutcome concluyente
 ```
 
 ## Estructura recuperada de pools
@@ -112,7 +112,7 @@ flowchart TD
 Con `poolSpecial` disponible para interrupciones:
 
 ```text
-victoria, acciones finales, efectos retardados, eventos especiales
+objectives, acciones finales, efectos retardados, eventos especiales
 ```
 
 ## Pool Each Day
@@ -154,9 +154,9 @@ poolExposed: [
     }
   },
   {
-    key: 'stepEvaluateVictory',
+    key: 'stepCheckObjectives',
     status: 'enabled',
-    actionId: 'evaluate_victory'
+    actionId: 'check_objectives'
   }
 ]
 ```
@@ -259,5 +259,5 @@ todos los inPlay votan
 no abstencion
 no votar a linked
 empate sin efecto
-ganador -> inPlay=false
+chosen -> inPlay=false
 ```

@@ -283,7 +283,7 @@ Al terminar:
 
 - `status` debe ser `finished`.
 - `phase_pools.poolCurrent` debe apuntar a `poolSpecialEvents` o a una step final equivalente.
-- Debe existir un resultado de victoria persistido.
+- Debe existir un playOutcome persistido.
 
 ## Plan de migracion recomendado
 
@@ -301,5 +301,5 @@ Al terminar:
 - Definir si Actor y Ladron cambian `name` de la instancia o si guardan una transformacion temporal.
 - Definir si Sheriff, Medium y Town Crier son flags de `role_instances` o entidades honorificas separadas.
 - Definir como se persistira la posicion visual de tokens: dentro de `tokens`, en local storage o en un subdocumento.
-- Definir resultado de victoria: campo unico recomendado `victory_result`.
+- Definir resultado de objectives: campo unico recomendado `playOutcome`.
 - Definir una funcion pura para `hydrateStepPool(poolKey, sessionState)` que pueda probarse sin Svelte ni Firebase.

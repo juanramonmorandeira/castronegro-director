@@ -11,7 +11,7 @@
 // -----------------------------------------------------------------------------
 
 import { createRelation } from './relationDefinition.js';
-import { SESSION_STATUSES, normalizeId } from './sessionModel.js';
+import { normalizeId } from './sessionModel.js';
 
 export const EFFECT_TYPES = Object.freeze({
   REVEAL_PROPERTY: 'reveal_property',
@@ -19,7 +19,7 @@ export const EFFECT_TYPES = Object.freeze({
   BLOCK_ACTION: 'block_action',
   SET_RELATION: 'set_relation',
   CLOSE_CYCLE: 'close_cycle',
-  FINISH_SESSION: 'finish_session'
+  CONCLUDE_PLAY: 'conclude_play'
 });
 
 // Devuelve el ciclo actual de la sesion.
@@ -243,25 +243,28 @@ export function applyCloseCycle({ session, visibility = 'all' } = {}) {
   };
 }
 
-// Cierra la sesion con un resultado de victoria ya calculado.
+// Concluye la parte jugable con un playOutcome ya calculado.
 //
-// Esta escritura vive como efecto para que el fin de partida sea un step
+// Esta escritura vive como efecto para que la conclusion jugable sea un step
 // especial ejecutable, no un corte silencioso del motor antes de poolSpecial.
-export function applyFinishSession({ session, victory = null, visibility = 'all' } = {}) {
+//
+// No cerramos administrativamente la session: esa decision pertenece al creador
+// o al flujo de aplicacion. Guardamos playOutcome como estado mecanico.
+export function applyConcludePlay({ session, playOutcome = null, visibility = 'all' } = {}) {
   return {
     session: {
       ...session,
-      status: SESSION_STATUSES.FINISHED,
       metadata: {
         ...(session?.metadata ?? {}),
-        victory
-      }
+        playOutcome
+      },
+      playOutcome
     },
     result: {
-      type: EFFECT_TYPES.FINISH_SESSION,
+      type: EFFECT_TYPES.CONCLUDE_PLAY,
       visibility,
       finalEffects: [],
-      victory
+      playOutcome
     }
   };
 }

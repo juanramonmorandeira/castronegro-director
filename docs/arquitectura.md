@@ -65,7 +65,7 @@ stateDiagram-v2
     se muestra aquí antes del check final.
   end note
   ready --> in_progress: startGame()
-  in_progress --> finished: endGame(winner)
+  in_progress --> finished: concludePlay(playOutcome)
   in_progress --> paused: pauseGame()
   paused --> in_progress: resume()
   draft --> cancelled

@@ -150,7 +150,7 @@ export {
   applySetPropertyEffect,
   applySetRelationEffect,
   applyCloseCycle,
-  applyFinishSession
+  applyConcludePlay
 } from './effectModel.js';
 export {
   EVENT_TYPES,
@@ -160,8 +160,8 @@ export {
   getTriggeredReactions,
   resolveEventResponses,
   applyEventResponses,
-  createFinishSessionStep,
-  appendFinishSessionEventResponse,
+  createConcludePlayStep,
+  appendConcludePlayEventResponse,
   processActionResultEvents
 } from './eventModel.js';
 export { resolveProposedEffects } from './resolverModel.js';
@@ -176,20 +176,14 @@ export {
 } from './actionModel.js';
 
 export {
-  VICTORY_STATUSES,
-  VICTORY_TYPES,
-  VICTORY_RULE_TYPES,
-  getInPlayRoles,
-  getRoleAlignmentId,
-  getAlignmentIds,
-  getAlignmentVictoryRules,
-  getInPlayRolesByAlignment,
-  getOngoingVictoryResult,
-  evaluateAlignmentVictoryRules,
-  evaluateLinkedVictory,
-  evaluateSingleAlignmentVictory,
-  evaluateVictory
-} from './victoryModel.js';
+  OBJECTIVE_EVALUATION_STATUSES,
+  OBJECTIVE_CONDITIONS,
+  getSessionObjectiveRules,
+  createOngoingObjectiveEvaluation,
+  evaluateObjectiveRule,
+  evaluateSessionObjectiveRules,
+  checkObjectives
+} from './objectiveModel.js';
 export {
   VOTE_OUTCOME_TYPES,
   VOTE_ABSTAIN_RESOLUTION_TYPES,

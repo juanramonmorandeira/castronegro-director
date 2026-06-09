@@ -24,7 +24,7 @@ export const RECIPE_KEYS = Object.freeze({
   ONE_SHOT_SET_OUT_OF_PLAY: 'one_shot_set_out_of_play',
   RESTORE_RECENT_OUT_OF_PLAY: 'restore_recent_out_of_play',
   CLOSE_CYCLE: 'close_cycle',
-  FINISH_SESSION: 'finish_session'
+  CONCLUDE_PLAY: 'conclude_play'
 });
 
 export const RECIPE_CATALOG = Object.freeze({
@@ -194,17 +194,17 @@ export const RECIPE_CATALOG = Object.freeze({
     visibility: VISIBILITY.ALL
   },
 
-  [RECIPE_KEYS.FINISH_SESSION]: {
-    key: RECIPE_KEYS.FINISH_SESSION,
+  [RECIPE_KEYS.CONCLUDE_PLAY]: {
+    key: RECIPE_KEYS.CONCLUDE_PLAY,
     optional: false,
-    id: ACTION_IDS.FINISH_SESSION,
+    id: ACTION_IDS.CONCLUDE_PLAY,
     actor: { type: 'system' },
     target: {
       type: 'session',
       count: 0
     },
     effect: {
-      type: EFFECT_TYPES.FINISH_SESSION
+      type: EFFECT_TYPES.CONCLUDE_PLAY
     },
     visibility: VISIBILITY.ALL
   }

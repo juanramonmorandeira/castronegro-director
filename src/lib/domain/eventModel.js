@@ -225,7 +225,7 @@ export function processActionResultEvents({
   };
 }
 
-export function createFinishSessionStep({ session = {}, victory = null } = {}) {
+export function createConcludePlayStep({ session = {}, playOutcome = null } = {}) {
   const poolKey = POOL_KEYS.POOL_SPECIAL;
 
   return createStep({
@@ -234,32 +234,32 @@ export function createFinishSessionStep({ session = {}, victory = null } = {}) {
     status: STEP_STATUSES.ENABLED,
     actorIds: [],
     actions: [
-      getCatalogRecipe(RECIPE_KEYS.FINISH_SESSION, {
+      getCatalogRecipe(RECIPE_KEYS.CONCLUDE_PLAY, {
         effect: {
-          type: EFFECT_TYPES.FINISH_SESSION,
-          victory
+          type: EFFECT_TYPES.CONCLUDE_PLAY,
+          playOutcome
         }
       })
     ],
     metadata: {
       source: {
         type: 'event',
-        id: 'victory_finished',
+        id: 'play_concluded',
         metadata: {
-          victory
+          playOutcome
         }
       },
-      specialPriority: SPECIAL_STEP_PRIORITIES.FINISH_SESSION
+      specialPriority: SPECIAL_STEP_PRIORITIES.CONCLUDE_PLAY
     }
   });
 }
 
-export function appendFinishSessionEventResponse({ session = {}, victory = null } = {}) {
+export function appendConcludePlayEventResponse({ session = {}, playOutcome = null } = {}) {
   const response = {
     type: EVENT_RESPONSE_TYPES.CREATE_STEP,
     poolKey: POOL_KEYS.POOL_SPECIAL,
-    step: createFinishSessionStep({ session, victory }),
-    reason: 'victory_finished'
+    step: createConcludePlayStep({ session, playOutcome }),
+    reason: 'play_concluded'
   };
 
   return {

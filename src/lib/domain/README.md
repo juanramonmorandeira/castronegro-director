@@ -84,13 +84,13 @@ Ejemplos:
 - `effectModel.js`: aplica efectos finales a la sesion.
 - `eventModel.js`: convierte efectos finales en eventos y crea respuestas como
   steps especiales.
-- `victoryModel.js`: evalua condiciones de victoria.
+- `objectiveModel.js`: evalua objetivos y conclusion de la parte jugable.
 - `voteModel.js`: cuenta votos.
 
 ## Flujo principal
 
 ```text
-Skin o configuracion
+ruleSet + configuration + skin + jugadores/asientos
 -> Role/Group/Step catalog
 -> buildSession
 -> buildPools
@@ -130,10 +130,10 @@ primer caso implementado es `role_reactive`: cuando ese rol recibe un cambio
 real a `inPlay=false`, se crea un step en `poolSpecial` para que pueda ejecutar
 una respuesta.
 
-Despues de insertar respuestas en `poolSpecial`, `stepModel.js` evalua victoria.
-Si la partida queda `finished`, se anade tambien un step especial
-`finish_session`. Al resolver `poolSpecial`, ese step de cierre tiene prioridad
-sobre los demas eventos pendientes.
+Despues de insertar respuestas en `poolSpecial`, el motor debe ejecutar
+`check_objectives` al final de cada pool. Si se emite un `playOutcome`
+concluyente, se anade un step especial `conclude_play`. Ese step concluye la
+parte jugable, pero no cierra administrativamente la session.
 
 `vote` es el primer modelo de decision multi-actor:
 
@@ -175,4 +175,7 @@ La sesion guarda:
 
 - `docs/engine_scope.md`: limites y responsabilidades del motor.
 - `docs/engine_flow_map.md`: mapa visual del flujo.
+- `docs/skin_ruleset_session.md`: separacion entre presentacion, reglas, configuracion y partida viva.
+- `docs/domain_glossary.md`: diccionario de terminos finales del nuevo nucleo.
+- `docs/objectiveDefinition.md`: objetivos, achievedObjectives, playOutcome y conclude_play.
 - `src/lib/domain/README_RULES.md`: lenguaje mecanico de reglas.

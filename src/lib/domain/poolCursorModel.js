@@ -37,8 +37,8 @@ export function getPoolSteps(stepPools, poolKey = stepPools?.poolCurrent) {
   return stepPools.pools?.[poolKey] ?? [];
 }
 
-function isFinishSessionSpecialStep(step = {}) {
-  return step?.metadata?.specialPriority === SPECIAL_STEP_PRIORITIES.FINISH_SESSION;
+function isConcludePlaySpecialStep(step = {}) {
+  return step?.metadata?.specialPriority === SPECIAL_STEP_PRIORITIES.CONCLUDE_PLAY;
 }
 
 // Devuelve el step actual segun el cursor.
@@ -54,7 +54,7 @@ export function getCurrentStepCursor(stepPools) {
     : 0;
   const priorityIndex =
     stepPools.poolCurrent === POOL_KEYS.POOL_SPECIAL
-      ? steps.findIndex((step) => isStepRunnable(step) && isFinishSessionSpecialStep(step))
+      ? steps.findIndex((step) => isStepRunnable(step) && isConcludePlaySpecialStep(step))
       : -1;
   const resolvedIndex = priorityIndex >= 0 ? priorityIndex : index;
   const step = steps[resolvedIndex] ?? null;
