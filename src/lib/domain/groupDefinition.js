@@ -17,26 +17,35 @@ import { createStep } from './stepDefinition.js';
 
 export const GROUP_MEMBERSHIP_RULE_TYPES = Object.freeze({
   ALIGNMENT: 'alignment',
-  RELATION: 'relation',
   FLAG: 'flag',
   ALL_ROLES: 'all_roles',
   CUSTOM: 'custom'
 });
 
+export const GROUP_TYPES = Object.freeze({
+  LINKED: 'linked'
+});
+
 export function createGroup({
   id = null,
-  key,
+  key = null,
+  type = null,
+  active = true,
+  createdCycleId = null,
+  sourceActionId = null,
   membershipRule = null,
   roleIds = [],
+  groupRules = [],
   stepDefinitions = [],
   metadata = {}
 } = {}) {
-  const normalizedKey = normalizeId(key);
+  const normalizedType = type ? normalizeId(type) : null;
+  const normalizedRoleIds = [...new Set((roleIds ?? []).filter(Boolean))];
+  const normalizedKey = normalizeId(key ?? id ?? normalizedType ?? 'group');
   const normalizedMembershipRule = membershipRule
     ? {
         type: normalizeId(membershipRule.type ?? GROUP_MEMBERSHIP_RULE_TYPES.CUSTOM),
         alignmentId: membershipRule.alignmentId ? normalizeId(membershipRule.alignmentId) : null,
-        relationType: membershipRule.relationType ? normalizeId(membershipRule.relationType) : null,
         flagKey: membershipRule.flagKey ? normalizeId(membershipRule.flagKey) : null,
         metadata: { ...(membershipRule.metadata ?? {}) }
       }
@@ -45,8 +54,13 @@ export function createGroup({
   return {
     id: id ? normalizeId(id) : normalizedKey,
     key: normalizedKey,
+    ...(normalizedType ? { type: normalizedType } : {}),
+    active: active !== false,
+    createdCycleId,
+    sourceActionId,
     ...(normalizedMembershipRule ? { membershipRule: normalizedMembershipRule } : {}),
-    roleIds: [...new Set((roleIds ?? []).filter(Boolean))],
+    roleIds: normalizedRoleIds,
+    groupRules: (groupRules ?? []).map((rule) => ({ ...rule })),
     stepDefinitions: (stepDefinitions ?? []).map(createStep),
     metadata: { ...metadata }
   };

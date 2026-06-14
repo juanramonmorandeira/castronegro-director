@@ -20,7 +20,7 @@ import { ACTION_IDS, VISIBILITY, resolveAction } from './actionModel.js';
 import { appendConcludePlayEventResponse, processActionResultEvents } from './eventModel.js';
 import { SPECIAL_STEP_PRIORITIES, normalizeId } from './sessionModel.js';
 import { OBJECTIVE_EVALUATION_STATUSES, checkObjectives } from './objectiveModel.js';
-import { VOTE_OUTCOME_TYPES } from './voteModel.js';
+import { SELECTION_OUTCOME_TYPES } from './selectionModel.js';
 
 export const STEP_ERRORS = Object.freeze({
   MISSING_SESSION: 'step/missing-session',
@@ -264,30 +264,30 @@ export function canRequesterCompleteStep(step, requestedBy) {
   return completion.allowedRequesters.includes(requestedBy);
 }
 
-function getStepVoteRules(step = {}) {
-  return step?.voteRules ?? null;
+function getStepSelectionRules(step = {}) {
+  return step?.selectionRules ?? null;
 }
 
-function hasStepVoteRules(step = {}) {
-  return !!getStepVoteRules(step);
+function hasStepSelectionRules(step = {}) {
+  return !!getStepSelectionRules(step);
 }
 
-function getVoteInputForStep(step = {}, input = {}) {
-  const voteRules = getStepVoteRules(step) ?? {};
+function getSelectionInputForStep(step = {}, input = {}) {
+  const selectionRules = getStepSelectionRules(step) ?? {};
 
   return {
-    actorIds: input.actorIds ?? step.actorIds ?? [],
-    votes: input.votes ?? [],
-    voteRules: {
-      ...voteRules,
-      candidateIds: input.candidateIds ?? voteRules.candidateIds ?? null
+    selectorIds: input.selectorIds ?? input.actorIds ?? step.actorIds ?? [],
+    selections: input.selections ?? [],
+    selectionRules: {
+      ...selectionRules,
+      candidateIds: input.candidateIds ?? selectionRules.candidateIds ?? null
     },
     roundType: input.roundType,
     roundIndex: input.roundIndex ?? 0
   };
 }
 
-function getRecipeInputFromVote({ step = {}, input = {}, chosenId = null }) {
+function getRecipeInputFromSelection({ step = {}, input = {}, chosenId = null }) {
   return {
     ...input,
     actorIds: input.actorIds ?? step.actorIds ?? [],
@@ -295,11 +295,11 @@ function getRecipeInputFromVote({ step = {}, input = {}, chosenId = null }) {
   };
 }
 
-function mergeVoteAndRecipeResult({ voteResult = null, recipeResult = null } = {}) {
+function mergeSelectionAndRecipeResult({ selectionResult = null, recipeResult = null } = {}) {
   return {
     ...(recipeResult ?? {}),
-    vote: voteResult?.vote ?? null,
-    voteActionId: voteResult?.actionId ?? null,
+    selection: selectionResult?.selection ?? null,
+    selectionActionId: selectionResult?.actionId ?? null,
     proposedEffects: recipeResult?.proposedEffects ?? [],
     finalEffects: recipeResult?.finalEffects ?? [],
     blockedActions: recipeResult?.blockedActions ?? [],
@@ -307,28 +307,28 @@ function mergeVoteAndRecipeResult({ voteResult = null, recipeResult = null } = {
   };
 }
 
-function resolveVoteStepRecipe(session, step, recipe, input = {}, context = {}) {
-  const voteResolution = resolveAction(
+function resolveSelectionStepRecipe(session, step, recipe, input = {}, context = {}) {
+  const selectionResolution = resolveAction(
     session,
     {
-      id: ACTION_IDS.VOTE,
+      id: ACTION_IDS.SELECT,
       visibility: recipe?.visibility ?? VISIBILITY.ALL
     },
-    getVoteInputForStep(step, input),
+    getSelectionInputForStep(step, input),
     context
   );
 
-  if (!voteResolution.ok) return voteResolution;
+  if (!selectionResolution.ok) return selectionResolution;
 
-  const chosenId = voteResolution.result?.vote?.chosenId ?? null;
-  if (voteResolution.result?.vote?.type !== VOTE_OUTCOME_TYPES.CHOSEN || !chosenId) {
-    return voteResolution;
+  const chosenId = selectionResolution.result?.selection?.chosenId ?? null;
+  if (selectionResolution.result?.selection?.type !== SELECTION_OUTCOME_TYPES.CHOSEN || !chosenId) {
+    return selectionResolution;
   }
 
   const recipeResolution = resolveRecipe(
-    voteResolution.session,
+    selectionResolution.session,
     recipe,
-    getRecipeInputFromVote({ step, input, chosenId }),
+    getRecipeInputFromSelection({ step, input, chosenId }),
     context
   );
 
@@ -337,15 +337,15 @@ function resolveVoteStepRecipe(session, step, recipe, input = {}, context = {}) 
       ...recipeResolution,
       result: {
         ...(recipeResolution.result ?? {}),
-        vote: voteResolution.result?.vote ?? null
+        selection: selectionResolution.result?.selection ?? null
       }
     };
   }
 
   return {
     ...recipeResolution,
-    result: mergeVoteAndRecipeResult({
-      voteResult: voteResolution.result,
+    result: mergeSelectionAndRecipeResult({
+      selectionResult: selectionResolution.result,
       recipeResult: recipeResolution.result
     })
   };
@@ -646,8 +646,8 @@ export function resolveCurrentStep(session, input = {}, options = {}) {
     stepKey: stepValidation.currentStep.stepKey,
     actionKey: stepValidation.actionKey
   };
-  const actionResolution = hasStepVoteRules(stepValidation.currentStep.step)
-    ? resolveVoteStepRecipe(
+  const actionResolution = hasStepSelectionRules(stepValidation.currentStep.step)
+    ? resolveSelectionStepRecipe(
         session,
         stepValidation.currentStep.step,
         stepValidation.action,

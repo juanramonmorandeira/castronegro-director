@@ -42,7 +42,7 @@ createSessionRole({
 ```
 
 Un `Role` es la unidad jugable. Las acciones, relaciones, filtros,
-votos y efectos apuntan a roles, no a roles abstractos.
+selecciones y efectos apuntan a roles, no a roles abstractos.
 
 Regla practica:
 
@@ -131,7 +131,7 @@ Ejemplos actuales:
 - `set_in_play`
 - `block_action`
 - `link_targets`
-- `vote`
+- `select`
 - `close_cycle`
 
 ### Effect
@@ -142,18 +142,18 @@ Ejemplos actuales:
 
 - `reveal_property`
 - `set_property`
-- `set_relation`
+- `set_group`
 - `block_action`
 - `close_cycle`
 
-### Relation
+### Group
 
-Estado compartido entre roles. Vive en `session.relations`.
+Coleccion mecanica de roles. Vive en `session.groups`.
 
 Ejemplo:
 
 ```js
-createRelation({
+createGroup({
   type: 'linked',
   roleIds: ['role_a-0', 'role_b-0']
 })

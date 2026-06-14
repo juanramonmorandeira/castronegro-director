@@ -9,7 +9,8 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
 - Definir inventario de `primaryElements`.
 - Verificar si el codigo actual se ajusta a esa jerarquia o si hay que mover
   responsabilidades.
-- Revisar como encajan `vote` y `voteRules` dentro de ruleSet.
+- Migrar `selectionModel`/`selectionRules` hacia `selectionModel` con `candidateRules` y
+  `selectionRules`.
 
 ## ruleSet
 
@@ -79,7 +80,7 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
 ## objective
 
 - Completar la migracion de UI y referencias antiguas hacia `objective`.
-- Implementar `sessionObjectiveRules`.
+- Migrar `session.sessionObjectiveRules` hacia `session.objectiveRules`.
 - Completar persistencia de `achievedObjectives`.
 - Completar resolucion de conflictos entre objectiveRules concluyentes.
 - Eliminar cualquier import antiguo que no use `objectiveModel.js`.

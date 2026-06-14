@@ -13,8 +13,8 @@
 import { ACTION_IDS, VISIBILITY } from './actionModel.js';
 import { CONSTRAINT_TYPES, CONSTRAINT_WINDOWS, createConstraint } from './constraintModel.js';
 import { EFFECT_TYPES } from './effectModel.js';
+import { GROUP_TYPES } from './groupDefinition.js';
 import { createRecipe } from './recipeModel.js';
-import { RELATION_TYPES } from './sessionModel.js';
 
 export const RECIPE_KEYS = Object.freeze({
   INSPECT_ROLE: 'inspect_role',
@@ -171,9 +171,9 @@ export const RECIPE_CATALOG = Object.freeze({
       filters: ['in_play', 'distinct']
     },
     effect: {
-      type: EFFECT_TYPES.SET_RELATION,
-      targetType: 'relation',
-      relationType: RELATION_TYPES.LINKED,
+      type: EFFECT_TYPES.SET_GROUP,
+      targetType: 'group',
+      groupType: GROUP_TYPES.LINKED,
       active: true
     },
     visibility: VISIBILITY.STORYTELLER_ONLY

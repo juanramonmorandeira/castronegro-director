@@ -13,17 +13,12 @@ export {
   STEP_STATUSES,
   POOL_KEYS,
   DEFAULT_POOL_ORDER,
-  RELATION_TYPES,
   SPECIAL_STEP_PRIORITIES,
-  normalizeId,
-  findRelationsForRole,
-  hasRelation,
-  getRelatedRoleIds
+  normalizeId
 } from './sessionModel.js';
 
 export { createPlayer } from './playerDefinition.js';
 export { createActionToken } from './actionTokenDefinition.js';
-export { createRelation } from './relationDefinition.js';
 export {
   CONFIGURABLE_STEP_ORDER_POOLS,
   POOL_DEFINITION_ORDER_FIELD,
@@ -39,7 +34,6 @@ export {
   validateGroups,
   validateUniqueIds,
   validateRoles,
-  validateRelations,
   validateSession
 } from './sessionValidation.js';
 
@@ -65,15 +59,19 @@ export {
   getCoreRoleCatalog
 } from './roleCatalog.js';
 export {
+  GROUP_TYPES,
   GROUP_MEMBERSHIP_RULE_TYPES,
   createGroup
 } from './groupDefinition.js';
 export {
   addRoleToGroup,
   buildInitialGroups,
+  findGroupsForRole,
   getGroup,
+  getGroupMemberRoleIds,
   getGroupRoleIds,
   getGroupRoles,
+  hasGroupMembership,
   removeRoleFromGroup,
   resolveMembershipRuleRoleIds
 } from './groupModel.js';
@@ -148,7 +146,7 @@ export {
   hasActionBlock,
   clearCycleFlags,
   applySetPropertyEffect,
-  applySetRelationEffect,
+  applySetGroupEffect,
   applyCloseCycle,
   applyConcludePlay
 } from './effectModel.js';
@@ -185,24 +183,26 @@ export {
   checkObjectives
 } from './objectiveModel.js';
 export {
-  VOTE_OUTCOME_TYPES,
-  VOTE_ABSTAIN_RESOLUTION_TYPES,
-  VOTE_ABSTAIN_RULES,
-  VOTE_UNANIMOUS_RULES,
-  VOTE_NULL_RULES,
-  VOTE_RUNOFF_RULES,
-  VOTE_SUPPORT_BASES,
-  VOTE_SUPPORT_THRESHOLD_TYPES,
-  VOTE_TIE_RULES,
-  VOTE_ROUND_TYPES,
-  VOTE_REQUIRED_RULES,
-  VOTE_RESTRICTION_TYPES,
-  createVote,
+  SELECTION_OUTCOME_TYPES,
+  SELECTION_ABSTAIN_RESOLUTION_TYPES,
+  SELECTION_ABSTAIN_RULES,
+  SELECTION_UNANIMOUS_RULES,
+  SELECTION_NULL_RULES,
+  SELECTION_RUNOFF_RULES,
+  SELECTION_SUPPORT_BASES,
+  SELECTION_SUPPORT_THRESHOLD_TYPES,
+  SELECTION_TIE_RULES,
+  SELECTION_ROUND_TYPES,
+  SELECTION_REQUIRED_RULES,
+  SELECTION_RESTRICTION_TYPES,
+  CANDIDATE_RULE_TYPES,
+  createSelection,
   createAbstainResolution,
-  createVoteRules,
+  createSelectionRules,
   createSupportThreshold,
-  getDefaultVoteCandidateIds,
-  validateVotes,
-  tallyVotes,
-  resolveVoteRound
-} from './voteModel.js';
+  getDefaultSelectionCandidateIds,
+  resolveCandidateIds,
+  validateSelections,
+  tallySelections,
+  resolveSelectionRound
+} from './selectionModel.js';

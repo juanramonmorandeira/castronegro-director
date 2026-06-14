@@ -49,7 +49,7 @@ poolEachDay -> stepVoteOutOfPlay -> obsolete_composite_vote_recipe -> vote + obs
 | `poolFirstNight` | `phaseCupid` | `stepLinkTargets` | acordado |
 | `poolFirstNight` | `phaseSeer` | `stepInspectRole` | acordado |
 | `poolFirstNight` | `phaseFox` | `stepInspectGroup` | candidato |
-| `poolFirstNight` | `phaseLovers` | `stepRevealRelationToMembers` | candidato |
+| `poolFirstNight` | `phaseLovers` | `stepRevealGroupMembers` | candidato |
 | `poolFirstNight` | `phaseJudgeSignal` | `stepSetTriggerSignal` | candidato |
 | `poolFirstNight` | `phaseSisters` | `stepRevealGroupMembers` | candidato |
 | `poolFirstNight` | `phaseBrothers` | `stepRevealGroupMembers` | candidato |

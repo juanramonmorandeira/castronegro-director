@@ -6,7 +6,8 @@
 // de step. El constructor unico sigue siendo createStep.
 // -----------------------------------------------------------------------------
 
-import { RELATION_TYPES, STEP_STATUSES } from './sessionModel.js';
+import { GROUP_TYPES } from './groupDefinition.js';
+import { STEP_STATUSES } from './sessionModel.js';
 import { createStep } from './stepDefinition.js';
 import {
   STEP_COMPLETION_MODES,
@@ -15,13 +16,13 @@ import {
 } from './stepModel.js';
 import { getCatalogRecipe, RECIPE_KEYS } from './recipeCatalog.js';
 import {
-  VOTE_ABSTAIN_RULES,
-  VOTE_REQUIRED_RULES,
-  VOTE_RESTRICTION_TYPES,
-  VOTE_TIE_RULES,
-  VOTE_UNANIMOUS_RULES,
-  createVoteRules
-} from './voteModel.js';
+  SELECTION_ABSTAIN_RULES,
+  SELECTION_REQUIRED_RULES,
+  SELECTION_RESTRICTION_TYPES,
+  SELECTION_TIE_RULES,
+  SELECTION_UNANIMOUS_RULES,
+  createSelectionRules
+} from './selectionModel.js';
 
 export const STEP_CATALOG_IDS = Object.freeze({
   ROLE_INSPECTS: 'role_inspects',
@@ -30,7 +31,7 @@ export const STEP_CATALOG_IDS = Object.freeze({
   ROLE_IN_PLAY_CONTROL: 'role_in_play_control',
   ROLE_REACTIVE_RESPONSE: 'role_reactive_response',
   GROUP_SET_OUT_OF_PLAY: 'group_set_out_of_play',
-  GROUP_VOTE: 'group_vote',
+  GROUP_SELECTION: 'group_selection',
   SYSTEM_CLOSES_CYCLE: 'system_closes_cycle'
 });
 
@@ -120,20 +121,20 @@ export const STEP_CATALOG = Object.freeze({
     }
   }),
 
-  [STEP_CATALOG_IDS.GROUP_VOTE]: createStep({
+  [STEP_CATALOG_IDS.GROUP_SELECTION]: createStep({
     key: STEP_KEYS.STEP_05,
     status: STEP_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
-    voteRules: createVoteRules({
-      required: VOTE_REQUIRED_RULES.ALL_ACTORS,
-      abstain: VOTE_ABSTAIN_RULES.NOT_ALLOWED,
-      unanimous: VOTE_UNANIMOUS_RULES.NOT_REQUIRED,
-      tie: VOTE_TIE_RULES.NULL_ON_TIE,
-      relationRestrictions: [
+    selectionRules: createSelectionRules({
+      required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
+      abstain: SELECTION_ABSTAIN_RULES.NOT_ALLOWED,
+      unanimous: SELECTION_UNANIMOUS_RULES.NOT_REQUIRED,
+      tie: SELECTION_TIE_RULES.NULL_ON_TIE,
+      groupRestrictions: [
         {
-          type: VOTE_RESTRICTION_TYPES.EXCLUDE_RELATED_TARGET,
-          relationType: RELATION_TYPES.LINKED
+          type: SELECTION_RESTRICTION_TYPES.EXCLUDE_GROUP_MEMBER_CANDIDATE,
+          groupType: GROUP_TYPES.LINKED
         }
       ]
     }),
@@ -147,7 +148,7 @@ export const STEP_CATALOG = Object.freeze({
       })
     ],
     metadata: {
-      catalogId: STEP_CATALOG_IDS.GROUP_VOTE
+      catalogId: STEP_CATALOG_IDS.GROUP_SELECTION
     }
   }),
 
@@ -186,9 +187,9 @@ export function getCatalogStep(stepCatalogId, overrides = {}) {
     completion: overrides.completion
       ? cloneCatalogValue(overrides.completion)
       : cloneCatalogValue(baseStep.completion),
-    voteRules: overrides.voteRules
-      ? cloneCatalogValue(overrides.voteRules)
-      : cloneCatalogValue(baseStep.voteRules),
+    selectionRules: overrides.selectionRules
+      ? cloneCatalogValue(overrides.selectionRules)
+      : cloneCatalogValue(baseStep.selectionRules),
     actions: overrides.actions
       ? cloneCatalogValue(overrides.actions)
       : cloneCatalogValue(baseStep.actions),

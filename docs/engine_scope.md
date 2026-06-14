@@ -80,7 +80,7 @@ Ejemplos actuales:
 - `reveal_property`
 - `set_property`
 - `block_action`
-- `set_relation`
+- `set_group`
 - `close_cycle`
 
 El aplicador de efectos escribe datos, pero no decide si una accion era valida.
@@ -92,11 +92,11 @@ La sesion es el estado vivo de la partida:
 - `players`
 - `roles`
 - `groups`
-- `relations`
+- `groups`
 - `stepPools`
 - `actionHistory`
 - `stepHistory`
-- `sessionObjectiveRules`
+- `objectiveRules`
 - `achievedObjectives`
 - `playOutcome`
 - `settings`
@@ -133,7 +133,7 @@ Preferimos nombres mecanicos y anonimos:
 
 ```text
 set_property inPlay false
-set_relation linked true
+set_group linked true
 block_action set_in_play false
 ```
 

@@ -215,20 +215,20 @@ Forma candidata:
 
 ```js
 {
-  type: 'exclude_related_target',
-  relationType: 'linked'
+  type: 'exclude_group_member_target',
+  groupType: 'linked'
 }
 ```
 
 El validador comprobaria:
 
 ```text
-si actorRoleInstanceId esta linked con targetRoleInstanceId
+si actorRoleInstanceId comparte group linked con targetRoleInstanceId
 y la receta es obsolete_composite_vote_recipe
 entonces el voto es invalido
 ```
 
-Estado actual: implementado en `voteModel.js` como `relationRestrictions` y
+Estado actual: implementado en `voteModel.js` como `groupRestrictions` y
 usado por `obsolete_composite_vote_recipe`.
 
 ## Votaciones Configurables
@@ -239,7 +239,7 @@ puerta a otras votaciones:
 ```text
 vote_assign_marker
 vote_grant_action
-vote_set_relation
+vote_set_group
 ```
 
 Todas pueden reutilizar `voteModel.js` para contar votos, pero no deben compartir
@@ -250,7 +250,7 @@ automaticamente el mismo efecto.
 Antes de anadir mas roles, conviene implementar dos cosas pequenas:
 
 1. `requiredVotes: all_in_play` en `voteModel.js`. Implementado.
-2. restriccion de voto contra relation target para `linked`. Implementado.
+2. restriccion de voto contra miembros de group `linked`. Implementado.
 
 Eso cerraria la votacion diurna base:
 

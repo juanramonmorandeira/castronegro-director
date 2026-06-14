@@ -171,7 +171,7 @@ link_targets
 Configuracion principal:
 
 ```text
-effect: set_relation linked
+effect: set_group linked
 target: 2 roles
 filters: in_play, distinct
 ```
@@ -309,12 +309,12 @@ por la receta set_out_of_play. El mismo actor solo puede usar esta receta una
 vez en la partida.
 ```
 
-### Voto + receta
+### Seleccion + receta
 
-`vote` ya no es una receta de catalogo. Es un mecanismo de step:
+`select` ya no es una receta de catalogo. Es un mecanismo de step:
 
 ```text
-step.voteRules -> voteModel -> chosenId / empate / nulo
+step.selectionRules -> selectionModel -> chosenId / empate / nulo
 ```
 
 Si hay `chosenId`, `stepModel` ejecuta la receta normal declarada en
@@ -323,9 +323,9 @@ Si hay `chosenId`, `stepModel` ejecuta la receta normal declarada en
 Ejemplo actual:
 
 ```text
-group_vote
-  voteRules:
-    required: all_actors
+group_selection
+  selectionRules:
+    required: all_selectors
     abstain: not_allowed
     unanimous: not_required
     tie: null_on_tie
@@ -335,13 +335,13 @@ group_vote
     abstainResolution: ignore
     supportThreshold: none
     candidateIds: null -> todos los roles inPlay
-    relationRestrictions: exclude_related_target linked
+    groupRestrictions: exclude_group_member_target linked
   actions:
     set_out_of_play
 ```
 
-Lectura: el voto elige un target; la receta `set_out_of_play` aplica
-`set_in_play(inPlay=false)` sobre ese target. La misma estructura podra votar
+Lectura: el seleccion elige un target; la receta `set_out_of_play` aplica
+`set_in_play(inPlay=false)` sobre ese target. La misma estructura podra elegir
 para aplicar otra receta distinta sin crear una receta compuesta nueva.
 
 ### `close_cycle`

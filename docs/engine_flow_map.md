@@ -77,7 +77,6 @@ skin/setup -> buildSession -> roles + groups + stepPools -> step actual -> recet
 | Definicion de sesion | `sessionDefinition.js` | Crear una sesion viva con players, roles, groups, pools e historiales | Resolver acciones |
 | Definicion de player | `playerDefinition.js` | Crear players de sesion | Aplicar reglas sobre roles |
 | Definicion de rol | `roleDefinition.js` | Crear roles y el estado de esos roles dentro de una sesion | Ejecutar acciones |
-| Definicion de relacion | `relationDefinition.js` | Crear relaciones entre roles | Guardar relaciones dentro de un unico rol |
 | Definicion de pool | `poolDefinition.js` | Crear pools y organizar steps dentro de pools configurables | Decidir que hace cada step |
 | Validacion de sesion | `sessionValidation.js` | Detectar datos rotos o incompletos | Corregir datos automaticamente |
 | Historial | `historyModel.js` | Crear y consultar memoria mecanica de la sesion | Resolver acciones o cambiar estado por si mismo |
@@ -96,7 +95,7 @@ skin/setup -> buildSession -> roles + groups + stepPools -> step actual -> recet
 | Efectos | `effectModel.js` | Escribir efectos finales sobre la sesion | Decidir si un efecto debe existir |
 | Eventos | `eventModel.js` | Convertir efectos finales en eventos y activar reacciones declaradas por roles | Ejecutar la receta del step especial |
 | Objectives | `objectiveModel.js` | Evaluar objetivos y playOutcome | Cerrar administrativamente la session |
-| Voto | `voteModel.js` | Contar elecciones y resolver chosen/empate | Aplicar el efecto de la votacion |
+| Seleccion | `selectionModel.js` | Contar elecciones y resolver chosen/empate | Aplicar el efecto de la seleccion |
 
 ## Construccion de sesion
 
@@ -335,7 +334,7 @@ aplicador:
 
 | Pregunta | Lugar correcto | Ejemplo |
 |---|---|---|
-| Existe la sesion y sus datos basicos son coherentes? | `sessionValidation.js` | IDs duplicados, relacion apunta a rol inexistente |
+| Existe la sesion y sus datos basicos son coherentes? | `sessionValidation.js` | IDs duplicados, grupo apunta a rol inexistente |
 | Que ocurrio antes en esta partida? | `historyModel.js` | efectos aplicados en el ciclo actual |
 | Este step debe ejecutarse ahora? | `poolCursorModel.js` | saltar steps disabled |
 | El step actual tiene una receta ejecutable? | `stepModel.js` | step enabled con `actions` definida |
@@ -346,7 +345,7 @@ aplicador:
 | Esta receta tiene una restriccion propia? | `constraintModel.js` | no repetir mismo objetivo en ciclos consecutivos |
 | Una accion queda bloqueada? | `actionModel.js` | `block_action` bloquea `set_in_play(false)` contra un target |
 | Un efecto genera consecuencias globales? | `resolverModel.js` | `linked` propaga `inPlay=false` |
-| Como se escribe un cambio final? | `effectModel.js` | `set_property`, `set_relation` |
+| Como se escribe un cambio final? | `effectModel.js` | `set_property`, `set_group` |
 | La parte jugable ha concluido? | `objectiveModel.js` | `holder_reaches_in_play_parity`, `only_holder_group_remains_in_play`, `no_roles_in_play` |
 
 ## Flujo de efectos
@@ -364,7 +363,7 @@ graph LR
   H -->|No| J[check_objectives]
   I --> J
   J --> K{playOutcome concluyente}
-  K -->|Si| L[Crear step conclude_play]
+  K -->|Si| L[Ejecutar automaticStage conclude_play]
   K -->|No| M[Continuar]
   L --> N[poolSpecial]
   I --> N
@@ -380,10 +379,10 @@ Debe proponer efectos, resolverlos y aplicar solo efectos finales.
 Regla de `poolSpecial`:
 
 ```text
-Los eventos especiales se registran y crean sus steps. Si check_objectives emite
-un playOutcome concluyente, se anade tambien un step especial conclude_play. Al
-resolver poolSpecial, conclude_play tiene prioridad sobre los demas steps
-pendientes.
+Los eventos especiales se registran como respuestas pendientes. Si
+check_objectives emite un playOutcome concluyente, se ejecuta la automaticStage
+conclude_play. La implementacion actual aun usa `poolSpecial`, pero el modelo
+objetivo esta migrando hacia automaticStages.
 ```
 
 Excepcion actual:
@@ -409,7 +408,7 @@ dados estos efectos propuestos, cuales deben llegar a ser efectos finales?
 Ejemplos:
 
 - Si se propone `set_property inPlay=false` sobre un rol linked, derivar otro
-  `set_property inPlay=false` sobre sus relacionados.
+  `set_property inPlay=false` sobre sus miembros de grupo.
 - Si en el futuro un efecto queda neutralizado por otra regla, marcarlo como
   bloqueado.
 - Si un efecto produce consecuencias encadenadas, generar esas consecuencias.
@@ -431,7 +430,7 @@ como se escribe este efecto final en la sesion?
 Ejemplos:
 
 - `set_property`: cambiar `role.inPlay`.
-- `set_relation`: crear una entrada en `session.relations`.
+- `set_group`: crear o actualizar un grupo mecanico, por ejemplo `linked`.
 - `close_cycle`: limpiar flags temporales y avanzar ciclo.
 
 El aplicador de efectos no decide si el cambio es justo, valido o narrativamente
@@ -444,13 +443,13 @@ resolverModel decide consecuencias.
 effectModel aplica cambios.
 ```
 
-## Flujo de relaciones
+## Flujo de grupos linked
 
 ```mermaid
 graph TD
-  A[link_targets] --> B[set_relation]
-  B --> C[session.relations]
-  C --> D{Relacion activada}
+  A[link_targets] --> B[set_group linked]
+  B --> C[session.groups]
+  C --> D{Grupo activo}
   D -->|No| E[No ocurre nada mas]
   D -->|Si| F[resolverModel deriva efectos linked]
   F --> G[effectModel aplica cambios]
@@ -460,8 +459,8 @@ Lectura:
 
 ```text
 link_targets no elimina a nadie.
-link_targets solo crea una relacion.
-La relacion linked tiene consecuencias cuando otro efecto la activa.
+link_targets solo crea un grupo.
+El group linked tiene consecuencias cuando otro efecto lo activa.
 ```
 
 ## Flujo de objectives
@@ -469,18 +468,18 @@ La relacion linked tiene consecuencias cuando otro efecto la activa.
 ```mermaid
 graph TD
   A[Efectos del pool consumados] --> B[check_objectives]
-  B --> C[Evaluar sessionObjectiveRules]
+  B --> C[Evaluar session.objectiveRules]
   C --> D{Alguna objectiveRule cumplida}
   D -->|No| E[Parte jugable continua]
   D -->|Si| F[objectiveResolution]
   F --> G{playOutcome concluyente}
   G -->|No| H[Registrar achievedObjectives]
-  G -->|Si| I[Crear step conclude_play en poolSpecial]
+  G -->|Si| I[Ejecutar automaticStage conclude_play]
 ```
 
 Orden objetivo:
 
-1. Evaluar `sessionObjectiveRules`.
+1. Evaluar `session.objectiveRules`.
 2. Registrar `achievedObjectives` no concluyentes.
 3. Resolver conflictos entre objectives concluyentes.
 4. Emitir `playOutcome` si la parte jugable queda concluida.
@@ -499,7 +498,7 @@ Flujo actual de comprobacion de objetivos:
 ```mermaid
 graph TD
   A[Efectos consumados] --> B[checkObjectives]
-  B --> C[Leer sessionObjectiveRules]
+  B --> C[Leer session.objectiveRules]
   C --> D[Evaluar cada condition contra su holder]
   D --> E{Alguna regla cumplida}
   E -->|No| F[ongoing]
@@ -511,14 +510,14 @@ graph TD
 
 Orden actual:
 
-1. Leer `sessionObjectiveRules`.
+1. Leer `session.objectiveRules`.
 2. Resolver el `holder` de cada regla.
 3. Evaluar la `condition`.
 4. Devolver `fulfilledRules`.
 5. Emitir `achievedObjectives` o `playOutcome` segun `onFulfilled`.
 
 `objectiveModel` no crea reglas implicitas de alignment o linked. Si un
-alignment o relation linked necesita objective, primero debe existir un group
+alignment o group linked necesita objective, primero debe existir un group
 holder que represente ese sujeto.
 
 ## Pipeline recomendado para nuevas mecanicas
@@ -526,7 +525,7 @@ holder que represente ese sujeto.
 Cuando aparezca una mecanica nueva, seguir este orden:
 
 1. Nombrar la mecanica de forma abstracta.
-2. Decidir si es accion, modificador, efecto, relacion, consecuencia u objective.
+2. Decidir si es accion, modificador, efecto, grupo, consecuencia u objective.
 3. Escribir un ejemplo minimo de datos.
 4. Implementar la pieza mas pequena posible.
 5. Anadir un test real en `src/lib/domain/__test__/domain.test.js`.
@@ -540,26 +539,26 @@ Cuando aparezca una mecanica nueva, seguir este orden:
 | La Vidente mira una carta | accion `inspect_role` | `actionModel.js` |
 | El Protector protege antes del ataque | accion `block_action` | `actionModel.js` |
 | No puede bloquear al mismo objetivo dos ciclos seguidos | restriccion `no_repeat_target` | `constraintModel.js` |
-| Cupido enlaza dos jugadores | accion `link_targets` + efecto `set_relation` | `actionModel.js` + `effectModel.js` |
+| Cupido enlaza dos jugadores | accion `link_targets` + group linked futuro | `groupModel.js` |
 | Si un linked sale de juego, el otro tambien | consecuencia sistemica | `resolverModel.js` |
-| Si solo quedan linked de alignments distintos, cumplen objective especial | objectiveRule sobre group linked | `sessionObjectiveRules` |
-| Un group de alignment alcanza al resto | `holder_reaches_in_play_parity` | `sessionObjectiveRules` |
-| Un jugador no puede votar contra su linked | restriccion de voto | `step.voteRules.relationRestrictions` |
+| Si solo quedan linked de alignments distintos, cumplen objective especial | objectiveRule sobre group linked | `session.objectiveRules` |
+| Un group de alignment alcanza al resto | `holder_reaches_in_play_parity` | `session.objectiveRules` |
+| Un jugador no puede elegir contra su linked | restriccion de seleccion | `step.selectionRules.groupRestrictions` |
 
-## Modelo de voto
+## Modelo de seleccion
 
-Una votacion generica no debe significar automaticamente "dejar fuera de juego".
+Una seleccion generica no debe significar automaticamente "dejar fuera de juego".
 Debe entenderse como una seleccion colectiva:
 
 ```text
-votos -> recuento -> target chosen / empate / nulo
+selecciones -> recuento -> target chosen / empate / nulo
 ```
 
 Despues otra capa decide que accion se aplica al target chosen.
 
 ```mermaid
 flowchart TD
-  A[Receta de voto] --> B[voteModel - recuento puro]
+  A[Receta de seleccion] --> B[selectionModel - recuento puro]
   B --> C{Resultado}
   C -->|chosen| D[target chosen]
   C -->|tie/null| E[sin accion posterior]
@@ -572,14 +571,14 @@ flowchart TD
 
 | Estrategia | Idea | Ventaja | Riesgo |
 |---|---|---|---|
-| Mantener acciones concretas | una receta distinta por cada votacion | Simple para pocos casos | Duplica logica de voto cuando aparezcan mas votaciones |
-| Step con voteRules recomendado | `vote` resuelve target y `stepModel` ejecuta la receta declarada | Flexible y anonimo | Requiere que el step declare claramente sus reglas de voto |
-| Efecto directo desde voto | El voto devuelve directamente `set_property` u otro efecto | Rapido de implementar | Mezcla recuento con consecuencias y empobrece la reutilizacion |
+| Mantener acciones concretas | una receta distinta por cada seleccion | Simple para pocos casos | Duplica logica de seleccion cuando aparezcan mas selecciones |
+| Step con selectionRules recomendado | `select` resuelve target y `stepModel` ejecuta la receta declarada | Flexible y anonimo | Requiere que el step declare claramente sus reglas de seleccion |
+| Efecto directo desde seleccion | El seleccion devuelve directamente `set_property` u otro efecto | Rapido de implementar | Mezcla recuento con consecuencias y empobrece la reutilizacion |
 
 La estrategia recomendada es la segunda:
 
 ```text
-step = voteRules + recipes
+step = selectionRules + recipes
 ```
 
 Ejemplo conceptual:
@@ -587,8 +586,8 @@ Ejemplo conceptual:
 ```js
 {
   key: 'step_05',
-  voteRules: {
-    required: 'all_actors',
+  selectionRules: {
+    required: 'all_selectors',
     abstain: 'not_allowed',
     unanimous: 'not_required',
     tie: 'null_on_tie',
@@ -600,13 +599,13 @@ Ejemplo conceptual:
     },
     supportThreshold: {
       type: 'none',
-      base: 'cast_votes'
+      base: 'cast_selections'
     },
     candidateIds: null,
-    relationRestrictions: [
+    groupRestrictions: [
       {
-        type: 'exclude_related_target',
-        relationType: 'linked'
+        type: 'exclude_group_member_target',
+        groupType: 'linked'
       }
     ]
   },
@@ -628,7 +627,7 @@ Ejemplo conceptual:
 Lectura:
 
 ```text
-voteModel solo dice que roleId ha sido chosen.
+selectionModel solo dice que roleId ha sido chosen.
 stepModel convierte chosenId en targetIds.
 recipeModel/actionModel aplican la receta configurada sobre ese target.
 ```
@@ -637,32 +636,32 @@ Ejemplos futuros con la misma estructura:
 
 - `set_property inPlay=false`
 - `set_property hasMarker=true`
-- `set_relation`
+- `set_group`
 - cualquier otro efecto permitido por el motor
 
-La restriccion de `linked` no aplica a cualquier voto. Aplica a los steps que
-la declaren en `voteRules.relationRestrictions`. En el caso actual:
+La restriccion de `linked` no aplica a cualquier seleccion. Aplica a los steps que
+la declaren en `selectionRules.groupRestrictions`. En el caso actual:
 
 ```text
-group_vote + set_out_of_play
+group_selection + set_out_of_play
 ```
 
-Si una regla permite repetir la votacion del ciclo con el mismo proposito, la
-restriccion sigue aplicando porque el caracter mecanico de la votacion no ha
+Si una regla permite repetir la seleccion del ciclo con el mismo proposito, la
+restriccion sigue aplicando porque el caracter mecanico de la seleccion no ha
 cambiado.
 
-## Vote Model
+## Selection Model
 
-`voteModel.js` modela la parte de recuento:
+`selectionModel.js` modela la parte de recuento:
 
 ```mermaid
 flowchart TD
   A[Votos emitidos] --> B[Validar actores y targets]
-  B --> C[Comprobar un voto por actor]
-  C --> D[Sumar votos por targetId]
+  B --> C[Comprobar un seleccion por actor]
+  C --> D[Sumar selecciones por targetId]
   D --> E{Ganador unico}
   E -->|Si| F[chosen]
-  E -->|No| G{voteRules.tie}
+  E -->|No| G{selectionRules.tie}
   G -->|null_on_tie| H[null]
   G -->|runoff_on_tie| I[runoff limitado a empatados]
   I --> J{Segundo empate}
@@ -673,37 +672,37 @@ flowchart TD
 Implementacion actual:
 
 ```text
-group_vote = voteRules + set_out_of_play
+group_selection = selectionRules + set_out_of_play
 ```
 
-Reglas actuales de esa votacion:
+Reglas actuales de esa seleccion:
 
 ```text
-voteRules.required: all_actors
-voteRules.tie: null_on_tie
-voteRules.runoff: tied_candidates
-voteRules.nullResult: end_as_null
-voteRules.repeatLimit: 1
-voteRules.abstainResolution: ignore
-voteRules.supportThreshold: none
-voteRules.candidateIds: null -> todos los roles inPlay
-relationRestrictions: exclude_related_target linked
+selectionRules.required: all_selectors
+selectionRules.tie: null_on_tie
+selectionRules.runoff: tied_candidates
+selectionRules.nullResult: end_as_null
+selectionRules.repeatLimit: 1
+selectionRules.abstainResolution: ignore
+selectionRules.supportThreshold: none
+selectionRules.candidateIds: null -> todos los roles inPlay
+groupRestrictions: exclude_group_member_target linked
 ```
 
-La deuda tecnica anterior era mezclar recuento de voto y consecuencia en una
+La deuda tecnica anterior era mezclar recuento de seleccion y consecuencia en una
 receta compuesta. Eso ya queda separado:
 
 ```text
-voteModel cuenta votos.
+selectionModel cuenta selecciones.
 stepModel aplica la receta declarada si hay chosen.
 actionModel resuelve la accion pura configurada.
 ```
 
-Flujo actual de `group_vote + set_out_of_play`:
+Flujo actual de `group_selection + set_out_of_play`:
 
 ```mermaid
 flowchart TD
-  A[step con voteRules] --> B[vote resuelve ronda]
+  A[step con selectionRules] --> B[select resuelve ronda]
   B --> C{Resultado}
   C -->|chosen| E[stepModel pasa chosenId como targetId]
   C -->|null| D[Sin efectos; step listo para cierre manual]
@@ -716,11 +715,11 @@ flowchart TD
   H --> I[effectModel aplica cambios]
 ```
 
-Contrato del step con voto:
+Contrato del step con seleccion:
 
 ```text
 chosen:
-  - voteModel devuelve chosenId.
+  - selectionModel devuelve chosenId.
   - stepModel ejecuta la receta del step usando chosenId como targetIds.
 
 null:
@@ -730,52 +729,52 @@ null:
     con completeCurrentStep segun sus reglas de completion.
 
 tie:
-  - Si voteRules.tie no define otra cosa, se trata como null.
-  - Si voteRules.tie = runoff_on_tie, voteModel devuelve nextRound con
-    candidateIds definido por voteRules.runoff.
+  - Si selectionRules.tie no define otra cosa, se trata como null.
+  - Si selectionRules.tie = runoff_on_tie, selectionModel devuelve nextRound con
+    candidateIds definido por selectionRules.runoff.
   - La receta no se ejecuta hasta que una ronda posterior produzca chosen.
 ```
 
-Reglas de voto ya previstas:
+Reglas de seleccion ya previstas:
 
 ```text
 candidateIds:
-  - Lista de roleIds que pueden recibir votos en una ronda.
+  - Lista de roleIds que pueden recibir selecciones en una ronda.
   - Si no se define, los candidatos por defecto son todos los roles inPlay.
   - En una segunda ronda puede cambiar, por ejemplo limitandose a los roleIds
-    que recibieron votos o a los roleIds empatados.
+    que recibieron selecciones o a los roleIds empatados.
 
 runoff:
   - tied_candidates: segunda ronda solo entre los roleIds empatados.
-  - voted_candidates: segunda ronda entre todos los roleIds que recibieron
-    al menos un voto.
+  - selected_candidates: segunda ronda entre todos los roleIds que recibieron
+    al menos un seleccion.
   - same_candidates: segunda ronda con los mismos candidatos de la ronda actual.
 
 nullResult:
-  - end_as_null: la votacion nula no pide otra ronda.
-  - repeat_on_null: la votacion nula puede pedir otra ronda si repeatLimit lo
+  - end_as_null: la seleccion nula no pide otra ronda.
+  - repeat_on_null: la seleccion nula puede pedir otra ronda si repeatLimit lo
     permite.
 
 repeatLimit:
-  - Numero maximo de rondas adicionales que puede pedir voteModel.
-  - Por defecto es 1: una votacion inicial puede pedir una segunda ronda, pero
+  - Numero maximo de rondas adicionales que puede pedir selectionModel.
+  - Por defecto es 1: una seleccion inicial puede pedir una segunda ronda, pero
     si esa segunda ronda vuelve a empatar o quedar nula, termina como null.
 
 supportThreshold:
-  - Minimo de votos necesarios para aceptar el chosen provisional.
+  - Minimo de selecciones necesarios para aceptar el chosen provisional.
   - none: acepta el chosen provisional sin exigir minimo adicional.
   - majority: exige mitad + 1.
   - fraction: exige una fraccion, por ejemplo 2/3.
-  - base cast_votes: calcula el minimo sobre votos emitidos no abstenidos.
-  - base actor_count: calcula el minimo sobre los actores obligados o definidos
+  - base cast_selections: calcula el minimo sobre selecciones emitidas no abstenidos.
+  - base selector_count: calcula el minimo sobre los actores obligados o definidos
     para el step.
   - Si no alcanza el minimo, el resultado pasa a null con reason
     insufficient_support y la receta no se ejecuta.
 
 abstainResolution:
   - ignore: las abstenciones no entran en el recuento de chosen.
-  - null_if_highest: si la abstencion tiene mas votos que cualquier targetId,
-    la votacion queda null con reason abstention_highest.
+  - null_if_highest: si la abstencion tiene mas selecciones que cualquier targetId,
+    la seleccion queda null con reason abstention_highest.
   - Si la abstencion empata con el target mas votado, esta regla no actua por
     ahora; queda espacio para definir nuevos tipos mas adelante.
 ```

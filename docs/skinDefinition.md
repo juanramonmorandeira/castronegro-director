@@ -16,7 +16,7 @@ La skin da forma visible:
 - fantasia;
 - metatrama.
 
-## Relacion con ruleSet
+## Grupo con ruleSet
 
 Una skin se define sobre uno o varios `ruleSet`.
 
@@ -59,7 +59,7 @@ Una skin puede proporcionar presentacion para:
 
 - roles;
 - groups;
-- relations;
+- groups;
 - recipes;
 - actions;
 - tokens;
@@ -97,7 +97,7 @@ No pertenece a skin:
   labels: {
     roles: {},
     groups: {},
-    relations: {},
+    groups: {},
     steps: {},
     recipes: {},
     tokens: {},
@@ -181,7 +181,7 @@ Una skin es compatible si:
 - sus claves de texto existen para los idiomas soportados;
 - no usa ids inexistentes.
 
-## Relacion con UI
+## Grupo con UI
 
 La UI debe pedir a la skin presentacion para un elemento mecanico.
 

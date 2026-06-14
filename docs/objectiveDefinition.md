@@ -16,13 +16,13 @@ jugable de la session.
 
 ## Conceptos
 
-### sessionObjectiveRules
+### objectiveRules
 
-`sessionObjectiveRules` es la lista viva de reglas de objetivo evaluables durante
-una session concreta.
+`session.objectiveRules` es la lista viva de reglas de objetivo evaluables
+durante una session concreta.
 
 Puede empezar con reglas definidas por el ruleSet y cambiar durante la partida
-por efectos, roles, groups, relations o events.
+por efectos, roles, groups o events.
 
 ### objectiveRule
 
@@ -123,7 +123,7 @@ un pool. No es un step ejecutable por player, group o director.
 
 Responsabilidades:
 
-1. evaluar todas las `sessionObjectiveRules`;
+1. evaluar todas las `session.objectiveRules`;
 2. registrar objetivos cumplidos no concluyentes en `achievedObjectives`;
 3. resolver conflictos si varias condiciones concluyentes se cumplen a la vez;
 4. emitir `playOutcome` si la parte jugable queda concluida;
@@ -132,7 +132,7 @@ Responsabilidades:
 
 ### conclude_play
 
-`conclude_play` es el step especial que gestiona la conclusion de la parte
+`conclude_play` es la automaticStage que gestiona la conclusion de la parte
 jugable.
 
 No cierra la session. Cerrar la session es responsabilidad exclusiva del creador
@@ -219,11 +219,11 @@ Son puntos de partida. No son una lista cerrada. Las conditions no saben que es
 un alignment o linked: esas ideas se expresan creando groups adecuados y
 pasandolos como holder.
 
-## Relacion con session
+## Grupo con session
 
 La session puede guardar:
 
-- `sessionObjectiveRules`;
+- `session.objectiveRules`;
 - `achievedObjectives`;
 - `playOutcome`;
 - historial de objective checks si lo necesitamos para debug o narracion.

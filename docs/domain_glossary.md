@@ -86,23 +86,33 @@ propios o no dependientes del eje principal `alignment_a` /
 `instanceRule` = regla definida por un role para indicar cuantas instancias de
 si mismo puede o debe materializar en una session.
 
-`group` = coleccion dinamica de roleIds.
+`group` = conjunto de roles. Puede representar equipos, subconjuntos,
+vinculos o colecciones temporales. No siempre necesita persistir; solo se
+materializa cuando una regla necesita una referencia estable a esa coleccion.
 
-`step` = unidad ejecutable dentro de un pool.
+`groupRules` = reglas asociadas a un group.
+
+`memberRole` = rol interno provisional de un miembro dentro de un group. Solo se
+conservara si aparece un caso real de grupo direccional.
+
+`step` = periodo ejecutable dentro de un pool donde un role o group puede
+actuar.
+
+`automaticStage` = etapa automatica del sistema. No representa actuacion de
+role/group. Ejemplos aceptados: `close_cycle`, `check_objectives`,
+`conclude_play`.
 
 `pool` = coleccion ordenada de steps.
 
 `recipe` = receta mecanica que combina una o varias acciones con restricciones.
 
-`action` = operacion pura que recibe input y propone resultado mecanico.
+`action` = intento de producir un cambio o resultado mecanico.
 
 `effect` = cambio final que puede aplicarse sobre la session.
 
 `constraint` = restriccion que limita si una recipe puede ejecutarse.
 
 `modifier` = modificador futuro. No debe confundirse con constraint.
-
-`relation` = vinculo mecanico entre roles.
 
 `event` = hecho producido por la session que puede disparar reacciones.
 
@@ -112,8 +122,8 @@ un step especial.
 `objective` = objetivo mecanico que puede cumplirse durante la parte jugable.
 Es el lenguaje interno del nucleo para evaluar logros o conclusiones.
 
-`sessionObjectiveRules` = lista viva de objectiveRules evaluables durante una
-session concreta.
+`objectiveRules` = lista viva de reglas de objetivo evaluables dentro de una
+session concreta. En el modelo objetivo vive como `session.objectiveRules`.
 
 `objectiveRule` = regla que define una condicion de objetivo, que propone al
 cumplirse y como resolver conflictos asociados.
@@ -133,10 +143,10 @@ parte jugable.
 `playOutcome` = conclusion mecanica de la parte jugable. No cierra la session
 administrativa.
 
-`check_objectives` = etapa automatica del cierre de pool que evalua
-sessionObjectiveRules y emite achievedObjectives o playOutcome.
+`check_objectives` = automaticStage del cierre de pool que evalua objectiveRules
+de session y emite achievedObjectives o playOutcome.
 
-`conclude_play` = step especial que gestiona la conclusion de la parte jugable
+`conclude_play` = automaticStage que gestiona la conclusion de la parte jugable
 cuando existe un playOutcome concluyente.
 
 `resources` = recursos mecanicos consumibles o contadores que un role materializa
@@ -149,13 +159,34 @@ elegibles sobre los que asumir, copiar, intercambiar o activar comportamiento.
 `role_assumes_role` = familia mecanica pendiente para roles que asumen temporal o
 permanentemente otro role elegido desde un `roleChoiceSet`.
 
-`vote` = modelo de decision que recibe votos y devuelve un `chosen`, `null` o
-un estado que exige nueva ronda.
+`select` = mecanismo general para obtener una decision humana o grupal.
 
-`voteRules` = reglas que gobiernan una votacion: abstencion, unanimidad, empate,
-candidatos, rondas adicionales y umbral minimo de apoyo.
+`selectorIds` = roleIds que participan en una selection.
 
-`chosen` = target elegido por una votacion valida.
+`candidateIds` = roleIds que pueden ser elegidos en una selection.
+
+`candidateRules` = reglas para construir o acotar `candidateIds` antes de una
+selection.
+
+`selectionRules` = reglas que gobiernan como `selectorIds` eligen entre
+`candidateIds`.
+
+`chosen` = candidate elegido por una selection valida.
+
+`property` = unidad de estado legible o modificable de un role.
+
+`condition` = lectura o comparacion del estado.
+
+`rule` = declaracion que combina condition, action, consequence o restriction.
+
+`ruleAnalyzer` = responsabilidad que lee reglas, detecta objetos necesarios y
+solicita materializacion cuando faltan.
+
+`materializerCoordinator` = responsabilidad que coordina que creador debe
+materializar cada objeto solicitado por ruleAnalyzer.
+
+`sessionAssembler` = coordinador general que ensambla una session jugable desde
+ruleSet, configuration y match.
 
 ## Estado
 
@@ -166,8 +197,6 @@ candidatos, rondas adicionales y umbral minimo de apoyo.
 `actorIds` = roleIds que actuan dentro de un step.
 
 `targetIds` = roleIds que reciben una accion, recipe o decision.
-
-`candidateIds` = roleIds que pueden ser elegidos en una votacion.
 
 `actionHistory` = historial de acciones ejecutadas o intentadas.
 

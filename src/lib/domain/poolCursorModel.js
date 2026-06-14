@@ -100,7 +100,7 @@ export function findNextRunnableIndex(steps = [], startIndex = 0) {
 // Cambia el estado de un step concreto.
 //
 // Ejemplo:
-// markStepStatus(pools, 'poolDay', 'vote', 'done')
+// markStepStatus(pools, 'poolDay', 'select', 'done')
 //
 // No modifica el objeto original. Devuelve una copia actualizada.
 export function markStepStatus(stepPools, poolKey, stepKey, status) {

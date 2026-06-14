@@ -17,7 +17,7 @@ import {
   STEP_COMPLETION_MODES,
   STEP_COMPLETION_REQUESTED_BY
 } from './stepModel.js';
-import { createVoteRules } from './voteModel.js';
+import { createSelectionRules } from './selectionModel.js';
 
 export const STEP_SOURCE_TYPES = Object.freeze({
   ROLE: 'role',
@@ -50,14 +50,14 @@ function prepareRecipe(recipe = {}) {
   };
 }
 
-// Normaliza las reglas de voto asociadas al step.
+// Normaliza las reglas de seleccion asociadas al step.
 //
-// El voto no es una receta: es un mecanismo del step para elegir target. Estas
-// reglas le dicen a voteModel como contar decisiones antes de ejecutar la receta
+// El seleccion no es una receta: es un mecanismo del step para elegir target. Estas
+// reglas le dicen a selectionModel como contar decisiones antes de ejecutar la receta
 // declarada en step.actions sobre el chosenId resultante.
-function prepareVoteRules(voteRules = null) {
-  if (!voteRules) return null;
-  return createVoteRules(voteRules);
+function prepareSelectionRules(selectionRules = null) {
+  if (!selectionRules) return null;
+  return createSelectionRules(selectionRules);
 }
 
 // Valida y completa la configuracion de cierre de un step.
@@ -94,7 +94,7 @@ export function createStep({
   status = STEP_STATUSES.DISABLED,
   actorIds = [],
   completion = {},
-  voteRules = null,
+  selectionRules = null,
   actions = [],
   order = null,
   source = null,
@@ -114,7 +114,7 @@ export function createStep({
     status,
     actorIds: defineActorIds(actorIds),
     completion: validateStepCompletion(completion),
-    voteRules: prepareVoteRules(voteRules),
+    selectionRules: prepareSelectionRules(selectionRules),
     actions: (actions ?? []).map(prepareRecipe),
     order: Number.isFinite(order) ? order : null,
     metadata: {

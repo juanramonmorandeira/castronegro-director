@@ -33,7 +33,7 @@ export const ROLE_CATALOG = Object.freeze({
         order: null,
         metadata: {
           orderReason:
-            'Runs during deployment so shared-destiny relations exist before recurrent actions can change inPlay or alignment state.'
+            'Runs during deployment so shared-destiny groups exist before recurrent actions can change inPlay or alignment state.'
         }
       })
     ]

@@ -21,7 +21,7 @@ session ejecuta una partida concreta combinando todo lo anterior.
 Define el mundo visible:
 
 - nombres de roles;
-- nombres de grupos, relaciones, tokens, edificios u otros elementos jugables;
+- nombres de grupos, efectos, tokens, edificios u otros elementos jugables;
 - textos largos y cortos;
 - imagenes, iconos y assets;
 - tono narrativo;
@@ -207,8 +207,8 @@ Es el punto donde convergen:
 - asientos;
 - elecciones del narrador o creador de la partida;
 - decisiones tomadas durante la partida;
-- estado actual de roles, groups, relations y stepPools;
-- `sessionObjectiveRules`;
+- estado actual de roles, groups y stepPools;
+- `objectiveRules`;
 - `achievedObjectives`;
 - `playOutcome`;
 - historiales;
@@ -231,9 +231,9 @@ session
   players: [...]
   roles: [...]
   groups: [...]
-  relations: [...]
+  groups: [...]
   stepPools: ...
-  sessionObjectiveRules: [...]
+  objectiveRules: [...]
   achievedObjectives: [...]
   playOutcome: null
   actionHistory: [...]
@@ -249,7 +249,7 @@ Antes de crear una session, la aplicacion debe poder comprobar:
 - la configuration cumple las restricciones del ruleSet;
 - la skin tiene textos para los roles del ruleSet;
 - la skin tiene assets para los elementos que la UI necesita mostrar;
-- la skin puede presentar las acciones, tokens, relaciones o steps relevantes;
+- la skin puede presentar las acciones, tokens, efectos o steps relevantes;
 - el ruleSet es mecanicamente valido;
 - la seleccion de jugadores/asientos permite construir la session.
 

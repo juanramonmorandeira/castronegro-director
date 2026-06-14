@@ -47,7 +47,7 @@ function normalizePoolStep({
   action = null,
   actions = null,
   completion = null,
-  voteRules = null,
+  selectionRules = null,
   order = null,
   metadata = {}
 } = {}) {
@@ -69,15 +69,16 @@ function normalizePoolStep({
             : []
         }
       : null,
-    voteRules: voteRules
+    selectionRules: selectionRules
       ? {
-          ...voteRules,
-          relationRestrictions: (voteRules.relationRestrictions ?? []).map((restriction) => ({
+          ...selectionRules,
+          groupRestrictions: (selectionRules.groupRestrictions ?? []).map((restriction) => ({
             ...restriction
           })),
-          candidateIds: Array.isArray(voteRules.candidateIds)
-            ? [...voteRules.candidateIds]
-            : null
+          candidateIds: Array.isArray(selectionRules.candidateIds)
+            ? [...selectionRules.candidateIds]
+            : null,
+          candidateRules: (selectionRules.candidateRules ?? []).map((rule) => ({ ...rule }))
         }
       : null,
     actions: normalizedActions,

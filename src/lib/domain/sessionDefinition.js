@@ -3,12 +3,11 @@
 // Constructor de sesiones de juego.
 //
 // La sesion es el estado vivo de una partida. Agrupa players, roles,
-// relaciones, pools e historiales. No guarda en disco ni toca UI.
+// grupos, pools e historiales. No guarda en disco ni toca UI.
 // -----------------------------------------------------------------------------
 
 import { createPlayer } from './playerDefinition.js';
 import { buildPools, createPool } from './poolDefinition.js';
-import { createRelation } from './relationDefinition.js';
 import { createGroup } from './groupDefinition.js';
 import { buildInitialGroups } from './groupModel.js';
 import { buildRolesFromSeats, createSessionRole } from './roleDefinition.js';
@@ -21,7 +20,13 @@ function createSessionGroup(groupInput = {}) {
   return {
     id: group.id,
     key: group.key,
+    ...(group.type ? { type: group.type } : {}),
+    active: group.active,
+    createdCycleId: group.createdCycleId,
+    sourceActionId: group.sourceActionId,
     roleIds: group.roleIds,
+    groupRules: group.groupRules,
+    stepDefinitions: group.stepDefinitions,
     metadata: { ...group.metadata }
   };
 }
@@ -34,7 +39,6 @@ export function createSession({
   players = [],
   roles = [],
   groups = [],
-  relations = [],
   stepPools = createPool(),
   sessionObjectiveRules = [],
   achievedObjectives = [],
@@ -52,7 +56,6 @@ export function createSession({
     players: players.map(createPlayer),
     roles: roles.map(createSessionRole),
     groups: groups.map(createSessionGroup),
-    relations: relations.map(createRelation),
     stepPools,
     sessionObjectiveRules: [...sessionObjectiveRules],
     achievedObjectives: [...achievedObjectives],

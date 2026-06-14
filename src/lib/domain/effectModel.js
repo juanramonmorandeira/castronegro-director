@@ -10,14 +10,14 @@
 // traducciones ni logica visual.
 // -----------------------------------------------------------------------------
 
-import { createRelation } from './relationDefinition.js';
+import { createGroup } from './groupDefinition.js';
 import { normalizeId } from './sessionModel.js';
 
 export const EFFECT_TYPES = Object.freeze({
   REVEAL_PROPERTY: 'reveal_property',
   SET_PROPERTY: 'set_property',
   BLOCK_ACTION: 'block_action',
-  SET_RELATION: 'set_relation',
+  SET_GROUP: 'set_group',
   CLOSE_CYCLE: 'close_cycle',
   CONCLUDE_PLAY: 'conclude_play'
 });
@@ -154,68 +154,67 @@ export function applySetPropertyEffect({ session, effect }) {
   };
 }
 
-// Crea o actualiza una relacion de sesion.
+// Crea o actualiza un grupo de sesion.
 //
-// set_relation es el efecto anonimo que usa una accion como link_targets.
+// set_group es el efecto anonimo que usa una accion como link_targets.
 // No guarda "amor", "hermandad", "maldicion" ni ningun texto narrativo.
-// Solo registra que varios roles de sesion comparten una relacion mecanica.
-export function applySetRelationEffect({ session, effect }) {
-  if (effect?.targetType !== 'relation') return session;
+// Solo registra que varios roles de sesion comparten un grupo mecanico.
+export function applySetGroupEffect({ session, effect }) {
+  if (effect?.targetType !== 'group') return session;
 
-  const relationType = normalizeId(effect.relationType);
-  const roleIds = normalizeRelationMemberIds(effect.roleIds);
-  if (!relationType || roleIds.length < 2) return session;
+  const groupType = normalizeId(effect.groupType);
+  const roleIds = normalizeGroupMemberIds(effect.roleIds);
+  if (!groupType || roleIds.length < 2) return session;
 
-  const relation = createRelation({
-    id: effect.relationId,
-    type: relationType,
+  const group = createGroup({
+    id: effect.groupId,
+    key: effect.groupKey ?? effect.groupId ?? `${groupType}-${roleIds.join('-')}`,
+    type: groupType,
     roleIds,
     active: effect.active ?? true,
     createdCycleId: getCurrentCycleId(session),
     sourceActionId: effect.sourceActionId ?? null,
     metadata: effect.metadata ?? {}
   });
-  const relationKey = getRelationKey(relation);
-  const currentRelations = session?.relations ?? [];
-  const existingIndex = currentRelations.findIndex(
-    (currentRelation) => getRelationKey(currentRelation) === relationKey
+  const groupKey = getGroupKey(group);
+  const currentGroups = session?.groups ?? [];
+  const existingIndex = currentGroups.findIndex(
+    (currentGroup) => getGroupKey(currentGroup) === groupKey
   );
 
   if (existingIndex === -1) {
     return {
       ...session,
-      relations: [...currentRelations, relation]
+      groups: [...currentGroups, group]
     };
   }
 
   return {
     ...session,
-    relations: currentRelations.map((currentRelation, index) =>
+    groups: currentGroups.map((currentGroup, index) =>
       index === existingIndex
         ? {
-            ...currentRelation,
-            ...relation,
-            id: currentRelation.id
+            ...currentGroup,
+            ...group,
+            id: currentGroup.id
           }
-        : currentRelation
+        : currentGroup
     )
   };
 }
 
-// Normaliza miembros de una relacion para que A+B y B+A sean el mismo vinculo.
-export function normalizeRelationMemberIds(roleIds = []) {
+// Normaliza miembros de un grupo de vinculo para que A+B y B+A sean el mismo grupo.
+export function normalizeGroupMemberIds(roleIds = []) {
   return [...new Set((roleIds ?? []).filter(Boolean))].sort();
 }
 
-// Clave interna para detectar relaciones mecanicamente equivalentes.
+// Clave interna para detectar grupos mecanicamente equivalentes.
 //
 // La id visible puede venir de fuera, pero para evitar duplicados nos importa:
-// - tipo de relacion;
+// - tipo de grupo;
 // - conjunto de miembros.
-export function getRelationKey(relation = {}) {
-  return [normalizeId(relation.type), ...normalizeRelationMemberIds(relation.roleIds)].join(
-    ':'
-  );
+export function getGroupKey(group = {}) {
+  return [normalizeId(group.type), ...normalizeGroupMemberIds(group.roleIds)].join(':');
 }
 
 // Cierra el ciclo actual.

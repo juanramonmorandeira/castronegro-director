@@ -5,7 +5,7 @@
 No es una partida concreta. No elige jugadores. No elige cuantos roles entran
 en una session. No contiene textos ni imagenes de skin.
 
-## Relacion con Catalog
+## Grupo con Catalog
 
 Los catalogos son la biblioteca mecanica del software:
 
@@ -13,7 +13,7 @@ Los catalogos son la biblioteca mecanica del software:
 - `groupCatalog`
 - `stepCatalog`
 - `recipeCatalog`
-- futuros catalogos de objectives, resources, relations o buildings.
+- futuros catalogos de objectives, resources, groups o buildings.
 
 Un `ruleSet` se construye con elementos existentes en esos catalogos.
 
@@ -95,7 +95,7 @@ primaryElement = operacion mecanica minima e indivisible.
 Ejemplos actuales:
 
 - cambiar una propiedad: `set_property`
-- crear una relacion: `set_relation`
+- crear un grupo: `set_group`
 - revelar una propiedad: `reveal_property`
 - bloquear una accion: `block_action`
 - contar votos: `vote`

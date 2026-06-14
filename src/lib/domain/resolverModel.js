@@ -12,7 +12,8 @@
 // -----------------------------------------------------------------------------
 
 import { EFFECT_TYPES } from './effectModel.js';
-import { RELATION_TYPES, getRelatedRoleIds } from './sessionModel.js';
+import { GROUP_TYPES } from './groupDefinition.js';
+import { getGroupMemberRoleIds } from './groupModel.js';
 
 // Resuelve una lista de efectos propuestos contra el estado actual.
 //
@@ -72,26 +73,26 @@ export function isSetInPlayFalseEffect(effect) {
   );
 }
 
-// Crea efectos derivados por la relacion linked.
+// Crea efectos derivados por el grupo linked.
 //
 // Ejemplo:
 // - efecto final: set_property role_a-0.inPlay=false
-// - relacion: linked [role_a-0, role_b-0]
+// - grupo: linked [role_a-0, role_b-0]
 // - derivado: set_property role_b-0.inPlay=false
 //
 // Estos efectos derivados vuelven a pasar por el mismo resolver. Eso importa
 // porque un derivado tambien puede propagar a otro
-// linked en relaciones mas amplias.
+// linked en grupos mas amplios.
 export function getLinkedSetInPlayFalseEffects({ session, effect, seenEffectKeys = new Set() }) {
   if (!isSetInPlayFalseEffect(effect)) return [];
 
-  return getRelatedRoleIds(session, effect.targetId, RELATION_TYPES.LINKED)
+  return getGroupMemberRoleIds(session, effect.targetId, GROUP_TYPES.LINKED)
     .map((targetId) => ({
       ...effect,
       targetId,
       derivedFrom: {
-        type: 'relation',
-        relationType: RELATION_TYPES.LINKED,
+        type: 'group',
+        groupType: GROUP_TYPES.LINKED,
         sourceTargetId: effect.targetId
       }
     }))
@@ -109,7 +110,7 @@ export function getEffectKey(effect = {}) {
     effect.targetId ?? '',
     effect.property ?? '',
     String(effect.value),
-    effect.relationType ?? '',
+    effect.groupType ?? '',
     (effect.roleIds ?? []).slice().sort().join(',')
   ].join(':');
 }

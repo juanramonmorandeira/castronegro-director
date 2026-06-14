@@ -8,8 +8,8 @@
 // - consulta grupos y roles miembros;
 // - anade o elimina roles de un grupo durante la partida.
 //
-// En session.groups guardamos solo estado persistente simple:
-// { id, key, roleIds, metadata }.
+// En session.groups guardamos estado persistente simple:
+// { id, key, type, active, roleIds, groupRules, metadata }.
 // -----------------------------------------------------------------------------
 
 import { createGroup, GROUP_MEMBERSHIP_RULE_TYPES } from './groupDefinition.js';
@@ -45,17 +45,6 @@ export function resolveMembershipRuleRoleIds(
       .map((role) => role.id);
   }
 
-  if (rule.type === GROUP_MEMBERSHIP_RULE_TYPES.RELATION) {
-    return uniqueIds(
-      (session.relations ?? [])
-        .filter(
-          (relation) =>
-            relation.active && (!rule.relationType || relation.type === rule.relationType)
-        )
-        .flatMap((relation) => relation.roleIds ?? [])
-    );
-  }
-
   if (rule.type === GROUP_MEMBERSHIP_RULE_TYPES.FLAG) {
     return roles
       .filter((role) => rule.flagKey && role.flags?.[rule.flagKey] === true)
@@ -78,7 +67,12 @@ function createSessionGroup(groupDefinition = {}, roleIds = []) {
   return {
     id: group.id,
     key: group.key,
+    ...(group.type ? { type: group.type } : {}),
+    active: group.active,
+    createdCycleId: group.createdCycleId,
+    sourceActionId: group.sourceActionId,
     roleIds: group.roleIds,
+    groupRules: group.groupRules,
     metadata: { ...group.metadata }
   };
 }
@@ -120,6 +114,29 @@ export function getGroupRoleIds(session = {}, groupId = null) {
   if (!group) return [];
 
   return [...(group.roleIds ?? [])];
+}
+
+export function findGroupsForRole(session = {}, roleId = null, type = null) {
+  const normalizedType = type ? normalizeId(type) : null;
+  if (!roleId) return [];
+
+  return (session.groups ?? []).filter((group) => {
+    if (group?.active === false) return false;
+    if (normalizedType && group.type !== normalizedType) return false;
+    return (group.roleIds ?? []).includes(roleId);
+  });
+}
+
+export function hasGroupMembership(session = {}, roleId = null, type = null) {
+  return findGroupsForRole(session, roleId, type).length > 0;
+}
+
+export function getGroupMemberRoleIds(session = {}, roleId = null, type = null) {
+  return uniqueIds(
+    findGroupsForRole(session, roleId, type)
+      .flatMap((group) => group.roleIds ?? [])
+      .filter((memberRoleId) => memberRoleId && memberRoleId !== roleId)
+  );
 }
 
 export function addRoleToGroup(session = {}, groupId = null, roleId = null) {

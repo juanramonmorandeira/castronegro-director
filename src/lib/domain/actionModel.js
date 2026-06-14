@@ -6,8 +6,8 @@
 // - inspect_role: revela informacion.
 // - set_in_play: intenta cambiar si un objetivo sigue en el juego principal.
 // - block_action: bloquea una accion concreta contra un objetivo.
-// - link_targets: crea una relacion mecanica entre varios objetivos.
-// - vote: resuelve una votacion y devuelve chosen/empate/nulo.
+// - link_targets: crea un grupo mecanico entre varios objetivos.
+// - select: resuelve una seleccion y devuelve chosen/empate/nulo.
 // - close_cycle: cierra el ciclo y limpia efectos temporales.
 // - conclude_play: concluye la parte jugable desde un step especial.
 //
@@ -24,7 +24,7 @@ import {
   EFFECT_TYPES,
   applyConcludePlay as applyConcludePlayFromModel,
   applyCloseCycle as applyCloseCycleFromModel,
-  applySetRelationEffect,
+  applySetGroupEffect,
   applySetPropertyEffect,
   getActionBlockKey,
   getCurrentCycleId,
@@ -37,17 +37,17 @@ import {
 } from './historyModel.js';
 import { resolveProposedEffects } from './resolverModel.js';
 import {
-  VOTE_OUTCOME_TYPES,
-  VOTE_ROUND_TYPES,
-  resolveVoteRound
-} from './voteModel.js';
+  SELECTION_OUTCOME_TYPES,
+  SELECTION_ROUND_TYPES,
+  resolveSelectionRound
+} from './selectionModel.js';
 
 export const ACTION_IDS = Object.freeze({
   INSPECT_ROLE: 'inspect_role',
   SET_IN_PLAY: 'set_in_play',
   BLOCK_ACTION: 'block_action',
   LINK_TARGETS: 'link_targets',
-  VOTE: 'vote',
+  SELECT: 'select',
   CLOSE_CYCLE: 'close_cycle',
   CONCLUDE_PLAY: 'conclude_play'
 });
@@ -73,7 +73,7 @@ export function getActionActors(session, actorIds = []) {
 
 // Devuelve true si una accion puede resolverse sin actor individual.
 //
-// Ejemplo: una votacion all_roles puede derivar un set_in_play(false). Esa
+// Ejemplo: una seleccion all_roles puede derivar un set_in_play(false). Esa
 // accion no tiene un unico actorId. Es valida mientras la propia accion no
 // necesite comparar target contra actor, como ocurre con not_self.
 export function canResolveWithoutActor(action) {
@@ -241,22 +241,22 @@ export function validateActionDefinition(action) {
 
   if (action?.id === ACTION_IDS.LINK_TARGETS) {
     const effect = action?.effect ?? {};
-    if (effect.type !== EFFECT_TYPES.SET_RELATION) {
+    if (effect.type !== EFFECT_TYPES.SET_GROUP) {
       errors.push({
         code: 'action/invalid-effect-type',
-        message: 'link_targets requires a set_relation effect'
+        message: 'link_targets requires a set_group effect'
       });
     }
-    if (effect.targetType !== 'relation') {
+    if (effect.targetType !== 'group') {
       errors.push({
         code: 'action/invalid-effect-target-type',
-        message: 'link_targets requires targetType "relation"'
+        message: 'link_targets requires targetType "group"'
       });
     }
-    if (!effect.relationType) {
+    if (!effect.groupType) {
       errors.push({
-        code: 'action/missing-relation-type',
-        message: 'link_targets requires effect.relationType'
+        code: 'action/missing-group-type',
+        message: 'link_targets requires effect.groupType'
       });
     }
   }
@@ -392,8 +392,8 @@ export function applyFinalEffects({ session, finalEffects = [] }) {
     if (effect?.type === EFFECT_TYPES.SET_PROPERTY) {
       return applySetPropertyEffect({ session: currentSession, effect });
     }
-    if (effect?.type === EFFECT_TYPES.SET_RELATION) {
-      return applySetRelationEffect({ session: currentSession, effect });
+    if (effect?.type === EFFECT_TYPES.SET_GROUP) {
+      return applySetGroupEffect({ session: currentSession, effect });
     }
     return currentSession;
   }, session);
@@ -539,11 +539,11 @@ export function applyBlockAction({ session, action, actor, targets, context = {}
   };
 }
 
-// Aplica una relacion creada por link_targets.
+// Aplica un grupo creado por link_targets.
 //
 // Separacion conceptual:
 // - link_targets es la accion: alguien intenta enlazar objetivos.
-// - set_relation es el efecto final: se escribe una relacion en la sesion.
+// - set_group es el efecto final: se escribe un grupo en la sesion.
 // - linked se interpreta despues en resolverModel cuando otro efecto lo active.
 export function applyLinkTargets({ session, action, actor, targets }) {
   const visibility = action?.visibility ?? VISIBILITY.STORYTELLER_ONLY;
@@ -576,31 +576,31 @@ export function applyLinkTargets({ session, action, actor, targets }) {
   };
 }
 
-// Resuelve una votacion pura.
+// Resuelve una seleccion pura.
 //
-// voteModel solo cuenta votos y decide chosen/empate/nulo. No aplica efectos.
+// selectionModel solo cuenta selecciones y decide chosen/empate/nulo. No aplica efectos.
 // Si un step quiere hacer algo con el chosen, stepModel aplicara despues la
 // receta normal configurada en ese step.
-export function applyVote({ session, action, input = {} }) {
+export function applySelection({ session, action, input = {} }) {
   const visibility = action?.visibility ?? VISIBILITY.ALL;
-  const voteResolution = resolveVoteRound({
+  const selectionResolution = resolveSelectionRound({
     session,
-    actorIds: input.actorIds ?? [],
-    votes: input.votes ?? [],
-    voteRules: input.voteRules ?? action?.voteRules ?? {},
-    roundType: input.roundType ?? VOTE_ROUND_TYPES.INITIAL
+    selectorIds: input.selectorIds ?? input.actorIds ?? [],
+    selections: input.selections ?? [],
+    selectionRules: input.selectionRules ?? action?.selectionRules ?? {},
+    roundType: input.roundType ?? SELECTION_ROUND_TYPES.INITIAL
   });
 
-  if (!voteResolution.ok) {
+  if (!selectionResolution.ok) {
     return {
       ok: false,
-      errors: voteResolution.errors,
+      errors: selectionResolution.errors,
       session,
       result: null
     };
   }
 
-  if (voteResolution.result.type !== VOTE_OUTCOME_TYPES.CHOSEN) {
+  if (selectionResolution.result.type !== SELECTION_OUTCOME_TYPES.CHOSEN) {
     return {
       ok: true,
       errors: [],
@@ -609,7 +609,7 @@ export function applyVote({ session, action, input = {} }) {
         type: 'action_resolution',
         visibility,
         actionId: action.id,
-        vote: voteResolution.result,
+        selection: selectionResolution.result,
         proposedEffects: [],
         finalEffects: [],
         blockedEffects: []
@@ -625,7 +625,7 @@ export function applyVote({ session, action, input = {} }) {
       type: 'action_resolution',
       visibility,
       actionId: action.id,
-      vote: voteResolution.result,
+      selection: selectionResolution.result,
       proposedEffects: [],
       finalEffects: [],
       blockedEffects: []
@@ -783,8 +783,8 @@ export function resolveBlockAction(session, action, input = {}, context = {}) {
 
 // Ejecuta link_targets.
 //
-// Esta accion no decide que significa narrativamente el vinculo. Solo crea una
-// relacion mecanica en session.relations. Por ejemplo, una skin podria llamarlo
+// Esta accion no decide que significa narrativamente el vinculo. Solo crea un
+// grupo mecanico en session.groups. Por ejemplo, una skin podria llamarlo
 // enamorar, sincronizar, esposar, conectar destinos o cualquier otra fantasia.
 export function resolveLinkTargets(session, action, input = {}) {
   const actors = getActionActors(session, input.actorIds ?? []);
@@ -813,24 +813,24 @@ export function resolveLinkTargets(session, action, input = {}) {
   };
 }
 
-// Ejecuta vote.
+// Ejecuta select.
 //
-// La accion no recibe un actor unico porque representa una ronda colectiva de
-// votos. Cada voto individual ya trae su actorId.
-export function resolveVote(session, action, input = {}) {
+// La accion no recibe un actor unico porque representa una ronda de seleccion.
+// Cada seleccion individual ya trae su selectorId.
+export function resolveSelection(session, action, input = {}) {
   const definitionValidation = validateActionDefinition(action);
 
   if (!definitionValidation.ok) {
     return {
       ok: false,
-      actionId: action?.id ?? ACTION_IDS.VOTE,
+      actionId: action?.id ?? ACTION_IDS.SELECT,
       errors: definitionValidation.errors,
       session,
       result: null
     };
   }
 
-  const applied = applyVote({ session, action, input });
+  const applied = applySelection({ session, action, input });
 
   return {
     ok: applied.ok,
@@ -889,7 +889,7 @@ export function resolveConcludePlay(session, action, input = {}) {
 // - block_action
 // - block_out_of_play
 // - link_targets
-// - vote
+// - select
 // - close_cycle
 //
 // Las proximas acciones genericas se conectaran aqui.
@@ -906,8 +906,8 @@ export function resolveAction(session, action, input = {}, context = {}) {
   if (action?.id === ACTION_IDS.LINK_TARGETS) {
     return resolveLinkTargets(session, action, input);
   }
-  if (action?.id === ACTION_IDS.VOTE) {
-    return resolveVote(session, action, input);
+  if (action?.id === ACTION_IDS.SELECT) {
+    return resolveSelection(session, action, input);
   }
   if (action?.id === ACTION_IDS.CLOSE_CYCLE) {
     return resolveCloseCycle(session, action);

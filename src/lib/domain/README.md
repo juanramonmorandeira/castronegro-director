@@ -66,7 +66,7 @@ Un catalogo no contiene objetos completos de sesion. Contiene definiciones
 reutilizables. Un role, group, step, recipe o session solo queda completo cuando
 se materializa con datos concretos de partida.
 
-Ejemplo: un step de catalogo puede declarar que existe una receta de voto, pero
+Ejemplo: un step de catalogo puede declarar que existe una receta de seleccion, pero
 no conoce todavia `actorIds`. Esos ids aparecen al construir la sesion, cuando
 los roles y grupos reales ya existen.
 
@@ -82,10 +82,10 @@ Ejemplos:
 - `actionModel.js`: resuelve acciones puras.
 - `resolverModel.js`: deriva o bloquea efectos propuestos.
 - `effectModel.js`: aplica efectos finales a la sesion.
-- `eventModel.js`: convierte efectos finales en eventos y crea respuestas como
-  steps especiales.
+- `eventModel.js`: convierte efectos finales en eventos y crea respuestas
+  pendientes.
 - `objectiveModel.js`: evalua objetivos y conclusion de la parte jugable.
-- `voteModel.js`: cuenta votos.
+- `selectionModel.js`: seleccion mecanica; resuelve chosen/empate/nulo.
 
 ## Flujo principal
 
@@ -130,32 +130,16 @@ primer caso implementado es `role_reactive`: cuando ese rol recibe un cambio
 real a `inPlay=false`, se crea un step en `poolSpecial` para que pueda ejecutar
 una respuesta.
 
-Despues de insertar respuestas en `poolSpecial`, el motor debe ejecutar
-`check_objectives` al final de cada pool. Si se emite un `playOutcome`
-concluyente, se anade un step especial `conclude_play`. Ese step concluye la
-parte jugable, pero no cierra administrativamente la session.
+El motor debe ejecutar `check_objectives` al final de cada pool. Si se emite un
+`playOutcome` concluyente, se ejecuta la etapa automatica `conclude_play`.
+`conclude_play` concluye la parte jugable, pero no cierra administrativamente la
+session.
 
-`vote` es el primer modelo de decision multi-actor:
+El modelo objetivo de decision es `select`:
 
-- los participantes salen de `step.actorIds`;
-- cada participante emite una decision;
-- una abstencion explicita se registra como voto con `abstain: true`;
-- una ausencia de voto no es abstencion;
-- `voteRules.abstain` decide si abstenerse es valido;
-- `voteRules.unanimous: required` exige que todos los `actorIds` elijan el mismo
-  target para que la votacion tenga efecto.
-- `voteRules.tie` decide que ocurre si dos o mas targets quedan empatados. Usamos
-  `tie`, no `even`, porque es el termino tecnico habitual en ingles para un
-  empate de votacion.
-- `voteRules.candidateIds` acota que roleIds pueden recibir votos. Si no se
-  define, todos los roles `inPlay` son candidatos.
-- `voteRules.runoff` decide que candidatos pasan a una segunda ronda.
-- `voteRules.repeatLimit` limita cuantas rondas adicionales puede pedir una
-  votacion.
-- `voteRules.supportThreshold` define el minimo de votos necesario para aceptar
-  el `chosen` provisional. Si no se alcanza, la votacion queda `null`.
-- `voteRules.abstainResolution` decide si las abstenciones se ignoran o si una
-  abstencion claramente superior a cualquier target anula la votacion.
+- `candidateRules` construyen o acotan `candidateIds`;
+- `selectionRules` gobiernan como `selectorIds` eligen entre esos candidates;
+- `selectionModel.js` cubre la decision mecanica reusable.
 
 ## Estado vivo
 
@@ -164,7 +148,6 @@ La sesion guarda:
 - `players`
 - `roles`
 - `groups`
-- `relations`
 - `stepPools`
 - `actionHistory`
 - `stepHistory`
@@ -177,5 +160,7 @@ La sesion guarda:
 - `docs/engine_flow_map.md`: mapa visual del flujo.
 - `docs/skin_ruleset_session.md`: separacion entre presentacion, reglas, configuracion y partida viva.
 - `docs/domain_glossary.md`: diccionario de terminos finales del nuevo nucleo.
+- `docs/STATE_RULE_MODEL.md`: modelo conceptual de estado, reglas, seleccion y
+  propiedades.
 - `docs/objectiveDefinition.md`: objetivos, achievedObjectives, playOutcome y conclude_play.
 - `src/lib/domain/README_RULES.md`: lenguaje mecanico de reglas.

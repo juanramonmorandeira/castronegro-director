@@ -140,56 +140,9 @@ export function validateRoles(roles = [], options = {}) {
   return errors;
 }
 
-// Valida relaciones entre roles de sesion.
-//
-// Comprueba:
-// - IDs duplicados;
-// - type ausente;
-// - que cada relacion apunte a instancias existentes;
-// - que una relacion tenga al menos dos participantes.
-export function validateRelations(relations = [], roles = []) {
-  const errors = [...validateUniqueIds(relations, 'relation')];
-  const roleIds = new Set((roles ?? []).map((role) => role.id));
-
-  (relations ?? []).forEach((relation, index) => {
-    if (!relation?.type) {
-      errors.push({
-        code: 'relation/missing-type',
-        message: `relation at index ${index} has no type`,
-        id: relation?.id ?? null,
-        index
-      });
-    }
-
-    if (!Array.isArray(relation?.roleIds) || relation.roleIds.length < 2) {
-      errors.push({
-        code: 'relation/not-enough-members',
-        message: `relation "${relation?.id ?? index}" needs at least two roleIds`,
-        id: relation?.id ?? null,
-        index
-      });
-      return;
-    }
-
-    relation.roleIds.forEach((roleId) => {
-      if (!roleIds.has(roleId)) {
-        errors.push({
-          code: 'relation/missing-role',
-          message: `relation "${relation?.id ?? index}" references missing role "${roleId}"`,
-          id: relation?.id ?? null,
-          roleId,
-          index
-        });
-      }
-    });
-  });
-
-  return errors;
-}
-
 // Valida grupos de sesion.
 //
-// Un grupo puede estar vacio: relation/linked o flag pueden llenarse mas tarde.
+// Un grupo puede estar vacio: linked o flags pueden llenarse mas tarde.
 // Lo que si validamos es que, si declara miembros, esos roleIds existan.
 export function validateGroups(groups = [], roles = []) {
   const errors = [...validateUniqueIds(groups, 'group')];
@@ -227,7 +180,7 @@ export function validateGroups(groups = [], roles = []) {
 // - la sesion tiene id;
 // - los jugadores no tienen IDs duplicados;
 // - las roles son coherentes.
-// - las relaciones apuntan a roles existentes.
+// - los grupos apuntan a roles existentes.
 //
 // Devuelve siempre un objeto con esta forma:
 // {
@@ -250,7 +203,6 @@ export function validateSession(session = {}, options = {}) {
   errors.push(...validateUniqueIds(session.players ?? [], 'player'));
   errors.push(...validateRoles(session.roles ?? [], options));
   errors.push(...validateGroups(session.groups ?? [], session.roles ?? []));
-  errors.push(...validateRelations(session.relations ?? [], session.roles ?? []));
 
   return {
     ok: errors.length === 0,

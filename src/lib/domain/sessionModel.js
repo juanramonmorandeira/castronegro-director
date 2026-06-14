@@ -56,7 +56,7 @@ export const STEP_STATUSES = Object.freeze({
 // Pools mecanicos del flujo.
 //
 // DEPLOYMENT: configuracion jugable inicial. Debe ejecutarse antes de que
-// acciones recurrentes puedan modificar estados, alignments o relaciones.
+// acciones recurrentes puedan modificar estados, alignments o grupos.
 // CONCEALED: acciones de informacion privada u oculta.
 // EXPOSED: acciones publicas o visibles para el grupo.
 // SPECIAL: interrupciones o resoluciones excepcionales.
@@ -75,14 +75,6 @@ export const DEFAULT_POOL_ORDER = Object.freeze([
   POOL_KEYS.POOL_EXPOSED,
   POOL_KEYS.POOL_SPECIAL
 ]);
-
-// Tipos de relaciones entre roles de sesion.
-//
-// LINKED representa un vinculo mecanico entre dos o mas roles.
-// No usamos nombres narrativos porque eso pertenece a una skin concreta.
-export const RELATION_TYPES = Object.freeze({
-  LINKED: 'linked'
-});
 
 // Prioridades internas de steps especiales.
 //
@@ -108,36 +100,4 @@ export function normalizeId(value = '') {
     .trim()
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '');
-}
-
-// Devuelve las relaciones activas de un tipo concreto para un rol de sesion.
-//
-// Si no se pasa type, devuelve cualquier relacion activa de esa instancia.
-export function findRelationsForRole(session, roleId, type = null) {
-  const normalizedType = type ? normalizeId(type) : null;
-
-  return (session?.relations ?? []).filter((relation) => {
-    if (!relation?.active) return false;
-    if (normalizedType && relation.type !== normalizedType) return false;
-    return (relation.roleIds ?? []).includes(roleId);
-  });
-}
-
-// Devuelve true si una instancia participa en una relacion activa.
-export function hasRelation(session, roleId, type) {
-  return findRelationsForRole(session, roleId, type).length > 0;
-}
-
-// Devuelve los companeros de relacion de un rol de sesion.
-//
-// Para linked entre A y B:
-// getRelatedRoleIds(session, 'A', 'linked') -> ['B']
-export function getRelatedRoleIds(session, roleId, type = null) {
-  return [
-    ...new Set(
-      findRelationsForRole(session, roleId, type)
-        .flatMap((relation) => relation.roleIds ?? [])
-        .filter((id) => id && id !== roleId)
-    )
-  ];
 }

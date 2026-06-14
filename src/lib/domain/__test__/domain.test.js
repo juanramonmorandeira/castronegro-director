@@ -6,22 +6,22 @@ import {
   HISTORY_RESULTS,
   CONSTRAINT_TYPES,
   CONSTRAINT_WINDOWS,
-  RELATION_TYPES,
+  GROUP_TYPES,
   VISIBILITY,
   OBJECTIVE_CONDITIONS,
   OBJECTIVE_EVALUATION_STATUSES,
-  VOTE_ABSTAIN_RESOLUTION_TYPES,
-  VOTE_ABSTAIN_RULES,
-  VOTE_UNANIMOUS_RULES,
-  VOTE_NULL_RULES,
-  VOTE_OUTCOME_TYPES,
-  VOTE_REQUIRED_RULES,
-  VOTE_RESTRICTION_TYPES,
-  VOTE_RUNOFF_RULES,
-  VOTE_ROUND_TYPES,
-  VOTE_SUPPORT_BASES,
-  VOTE_SUPPORT_THRESHOLD_TYPES,
-  VOTE_TIE_RULES,
+  SELECTION_ABSTAIN_RESOLUTION_TYPES,
+  SELECTION_ABSTAIN_RULES,
+  SELECTION_UNANIMOUS_RULES,
+  SELECTION_NULL_RULES,
+  SELECTION_OUTCOME_TYPES,
+  SELECTION_REQUIRED_RULES,
+  SELECTION_RESTRICTION_TYPES,
+  SELECTION_RUNOFF_RULES,
+  SELECTION_ROUND_TYPES,
+  SELECTION_SUPPORT_BASES,
+  SELECTION_SUPPORT_THRESHOLD_TYPES,
+  SELECTION_TIE_RULES,
   buildPools,
   buildInitialGroups,
   buildRolesFromSeats,
@@ -30,9 +30,8 @@ import {
   completeCurrentStep,
   createPool,
   organizePoolSteps,
-  createVoteRules,
+  createSelectionRules,
   createSession,
-  createRelation,
   createGroup,
   addRoleToGroup,
   getCoreGroupCatalog,
@@ -50,7 +49,7 @@ import {
   GROUP_MEMBERSHIP_RULE_TYPES,
   ROLE_CATALOG_IDS,
   RECIPE_KEYS,
-  resolveVoteRound,
+  resolveSelectionRound,
   resolveAction,
   resolveCurrentStep,
   resolveRecipe,
@@ -89,7 +88,7 @@ function test(name, fn) {
 // - linked deriva inPlay=false hacia roles relacionados.
 // - no_repeat_target impide repetir bloqueo sobre el mismo target.
 // - objectiveModel detecta objetivos concluyentes genericos y linked.
-// - voteModel cuenta votos y resuelve empates configurables.
+// - selectionModel cuenta selecciones y resuelve empates configurables.
 // - stepModel conecta el step actual con actionModel y avanza el cursor.
 //
 // No usan Svelte, Firebase, i18n ni navegador.
@@ -100,7 +99,7 @@ const setInPlayFalseAction = getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY);
 const restoreRecentOutOfPlayAction = getCatalogRecipe(RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY);
 const blockOutOfPlayRecipe = getCatalogRecipe(RECIPE_KEYS.BLOCK_OUT_OF_PLAY);
 const linkTargetsAction = getCatalogRecipe(RECIPE_KEYS.LINK_TARGETS);
-const setOutOfPlayAfterVoteRecipe = getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY, {
+const setOutOfPlayAfterSelectionRecipe = getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY, {
   target: {
     type: 'role',
     count: 1,
@@ -110,22 +109,21 @@ const setOutOfPlayAfterVoteRecipe = getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY
 });
 const closeCycleAction = getCatalogRecipe(RECIPE_KEYS.CLOSE_CYCLE);
 
-const voteOutOfPlayRules = createVoteRules({
-  required: VOTE_REQUIRED_RULES.ALL_ACTORS,
-  abstain: VOTE_ABSTAIN_RULES.NOT_ALLOWED,
-  unanimous: VOTE_UNANIMOUS_RULES.NOT_REQUIRED,
-  tie: VOTE_TIE_RULES.NULL_ON_TIE,
-  relationRestrictions: [
+const selectionOutOfPlayRules = createSelectionRules({
+  required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
+  abstain: SELECTION_ABSTAIN_RULES.NOT_ALLOWED,
+  unanimous: SELECTION_UNANIMOUS_RULES.NOT_REQUIRED,
+  tie: SELECTION_TIE_RULES.NULL_ON_TIE,
+  groupRestrictions: [
     {
-      type: VOTE_RESTRICTION_TYPES.EXCLUDE_RELATED_TARGET,
-      relationType: RELATION_TYPES.LINKED
+      type: SELECTION_RESTRICTION_TYPES.EXCLUDE_GROUP_MEMBER_CANDIDATE,
+      groupType: GROUP_TYPES.LINKED
     }
   ]
 });
 
 function createBaseSession({
   groups = [],
-  relations = [],
   sessionObjectiveRules = [],
   settings = {}
 } = {}) {
@@ -176,7 +174,6 @@ function createBaseSession({
     })),
     roles,
     groups,
-    relations,
     sessionObjectiveRules,
     settings
   });
@@ -189,6 +186,22 @@ function createAlignmentGroup(alignmentId, roleIds = []) {
     metadata: {
       alignmentId
     }
+  });
+}
+
+function createLinkedGroup({
+  id = 'linked-test-group',
+  roleIds = ['alignment_a_target-0', 'alignment_a_plain-0'],
+  active = true,
+  sourceActionId = ACTION_IDS.LINK_TARGETS
+} = {}) {
+  return createGroup({
+    id,
+    key: id,
+    type: GROUP_TYPES.LINKED,
+    roleIds,
+    active,
+    sourceActionId
   });
 }
 
@@ -220,31 +233,31 @@ function withStepPools(session, stepPools) {
   };
 }
 
-function createVoteOutOfPlayStep(overrides = {}) {
+function createSelectionOutOfPlayStep(overrides = {}) {
   return createStep({
     key: STEP_KEYS.STEP_05,
     status: STEP_STATUSES.ENABLED,
     actorIds: [],
-    voteRules: voteOutOfPlayRules,
-    actions: [actionRecipe(setOutOfPlayAfterVoteRecipe, STEP_ACTION_KEYS.SET_OUT_OF_PLAY)],
+    selectionRules: selectionOutOfPlayRules,
+    actions: [actionRecipe(setOutOfPlayAfterSelectionRecipe, STEP_ACTION_KEYS.SET_OUT_OF_PLAY)],
     ...overrides
   });
 }
 
-function resolveVoteOutOfPlayStep(session, input = {}, stepOverrides = {}) {
-  const sessionWithVoteStep = withStepPools(
+function resolveSelectionOutOfPlayStep(session, input = {}, stepOverrides = {}) {
+  const sessionWithSelectionStep = withStepPools(
     session,
     createPool({
       poolOrder: ['poolExposed'],
       poolCurrent: 'poolExposed',
       poolNext: 'poolExposed',
       pools: {
-        poolExposed: [createVoteOutOfPlayStep(stepOverrides)]
+        poolExposed: [createSelectionOutOfPlayStep(stepOverrides)]
       }
     })
   );
 
-  return resolveCurrentStep(sessionWithVoteStep, input);
+  return resolveCurrentStep(sessionWithSelectionStep, input);
 }
 
 function withInPlayState(session, inPlayByRoleId = {}) {
@@ -257,11 +270,11 @@ function withInPlayState(session, inPlayByRoleId = {}) {
   };
 }
 
-function createVotes(votesByActorRoleId = {}) {
-  return Object.entries(votesByActorRoleId).map(
-    ([actorId, targetId]) => ({
-      actorId,
-      targetId
+function createSelections(selectionsBySelectorRoleId = {}) {
+  return Object.entries(selectionsBySelectorRoleId).map(
+    ([selectorId, candidateId]) => ({
+      selectorId,
+      candidateId
     })
   );
 }
@@ -273,7 +286,7 @@ function actionRecipe(action, key) {
   };
 }
 
-function collectiveVoteInput(input = {}) {
+function collectiveSelectionInput(input = {}) {
   return {
     ...input
   };
@@ -350,7 +363,7 @@ test('resolveCurrentStep ejecuta receta y completeCurrentStep avanza el cursor',
   assert.equal(inspected.stepAdvance.reason, 'next-step-in-current-pool');
   assert.equal(inspected.stepAdvance.next.stepKey, STEP_KEYS.STEP_02);
   assert.equal(linkedAction.ok, true);
-  assert.equal(linkedAction.session.relations[0].type, RELATION_TYPES.LINKED);
+  assert.equal(linkedAction.session.groups[0].type, GROUP_TYPES.LINKED);
   assert.equal(linkedAction.stepAdvance, null);
   assert.equal(linked.ok, true);
   assert.equal(linked.stepAdvance.reason, 'no-runnable-step');
@@ -399,7 +412,7 @@ test('poolDefinition organiza steps construidos por stepDefinition', () => {
     status: STEP_STATUSES.ENABLED,
     order: 10,
     actorIds: ['alignment_a_target-0', 'alignment_a_plain-0'],
-    actions: [actionRecipe(setOutOfPlayAfterVoteRecipe, STEP_ACTION_KEYS.SET_OUT_OF_PLAY)]
+    actions: [actionRecipe(setOutOfPlayAfterSelectionRecipe, STEP_ACTION_KEYS.SET_OUT_OF_PLAY)]
   });
   const created = organizePoolSteps({
     poolOrder: ['poolExposed'],
@@ -492,7 +505,7 @@ test('stepCatalog expone los steps mecanicos ya definidos', () => {
     getCatalogStep(STEP_CATALOG_IDS.ROLE_IN_PLAY_CONTROL, { key: STEP_KEYS.STEP_03 }),
     getCatalogStep(STEP_CATALOG_IDS.ROLE_REACTIVE_RESPONSE, { key: STEP_KEYS.STEP_07 }),
     getCatalogStep(STEP_CATALOG_IDS.GROUP_SET_OUT_OF_PLAY, { key: STEP_KEYS.STEP_04 }),
-    getCatalogStep(STEP_CATALOG_IDS.GROUP_VOTE, { key: STEP_KEYS.STEP_05 }),
+    getCatalogStep(STEP_CATALOG_IDS.GROUP_SELECTION, { key: STEP_KEYS.STEP_05 }),
     getCatalogStep(STEP_CATALOG_IDS.SYSTEM_CLOSES_CYCLE, { key: STEP_KEYS.STEP_06 })
   ];
 
@@ -923,7 +936,7 @@ test('resolveCurrentStep exige actionKey cuando un step ofrece varias acciones',
   assert.equal(roleById(selectedAction.session, 'alignment_a_target-0').inPlay, false);
 });
 
-test('resolveCurrentStep ejecuta step_05 con voto y receta set_out_of_play', () => {
+test('resolveCurrentStep ejecuta step_05 con seleccion y receta set_out_of_play', () => {
   const session = withStepPools(
     createBaseSession(),
     createPool({
@@ -936,15 +949,15 @@ test('resolveCurrentStep ejecuta step_05 con voto y receta set_out_of_play', () 
             key: STEP_KEYS.STEP_05,
             status: STEP_STATUSES.ENABLED,
             actorIds: [],
-            voteRules: voteOutOfPlayRules,
-            actions: [actionRecipe(setOutOfPlayAfterVoteRecipe, STEP_ACTION_KEYS.SET_OUT_OF_PLAY)]
+            selectionRules: selectionOutOfPlayRules,
+            actions: [actionRecipe(setOutOfPlayAfterSelectionRecipe, STEP_ACTION_KEYS.SET_OUT_OF_PLAY)]
           }
         ]
       }
     })
   );
   const resolved = resolveCurrentStep(session, {
-    votes: createVotes({
+    selections: createSelections({
       'alignment_b_attacker-0': 'alignment_a_target-0',
       'alignment_a_blocker-0': 'alignment_a_target-0',
       'alignment_a_target-0': 'alignment_a_target-0',
@@ -956,12 +969,12 @@ test('resolveCurrentStep ejecuta step_05 con voto y receta set_out_of_play', () 
   });
   const completed = completeCurrentStep(resolved.session, {
     requestedBy: STEP_COMPLETION_REQUESTED_BY.DIRECTOR,
-    reason: 'director_closed_vote_step'
+    reason: 'director_closed_selection_step'
   });
 
   assert.equal(resolved.ok, true);
   assert.equal(resolved.step.stepKey, STEP_KEYS.STEP_05);
-  assert.equal(resolved.result.vote.type, VOTE_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.CHOSEN);
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
   assert.equal(resolved.stepAdvance, null);
   assert.equal(completed.ok, true);
@@ -972,7 +985,7 @@ test('resolveCurrentStep ejecuta step_05 con voto y receta set_out_of_play', () 
   assert.equal(completed.stepAdvance.reason, 'no-runnable-step');
 });
 
-test('resolveCurrentStep usa actorIds del step como participantes de vote', () => {
+test('resolveCurrentStep usa actorIds del step como participantes de seleccion', () => {
   const session = withStepPools(
     createBaseSession(),
     createPool({
@@ -985,22 +998,22 @@ test('resolveCurrentStep usa actorIds del step como participantes de vote', () =
             key: STEP_KEYS.STEP_05,
             status: STEP_STATUSES.ENABLED,
             actorIds: ['alignment_b_attacker-0', 'alignment_a_blocker-0'],
-            voteRules: voteOutOfPlayRules,
-            actions: [actionRecipe(setOutOfPlayAfterVoteRecipe, STEP_ACTION_KEYS.SET_OUT_OF_PLAY)]
+            selectionRules: selectionOutOfPlayRules,
+            actions: [actionRecipe(setOutOfPlayAfterSelectionRecipe, STEP_ACTION_KEYS.SET_OUT_OF_PLAY)]
           }
         ]
       }
     })
   );
   const resolved = resolveCurrentStep(session, {
-    votes: createVotes({
+    selections: createSelections({
       'alignment_b_attacker-0': 'alignment_a_target-0'
     })
   });
 
   assert.equal(resolved.ok, false);
-  assert.equal(resolved.errors[0].code, 'vote/missing-required-votes');
-  assert.deepEqual(resolved.errors[0].missingActorIds, ['alignment_a_blocker-0']);
+  assert.equal(resolved.errors[0].code, 'selection/missing-required-selections');
+  assert.deepEqual(resolved.errors[0].missingSelectorIds, ['alignment_a_blocker-0']);
 });
 
 test('resolveCurrentStep ejecuta step_02 con receta block_out_of_play', () => {
@@ -1725,7 +1738,7 @@ test('no_repeat_target con ventana session impide repetir target durante toda la
   assert.equal(otherTargetBlocking.ok, true);
 });
 
-test('link_targets crea una relacion linked en la sesion', () => {
+test('link_targets crea un grupo linked en la sesion', () => {
   const session = createBaseSession();
   const linked = resolveAction(session, linkTargetsAction, {
     actorIds: ['role_inspector-0'],
@@ -1733,17 +1746,20 @@ test('link_targets crea una relacion linked en la sesion', () => {
   });
 
   assert.equal(linked.ok, true);
-  assert.equal(linked.session.relations.length, 1);
-  assert.deepEqual(linked.session.relations[0], {
-    id: 'linked-alignment_a_plain-0-alignment_a_target-0',
-    type: RELATION_TYPES.LINKED,
-    roleIds: ['alignment_a_plain-0', 'alignment_a_target-0'],
+  assert.equal(linked.session.groups.length, 1);
+  assert.deepEqual(linked.session.groups[0], {
+    id: 'linked_alignment_a_plain_0_alignment_a_target_0',
+    key: 'linked_alignment_a_plain_0_alignment_a_target_0',
+    type: GROUP_TYPES.LINKED,
     active: true,
     createdCycleId: 1,
     sourceActionId: ACTION_IDS.LINK_TARGETS,
+    roleIds: ['alignment_a_plain-0', 'alignment_a_target-0'],
+    groupRules: [],
+    stepDefinitions: [],
     metadata: {}
   });
-  assert.equal(linked.result.finalEffects[0].type, EFFECT_TYPES.SET_RELATION);
+  assert.equal(linked.result.finalEffects[0].type, EFFECT_TYPES.SET_GROUP);
 });
 
 test('linked deriva inPlay=false hacia los roles enlazados', () => {
@@ -1762,18 +1778,17 @@ test('linked deriva inPlay=false hacia los roles enlazados', () => {
   assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, false);
   assert.equal(resolved.result.finalEffects.length, 2);
   assert.deepEqual(resolved.result.finalEffects[1].derivedFrom, {
-    type: 'relation',
-    relationType: RELATION_TYPES.LINKED,
+    type: 'group',
+    groupType: GROUP_TYPES.LINKED,
     sourceTargetId: 'alignment_a_target-0'
   });
 });
 
-test('validateSession detecta relaciones que apuntan a roles inexistentes', () => {
+test('validateSession detecta grupos que apuntan a roles inexistentes', () => {
   const session = createBaseSession({
-    relations: [
-      createRelation({
+    groups: [
+      createLinkedGroup({
         id: 'broken-link',
-        type: RELATION_TYPES.LINKED,
         roleIds: ['alignment_a_target-0', 'missing-role-0']
       })
     ]
@@ -1782,7 +1797,7 @@ test('validateSession detecta relaciones que apuntan a roles inexistentes', () =
 
   assert.equal(validation.ok, false);
   assert.equal(
-    validation.errors.some((error) => error.code === 'relation/missing-role'),
+    validation.errors.some((error) => error.code === 'group/missing-role'),
     true
   );
 });
@@ -1921,22 +1936,10 @@ test('checkObjectives detecta only_holder_group_remains_in_play con group de ali
 test('checkObjectives detecta only_holder_group_remains_in_play con group linked explicito', () => {
   const session = withInPlayState(
     createBaseSession({
-      relations: [
-        createRelation({
-          id: 'linked-mixed-finalists',
-          type: RELATION_TYPES.LINKED,
-          roleIds: ['alignment_a_target-0', 'alignment_b_target-0'],
-          active: true,
-          sourceActionId: ACTION_IDS.LINK_TARGETS
-        })
-      ],
       groups: [
-        createGroup({
-          key: 'group_linked_finalists',
-          roleIds: ['alignment_a_target-0', 'alignment_b_target-0'],
-          metadata: {
-            relationId: 'linked-mixed-finalists'
-          }
+        createLinkedGroup({
+          id: 'group_linked_finalists',
+          roleIds: ['alignment_a_target-0', 'alignment_b_target-0']
         })
       ],
       sessionObjectiveRules: [
@@ -1973,18 +1976,9 @@ test('checkObjectives detecta only_holder_group_remains_in_play con group linked
 test('checkObjectives no activa only_holder_group_remains_in_play si queda un tercero en juego', () => {
   const session = withInPlayState(
     createBaseSession({
-      relations: [
-        createRelation({
-          id: 'linked-with-third-player',
-          type: RELATION_TYPES.LINKED,
-          roleIds: ['alignment_a_target-0', 'alignment_b_target-0'],
-          active: true,
-          sourceActionId: ACTION_IDS.LINK_TARGETS
-        })
-      ],
       groups: [
-        createGroup({
-          key: 'group_linked_with_third',
+        createLinkedGroup({
+          id: 'group_linked_with_third',
           roleIds: ['alignment_a_target-0', 'alignment_b_target-0']
         })
       ],
@@ -2014,89 +2008,89 @@ test('checkObjectives no activa only_holder_group_remains_in_play si queda un te
   assert.deepEqual(objectiveEvaluation.fulfilledRules, []);
 });
 
-test('resolveVoteRound detecta chosen unico por mayoria simple', () => {
+test('resolveSelectionRound detecta chosen unico por mayoria simple', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteRound({
+  const resolved = resolveSelectionRound({
     session,
-    votes: [
-      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_a_blocker-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_a_plain-0', targetId: 'alignment_b_target-0' }
+    selections: [
+      { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_blocker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_plain-0', candidateId: 'alignment_b_target-0' }
     ]
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.CHOSEN);
   assert.equal(resolved.result.chosenId, 'alignment_a_target-0');
-  assert.deepEqual(resolved.result.tally, [
-    { targetId: 'alignment_a_target-0', voteCount: 2 },
-    { targetId: 'alignment_b_target-0', voteCount: 1 }
+  assert.deepEqual(resolved.result.selectionTally, [
+    { candidateId: 'alignment_a_target-0', selectionCount: 2 },
+    { candidateId: 'alignment_b_target-0', selectionCount: 1 }
   ]);
 });
 
-test('resolveVoteRound rechaza actores que votan mas de una vez', () => {
+test('resolveSelectionRound rechaza selectores que seleccionan mas de una vez', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteRound({
+  const resolved = resolveSelectionRound({
     session,
-    votes: [
-      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_plain-0' }
+    selections: [
+      { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_plain-0' }
     ]
   });
 
   assert.equal(resolved.ok, false);
-  assert.equal(resolved.errors[0].code, 'vote/duplicate-actor');
+  assert.equal(resolved.errors[0].code, 'selection/duplicate-selector');
 });
 
-test('resolveVoteRound declara nula una votacion empatada con null_on_tie', () => {
+test('resolveSelectionRound declara nula una seleccion empatada con null_on_tie', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteRound({
+  const resolved = resolveSelectionRound({
     session,
-    voteRules: { tie: VOTE_TIE_RULES.NULL_ON_TIE },
-    votes: [
-      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_a_blocker-0', targetId: 'alignment_a_plain-0' }
+    selectionRules: { tie: SELECTION_TIE_RULES.NULL_ON_TIE },
+    selections: [
+      { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_blocker-0', candidateId: 'alignment_a_plain-0' }
     ]
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.NULL);
-  assert.equal(resolved.result.reason, 'tied_vote');
-  assert.deepEqual(resolved.result.tiedTargetIds, [
+  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.reason, 'tied_selection');
+  assert.deepEqual(resolved.result.tiedCandidateIds, [
     'alignment_a_plain-0',
     'alignment_a_target-0'
   ]);
 });
 
-test('resolveVoteRound acepta chosen si alcanza mayoria sobre votos emitidos', () => {
+test('resolveSelectionRound acepta chosen si alcanza mayoria sobre selecciones emitidas', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteRound({
+  const resolved = resolveSelectionRound({
     session,
-    voteRules: {
+    selectionRules: {
       supportThreshold: {
-        type: VOTE_SUPPORT_THRESHOLD_TYPES.MAJORITY,
-        base: VOTE_SUPPORT_BASES.CAST_VOTES
+        type: SELECTION_SUPPORT_THRESHOLD_TYPES.MAJORITY,
+        base: SELECTION_SUPPORT_BASES.CAST_SELECTIONS
       }
     },
-    votes: [
-      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_a_blocker-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_a_target-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_a_plain-0', targetId: 'alignment_a_plain-0' },
-      { actorId: 'alignment_b_target-0', targetId: 'alignment_a_plain-0' }
+    selections: [
+      { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_blocker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_target-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_plain-0', candidateId: 'alignment_a_plain-0' },
+      { selectorId: 'alignment_b_target-0', candidateId: 'alignment_a_plain-0' }
     ]
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.CHOSEN);
   assert.equal(resolved.result.chosenId, 'alignment_a_target-0');
 });
 
-test('resolveVoteRound declara null si chosen no alcanza mayoria sobre actores', () => {
+test('resolveSelectionRound declara null si chosen no alcanza mayoria sobre selectores', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteRound({
+  const resolved = resolveSelectionRound({
     session,
-    actorIds: [
+    selectorIds: [
       'alignment_b_attacker-0',
       'alignment_a_blocker-0',
       'alignment_a_target-0',
@@ -2105,23 +2099,23 @@ test('resolveVoteRound declara null si chosen no alcanza mayoria sobre actores',
       'role_inspector-0',
       'hidden_enemy-0'
     ],
-    voteRules: {
+    selectionRules: {
       supportThreshold: {
-        type: VOTE_SUPPORT_THRESHOLD_TYPES.MAJORITY,
-        base: VOTE_SUPPORT_BASES.ACTOR_COUNT
+        type: SELECTION_SUPPORT_THRESHOLD_TYPES.MAJORITY,
+        base: SELECTION_SUPPORT_BASES.SELECTOR_COUNT
       }
     },
-    votes: [
-      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_a_blocker-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_a_target-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_a_plain-0', targetId: 'alignment_a_plain-0' },
-      { actorId: 'alignment_b_target-0', targetId: 'alignment_a_plain-0' }
+    selections: [
+      { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_blocker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_target-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_plain-0', candidateId: 'alignment_a_plain-0' },
+      { selectorId: 'alignment_b_target-0', candidateId: 'alignment_a_plain-0' }
     ]
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.NULL);
   assert.equal(resolved.result.reason, 'insufficient_support');
   assert.deepEqual(resolved.result.support, {
     ok: false,
@@ -2130,127 +2124,127 @@ test('resolveVoteRound declara null si chosen no alcanza mayoria sobre actores',
   });
 });
 
-test('resolveVoteRound declara null si chosen no alcanza fraccion exigida', () => {
+test('resolveSelectionRound declara null si chosen no alcanza fraccion exigida', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteRound({
+  const resolved = resolveSelectionRound({
     session,
-    voteRules: {
+    selectionRules: {
       supportThreshold: {
-        type: VOTE_SUPPORT_THRESHOLD_TYPES.FRACTION,
+        type: SELECTION_SUPPORT_THRESHOLD_TYPES.FRACTION,
         numerator: 2,
         denominator: 3,
-        base: VOTE_SUPPORT_BASES.CAST_VOTES
+        base: SELECTION_SUPPORT_BASES.CAST_SELECTIONS
       }
     },
-    votes: [
-      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_a_blocker-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_a_target-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_a_plain-0', targetId: 'alignment_a_plain-0' },
-      { actorId: 'alignment_b_target-0', targetId: 'alignment_a_plain-0' },
-      { actorId: 'role_inspector-0', targetId: 'alignment_b_target-0' }
+    selections: [
+      { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_blocker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_target-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_plain-0', candidateId: 'alignment_a_plain-0' },
+      { selectorId: 'alignment_b_target-0', candidateId: 'alignment_a_plain-0' },
+      { selectorId: 'role_inspector-0', candidateId: 'alignment_b_target-0' }
     ]
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.NULL);
   assert.equal(resolved.result.reason, 'insufficient_support');
   assert.equal(resolved.result.support.requiredSupportCount, 4);
   assert.equal(resolved.result.support.supportBaseCount, 6);
 });
 
-test('resolveVoteRound acepta chosen si alcanza fraccion exigida', () => {
+test('resolveSelectionRound acepta chosen si alcanza fraccion exigida', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteRound({
+  const resolved = resolveSelectionRound({
     session,
-    voteRules: {
+    selectionRules: {
       supportThreshold: {
-        type: VOTE_SUPPORT_THRESHOLD_TYPES.FRACTION,
+        type: SELECTION_SUPPORT_THRESHOLD_TYPES.FRACTION,
         numerator: 2,
         denominator: 3,
-        base: VOTE_SUPPORT_BASES.CAST_VOTES
+        base: SELECTION_SUPPORT_BASES.CAST_SELECTIONS
       }
     },
-    votes: [
-      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_a_blocker-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_a_target-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_a_plain-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_b_target-0', targetId: 'alignment_a_plain-0' },
-      { actorId: 'role_inspector-0', targetId: 'alignment_b_target-0' }
+    selections: [
+      { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_blocker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_target-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_plain-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_b_target-0', candidateId: 'alignment_a_plain-0' },
+      { selectorId: 'role_inspector-0', candidateId: 'alignment_b_target-0' }
     ]
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.CHOSEN);
   assert.equal(resolved.result.chosenId, 'alignment_a_target-0');
 });
 
-test('resolveVoteRound pide runoff cuando la politica de empate lo permite', () => {
+test('resolveSelectionRound pide runoff cuando la politica de empate lo permite', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteRound({
+  const resolved = resolveSelectionRound({
     session,
-    voteRules: { tie: VOTE_TIE_RULES.RUNOFF_ON_TIE },
-    votes: [
-      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_a_blocker-0', targetId: 'alignment_a_plain-0' }
+    selectionRules: { tie: SELECTION_TIE_RULES.RUNOFF_ON_TIE },
+    selections: [
+      { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_blocker-0', candidateId: 'alignment_a_plain-0' }
     ]
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.TIE);
+  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.TIE);
   assert.equal(resolved.result.reason, 'runoff_required');
   assert.deepEqual(resolved.result.nextRound, {
-    roundType: VOTE_ROUND_TYPES.RUNOFF,
+    roundType: SELECTION_ROUND_TYPES.RUNOFF,
     roundIndex: 1,
     candidateIds: ['alignment_a_plain-0', 'alignment_a_target-0']
   });
 });
 
-test('resolveVoteRound crea runoff con candidatos empatados por defecto', () => {
+test('resolveSelectionRound crea runoff con candidatos empatados por defecto', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteRound({
+  const resolved = resolveSelectionRound({
     session,
-    voteRules: {
-      tie: VOTE_TIE_RULES.RUNOFF_ON_TIE,
-      runoff: VOTE_RUNOFF_RULES.TIED_CANDIDATES
+    selectionRules: {
+      tie: SELECTION_TIE_RULES.RUNOFF_ON_TIE,
+      runoff: SELECTION_RUNOFF_RULES.TIED_CANDIDATES
     },
-    votes: [
-      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_a_blocker-0', targetId: 'alignment_a_plain-0' },
-      { actorId: 'alignment_a_target-0', targetId: 'alignment_b_target-0' },
-      { actorId: 'alignment_a_plain-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_b_target-0', targetId: 'alignment_a_plain-0' }
+    selections: [
+      { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_blocker-0', candidateId: 'alignment_a_plain-0' },
+      { selectorId: 'alignment_a_target-0', candidateId: 'alignment_b_target-0' },
+      { selectorId: 'alignment_a_plain-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_b_target-0', candidateId: 'alignment_a_plain-0' }
     ]
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.TIE);
+  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.TIE);
   assert.deepEqual(resolved.result.nextRound.candidateIds, [
     'alignment_a_plain-0',
     'alignment_a_target-0'
   ]);
 });
 
-test('resolveVoteRound crea runoff con todos los candidatos votados si asi se define', () => {
+test('resolveSelectionRound crea runoff con todos los candidatos seleccionados si asi se define', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteRound({
+  const resolved = resolveSelectionRound({
     session,
-    voteRules: {
-      tie: VOTE_TIE_RULES.RUNOFF_ON_TIE,
-      runoff: VOTE_RUNOFF_RULES.VOTED_CANDIDATES
+    selectionRules: {
+      tie: SELECTION_TIE_RULES.RUNOFF_ON_TIE,
+      runoff: SELECTION_RUNOFF_RULES.SELECTED_CANDIDATES
     },
-    votes: [
-      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_a_blocker-0', targetId: 'alignment_a_plain-0' },
-      { actorId: 'alignment_a_target-0', targetId: 'alignment_b_target-0' },
-      { actorId: 'alignment_a_plain-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_b_target-0', targetId: 'alignment_a_plain-0' }
+    selections: [
+      { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_blocker-0', candidateId: 'alignment_a_plain-0' },
+      { selectorId: 'alignment_a_target-0', candidateId: 'alignment_b_target-0' },
+      { selectorId: 'alignment_a_plain-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_b_target-0', candidateId: 'alignment_a_plain-0' }
     ]
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.TIE);
+  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.TIE);
   assert.deepEqual(resolved.result.nextRound.candidateIds, [
     'alignment_a_plain-0',
     'alignment_a_target-0',
@@ -2258,106 +2252,106 @@ test('resolveVoteRound crea runoff con todos los candidatos votados si asi se de
   ]);
 });
 
-test('resolveVoteRound crea runoff con los mismos candidatos si asi se define', () => {
+test('resolveSelectionRound crea runoff con los mismos candidatos si asi se define', () => {
   const session = createBaseSession();
   const candidateIds = ['alignment_a_plain-0', 'alignment_a_target-0', 'alignment_b_target-0'];
-  const resolved = resolveVoteRound({
+  const resolved = resolveSelectionRound({
     session,
-    voteRules: {
-      tie: VOTE_TIE_RULES.RUNOFF_ON_TIE,
-      runoff: VOTE_RUNOFF_RULES.SAME_CANDIDATES,
+    selectionRules: {
+      tie: SELECTION_TIE_RULES.RUNOFF_ON_TIE,
+      runoff: SELECTION_RUNOFF_RULES.SAME_CANDIDATES,
       candidateIds
     },
-    votes: [
-      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_a_blocker-0', targetId: 'alignment_a_plain-0' }
+    selections: [
+      { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_blocker-0', candidateId: 'alignment_a_plain-0' }
     ]
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.TIE);
+  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.TIE);
   assert.deepEqual(resolved.result.nextRound.candidateIds, candidateIds);
 });
 
-test('resolveVoteRound limita runoff a los objetivos empatados', () => {
+test('resolveSelectionRound limita runoff a los objetivos empatados', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteRound({
+  const resolved = resolveSelectionRound({
     session,
-    roundType: VOTE_ROUND_TYPES.RUNOFF,
-    voteRules: {
+    roundType: SELECTION_ROUND_TYPES.RUNOFF,
+    selectionRules: {
       candidateIds: ['alignment_a_plain-0', 'alignment_a_target-0']
     },
-    votes: [
-      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_b_target-0' }
+    selections: [
+      { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_b_target-0' }
     ]
   });
 
   assert.equal(resolved.ok, false);
-  assert.equal(resolved.errors[0].code, 'vote/target-not-candidate');
+  assert.equal(resolved.errors[0].code, 'selection/candidate-not-candidate');
 });
 
-test('resolveVoteRound declara nulo un runoff que vuelve a empatar', () => {
+test('resolveSelectionRound declara nulo un runoff que vuelve a empatar', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteRound({
+  const resolved = resolveSelectionRound({
     session,
-    roundType: VOTE_ROUND_TYPES.RUNOFF,
-    voteRules: {
-      tie: VOTE_TIE_RULES.RUNOFF_ON_TIE,
+    roundType: SELECTION_ROUND_TYPES.RUNOFF,
+    selectionRules: {
+      tie: SELECTION_TIE_RULES.RUNOFF_ON_TIE,
       candidateIds: ['alignment_a_plain-0', 'alignment_a_target-0']
     },
-    votes: [
-      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_a_blocker-0', targetId: 'alignment_a_plain-0' }
+    selections: [
+      { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_blocker-0', candidateId: 'alignment_a_plain-0' }
     ]
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.NULL);
   assert.equal(resolved.result.reason, 'runoff_tied');
 });
 
-test('resolveVoteRound no pide otra ronda si ya alcanzo repeatLimit', () => {
+test('resolveSelectionRound no pide otra ronda si ya alcanzo repeatLimit', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteRound({
+  const resolved = resolveSelectionRound({
     session,
-    roundType: VOTE_ROUND_TYPES.RUNOFF,
+    roundType: SELECTION_ROUND_TYPES.RUNOFF,
     roundIndex: 1,
-    voteRules: {
-      tie: VOTE_TIE_RULES.RUNOFF_ON_TIE,
+    selectionRules: {
+      tie: SELECTION_TIE_RULES.RUNOFF_ON_TIE,
       repeatLimit: 1,
       candidateIds: ['alignment_a_plain-0', 'alignment_a_target-0']
     },
-    votes: [
-      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_a_blocker-0', targetId: 'alignment_a_plain-0' }
+    selections: [
+      { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_blocker-0', candidateId: 'alignment_a_plain-0' }
     ]
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.NULL);
   assert.equal(resolved.result.reason, 'runoff_tied');
   assert.equal(resolved.result.nextRound, undefined);
 });
 
-test('resolveVoteRound puede repetir una votacion nula si voteRules lo permite', () => {
+test('resolveSelectionRound puede repetir una seleccion nula si selectionRules lo permite', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteRound({
+  const resolved = resolveSelectionRound({
     session,
-    voteRules: {
-      abstain: VOTE_ABSTAIN_RULES.ALLOWED,
-      nullResult: VOTE_NULL_RULES.REPEAT_ON_NULL,
+    selectionRules: {
+      abstain: SELECTION_ABSTAIN_RULES.ALLOWED,
+      nullResult: SELECTION_NULL_RULES.REPEAT_ON_NULL,
       repeatLimit: 1
     },
-    votes: [
-      { actorId: 'alignment_b_attacker-0', abstain: true }
+    selections: [
+      { selectorId: 'alignment_b_attacker-0', abstain: true }
     ]
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.NULL);
   assert.equal(resolved.result.reason, 'all_abstained');
   assert.deepEqual(resolved.result.nextRound, {
-    roundType: VOTE_ROUND_TYPES.INITIAL,
+    roundType: SELECTION_ROUND_TYPES.INITIAL,
     roundIndex: 1,
     candidateIds: [
       'alignment_b_attacker-0',
@@ -2371,19 +2365,19 @@ test('resolveVoteRound puede repetir una votacion nula si voteRules lo permite',
   });
 });
 
-test('resolveVoteRound exige voto de todos los roles inPlay cuando voteRules.required es all_actors', () => {
+test('resolveSelectionRound exige seleccion de todos los roles inPlay cuando selectionRules.required es all_selectors', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteRound({
+  const resolved = resolveSelectionRound({
     session,
-    voteRules: { required: VOTE_REQUIRED_RULES.ALL_ACTORS },
-    votes: [
-      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' }
+    selectionRules: { required: SELECTION_REQUIRED_RULES.ALL_SELECTORS },
+    selections: [
+      { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' }
     ]
   });
 
   assert.equal(resolved.ok, false);
-  assert.equal(resolved.errors[0].code, 'vote/missing-required-votes');
-  assert.deepEqual(resolved.errors[0].missingActorIds.sort(), [
+  assert.equal(resolved.errors[0].code, 'selection/missing-required-selections');
+  assert.deepEqual(resolved.errors[0].missingSelectorIds.sort(), [
     'alignment_a_blocker-0',
     'alignment_a_plain-0',
     'alignment_a_target-0',
@@ -2393,230 +2387,218 @@ test('resolveVoteRound exige voto de todos los roles inPlay cuando voteRules.req
   ]);
 });
 
-test('resolveVoteRound permite abstencion explicita cuando la politica lo permite', () => {
+test('resolveSelectionRound permite abstencion explicita cuando la politica lo permite', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteRound({
+  const resolved = resolveSelectionRound({
     session,
-    actorIds: ['alignment_b_attacker-0', 'alignment_a_blocker-0'],
-    voteRules: {
-      required: VOTE_REQUIRED_RULES.ALL_ACTORS,
-      abstain: VOTE_ABSTAIN_RULES.ALLOWED
+    selectorIds: ['alignment_b_attacker-0', 'alignment_a_blocker-0'],
+    selectionRules: {
+      required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
+      abstain: SELECTION_ABSTAIN_RULES.ALLOWED
     },
-    votes: [
-      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_a_blocker-0', abstain: true }
+    selections: [
+      { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_blocker-0', abstain: true }
     ]
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.CHOSEN);
   assert.equal(resolved.result.chosenId, 'alignment_a_target-0');
-  assert.deepEqual(resolved.result.abstentions, [
+  assert.deepEqual(resolved.result.abstainedSelections, [
     {
-      actorId: 'alignment_a_blocker-0',
-      targetId: null,
+      selectorId: 'alignment_a_blocker-0',
+      candidateId: null,
       abstain: true,
       value: 1,
-      roundId: VOTE_ROUND_TYPES.INITIAL,
+      roundId: SELECTION_ROUND_TYPES.INITIAL,
       metadata: {}
     }
   ]);
 });
 
-test('resolveVoteRound rechaza abstencion cuando la politica no la permite', () => {
+test('resolveSelectionRound rechaza abstencion cuando la politica no la permite', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteRound({
+  const resolved = resolveSelectionRound({
     session,
-    actorIds: ['alignment_b_attacker-0'],
-    voteRules: { required: VOTE_REQUIRED_RULES.ALL_ACTORS },
-    votes: [{ actorId: 'alignment_b_attacker-0', abstain: true }]
+    selectorIds: ['alignment_b_attacker-0'],
+    selectionRules: { required: SELECTION_REQUIRED_RULES.ALL_SELECTORS },
+    selections: [{ selectorId: 'alignment_b_attacker-0', abstain: true }]
   });
 
   assert.equal(resolved.ok, false);
-  assert.equal(resolved.errors[0].code, 'vote/abstain-not-allowed');
+  assert.equal(resolved.errors[0].code, 'selection/abstain-not-allowed');
 });
 
-test('resolveVoteRound declara nula la votacion si todos se abstienen', () => {
+test('resolveSelectionRound declara nula la seleccion si todos se abstienen', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteRound({
+  const resolved = resolveSelectionRound({
     session,
-    actorIds: ['alignment_b_attacker-0', 'alignment_a_blocker-0'],
-    voteRules: {
-      required: VOTE_REQUIRED_RULES.ALL_ACTORS,
-      abstain: VOTE_ABSTAIN_RULES.ALLOWED
+    selectorIds: ['alignment_b_attacker-0', 'alignment_a_blocker-0'],
+    selectionRules: {
+      required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
+      abstain: SELECTION_ABSTAIN_RULES.ALLOWED
     },
-    votes: [
-      { actorId: 'alignment_b_attacker-0', abstain: true },
-      { actorId: 'alignment_a_blocker-0', abstain: true }
+    selections: [
+      { selectorId: 'alignment_b_attacker-0', abstain: true },
+      { selectorId: 'alignment_a_blocker-0', abstain: true }
     ]
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.NULL);
   assert.equal(resolved.result.reason, 'all_abstained');
-  assert.deepEqual(resolved.result.tally, []);
+  assert.deepEqual(resolved.result.selectionTally, []);
 });
 
-test('resolveVoteRound ignora abstenciones por defecto aunque superen al target elegido', () => {
+test('resolveSelectionRound ignora abstenciones por defecto aunque superen al target elegido', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteRound({
+  const resolved = resolveSelectionRound({
     session,
-    voteRules: {
-      abstain: VOTE_ABSTAIN_RULES.ALLOWED
+    selectionRules: {
+      abstain: SELECTION_ABSTAIN_RULES.ALLOWED
     },
-    votes: [
-      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_a_blocker-0', abstain: true },
-      { actorId: 'alignment_a_target-0', abstain: true }
+    selections: [
+      { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_blocker-0', abstain: true },
+      { selectorId: 'alignment_a_target-0', abstain: true }
     ]
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.CHOSEN);
   assert.equal(resolved.result.chosenId, 'alignment_a_target-0');
 });
 
-test('resolveVoteRound declara null si la abstencion supera a cualquier target', () => {
+test('resolveSelectionRound declara null si la abstencion supera a cualquier target', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteRound({
+  const resolved = resolveSelectionRound({
     session,
-    voteRules: {
-      abstain: VOTE_ABSTAIN_RULES.ALLOWED,
+    selectionRules: {
+      abstain: SELECTION_ABSTAIN_RULES.ALLOWED,
       abstainResolution: {
-        type: VOTE_ABSTAIN_RESOLUTION_TYPES.NULL_IF_HIGHEST
+        type: SELECTION_ABSTAIN_RESOLUTION_TYPES.NULL_IF_HIGHEST
       }
     },
-    votes: [
-      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_a_blocker-0', abstain: true },
-      { actorId: 'alignment_a_target-0', abstain: true }
+    selections: [
+      { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_blocker-0', abstain: true },
+      { selectorId: 'alignment_a_target-0', abstain: true }
     ]
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.NULL);
   assert.equal(resolved.result.reason, 'abstention_highest');
-  assert.equal(resolved.result.abstainVoteCount, 2);
+  assert.equal(resolved.result.abstainSelectionCount, 2);
   assert.deepEqual(resolved.result.finalEffects ?? [], []);
 });
 
-test('resolveVoteRound exige unanimidad cuando voteRules.unanimous es required', () => {
+test('resolveSelectionRound exige unanimidad cuando selectionRules.unanimous es required', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteRound({
+  const resolved = resolveSelectionRound({
     session,
-    actorIds: ['alignment_b_attacker-0', 'alignment_a_blocker-0'],
-    voteRules: {
-      required: VOTE_REQUIRED_RULES.ALL_ACTORS,
-      unanimous: VOTE_UNANIMOUS_RULES.REQUIRED
+    selectorIds: ['alignment_b_attacker-0', 'alignment_a_blocker-0'],
+    selectionRules: {
+      required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
+      unanimous: SELECTION_UNANIMOUS_RULES.REQUIRED
     },
-    votes: [
-      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_a_blocker-0', targetId: 'alignment_a_target-0' }
+    selections: [
+      { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_blocker-0', candidateId: 'alignment_a_target-0' }
     ]
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.CHOSEN);
-  assert.equal(resolved.result.reason, 'unanimous_target');
+  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.reason, 'unanimous_candidate');
   assert.equal(resolved.result.chosenId, 'alignment_a_target-0');
 });
 
-test('resolveVoteRound declara nula una decision no unanime', () => {
+test('resolveSelectionRound declara nula una decision no unanime', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteRound({
+  const resolved = resolveSelectionRound({
     session,
-    actorIds: ['alignment_b_attacker-0', 'alignment_a_blocker-0'],
-    voteRules: {
-      required: VOTE_REQUIRED_RULES.ALL_ACTORS,
-      unanimous: VOTE_UNANIMOUS_RULES.REQUIRED,
-      abstain: VOTE_ABSTAIN_RULES.ALLOWED
+    selectorIds: ['alignment_b_attacker-0', 'alignment_a_blocker-0'],
+    selectionRules: {
+      required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
+      unanimous: SELECTION_UNANIMOUS_RULES.REQUIRED,
+      abstain: SELECTION_ABSTAIN_RULES.ALLOWED
     },
-    votes: [
-      { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
-      { actorId: 'alignment_a_blocker-0', abstain: true }
+    selections: [
+      { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_blocker-0', abstain: true }
     ]
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.NULL);
   assert.equal(resolved.result.reason, 'not_unanimous');
   assert.equal(resolved.result.chosenId, null);
 });
 
-test('resolveVoteRound rechaza votar a un target relacionado por linked si la restriccion esta activa', () => {
+test('resolveSelectionRound rechaza elegir a un member del group linked por linked si la restriccion esta activa', () => {
   const session = createBaseSession({
-    relations: [
-      createRelation({
-        id: 'linked-vote-restriction',
-        type: RELATION_TYPES.LINKED,
-        roleIds: ['alignment_a_target-0', 'alignment_a_plain-0'],
-        active: true,
-        sourceActionId: ACTION_IDS.LINK_TARGETS
-      })
+    groups: [
+      createLinkedGroup({ id: 'linked-selection-restriction' })
     ]
   });
-  const resolved = resolveVoteRound({
+  const resolved = resolveSelectionRound({
     session,
-    voteRules: {
-      relationRestrictions: [
+    selectionRules: {
+      groupRestrictions: [
         {
-          type: VOTE_RESTRICTION_TYPES.EXCLUDE_RELATED_TARGET,
-          relationType: RELATION_TYPES.LINKED
+          type: SELECTION_RESTRICTION_TYPES.EXCLUDE_GROUP_MEMBER_CANDIDATE,
+          groupType: GROUP_TYPES.LINKED
         }
       ]
     },
-    votes: [
-      { actorId: 'alignment_a_plain-0', targetId: 'alignment_a_target-0' }
+    selections: [
+      { selectorId: 'alignment_a_plain-0', candidateId: 'alignment_a_target-0' }
     ]
   });
 
   assert.equal(resolved.ok, false);
-  assert.equal(resolved.errors[0].code, 'vote/restricted-related-target');
-  assert.equal(resolved.errors[0].actorId, 'alignment_a_plain-0');
-  assert.equal(resolved.errors[0].targetId, 'alignment_a_target-0');
+  assert.equal(resolved.errors[0].code, 'selection/restricted-group-member-candidate');
+  assert.equal(resolved.errors[0].selectorId, 'alignment_a_plain-0');
+  assert.equal(resolved.errors[0].candidateId, 'alignment_a_target-0');
 });
 
-test('resolveVoteRound ignora restricciones de relacion incompletas', () => {
+test('resolveSelectionRound ignora restricciones de grupo incompletas', () => {
   const session = createBaseSession({
-    relations: [
-      createRelation({
-        id: 'linked-incomplete-restriction',
-        type: RELATION_TYPES.LINKED,
-        roleIds: ['alignment_a_target-0', 'alignment_a_plain-0'],
-        active: true,
-        sourceActionId: ACTION_IDS.LINK_TARGETS
-      })
+    groups: [
+      createLinkedGroup({ id: 'linked-incomplete-restriction' })
     ]
   });
-  const resolved = resolveVoteRound({
+  const resolved = resolveSelectionRound({
     session,
-    voteRules: {
-      relationRestrictions: [
+    selectionRules: {
+      groupRestrictions: [
         {
-          type: VOTE_RESTRICTION_TYPES.EXCLUDE_RELATED_TARGET
+          type: SELECTION_RESTRICTION_TYPES.EXCLUDE_GROUP_MEMBER_CANDIDATE
         }
       ]
     },
-    votes: [
-      { actorId: 'alignment_a_plain-0', targetId: 'alignment_a_target-0' }
+    selections: [
+      { selectorId: 'alignment_a_plain-0', candidateId: 'alignment_a_target-0' }
     ]
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, VOTE_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.CHOSEN);
 });
 
-test('vote puro devuelve chosen sin aplicar efectos', () => {
+test('selection pura devuelve chosen sin aplicar efectos', () => {
   const session = createBaseSession();
   const resolved = resolveAction(session, {
-    id: ACTION_IDS.VOTE,
-    voteRules: {
-      tie: VOTE_TIE_RULES.NULL_ON_TIE,
-      required: VOTE_REQUIRED_RULES.ALL_ACTORS
+    id: ACTION_IDS.SELECT,
+    selectionRules: {
+      tie: SELECTION_TIE_RULES.NULL_ON_TIE,
+      required: SELECTION_REQUIRED_RULES.ALL_SELECTORS
     },
     visibility: VISIBILITY.ALL
   }, {
-    votes: createVotes({
+    selections: createSelections({
       'alignment_b_attacker-0': 'alignment_a_target-0',
       'alignment_a_blocker-0': 'alignment_a_target-0',
       'alignment_a_target-0': 'alignment_a_target-0',
@@ -2628,49 +2610,43 @@ test('vote puro devuelve chosen sin aplicar efectos', () => {
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.vote.type, VOTE_OUTCOME_TYPES.CHOSEN);
-  assert.equal(resolved.result.vote.chosenId, 'alignment_a_target-0');
+  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.selection.chosenId, 'alignment_a_target-0');
   assert.deepEqual(resolved.result.proposedEffects, []);
   assert.deepEqual(resolved.result.finalEffects, []);
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, true);
 });
 
-test('vote puro no aplica restricciones linked por defecto', () => {
+test('selection pura no aplica restricciones linked por defecto', () => {
   const session = createBaseSession({
-    relations: [
-      createRelation({
-        id: 'linked-generic-vote',
-        type: RELATION_TYPES.LINKED,
-        roleIds: ['alignment_a_target-0', 'alignment_a_plain-0'],
-        active: true,
-        sourceActionId: ACTION_IDS.LINK_TARGETS
-      })
+    groups: [
+      createLinkedGroup({ id: 'linked-generic-selection' })
     ]
   });
   const resolved = resolveAction(session, {
-    id: ACTION_IDS.VOTE,
-    voteRules: { tie: VOTE_TIE_RULES.NULL_ON_TIE },
+    id: ACTION_IDS.SELECT,
+    selectionRules: { tie: SELECTION_TIE_RULES.NULL_ON_TIE },
     visibility: VISIBILITY.ALL
   }, {
-    votes: [
+    selections: [
       {
-        actorId: 'alignment_a_plain-0',
-        targetId: 'alignment_a_target-0'
+        selectorId: 'alignment_a_plain-0',
+        candidateId: 'alignment_a_target-0'
       }
     ]
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.vote.type, VOTE_OUTCOME_TYPES.CHOSEN);
-  assert.equal(resolved.result.vote.chosenId, 'alignment_a_target-0');
+  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.selection.chosenId, 'alignment_a_target-0');
 });
 
-test('step con voto y set_out_of_play aplica inPlay=false al chosen de la votacion', () => {
+test('step con seleccion y set_out_of_play aplica inPlay=false al chosen de la seleccion', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteOutOfPlayStep(
+  const resolved = resolveSelectionOutOfPlayStep(
     session,
-    collectiveVoteInput({
-      votes: createVotes({
+    collectiveSelectionInput({
+      selections: createSelections({
         'alignment_b_attacker-0': 'alignment_a_target-0',
         'alignment_a_blocker-0': 'alignment_a_target-0',
         'alignment_a_target-0': 'alignment_a_target-0',
@@ -2683,8 +2659,8 @@ test('step con voto y set_out_of_play aplica inPlay=false al chosen de la votaci
   );
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.vote.type, VOTE_OUTCOME_TYPES.CHOSEN);
-  assert.equal(resolved.result.vote.chosenId, 'alignment_a_target-0');
+  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.selection.chosenId, 'alignment_a_target-0');
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
   assert.deepEqual(resolved.session.actionHistory.at(-1).actorIds, []);
   assert.deepEqual(resolved.result.proposedEffects, [
@@ -2698,12 +2674,12 @@ test('step con voto y set_out_of_play aplica inPlay=false al chosen de la votaci
   ]);
 });
 
-test('step con voto y set_out_of_play no ejecuta receta si chosen no alcanza supportThreshold', () => {
+test('step con seleccion y set_out_of_play no ejecuta receta si chosen no alcanza supportThreshold', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteOutOfPlayStep(
+  const resolved = resolveSelectionOutOfPlayStep(
     session,
-    collectiveVoteInput({
-      votes: createVotes({
+    collectiveSelectionInput({
+      selections: createSelections({
         'alignment_b_attacker-0': 'alignment_a_target-0',
         'alignment_a_blocker-0': 'alignment_a_target-0',
         'alignment_a_target-0': 'alignment_a_target-0',
@@ -2714,66 +2690,66 @@ test('step con voto y set_out_of_play no ejecuta receta si chosen no alcanza sup
       })
     }),
     {
-      voteRules: createVoteRules({
-        ...voteOutOfPlayRules,
+      selectionRules: createSelectionRules({
+        ...selectionOutOfPlayRules,
         supportThreshold: {
-          type: VOTE_SUPPORT_THRESHOLD_TYPES.MAJORITY,
-          base: VOTE_SUPPORT_BASES.ACTOR_COUNT
+          type: SELECTION_SUPPORT_THRESHOLD_TYPES.MAJORITY,
+          base: SELECTION_SUPPORT_BASES.SELECTOR_COUNT
         }
       })
     }
   );
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.vote.type, VOTE_OUTCOME_TYPES.NULL);
-  assert.equal(resolved.result.vote.reason, 'insufficient_support');
+  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.selection.reason, 'insufficient_support');
   assert.deepEqual(resolved.result.proposedEffects, []);
   assert.deepEqual(resolved.result.finalEffects, []);
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, true);
 });
 
-test('step con voto y set_out_of_play no ejecuta receta si la abstencion supera al chosen', () => {
+test('step con seleccion y set_out_of_play no ejecuta receta si la abstencion supera al chosen', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteOutOfPlayStep(
+  const resolved = resolveSelectionOutOfPlayStep(
     session,
-    collectiveVoteInput({
-      votes: [
-        { actorId: 'alignment_b_attacker-0', targetId: 'alignment_a_target-0' },
-        { actorId: 'alignment_a_blocker-0', targetId: 'alignment_a_target-0' },
-        { actorId: 'alignment_a_target-0', abstain: true },
-        { actorId: 'alignment_a_plain-0', abstain: true },
-        { actorId: 'alignment_b_target-0', abstain: true },
-        { actorId: 'role_inspector-0', abstain: true },
-        { actorId: 'hidden_enemy-0', abstain: true }
+    collectiveSelectionInput({
+      selections: [
+        { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
+        { selectorId: 'alignment_a_blocker-0', candidateId: 'alignment_a_target-0' },
+        { selectorId: 'alignment_a_target-0', abstain: true },
+        { selectorId: 'alignment_a_plain-0', abstain: true },
+        { selectorId: 'alignment_b_target-0', abstain: true },
+        { selectorId: 'role_inspector-0', abstain: true },
+        { selectorId: 'hidden_enemy-0', abstain: true }
       ]
     }),
     {
-      voteRules: createVoteRules({
-        ...voteOutOfPlayRules,
-        abstain: VOTE_ABSTAIN_RULES.ALLOWED,
+      selectionRules: createSelectionRules({
+        ...selectionOutOfPlayRules,
+        abstain: SELECTION_ABSTAIN_RULES.ALLOWED,
         abstainResolution: {
-          type: VOTE_ABSTAIN_RESOLUTION_TYPES.NULL_IF_HIGHEST
+          type: SELECTION_ABSTAIN_RESOLUTION_TYPES.NULL_IF_HIGHEST
         }
       })
     }
   );
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.vote.type, VOTE_OUTCOME_TYPES.NULL);
-  assert.equal(resolved.result.vote.reason, 'abstention_highest');
+  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.selection.reason, 'abstention_highest');
   assert.deepEqual(resolved.result.proposedEffects, []);
   assert.deepEqual(resolved.result.finalEffects, []);
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, true);
 });
 
-test('step con voto y set_out_of_play empatado no aplica efecto con null_on_tie', () => {
+test('step con seleccion y set_out_of_play empatado no aplica efecto con null_on_tie', () => {
   const session = withInPlayState(createBaseSession(), {
     'hidden_enemy-0': false
   });
-  const resolved = resolveVoteOutOfPlayStep(
+  const resolved = resolveSelectionOutOfPlayStep(
     session,
-    collectiveVoteInput({
-      votes: createVotes({
+    collectiveSelectionInput({
+      selections: createSelections({
         'alignment_b_attacker-0': 'alignment_a_target-0',
         'alignment_a_blocker-0': 'alignment_a_plain-0',
         'alignment_a_target-0': 'alignment_a_target-0',
@@ -2785,44 +2761,44 @@ test('step con voto y set_out_of_play empatado no aplica efecto con null_on_tie'
   );
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.vote.type, VOTE_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.NULL);
   assert.deepEqual(resolved.result.proposedEffects, []);
   assert.deepEqual(resolved.result.finalEffects, []);
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, true);
   assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, true);
 });
 
-test('step con voto y set_out_of_play permite cerrar el step cuando todos se abstienen', () => {
+test('step con seleccion y set_out_of_play permite cerrar el step cuando todos se abstienen', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteOutOfPlayStep(
+  const resolved = resolveSelectionOutOfPlayStep(
     session,
-    collectiveVoteInput({
-      votes: [
-        { actorId: 'alignment_b_attacker-0', abstain: true },
-        { actorId: 'alignment_a_blocker-0', abstain: true },
-        { actorId: 'alignment_a_target-0', abstain: true },
-        { actorId: 'alignment_a_plain-0', abstain: true },
-        { actorId: 'alignment_b_target-0', abstain: true },
-        { actorId: 'role_inspector-0', abstain: true },
-        { actorId: 'hidden_enemy-0', abstain: true }
+    collectiveSelectionInput({
+      selections: [
+        { selectorId: 'alignment_b_attacker-0', abstain: true },
+        { selectorId: 'alignment_a_blocker-0', abstain: true },
+        { selectorId: 'alignment_a_target-0', abstain: true },
+        { selectorId: 'alignment_a_plain-0', abstain: true },
+        { selectorId: 'alignment_b_target-0', abstain: true },
+        { selectorId: 'role_inspector-0', abstain: true },
+        { selectorId: 'hidden_enemy-0', abstain: true }
       ]
     }),
     {
-      voteRules: createVoteRules({
-        ...voteOutOfPlayRules,
-        abstain: VOTE_ABSTAIN_RULES.ALLOWED
+      selectionRules: createSelectionRules({
+        ...selectionOutOfPlayRules,
+        abstain: SELECTION_ABSTAIN_RULES.ALLOWED
       })
     }
   );
   const completed = completeCurrentStep(resolved.session, {
     requestedBy: STEP_COMPLETION_REQUESTED_BY.DIRECTOR,
-    reason: 'director_closed_null_vote_step'
+    reason: 'director_closed_null_selection_step'
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.vote.type, VOTE_OUTCOME_TYPES.NULL);
-  assert.equal(resolved.result.vote.reason, 'all_abstained');
-  assert.equal(resolved.result.vote.chosenId, null);
+  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.selection.reason, 'all_abstained');
+  assert.equal(resolved.result.selection.chosenId, null);
   assert.deepEqual(resolved.result.proposedEffects, []);
   assert.deepEqual(resolved.result.finalEffects, []);
   assert.equal(resolved.stepAdvance, null);
@@ -2830,14 +2806,14 @@ test('step con voto y set_out_of_play permite cerrar el step cuando todos se abs
   assert.equal(completed.stepAdvance.reason, 'no-runnable-step');
 });
 
-test('step con voto y set_out_of_play trata un empate sin regla especial como null', () => {
+test('step con seleccion y set_out_of_play trata un empate sin regla especial como null', () => {
   const session = withInPlayState(createBaseSession(), {
     'hidden_enemy-0': false
   });
-  const resolved = resolveVoteOutOfPlayStep(
+  const resolved = resolveSelectionOutOfPlayStep(
     session,
-    collectiveVoteInput({
-      votes: createVotes({
+    collectiveSelectionInput({
+      selections: createSelections({
         'alignment_b_attacker-0': 'alignment_a_target-0',
         'alignment_a_blocker-0': 'alignment_a_plain-0',
         'alignment_a_target-0': 'alignment_a_target-0',
@@ -2847,30 +2823,30 @@ test('step con voto y set_out_of_play trata un empate sin regla especial como nu
       })
     }),
     {
-      voteRules: createVoteRules({
-        required: VOTE_REQUIRED_RULES.ALL_ACTORS
+      selectionRules: createSelectionRules({
+        required: SELECTION_REQUIRED_RULES.ALL_SELECTORS
       })
     }
   );
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.vote.type, VOTE_OUTCOME_TYPES.NULL);
-  assert.equal(resolved.result.vote.reason, 'tied_vote');
-  assert.equal(resolved.result.vote.chosenId, null);
+  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.selection.reason, 'tied_selection');
+  assert.equal(resolved.result.selection.chosenId, null);
   assert.deepEqual(resolved.result.proposedEffects, []);
   assert.deepEqual(resolved.result.finalEffects, []);
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, true);
   assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, true);
 });
 
-test('step con voto y set_out_of_play puede pedir runoff limitado por empate', () => {
+test('step con seleccion y set_out_of_play puede pedir runoff limitado por empate', () => {
   const session = withInPlayState(createBaseSession(), {
     'hidden_enemy-0': false
   });
-  const resolved = resolveVoteOutOfPlayStep(
+  const resolved = resolveSelectionOutOfPlayStep(
     session,
-    collectiveVoteInput({
-      votes: createVotes({
+    collectiveSelectionInput({
+      selections: createSelections({
         'alignment_b_attacker-0': 'alignment_a_target-0',
         'alignment_a_blocker-0': 'alignment_a_plain-0',
         'alignment_a_target-0': 'alignment_a_target-0',
@@ -2880,19 +2856,19 @@ test('step con voto y set_out_of_play puede pedir runoff limitado por empate', (
       })
     }),
     {
-      voteRules: createVoteRules({
-        ...voteOutOfPlayRules,
-        tie: VOTE_TIE_RULES.RUNOFF_ON_TIE
+      selectionRules: createSelectionRules({
+        ...selectionOutOfPlayRules,
+        tie: SELECTION_TIE_RULES.RUNOFF_ON_TIE
       })
     }
   );
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.vote.type, VOTE_OUTCOME_TYPES.TIE);
-  assert.equal(resolved.result.vote.reason, 'runoff_required');
-  assert.equal(resolved.result.vote.chosenId, null);
-  assert.deepEqual(resolved.result.vote.nextRound, {
-    roundType: VOTE_ROUND_TYPES.RUNOFF,
+  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.TIE);
+  assert.equal(resolved.result.selection.reason, 'runoff_required');
+  assert.equal(resolved.result.selection.chosenId, null);
+  assert.deepEqual(resolved.result.selection.nextRound, {
+    roundType: SELECTION_ROUND_TYPES.RUNOFF,
     roundIndex: 1,
     candidateIds: ['alignment_a_plain-0', 'alignment_a_target-0']
   });
@@ -2902,13 +2878,13 @@ test('step con voto y set_out_of_play puede pedir runoff limitado por empate', (
   assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, true);
 });
 
-test('step con voto y set_out_of_play ejecuta receta si el runoff produce chosen', () => {
+test('step con seleccion y set_out_of_play ejecuta receta si el runoff produce chosen', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteOutOfPlayStep(session, {
-    roundType: VOTE_ROUND_TYPES.RUNOFF,
+  const resolved = resolveSelectionOutOfPlayStep(session, {
+    roundType: SELECTION_ROUND_TYPES.RUNOFF,
     roundIndex: 1,
     candidateIds: ['alignment_a_plain-0', 'alignment_a_target-0'],
-    votes: createVotes({
+    selections: createSelections({
       'alignment_b_attacker-0': 'alignment_a_target-0',
       'alignment_a_blocker-0': 'alignment_a_target-0',
       'alignment_a_target-0': 'alignment_a_target-0',
@@ -2920,27 +2896,21 @@ test('step con voto y set_out_of_play ejecuta receta si el runoff produce chosen
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.vote.type, VOTE_OUTCOME_TYPES.CHOSEN);
-  assert.equal(resolved.result.vote.chosenId, 'alignment_a_target-0');
+  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.selection.chosenId, 'alignment_a_target-0');
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
 });
 
-test('step con voto y set_out_of_play propaga inPlay=false por linked cuando el chosen esta enlazado', () => {
+test('step con seleccion y set_out_of_play propaga inPlay=false por linked cuando el chosen esta enlazado', () => {
   const session = createBaseSession({
-    relations: [
-      createRelation({
-        id: 'linked-vote-target',
-        type: RELATION_TYPES.LINKED,
-        roleIds: ['alignment_a_target-0', 'alignment_a_plain-0'],
-        active: true,
-        sourceActionId: ACTION_IDS.LINK_TARGETS
-      })
+    groups: [
+      createLinkedGroup({ id: 'linked-selection-target' })
     ]
   });
-  const resolved = resolveVoteOutOfPlayStep(
+  const resolved = resolveSelectionOutOfPlayStep(
     session,
-    collectiveVoteInput({
-      votes: createVotes({
+    collectiveSelectionInput({
+      selections: createSelections({
         'alignment_b_attacker-0': 'alignment_a_target-0',
         'alignment_a_blocker-0': 'alignment_a_target-0',
         'alignment_a_target-0': 'alignment_a_target-0',
@@ -2957,18 +2927,18 @@ test('step con voto y set_out_of_play propaga inPlay=false por linked cuando el 
   assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, false);
   assert.equal(resolved.result.finalEffects.length, 2);
   assert.deepEqual(resolved.result.finalEffects[1].derivedFrom, {
-    type: 'relation',
-    relationType: RELATION_TYPES.LINKED,
+    type: 'group',
+    groupType: GROUP_TYPES.LINKED,
     sourceTargetId: 'alignment_a_target-0'
   });
 });
 
-test('step con voto y set_out_of_play rechaza la ronda si falta un voto obligatorio', () => {
+test('step con seleccion y set_out_of_play rechaza la ronda si falta una seleccion obligatoria', () => {
   const session = createBaseSession();
-  const resolved = resolveVoteOutOfPlayStep(
+  const resolved = resolveSelectionOutOfPlayStep(
     session,
-    collectiveVoteInput({
-      votes: createVotes({
+    collectiveSelectionInput({
+      selections: createSelections({
         'alignment_b_attacker-0': 'alignment_a_target-0',
         'alignment_a_blocker-0': 'alignment_a_target-0'
       })
@@ -2976,25 +2946,19 @@ test('step con voto y set_out_of_play rechaza la ronda si falta un voto obligato
   );
 
   assert.equal(resolved.ok, false);
-  assert.equal(resolved.errors[0].code, 'vote/missing-required-votes');
+  assert.equal(resolved.errors[0].code, 'selection/missing-required-selections');
 });
 
-test('step con voto y set_out_of_play rechaza votar a un role linked', () => {
+test('step con seleccion y set_out_of_play rechaza elegir a un role linked', () => {
   const session = createBaseSession({
-    relations: [
-      createRelation({
-        id: 'linked-vote-out-of-play',
-        type: RELATION_TYPES.LINKED,
-        roleIds: ['alignment_a_target-0', 'alignment_a_plain-0'],
-        active: true,
-        sourceActionId: ACTION_IDS.LINK_TARGETS
-      })
+    groups: [
+      createLinkedGroup({ id: 'linked-selection-out-of-play' })
     ]
   });
-  const resolved = resolveVoteOutOfPlayStep(
+  const resolved = resolveSelectionOutOfPlayStep(
     session,
-    collectiveVoteInput({
-      votes: createVotes({
+    collectiveSelectionInput({
+      selections: createSelections({
         'alignment_b_attacker-0': 'alignment_a_target-0',
         'alignment_a_blocker-0': 'alignment_a_target-0',
         'alignment_a_target-0': 'alignment_a_target-0',
@@ -3007,28 +2971,22 @@ test('step con voto y set_out_of_play rechaza votar a un role linked', () => {
   );
 
   assert.equal(resolved.ok, false);
-  assert.equal(resolved.errors[0].code, 'vote/restricted-related-target');
-  assert.equal(resolved.errors[0].actorId, 'alignment_a_plain-0');
-  assert.equal(resolved.errors[0].targetId, 'alignment_a_target-0');
+  assert.equal(resolved.errors[0].code, 'selection/restricted-group-member-candidate');
+  assert.equal(resolved.errors[0].selectorId, 'alignment_a_plain-0');
+  assert.equal(resolved.errors[0].candidateId, 'alignment_a_target-0');
 });
 
-test('step con voto y set_out_of_play no permite desactivar restricciones estructurales desde input', () => {
+test('step con seleccion y set_out_of_play no permite desactivar restricciones estructurales desde input', () => {
   const session = createBaseSession({
-    relations: [
-      createRelation({
-        id: 'linked-vote-input-override',
-        type: RELATION_TYPES.LINKED,
-        roleIds: ['alignment_a_target-0', 'alignment_a_plain-0'],
-        active: true,
-        sourceActionId: ACTION_IDS.LINK_TARGETS
-      })
+    groups: [
+      createLinkedGroup({ id: 'linked-selection-input-override' })
     ]
   });
-  const resolved = resolveVoteOutOfPlayStep(
+  const resolved = resolveSelectionOutOfPlayStep(
     session,
-    collectiveVoteInput({
-      relationRestrictions: [],
-      votes: createVotes({
+    collectiveSelectionInput({
+      groupRestrictions: [],
+      selections: createSelections({
         'alignment_b_attacker-0': 'alignment_a_target-0',
         'alignment_a_blocker-0': 'alignment_a_target-0',
         'alignment_a_target-0': 'alignment_a_target-0',
@@ -3041,7 +2999,7 @@ test('step con voto y set_out_of_play no permite desactivar restricciones estruc
   );
 
   assert.equal(resolved.ok, false);
-  assert.equal(resolved.errors[0].code, 'vote/restricted-related-target');
+  assert.equal(resolved.errors[0].code, 'selection/restricted-group-member-candidate');
 });
 
 async function runTests() {

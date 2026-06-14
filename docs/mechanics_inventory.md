@@ -21,20 +21,20 @@ como referencia humana.
 | `block_out_of_play` | Protector | implementada | Receta que bloquea `set_in_play(inPlay=false)`. |
 | `no_repeat_target` | Protector no repite objetivo | implementada | Restriccion basada en `session.actionHistory`. |
 | `close_cycle` | cierre de noche/ciclo | implementada | Limpia flags temporales y avanza ciclo. |
-| `link_targets` | Cupido | parcial | Crea relacion `linked` entre varios objetivos. |
-| `linked` consequence | Enamorados comparten destino | parcial | Propaga `inPlay=false`; restriccion de voto linked implementada en steps con voto. |
+| `link_targets` | Cupido | parcial | Crea un grupo `linked` entre varios objetivos. |
+| `linked` consequence | Enamorados comparten destino | parcial | Propaga `inPlay=false`; restriccion de seleccion linked implementada en steps con seleccion. |
 | `linked_objective` | Enamorados de bandos distintos | parcial | Implementado en `objectiveModel.js`. |
 | `group_objective_rule` | condicion propia de un group | parcial | `holder_reaches_in_play_parity` y `only_holder_group_remains_in_play` configurables por sesion. |
-| `vote_count` | recuento de votacion | implementada | `voteModel.js` valida votos, suma unidades y resuelve chosen/empate. |
-| `group_vote` | votacion de grupo | implementada | El step vota para elegir `chosenId`; despues aplica la receta configurada. |
+| `selection_count` | recuento de seleccion | implementada | `selectionModel.js` valida selecciones, suma unidades y resuelve chosen/empate. |
+| `group_selection` | seleccion de grupo | implementada | El step vota para elegir `chosenId`; despues aplica la receta configurada. |
 
 ## Mecanicas pendientes detectadas
 
 | Mecanica abstracta candidata | Referencias humanas | Estado | Dependencias |
 |---|---|---|---|
 | `check_objectives` | objetivos de alignments y condiciones especiales | parcial | Ya se evalua al cierre de pool; faltan achievedObjectives persistidos y conflictos. |
-| `configurable_vote_effect` | eleccion de cargo, otras votaciones | parcial | El protocolo `step.voteRules` + receta aplicada al `chosenId` ya existe; faltan acciones genericas como marcar o conceder recursos. |
-| `block_related_vote_target` | linked no puede votar contra linked | implementada | El step con voto rechaza votos contra target relacionado por `linked`. |
+| `configurable_selection_effect` | eleccion de cargo, otras selecciones | parcial | El protocolo `step.selectionRules` + receta aplicada al `chosenId` ya existe; faltan acciones genericas como marcar o conceder recursos. |
+| `block_group_member_selection_candidate` | linked no puede elegir contra linked | implementada | El step con seleccion rechaza selecciones contra target del mismo grupo `linked`. |
 | `set_flag` | hechizado, infectado, revelado, acusado | pendiente | Necesita normalizar flags de estado. |
 | `change_alignment` | infeccion, conversion | pendiente | Necesita reglas de alignment y objective. |
 | `change_role` | ladron, actor, sirvienta | pendiente | Necesita reglas de reemplazo de rol. |
@@ -54,7 +54,7 @@ el avance. Ahora mismo esa pieza es objective:
 - saber si la parte jugable continua;
 - saber si un alignment cumple un objetivo;
 - saber si una regla configurada de alignment se cumple;
-- saber si una relacion `linked` cambia una objectiveRule;
+- saber si un grupo `linked` cambia una objectiveRule;
 - dejar sitio para objetivos individuales o por estado.
 
 ## Vocabulario de alignments
