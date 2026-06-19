@@ -19,25 +19,37 @@ nombres historicos, aliases provisionales ni versiones intermedias.
 
 ## Configuracion
 
-`basicConfiguration` = `ruleSetId`, `skinId`, `playersExpected`, idioma y
-opciones base.
+`basicConfiguration` = `ruleSetId`, `skinId`, `playersExpected`,
+`sessionLanguage` y opciones base.
+
+`sessionLanguage` = idioma de la session de juego. No es el idioma global de la
+aplicacion.
 
 `runModeConfiguration` = modo de direccion de partida: `human`, `human_ai` o
-`ai`, mas tareas asistidas cuando corresponda.
+`ai`, mas `delegatedTasks` cuando corresponda.
 
-`ruleSetConfiguration` = seleccion de roles, cantidades, alignments y reglas
-opcionales permitidas por el ruleSet.
+`ruleSetConfiguration` = seleccion de roles, cantidades, reglas opcionales y
+`distributionOverride` dentro de lo permitido por el ruleSet.
 
 `gameConfiguration` = plantilla reutilizable formada por
 `basicConfiguration + runModeConfiguration + ruleSetConfiguration`.
 
-`matchConfiguration` = jugadores, asientos y roles asignados.
+`matchConfiguration` = seleccion de jugadores, asientos y roles antes de
+materializar el match.
+
+`match` = jugadores, asientos y roles ya preparados para construir una session.
 
 `sessionConfiguration` = input completo para crear una session:
 `gameConfiguration + matchConfiguration`.
 
 `gameConfigurationCatalog` = futuro catalogo de plantillas reutilizables de
 partida.
+
+`selectedRuleSet` = ruleSet elegido desde catalogo antes de aplicar
+`ruleSetConfiguration`.
+
+`ruleSet` = si se usa como input de `buildSession`, significa ruleSet ya acotado
+para una session concreta. Se construye con `buildRuleSet`.
 
 ## Identificadores
 
@@ -95,14 +107,44 @@ materializa cuando una regla necesita una referencia estable a esa coleccion.
 `memberRole` = rol interno provisional de un miembro dentro de un group. Solo se
 conservara si aparece un caso real de grupo direccional.
 
-`step` = periodo ejecutable dentro de un pool donde un role o group puede
-actuar.
+`stage` = periodo ejecutable dentro de un pool. Normalmente permite actuar a
+uno o varios roles, pero no necesita distinguir conceptualmente si proceden de
+un role individual o de un group.
 
 `automaticStage` = etapa automatica del sistema. No representa actuacion de
-role/group. Ejemplos aceptados: `close_cycle`, `check_objectives`,
+role/group. Ejemplos aceptados: `start_cycle`, `check_objectives`,
 `conclude_play`.
 
-`pool` = coleccion ordenada de steps.
+`automaticStages.onEnter` = automaticStages que se ejecutan al entrar en un
+pool. Por ahora solo `poolConcealed` declara `start_cycle`.
+
+`automaticStages.onExit` = automaticStages que se ejecutan al terminar un pool.
+Por ahora todos los pools declaran `check_objectives`.
+
+`pool` = coleccion ordenada de stages y automaticStages.
+
+`cycle` = entidad runtime superior a los pools. Conoce el orden de los pools,
+la iteracion actual y cuando debe resolver `specialStages` antes de continuar
+con `poolConcealed` o `poolExposed`.
+
+`specialStages` = cola FIFO runtime de stages dinamicos que se resuelven entre
+pools. No es un pool, no se prepara y cada stage se elimina al completarse.
+
+`specialStagesHistory` = historial propio de altas, inicios, cierres y fallos de
+la cola `specialStages`.
+
+`cycleModel` = modelo runtime responsable de iniciar ciclos, contar sus
+iteraciones y mover el flujo entre pools. La migracion desde `poolCursorModel`
+esta acordada pero todavia no implementada.
+
+`preparePool` = operacion previa que prepara los stages persistentes del pool
+seleccionado.
+
+`validatePool` = operacion que valida un pool despues de prepararlo y antes de
+ejecutarlo.
+
+`runPool` = ejecucion completa de un pool: `automaticStages.onEnter`, stages
+normales y `automaticStages.onExit`.
 
 `recipe` = receta mecanica que combina una o varias acciones con restricciones.
 
@@ -117,7 +159,7 @@ role/group. Ejemplos aceptados: `close_cycle`, `check_objectives`,
 `event` = hecho producido por la session que puede disparar reacciones.
 
 `reaction` = definicion que escucha un event y puede crear una respuesta, como
-un step especial.
+un stage especial.
 
 `objective` = objetivo mecanico que puede cumplirse durante la parte jugable.
 Es el lenguaje interno del nucleo para evaluar logros o conclusiones.
@@ -143,11 +185,20 @@ parte jugable.
 `playOutcome` = conclusion mecanica de la parte jugable. No cierra la session
 administrativa.
 
+`playOutcomeCandidate` = conclusion mecanica posible, pero todavia no estable
+si existen stages pendientes capaces de alterar las objectiveRules cumplidas.
+
+`dependencies` = propiedades o estructuras de estado que una objectiveRule lee
+para sostener su condicion.
+
+`influences` = propiedades o estructuras de estado que una action, recipe o
+stage puede modificar, incluyendo operacion y valores posibles cuando aplique.
+
 `check_objectives` = automaticStage del cierre de pool que evalua objectiveRules
 de session y emite achievedObjectives o playOutcome.
 
 `conclude_play` = automaticStage que gestiona la conclusion de la parte jugable
-cuando existe un playOutcome concluyente.
+cuando existe un playOutcome concluyente y estable.
 
 `resources` = recursos mecanicos consumibles o contadores que un role materializa
 en session. Sustituye a los viejos tokens consumibles cuando no hacen falta como
@@ -194,13 +245,13 @@ ruleSet, configuration y match.
 
 `out_of_play` = lectura conceptual de `inPlay=false`.
 
-`actorIds` = roleIds que actuan dentro de un step.
+`actorIds` = roleIds que actuan dentro de un stage.
 
 `targetIds` = roleIds que reciben una accion, recipe o decision.
 
 `actionHistory` = historial de acciones ejecutadas o intentadas.
 
-`stepHistory` = historial de cierres y avances de steps.
+`stageHistory` = historial de cierres y avances de stages.
 
 `errorLog` = futuro registro de warnings, errors y fatals.
 

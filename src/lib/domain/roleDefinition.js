@@ -4,7 +4,7 @@
 //
 // createRole define un tipo mecanico de rol:
 // - a que alignment mecanico pertenece por defecto;
-// - que stepDefinitions puede proponer;
+// - que stageDefinitions puede proponer;
 // - si necesita estar inPlay para actuar.
 //
 // createSessionRole crea el estado de ese rol dentro de una sesion concreta.
@@ -14,7 +14,7 @@
 
 import { createActionToken } from './actionTokenDefinition.js';
 import { normalizeId } from './sessionModel.js';
-import { createStep } from './stepDefinition.js';
+import { createStage } from './stageDefinition.js';
 
 export const ROLE_DEFINITION_TYPES = Object.freeze({
   ROLE: 'role',
@@ -24,15 +24,15 @@ export const ROLE_DEFINITION_TYPES = Object.freeze({
 // Normaliza una reaction tanto en definicion de rol como en rol de sesion.
 //
 // Mantener una sola puerta evita que una reaction catalogada y una reaction ya
-// materializada diverjan en forma. El step de respuesta se vuelve a pasar por
-// createStep para preservar los defaults de stepDefinition.
+// materializada diverjan en forma. El stage de respuesta se vuelve a pasar por
+// createStage para preservar los defaults de stageDefinition.
 function createRoleReaction(reaction = {}) {
   return {
     ...reaction,
     trigger: { ...(reaction.trigger ?? {}) },
     response: {
       ...(reaction.response ?? {}),
-      step: reaction.response?.step ? createStep(reaction.response.step) : null
+      stage: reaction.response?.stage ? createStage(reaction.response.stage) : null
     },
     metadata: { ...(reaction.metadata ?? {}) }
   };
@@ -42,7 +42,7 @@ export function createRole({
   key,
   type = ROLE_DEFINITION_TYPES.ROLE,
   alignmentId = null,
-  stepDefinitions = [],
+  stageDefinitions = [],
   reactions = [],
   metadata = {}
 } = {}) {
@@ -52,7 +52,7 @@ export function createRole({
     key: normalizedKey,
     type: normalizeId(type),
     alignmentId: alignmentId ? normalizeId(alignmentId) : null,
-    stepDefinitions: (stepDefinitions ?? []).map(createStep),
+    stageDefinitions: (stageDefinitions ?? []).map(createStage),
     // Las reacciones son definicion mecanica del rol: "si ocurre X, puedo
     // responder con Y". eventModel sera quien las evalue durante la sesion.
     reactions: (reactions ?? []).map(createRoleReaction),

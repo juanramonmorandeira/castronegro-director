@@ -24,7 +24,7 @@ Ejemplos:
 - `createRole` en `roleDefinition.js`
 - `createSessionRole` en `roleDefinition.js`
 - `createGroup` en `groupDefinition.js`
-- `createStep` en `stepDefinition.js`
+- `createStage` en `stageDefinition.js`
 - `createPool` en `poolDefinition.js`
 
 ### `buildX`
@@ -33,10 +33,11 @@ Funciones de ensamblaje.
 
 Ejemplos:
 
-- `buildSession`: crea roles y stepPools a partir de configuracion.
+- `buildSession`: crea roles y pools a partir de configuracion.
 - `buildInitialGroups`: resuelve miembros iniciales de grupos.
-- `buildPools`: junta steps de roles, grupos y sistema.
-- `buildStepPool`: construye los steps de un pool concreto.
+- `buildPools`: junta stages de roles, grupos y sistema.
+- `buildStagePool`: nombre actual de codigo para construir los stages de un pool
+  concreto.
 
 Regla practica:
 
@@ -56,19 +57,19 @@ Ejemplos:
 
 - `roleCatalog.js`
 - `groupCatalog.js`
-- `stepCatalog.js`
+- `stageCatalog.js`
 - `recipeCatalog.js`
 
 Los catalogos no ejecutan reglas. Devuelven definiciones ya preparadas mediante
-funciones como `getCatalogStep` o `getCatalogRecipe`.
+funciones como `getCatalogStage` o `getCatalogRecipe`.
 
 Un catalogo no contiene objetos completos de sesion. Contiene definiciones
-reutilizables. Un role, group, step, recipe o session solo queda completo cuando
-se materializa con datos concretos de partida.
+reutilizables. Un role, group, stage, recipe o session solo queda completo
+cuando se materializa con datos concretos de partida.
 
-Ejemplo: un step de catalogo puede declarar que existe una receta de seleccion, pero
-no conoce todavia `actorIds`. Esos ids aparecen al construir la sesion, cuando
-los roles y grupos reales ya existen.
+Ejemplo: un stage de catalogo puede declarar que existe una receta de seleccion,
+pero no conoce todavia `actorIds`. Esos ids aparecen al construir la sesion,
+cuando los roles y grupos reales ya existen.
 
 ### `*Model.js`
 
@@ -76,8 +77,8 @@ Logica runtime del motor.
 
 Ejemplos:
 
-- `poolCursorModel.js`: mueve el cursor entre steps.
-- `stepModel.js`: conecta step actual con recipe/action y cierre de step.
+- `poolCursorModel.js`: mueve el cursor entre stages.
+- `stageModel.js`: conecta el stage actual con recipe/action y cierre de stage.
 - `recipeModel.js`: valida restricciones y transforma receta en accion pura.
 - `actionModel.js`: resuelve acciones puras.
 - `resolverModel.js`: deriva o bloquea efectos propuestos.
@@ -91,47 +92,72 @@ Ejemplos:
 
 ```text
 ruleSet + configuration + skin + jugadores/asientos
--> Role/Group/Step catalog
+-> Role/Group/Stage catalog
 -> buildSession
 -> buildPools
 -> createSession
--> resolveCurrentStep
--> completeCurrentStep
+-> resolveCurrentStage
+-> completeCurrentStage
 ```
 
-Resolver una receta no cierra el step. El cierre se hace explicitamente con
-`completeCurrentStep`.
+Resolver una receta no cierra el stage. El cierre se hace explicitamente con
+`completeCurrentStage`.
 
-## Roles, steps y recetas
+Flujo de pools aceptado:
+
+```text
+specialStages inicial si hay stages pendientes
+-> poolConcealed
+-> specialStages si hay interrupciones
+-> poolExposed
+-> specialStages si hay interrupciones
+-> poolConcealed
+```
+
+`specialStages` no es un pool. Es una cola FIFO independiente que el ciclo
+comprueba después de terminar completamente el pool actual y antes de entrar en
+el siguiente pool normal.
+
+`start_cycle` es una `automaticStage` de entrada a `poolConcealed`. Prepara el
+nuevo ciclo normal y sustituye al viejo cierre de ciclo. `check_objectives` es
+una `automaticStage` de salida de cada pool.
+
+Cuando el cierre de un stage dispara automaticStages, `completeCurrentStage`
+devuelve `automaticStageResults` para que la capa superior pueda ver que se
+ejecuto, por ejemplo, `check_objectives`, `start_cycle` o `conclude_play`.
+
+## Roles, stages y recetas
 
 La relacion actual es esta:
 
 ```text
 Role o Group
--> stepDefinitions
--> Step
+-> stageDefinitions
+-> Stage
 -> actions
 -> Recipe
 ```
 
-Un rol no ejecuta recetas directamente. Un rol define que steps puede aportar al
-flujo. Las recetas ejecutables viven dentro de `step.actions`.
+Un rol no ejecuta recetas directamente. Un rol define que stages puede aportar
+al flujo. Las recetas ejecutables viven dentro de `stage.actions`.
 
 Esto evita duplicar la misma receta en dos sitios. Si una skin quiere mover una
-receta a otro momento, modifica el step o el pool; no modifica la accion pura.
+receta a otro momento, modifica el stage o el pool; no modifica la accion pura.
 
-Los steps de catalogo son abstractos. Los steps de sesion deben tener actores
-reales en `actorIds`, salvo steps de sistema. Si un grupo esta vacio, no puede
-crear un step enabled jugable.
+Los stages de catalogo son abstractos. Los stages de sesion deben tener actores
+reales en `actorIds`, salvo stages de sistema. Si un grupo esta vacio, no puede
+crear un stage enabled jugable.
 
 Un rol tambien puede declarar `reactions`. Una reaccion no se ejecuta por si
 misma: `eventModel.js` la evalua cuando un efecto final produce un evento. El
 primer caso implementado es `role_reactive`: cuando ese rol recibe un cambio
-real a `inPlay=false`, se crea un step en `poolSpecial` para que pueda ejecutar
+real a `inPlay=false`, se crea un stage en `specialStages` para que pueda ejecutar
 una respuesta.
 
 El motor debe ejecutar `check_objectives` al final de cada pool. Si se emite un
-`playOutcome` concluyente, se ejecuta la etapa automatica `conclude_play`.
+`playOutcome` concluyente, primero se comprueba que no haya stages pendientes en
+`specialStages` capaces de modificarlo. Solo entonces se ejecuta la etapa
+automatica `conclude_play`.
 `conclude_play` concluye la parte jugable, pero no cierra administrativamente la
 session.
 
@@ -148,9 +174,11 @@ La sesion guarda:
 - `players`
 - `roles`
 - `groups`
-- `stepPools`
+- `stagePools` en el modelo conceptual. En codigo aparece todavia como
+  `stagePools`.
 - `actionHistory`
-- `stepHistory`
+- `stageHistory` en el modelo conceptual. En codigo aparece todavia como
+  `stageHistory`.
 - `settings`
 - `status`
 

@@ -8,8 +8,8 @@
 // - block_action: bloquea una accion concreta contra un objetivo.
 // - link_targets: crea un grupo mecanico entre varios objetivos.
 // - select: resuelve una seleccion y devuelve chosen/empate/nulo.
-// - close_cycle: cierra el ciclo y limpia efectos temporales.
-// - conclude_play: concluye la parte jugable desde un step especial.
+// - start_cycle: prepara un nuevo ciclo y limpia efectos temporales.
+// - conclude_play: concluye la parte jugable desde una automaticStage final.
 //
 // Importante:
 // - No sabe que es "La Vidente".
@@ -23,7 +23,7 @@
 import {
   EFFECT_TYPES,
   applyConcludePlay as applyConcludePlayFromModel,
-  applyCloseCycle as applyCloseCycleFromModel,
+  applyStartCycle as applyStartCycleFromModel,
   applySetGroupEffect,
   applySetPropertyEffect,
   getActionBlockKey,
@@ -48,7 +48,7 @@ export const ACTION_IDS = Object.freeze({
   BLOCK_ACTION: 'block_action',
   LINK_TARGETS: 'link_targets',
   SELECT: 'select',
-  CLOSE_CYCLE: 'close_cycle',
+  START_CYCLE: 'start_cycle',
   CONCLUDE_PLAY: 'conclude_play'
 });
 
@@ -431,7 +431,7 @@ export function resolveSetInPlayEffect({ session, action, actor, targets, contex
   const nextSession = appendActionHistory(applyFinalEffects({ session, finalEffects }), {
     cycleId: currentCycleId,
     poolKey: context.poolKey ?? null,
-    stepKey: context.stepKey ?? null,
+    stageKey: context.stageKey ?? null,
     actionKey: context.actionKey ?? action.key ?? action.id,
     actionId: action.id,
     actionSignature: getActionHistorySignature(action),
@@ -511,7 +511,7 @@ export function applyBlockAction({ session, action, actor, targets, context = {}
   const nextSession = appendActionHistory(sessionWithBlock, {
     cycleId: currentCycleId,
     poolKey: context.poolKey ?? null,
-    stepKey: context.stepKey ?? null,
+    stageKey: context.stageKey ?? null,
     actionKey: context.actionKey ?? action.key ?? action.id,
     actionId: action?.id ?? ACTION_IDS.BLOCK_ACTION,
     actionSignature: getActionHistorySignature(action),
@@ -579,8 +579,8 @@ export function applyLinkTargets({ session, action, actor, targets }) {
 // Resuelve una seleccion pura.
 //
 // selectionModel solo cuenta selecciones y decide chosen/empate/nulo. No aplica efectos.
-// Si un step quiere hacer algo con el chosen, stepModel aplicara despues la
-// receta normal configurada en ese step.
+// Si un stage quiere hacer algo con el chosen, stageModel aplicara despues la
+// receta normal configurada en ese stage.
 export function applySelection({ session, action, input = {} }) {
   const visibility = action?.visibility ?? VISIBILITY.ALL;
   const selectionResolution = resolveSelectionRound({
@@ -633,24 +633,24 @@ export function applySelection({ session, action, input = {} }) {
   };
 }
 
-// Cierra el ciclo actual.
+// Prepara un nuevo ciclo.
 //
 // En esta version todavia no tenemos una cola real de efectos pendientes. Las
 // acciones actuales resuelven y aplican sus efectos inmediatamente. Aun asi,
-// mantenemos esta accion de sistema para cerrar ciclo, limpiar bloqueos
-// temporales y avanzar currentCycleId.
+// mantenemos esta accion de sistema para limpiar bloqueos temporales y avanzar
+// currentCycleId antes del siguiente poolConcealed.
 //
-// Despues limpia flags temporales para empezar el siguiente ciclo sin basura:
+// Limpia flags temporales para empezar el siguiente ciclo sin basura:
 // - blockedActions.
-export function applyCloseCycleAction({ session, action }) {
+export function applyStartCycleAction({ session, action }) {
   const visibility = action?.visibility ?? VISIBILITY.ALL;
-  return applyCloseCycleFromModel({ session, visibility });
+  return applyStartCycleFromModel({ session, visibility });
 }
 
 // Ejecuta conclude_play.
 //
-// Esta accion normalmente vive en poolSpecial. Permite que la conclusion de la
-// parte jugable sea visible y ordenable dentro de la misma mecanica de steps.
+// Esta accion la dispara una automaticStage final cuando el playOutcome ya es
+// estable. No se encola en specialStages.
 export function applyConcludePlayAction({ session, action, input = {} }) {
   const visibility = action?.visibility ?? VISIBILITY.ALL;
   return applyConcludePlayFromModel({
@@ -841,16 +841,16 @@ export function resolveSelection(session, action, input = {}) {
   };
 }
 
-// Ejecuta close_cycle.
+// Ejecuta start_cycle.
 //
-// Esta accion normalmente la ejecutara el sistema al cerrar un bloque de ciclo.
+// Esta accion normalmente la ejecutara el sistema al comenzar un ciclo normal.
 // Por eso no exige actor ni objetivos manuales.
-export function resolveCloseCycle(session, action) {
-  const applied = applyCloseCycleAction({ session, action });
+export function resolveStartCycle(session, action) {
+  const applied = applyStartCycleAction({ session, action });
 
   return {
     ok: true,
-    actionId: action?.id ?? ACTION_IDS.CLOSE_CYCLE,
+    actionId: action?.id ?? ACTION_IDS.START_CYCLE,
     errors: [],
     session: applied.session,
     result: applied.result
@@ -890,7 +890,7 @@ export function resolveConcludePlay(session, action, input = {}) {
 // - block_out_of_play
 // - link_targets
 // - select
-// - close_cycle
+// - start_cycle
 //
 // Las proximas acciones genericas se conectaran aqui.
 export function resolveAction(session, action, input = {}, context = {}) {
@@ -909,8 +909,8 @@ export function resolveAction(session, action, input = {}, context = {}) {
   if (action?.id === ACTION_IDS.SELECT) {
     return resolveSelection(session, action, input);
   }
-  if (action?.id === ACTION_IDS.CLOSE_CYCLE) {
-    return resolveCloseCycle(session, action);
+  if (action?.id === ACTION_IDS.START_CYCLE) {
+    return resolveStartCycle(session, action);
   }
   if (action?.id === ACTION_IDS.CONCLUDE_PLAY) {
     return resolveConcludePlay(session, action, input);

@@ -82,20 +82,17 @@ objectiveModel comprueba si hay un playOutcome concluyente
 El modelo anterior ya planteaba estos pools:
 
 ```text
-poolPreparation
-poolDeployment
-poolExposed
+poolSpecial
 poolConcealed
+poolExposed
 poolSpecial
 ```
 
 Lectura:
 
-- `poolPreparation`: preparacion inicial.
-- `poolDeployment`: acciones que solo ocurren la primera noche.
+- `poolSpecial`: stages iniciales, interrupciones y resoluciones especiales.
 - `poolConcealed`: acciones recurrentes de noche.
 - `poolExposed`: resolucion diurna recurrente.
-- `poolSpecial`: interrupciones o resoluciones que pueden entrar entre pools.
 
 ## Orden general recuperado
 
@@ -103,7 +100,7 @@ Segun `turn_overview.md`, el bucle base es:
 
 ```mermaid
 flowchart TD
-  A[poolPreparation] --> B[poolDeployment]
+  A[poolPreparation] --> B[poolSpecial]
   B --> C[poolExposed]
   C --> D[poolConcealed]
   D --> C

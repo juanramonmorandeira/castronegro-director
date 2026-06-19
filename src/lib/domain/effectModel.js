@@ -18,14 +18,14 @@ export const EFFECT_TYPES = Object.freeze({
   SET_PROPERTY: 'set_property',
   BLOCK_ACTION: 'block_action',
   SET_GROUP: 'set_group',
-  CLOSE_CYCLE: 'close_cycle',
+  START_CYCLE: 'start_cycle',
   CONCLUDE_PLAY: 'conclude_play'
 });
 
 // Devuelve el ciclo actual de la sesion.
 //
 // Lo guardamos en metadata para no introducir todavia una estructura grande de
-// calendario/steps. Si no existe, asumimos ciclo 1.
+// calendario/stages. Si no existe, asumimos ciclo 1.
 export function getCurrentCycleId(session) {
   const rawCycleId = session?.metadata?.currentCycleId ?? session?.cycleId ?? 1;
   const numericCycleId = Number(rawCycleId);
@@ -34,8 +34,8 @@ export function getCurrentCycleId(session) {
 
 // Avanza el contador de ciclo de la sesion.
 //
-// Por ahora lo hacemos al cerrar efectos pendientes, porque esa accion
-// representa el cierre del ciclo y el paso al siguiente bloque de decisiones.
+// start_cycle se ejecuta antes de un nuevo ciclo normal. En ese punto el motor
+// limpia efectos temporales y prepara el siguiente bloque de decisiones.
 export function advanceSessionCycle(session) {
   return {
     ...session,
@@ -217,13 +217,13 @@ export function getGroupKey(group = {}) {
   return [normalizeId(group.type), ...normalizeGroupMemberIds(group.roleIds)].join(':');
 }
 
-// Cierra el ciclo actual.
+// Prepara el inicio de un nuevo ciclo.
 //
 // En esta version todavia no tenemos una cola real de efectos pendientes. Las
 // acciones actuales resuelven y aplican sus efectos inmediatamente. Aun asi,
-// mantenemos esta funcion para cerrar ciclo, limpiar bloqueos temporales y
-// avanzar currentCycleId.
-export function applyCloseCycle({ session, visibility = 'all' } = {}) {
+// mantenemos esta funcion para limpiar bloqueos temporales y avanzar
+// currentCycleId antes del siguiente poolConcealed.
+export function applyStartCycle({ session, visibility = 'all' } = {}) {
   const resolvedSession = {
     ...session,
     roles: (session?.roles ?? []).map(clearCycleFlags)
@@ -233,7 +233,7 @@ export function applyCloseCycle({ session, visibility = 'all' } = {}) {
   return {
     session: nextSession,
     result: {
-      type: EFFECT_TYPES.CLOSE_CYCLE,
+      type: EFFECT_TYPES.START_CYCLE,
       visibility,
       finalEffects: [],
       clearedTemporaryFlags: ['blockedActions'],
@@ -244,8 +244,8 @@ export function applyCloseCycle({ session, visibility = 'all' } = {}) {
 
 // Concluye la parte jugable con un playOutcome ya calculado.
 //
-// Esta escritura vive como efecto para que la conclusion jugable sea un step
-// especial ejecutable, no un corte silencioso del motor antes de poolSpecial.
+// Esta escritura vive como efecto para que la conclusion jugable pase por la
+// misma ruta de aplicacion que el resto de cambios mecanicos.
 //
 // No cerramos administrativamente la session: esa decision pertenece al creador
 // o al flujo de aplicacion. Guardamos playOutcome como estado mecanico.

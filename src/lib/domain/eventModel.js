@@ -7,19 +7,14 @@
 // - trigger: condicion declarada por un rol para escuchar ese evento.
 // - reaction: respuesta definida por ese rol cuando el trigger encaja.
 //
-// Este archivo no ejecuta la receta del step especial. Solo crea el step que
-// podra ejecutarse mas tarde por stepModel, respetando el cierre manual.
+// Este archivo no ejecuta la receta del stage especial. Solo crea el stage que
+// podra ejecutarse mas tarde por stageModel, respetando el cierre manual.
 // -----------------------------------------------------------------------------
 
-import { createStep } from './stepDefinition.js';
+import { createStage } from './stageDefinition.js';
 import { EFFECT_TYPES } from './effectModel.js';
-import { getCatalogRecipe, RECIPE_KEYS } from './recipeCatalog.js';
-import {
-  POOL_KEYS,
-  SPECIAL_STEP_PRIORITIES,
-  STEP_STATUSES,
-  normalizeId
-} from './sessionModel.js';
+import { STAGE_STATUSES, normalizeId } from './sessionModel.js';
+import { appendSpecialStage, getSpecialStages } from './specialStagesModel.js';
 
 export const EVENT_TYPES = Object.freeze({
   PROPERTY_CHANGED: 'property_changed'
@@ -30,7 +25,7 @@ export const EVENT_TRIGGER_TARGETS = Object.freeze({
 });
 
 export const EVENT_RESPONSE_TYPES = Object.freeze({
-  CREATE_STEP: 'create_step'
+  CREATE_STAGE: 'create_stage'
 });
 
 function findRole(session = {}, roleId = null) {
@@ -65,7 +60,7 @@ function getPropertyChangeEvent({ previousSession, effect, source = {} }) {
       actionId: source.actionId ?? null,
       actionKey: source.actionKey ?? null,
       poolKey: source.poolKey ?? null,
-      stepKey: source.stepKey ?? null,
+      stageKey: source.stageKey ?? null,
       effect
     }
   };
@@ -84,7 +79,7 @@ export function getEventsFromActionResult({
     actionId: actionResult?.actionId ?? null,
     actionKey: context.actionKey ?? null,
     poolKey: context.poolKey ?? null,
-    stepKey: context.stepKey ?? null
+    stageKey: context.stageKey ?? null
   };
 
   return (actionResult?.finalEffects ?? [])
@@ -120,9 +115,9 @@ export function getTriggeredReactions({ session = {}, events = [] } = {}) {
   );
 }
 
-function getUniqueStepKey(stepPools, poolKey, baseKey) {
-  const existingKeys = new Set((stepPools?.pools?.[poolKey] ?? []).map((step) => step.key));
-  const normalizedBaseKey = normalizeId(baseKey || 'event_step');
+function getUniqueStageKey(specialStages, baseKey) {
+  const existingKeys = new Set((specialStages ?? []).map((stage) => stage.key));
+  const normalizedBaseKey = normalizeId(baseKey || 'event_stage');
 
   if (!existingKeys.has(normalizedBaseKey)) return normalizedBaseKey;
 
@@ -135,17 +130,17 @@ function getUniqueStepKey(stepPools, poolKey, baseKey) {
   return nextKey;
 }
 
-function createStepFromReactionResponse({ session, triggeredReaction }) {
+function createStageFromReactionResponse({ session, triggeredReaction }) {
   const response = triggeredReaction.reaction.response ?? {};
-  const poolKey = response.poolKey ?? response.step?.poolKey ?? POOL_KEYS.POOL_SPECIAL;
-  const step = createStep({
-    ...(response.step ?? {}),
-    key: getUniqueStepKey(session.stepPools, poolKey, response.step?.key),
-    poolKey,
-    status: response.step?.status ?? STEP_STATUSES.ENABLED,
+  const stage = createStage({
+    ...(response.stage ?? {}),
+    key: getUniqueStageKey(getSpecialStages(session), response.stage?.key),
+    poolKey: null,
+    special: true,
+    status: response.stage?.status ?? STAGE_STATUSES.ENABLED,
     actorIds: [triggeredReaction.role.id],
     metadata: {
-      ...(response.step?.metadata ?? {}),
+      ...(response.stage?.metadata ?? {}),
       source: {
         type: 'event',
         id: triggeredReaction.event.type,
@@ -159,17 +154,16 @@ function createStepFromReactionResponse({ session, triggeredReaction }) {
   });
 
   return {
-    type: EVENT_RESPONSE_TYPES.CREATE_STEP,
-    poolKey,
-    step
+    type: EVENT_RESPONSE_TYPES.CREATE_STAGE,
+    stage
   };
 }
 
 export function resolveEventResponses({ session = {}, triggeredReactions = [] } = {}) {
   return triggeredReactions
-    .filter((entry) => entry.reaction?.response?.type === EVENT_RESPONSE_TYPES.CREATE_STEP)
+    .filter((entry) => entry.reaction?.response?.type === EVENT_RESPONSE_TYPES.CREATE_STAGE)
     .map((triggeredReaction) =>
-      createStepFromReactionResponse({
+      createStageFromReactionResponse({
         session,
         triggeredReaction
       })
@@ -180,29 +174,19 @@ export function applyEventResponses({ session = {}, responses = [] } = {}) {
   if (!responses.length) return session;
 
   return responses.reduce((currentSession, response) => {
-    if (response.type !== EVENT_RESPONSE_TYPES.CREATE_STEP) return currentSession;
+    if (response.type !== EVENT_RESPONSE_TYPES.CREATE_STAGE) return currentSession;
 
-    const poolKey = response.poolKey ?? POOL_KEYS.POOL_SPECIAL;
-    const pools = currentSession.stepPools?.pools ?? {};
-
-    return {
-      ...currentSession,
-      stepPools: {
-        ...currentSession.stepPools,
-        pools: {
-          ...pools,
-          [poolKey]: [...(pools[poolKey] ?? []), response.step]
-        }
-      }
-    };
+    return appendSpecialStage(currentSession, response.stage, {
+      source: 'event_response'
+    });
   }, session);
 }
 
-// Punto de entrada para stepModel.
+// Punto de entrada para stageModel.
 //
 // Recibe el resultado de una accion/receta ya resuelta, crea eventos desde sus
 // efectos finales, activa reacciones compatibles y devuelve la sesion con los
-// steps especiales anadidos.
+// stages especiales anadidos.
 export function processActionResultEvents({
   previousSession,
   session,
@@ -222,48 +206,5 @@ export function processActionResultEvents({
     events,
     triggeredReactions,
     responses
-  };
-}
-
-export function createConcludePlayStep({ session = {}, playOutcome = null } = {}) {
-  const poolKey = POOL_KEYS.POOL_SPECIAL;
-
-  return createStep({
-    key: getUniqueStepKey(session.stepPools, poolKey, 'step_08'),
-    poolKey,
-    status: STEP_STATUSES.ENABLED,
-    actorIds: [],
-    actions: [
-      getCatalogRecipe(RECIPE_KEYS.CONCLUDE_PLAY, {
-        effect: {
-          type: EFFECT_TYPES.CONCLUDE_PLAY,
-          playOutcome
-        }
-      })
-    ],
-    metadata: {
-      source: {
-        type: 'event',
-        id: 'play_concluded',
-        metadata: {
-          playOutcome
-        }
-      },
-      specialPriority: SPECIAL_STEP_PRIORITIES.CONCLUDE_PLAY
-    }
-  });
-}
-
-export function appendConcludePlayEventResponse({ session = {}, playOutcome = null } = {}) {
-  const response = {
-    type: EVENT_RESPONSE_TYPES.CREATE_STEP,
-    poolKey: POOL_KEYS.POOL_SPECIAL,
-    step: createConcludePlayStep({ session, playOutcome }),
-    reason: 'play_concluded'
-  };
-
-  return {
-    session: applyEventResponses({ session, responses: [response] }),
-    response
   };
 }

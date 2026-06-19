@@ -1,19 +1,19 @@
-// stepCatalog.js
+// stageCatalog.js
 // -----------------------------------------------------------------------------
-// Catalogo de steps mecanicos reutilizables.
+// Catalogo de stages mecanicos reutilizables.
 //
-// El catalogo guarda steps predefinidos. No expone un constructor por cada tipo
-// de step. El constructor unico sigue siendo createStep.
+// El catalogo guarda stages predefinidos. No expone un constructor por cada tipo
+// de stage. El constructor unico sigue siendo createStage.
 // -----------------------------------------------------------------------------
 
 import { GROUP_TYPES } from './groupDefinition.js';
-import { STEP_STATUSES } from './sessionModel.js';
-import { createStep } from './stepDefinition.js';
+import { STAGE_STATUSES } from './sessionModel.js';
+import { createStage } from './stageDefinition.js';
 import {
-  STEP_COMPLETION_MODES,
-  STEP_COMPLETION_REQUESTED_BY,
-  STEP_KEYS
-} from './stepModel.js';
+  STAGE_COMPLETION_MODES,
+  STAGE_COMPLETION_REQUESTED_BY,
+  STAGE_KEYS
+} from './stageModel.js';
 import { getCatalogRecipe, RECIPE_KEYS } from './recipeCatalog.js';
 import {
   SELECTION_ABSTAIN_RULES,
@@ -24,7 +24,7 @@ import {
   createSelectionRules
 } from './selectionModel.js';
 
-export const STEP_CATALOG_IDS = Object.freeze({
+export const STAGE_CATALOG_IDS = Object.freeze({
   ROLE_INSPECTS: 'role_inspects',
   ROLE_LINKS_TARGETS: 'role_links_targets',
   ROLE_BLOCKS_OUT_OF_PLAY: 'role_blocks_out_of_play',
@@ -32,53 +32,53 @@ export const STEP_CATALOG_IDS = Object.freeze({
   ROLE_REACTIVE_RESPONSE: 'role_reactive_response',
   GROUP_SET_OUT_OF_PLAY: 'group_set_out_of_play',
   GROUP_SELECTION: 'group_selection',
-  SYSTEM_CLOSES_CYCLE: 'system_closes_cycle'
+  SYSTEM_STARTS_CYCLE: 'system_starts_cycle'
 });
 
-export function getManualCompletion(allowedRequesters = Object.values(STEP_COMPLETION_REQUESTED_BY)) {
+export function getManualCompletion(allowedRequesters = Object.values(STAGE_COMPLETION_REQUESTED_BY)) {
   return {
-    mode: STEP_COMPLETION_MODES.MANUAL,
+    mode: STAGE_COMPLETION_MODES.MANUAL,
     allowedRequesters
   };
 }
 
-export const STEP_CATALOG = Object.freeze({
-  [STEP_CATALOG_IDS.ROLE_INSPECTS]: createStep({
-    key: STEP_KEYS.STEP_01,
-    status: STEP_STATUSES.ENABLED,
+export const STAGE_CATALOG = Object.freeze({
+  [STAGE_CATALOG_IDS.ROLE_INSPECTS]: createStage({
+    key: STAGE_KEYS.STAGE_01,
+    status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
     actions: [getCatalogRecipe(RECIPE_KEYS.INSPECT_ROLE)],
     metadata: {
-      catalogId: STEP_CATALOG_IDS.ROLE_INSPECTS
+      catalogId: STAGE_CATALOG_IDS.ROLE_INSPECTS
     }
   }),
 
-  [STEP_CATALOG_IDS.ROLE_LINKS_TARGETS]: createStep({
-    key: STEP_KEYS.STEP_02,
-    status: STEP_STATUSES.ENABLED,
+  [STAGE_CATALOG_IDS.ROLE_LINKS_TARGETS]: createStage({
+    key: STAGE_KEYS.STAGE_02,
+    status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
     actions: [getCatalogRecipe(RECIPE_KEYS.LINK_TARGETS)],
     metadata: {
-      catalogId: STEP_CATALOG_IDS.ROLE_LINKS_TARGETS
+      catalogId: STAGE_CATALOG_IDS.ROLE_LINKS_TARGETS
     }
   }),
 
-  [STEP_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY]: createStep({
-    key: STEP_KEYS.STEP_02,
-    status: STEP_STATUSES.ENABLED,
+  [STAGE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY]: createStage({
+    key: STAGE_KEYS.STAGE_02,
+    status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
     actions: [getCatalogRecipe(RECIPE_KEYS.BLOCK_OUT_OF_PLAY)],
     metadata: {
-      catalogId: STEP_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY
+      catalogId: STAGE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY
     }
   }),
 
-  [STEP_CATALOG_IDS.ROLE_IN_PLAY_CONTROL]: createStep({
-    key: STEP_KEYS.STEP_03,
-    status: STEP_STATUSES.ENABLED,
+  [STAGE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL]: createStage({
+    key: STAGE_KEYS.STAGE_03,
+    status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
     actions: [
@@ -86,13 +86,13 @@ export const STEP_CATALOG = Object.freeze({
       getCatalogRecipe(RECIPE_KEYS.ONE_SHOT_SET_OUT_OF_PLAY)
     ],
     metadata: {
-      catalogId: STEP_CATALOG_IDS.ROLE_IN_PLAY_CONTROL
+      catalogId: STAGE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL
     }
   }),
 
-  [STEP_CATALOG_IDS.ROLE_REACTIVE_RESPONSE]: createStep({
-    key: STEP_KEYS.STEP_07,
-    status: STEP_STATUSES.ENABLED,
+  [STAGE_CATALOG_IDS.ROLE_REACTIVE_RESPONSE]: createStage({
+    key: STAGE_KEYS.STAGE_07,
+    status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
     actions: [
@@ -106,24 +106,24 @@ export const STEP_CATALOG = Object.freeze({
       })
     ],
     metadata: {
-      catalogId: STEP_CATALOG_IDS.ROLE_REACTIVE_RESPONSE
+      catalogId: STAGE_CATALOG_IDS.ROLE_REACTIVE_RESPONSE
     }
   }),
 
-  [STEP_CATALOG_IDS.GROUP_SET_OUT_OF_PLAY]: createStep({
-    key: STEP_KEYS.STEP_04,
-    status: STEP_STATUSES.ENABLED,
+  [STAGE_CATALOG_IDS.GROUP_SET_OUT_OF_PLAY]: createStage({
+    key: STAGE_KEYS.STAGE_04,
+    status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
     actions: [getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY)],
     metadata: {
-      catalogId: STEP_CATALOG_IDS.GROUP_SET_OUT_OF_PLAY
+      catalogId: STAGE_CATALOG_IDS.GROUP_SET_OUT_OF_PLAY
     }
   }),
 
-  [STEP_CATALOG_IDS.GROUP_SELECTION]: createStep({
-    key: STEP_KEYS.STEP_05,
-    status: STEP_STATUSES.ENABLED,
+  [STAGE_CATALOG_IDS.GROUP_SELECTION]: createStage({
+    key: STAGE_KEYS.STAGE_05,
+    status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
     selectionRules: createSelectionRules({
@@ -148,18 +148,18 @@ export const STEP_CATALOG = Object.freeze({
       })
     ],
     metadata: {
-      catalogId: STEP_CATALOG_IDS.GROUP_SELECTION
+      catalogId: STAGE_CATALOG_IDS.GROUP_SELECTION
     }
   }),
 
-  [STEP_CATALOG_IDS.SYSTEM_CLOSES_CYCLE]: createStep({
-    key: STEP_KEYS.STEP_06,
-    status: STEP_STATUSES.ENABLED,
+  [STAGE_CATALOG_IDS.SYSTEM_STARTS_CYCLE]: createStage({
+    key: STAGE_KEYS.STAGE_06,
+    status: STAGE_STATUSES.ENABLED,
     actorIds: [],
-    completion: getManualCompletion([STEP_COMPLETION_REQUESTED_BY.SYSTEM]),
-    actions: [getCatalogRecipe(RECIPE_KEYS.CLOSE_CYCLE)],
+    completion: getManualCompletion([STAGE_COMPLETION_REQUESTED_BY.SYSTEM]),
+    actions: [getCatalogRecipe(RECIPE_KEYS.START_CYCLE)],
     metadata: {
-      catalogId: STEP_CATALOG_IDS.SYSTEM_CLOSES_CYCLE
+      catalogId: STAGE_CATALOG_IDS.SYSTEM_STARTS_CYCLE
     }
   })
 });
@@ -174,27 +174,27 @@ function cloneCatalogValue(value) {
   return value;
 }
 
-export function getCatalogStep(stepCatalogId, overrides = {}) {
-  const baseStep = STEP_CATALOG[stepCatalogId];
-  if (!baseStep) return null;
+export function getCatalogStage(stageCatalogId, overrides = {}) {
+  const baseStage = STAGE_CATALOG[stageCatalogId];
+  if (!baseStage) return null;
 
-  return createStep({
-    ...cloneCatalogValue(baseStep),
+  return createStage({
+    ...cloneCatalogValue(baseStage),
     ...overrides,
     actorIds: overrides.actorIds
       ? cloneCatalogValue(overrides.actorIds)
-      : cloneCatalogValue(baseStep.actorIds),
+      : cloneCatalogValue(baseStage.actorIds),
     completion: overrides.completion
       ? cloneCatalogValue(overrides.completion)
-      : cloneCatalogValue(baseStep.completion),
+      : cloneCatalogValue(baseStage.completion),
     selectionRules: overrides.selectionRules
       ? cloneCatalogValue(overrides.selectionRules)
-      : cloneCatalogValue(baseStep.selectionRules),
+      : cloneCatalogValue(baseStage.selectionRules),
     actions: overrides.actions
       ? cloneCatalogValue(overrides.actions)
-      : cloneCatalogValue(baseStep.actions),
+      : cloneCatalogValue(baseStage.actions),
     metadata: {
-      ...cloneCatalogValue(baseStep.metadata ?? {}),
+      ...cloneCatalogValue(baseStage.metadata ?? {}),
       ...(overrides.metadata ?? {})
     }
   });

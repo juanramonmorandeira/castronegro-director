@@ -41,6 +41,12 @@ Estructura aceptada:
   condition: {
     type: 'holder_reaches_in_play_parity'
   },
+  dependencies: [
+    {
+      subject: 'role',
+      property: 'inPlay'
+    }
+  ],
   onFulfilled: [
     {
       conclusive: true,
@@ -59,6 +65,8 @@ Lectura:
 - `holder`: sujeto mecanico al que se asocia el objective. Por ahora puede ser
   `role` o `group`.
 - `condition`: condicion que se evalua.
+- `dependencies`: propiedades o estructuras de estado que sostienen esa
+  condicion.
 - `onFulfilled`: propuestas que emite la regla si la condicion se cumple.
 - `conflictRules`: reglas para resolver conflictos con otros objetivos
   cumplidos.
@@ -119,7 +127,7 @@ Ejemplo conceptual:
 ### check_objectives
 
 `check_objectives` es la etapa automatica que comprueba objetivos al final de
-un pool. No es un step ejecutable por player, group o director.
+un pool. No es un stage ejecutable por player, group o director.
 
 Responsabilidades:
 
@@ -127,8 +135,10 @@ Responsabilidades:
 2. registrar objetivos cumplidos no concluyentes en `achievedObjectives`;
 3. resolver conflictos si varias condiciones concluyentes se cumplen a la vez;
 4. emitir `playOutcome` si la parte jugable queda concluida;
-5. pedir la creacion de `conclude_play` en `poolSpecial` si existe un
-   `playOutcome` concluyente.
+5. comprobar si hay stages pendientes en `specialStages` que pueden alterar el
+   outcome;
+6. ejecutar `conclude_play` como automaticStage final solo si existe un
+   `playOutcome` concluyente y estable.
 
 ### conclude_play
 
@@ -137,6 +147,54 @@ jugable.
 
 No cierra la session. Cerrar la session es responsabilidad exclusiva del creador
 o del flujo de administracion de la aplicacion.
+
+`conclude_play` no se encola en `specialStages`. Si hay stages pendientes que
+puedan alterar el outcome, se resuelve primero `specialStages`. Si no los hay,
+`conclude_play` se ejecuta como automaticStage final y el flujo de pools deja de
+avanzar.
+
+## Dependencies e influences
+
+Una objectiveRule declara `dependencies`: que estado necesita leer para sostener
+su condicion.
+
+Una action, recipe o stage declara `influences`: que estado puede cambiar y en
+que sentido.
+
+Ejemplo:
+
+```js
+objectiveRule.dependencies = [
+  {
+    subject: 'role',
+    property: 'inPlay'
+  }
+];
+
+recipe.influences = [
+  {
+    subject: 'role',
+    property: 'inPlay',
+    operation: 'set',
+    values: [false]
+  }
+];
+```
+
+El cruce entre ambas listas no basta por si solo. Tambien hay que mirar el
+contexto real del stage:
+
+- si sigue pendiente;
+- si sus acciones o recursos no estan consumidos;
+- que targets o candidates reales puede afectar;
+- si los valores posibles pueden cambiar una condicion cumplida hacia no
+  cumplida.
+
+Por ejemplo, una accion pendiente que solo pueda hacer `inPlay=true` sobre un
+role del holder no amenaza una condicion ya cumplida de
+`holder_reaches_in_play_parity`; la refuerza. En cambio, una accion pendiente
+que pueda hacer `inPlay=false` sobre un role del holder si puede volver inestable
+ese outcome.
 
 ## Momento de evaluacion
 
@@ -150,8 +208,8 @@ todos los efectos de ese pool.
 Motivo:
 
 ```text
-Un step temprano dentro de un pool puede producir un estado que parece
-concluyente, pero un step posterior del mismo pool puede revertirlo o modificarlo.
+Un stage temprano dentro de un pool puede producir un estado que parece
+concluyente, pero un stage posterior del mismo pool puede revertirlo o modificarlo.
 ```
 
 ## Evaluacion y resolucion

@@ -54,7 +54,7 @@ Pertenece a skin:
 - carta de rol;
 - imagen de rol;
 - nombre narrativo de una accion;
-- texto mostrado durante un step;
+- texto mostrado durante un stage;
 - descripcion de un token;
 - ambientacion del juego.
 
@@ -83,18 +83,18 @@ Define el universo mecanico:
 - que alignments declara;
 - que grupos existen;
 - que reglas de membership tienen esos grupos;
-- que steps aporta cada role o group;
-- que recetas usa cada step;
+- que stages aporta cada role o group;
+- que recetas usa cada stage;
 - que restricciones aplican a esas recetas;
-- que `voteRules` aplican a cada votacion;
+- que `selectionRules` aplican a cada seleccion;
 - que objectiveRules existen;
-- que orden de pools y steps se propone;
+- que orden de pools y stages se propone;
 - que eventos, triggers o reacciones existen;
-- que reglas especiales gobiernan `poolSpecial`.
+- que reglas pueden generar stages dinamicos en `specialStages`.
 
 Un `ruleSet` no entiende de skins. No decide si un rol se llama Cazador,
 Alienigena, Inquisidor o Drone. Solo define que ese rol tiene una reaccion,
-que esa reaccion escucha un evento y que genera un step especial.
+que esa reaccion escucha un evento y que genera un stage especial.
 
 El motor no limita cuantos alignments puede declarar un ruleSet. Para ruleSets
 basicos recomendamos esta convencion:
@@ -161,9 +161,9 @@ seleccionar, parametrizar y acotar.
 Usamos estas capas:
 
 ```text
-basicConfiguration = ruleSetId, skinId, playersExpected, language, opciones base.
-runModeConfiguration = human / human_ai / ai y tareas asistidas.
-ruleSetConfiguration = roles, cantidades, alignments y reglas opcionales elegidas.
+basicConfiguration = ruleSetId, skinId, playersExpected, sessionLanguage, opciones base.
+runModeConfiguration = human / human_ai / ai y delegatedTasks.
+ruleSetConfiguration = roles, cantidades, reglas opcionales y distributionOverride.
 gameConfiguration = basicConfiguration + runModeConfiguration + ruleSetConfiguration.
 matchConfiguration = jugadores + asientos + roles asignados.
 sessionConfiguration = gameConfiguration + matchConfiguration.
@@ -207,7 +207,7 @@ Es el punto donde convergen:
 - asientos;
 - elecciones del narrador o creador de la partida;
 - decisiones tomadas durante la partida;
-- estado actual de roles, groups y stepPools;
+- estado actual de roles, groups y stagePools;
 - `objectiveRules`;
 - `achievedObjectives`;
 - `playOutcome`;
@@ -232,12 +232,12 @@ session
   roles: [...]
   groups: [...]
   groups: [...]
-  stepPools: ...
+  stagePools: ...
   objectiveRules: [...]
   achievedObjectives: [...]
   playOutcome: null
   actionHistory: [...]
-  stepHistory: [...]
+  stageHistory: [...]
   status: in_progress
 ```
 
@@ -249,7 +249,7 @@ Antes de crear una session, la aplicacion debe poder comprobar:
 - la configuration cumple las restricciones del ruleSet;
 - la skin tiene textos para los roles del ruleSet;
 - la skin tiene assets para los elementos que la UI necesita mostrar;
-- la skin puede presentar las acciones, tokens, efectos o steps relevantes;
+- la skin puede presentar las acciones, tokens, efectos o stages relevantes;
 - el ruleSet es mecanicamente valido;
 - la seleccion de jugadores/asientos permite construir la session.
 
@@ -268,15 +268,35 @@ No usamos fallback automatico para elementos obligatorios.
 ## Flujo objetivo
 
 ```text
-ruleSet seleccionado
-+ configuration definida por el creador
-+ skin seleccionada
-+ jugadores/asientos
-+ opciones del creador
--> buildSession
--> session viva
--> UI presenta session usando skin
--> motor ejecuta reglas usando ruleSet materializado en session
+ruleSetCatalog + basicConfiguration.ruleSetId
+  -> selectedRuleSet
+
+skinCatalog + basicConfiguration.skinId
+  -> skin
+
+selectedRuleSet + skin + basicConfiguration.playersExpected
+  -> availableConfigurationOptions
+
+availableConfigurationOptions + decisiones del creador
+  -> ruleSetConfiguration
+
+selectedRuleSet + skin + ruleSetConfiguration
+  -> buildRuleSet
+  -> ruleSet
+
+runModeConfiguration
+  -> runMode
+
+basicConfiguration + ruleSet + players
+  -> buildMatch
+  -> match
+
+ruleSet + runMode + match
+  -> buildSession
+  -> session viva
+
+UI presenta session usando skin + sessionLanguage
+motor ejecuta reglas usando ruleSet materializado en session
 ```
 
 ## Pendiente de definir

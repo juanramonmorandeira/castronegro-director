@@ -20,12 +20,12 @@ Definicion mecanica de un tipo de rol.
 createRole({
   key: 'role_01',
   alignmentId: 'alignment_a',
-  stepDefinitions: []
+  stageDefinitions: []
 })
 ```
 
 Un `Role` no es una carta en partida. Es una plantilla mecanica. Puede definir
-alignment por defecto y los `stepDefinitions` que ese tipo de rol aporta al
+alignment por defecto y los `stageDefinitions` que ese tipo de rol aporta al
 flujo.
 
 ### Session role
@@ -68,11 +68,11 @@ Un grupo puede empezar vacio y llenarse durante la sesion. Por ejemplo, un
 grupo basado en `linked` no tendra miembros hasta que una accion cree esa
 relacion.
 
-### Step
+### Stage
 
 Unidad ejecutable dentro de un pool.
 
-El step define:
+El stage define:
 
 - `key`
 - `actor`
@@ -80,23 +80,24 @@ El step define:
 - `completion`
 - `metadata`
 
-El nombre del step debe ser neutro, por ejemplo `step_01`.
+El nombre del stage debe ser neutro, por ejemplo `stage_01`.
 
-Las recetas ejecutables viven en `step.actions`. Roles y groups solo aportan
-`stepDefinitions`.
+Las recetas ejecutables viven en `stage.actions`. Roles y groups solo aportan
+`stageDefinitions`.
 
 ### Pool
 
-Bloque ordenado de steps.
+Bloque ordenado de stages.
 
 Pools actuales:
 
-- `poolDeployment`
 - `poolConcealed`
 - `poolExposed`
-- `poolSpecial`
 
 El orden vive en arrays, no en nombres narrativos.
+
+`specialStages` no es un pool. Es una cola FIFO independiente de stages
+dinamicos administrada por `specialStagesModel.js`.
 
 ### Recipe
 
@@ -109,7 +110,7 @@ Ejemplo:
 restore_recent_out_of_play = set_in_play(true) + require_recent_set_property
 ```
 
-La receta no decide en que momento se ejecuta. Eso pertenece al step/pool.
+La receta no decide en que momento se ejecuta. Eso pertenece al stage/pool.
 
 ### Constraint
 
@@ -132,7 +133,7 @@ Ejemplos actuales:
 - `block_action`
 - `link_targets`
 - `select`
-- `close_cycle`
+- `start_cycle`
 
 ### Effect
 
@@ -144,7 +145,7 @@ Ejemplos actuales:
 - `set_property`
 - `set_group`
 - `block_action`
-- `close_cycle`
+- `start_cycle`
 
 ### Group
 

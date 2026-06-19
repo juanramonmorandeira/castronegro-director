@@ -7,7 +7,7 @@
 // -----------------------------------------------------------------------------
 
 import { POOL_KEYS } from './sessionModel.js';
-import { getCatalogStep, STEP_CATALOG_IDS } from './stepCatalog.js';
+import { getCatalogStage, STAGE_CATALOG_IDS } from './stageCatalog.js';
 import { createGroup, GROUP_MEMBERSHIP_RULE_TYPES } from './groupDefinition.js';
 
 export const GROUP_CATALOG_IDS = Object.freeze({
@@ -21,8 +21,8 @@ export const GROUP_CATALOG = Object.freeze({
       type: GROUP_MEMBERSHIP_RULE_TYPES.ALIGNMENT,
       alignmentId: 'alignment_b'
     },
-    stepDefinitions: [
-      getCatalogStep(STEP_CATALOG_IDS.GROUP_SET_OUT_OF_PLAY, {
+    stageDefinitions: [
+      getCatalogStage(STAGE_CATALOG_IDS.GROUP_SET_OUT_OF_PLAY, {
         poolKey: POOL_KEYS.POOL_CONCEALED,
         order: 30,
         metadata: {
@@ -54,9 +54,9 @@ export function getCatalogGroup(groupCatalogId, overrides = {}) {
     membershipRule: overrides.membershipRule
       ? cloneCatalogValue(overrides.membershipRule)
       : cloneCatalogValue(baseGroup.membershipRule),
-    stepDefinitions: overrides.stepDefinitions
-      ? cloneCatalogValue(overrides.stepDefinitions)
-      : cloneCatalogValue(baseGroup.stepDefinitions),
+    stageDefinitions: overrides.stageDefinitions
+      ? cloneCatalogValue(overrides.stageDefinitions)
+      : cloneCatalogValue(baseGroup.stageDefinitions),
     metadata: {
       ...cloneCatalogValue(baseGroup.metadata ?? {}),
       ...(overrides.metadata ?? {})

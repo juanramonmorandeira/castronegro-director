@@ -25,7 +25,7 @@ export const HISTORY_RESULTS = Object.freeze({
 
 // Devuelve las acciones registradas en la sesion.
 //
-// No se limpia al cerrar ciclo. Es memoria de partida, no estado temporal.
+// No se limpia al iniciar ciclo. Es memoria de partida, no estado temporal.
 export function getActionHistory(session) {
   return Array.isArray(session?.actionHistory) ? session.actionHistory : [];
 }
@@ -51,7 +51,7 @@ export function getActionHistorySignature(action = {}) {
 //
 // Esta es la mecanica comun de escritura. Los modelos concretos siguen
 // preparando sus entradas antes de llamar aqui, porque actionHistory y
-// stepHistory no guardan el mismo tipo de hecho.
+// stageHistory no guardan el mismo tipo de hecho.
 export function appendEntry(session, collectionName, entry, { getId } = {}) {
   const history = Array.isArray(session?.[collectionName]) ? session[collectionName] : [];
   const normalizedEntry = { ...entry };
@@ -77,7 +77,7 @@ export function appendEntry(session, collectionName, entry, { getId } = {}) {
 // La entrada guarda datos mecanicos, no textos visibles. Esto permite que una
 // regla futura pregunte cosas como:
 // - quien fue afectado en este ciclo?
-// - que step lo produjo?
+// - que stage lo produjo?
 // - hubo efectos finales o la accion fue bloqueada?
 export function appendActionHistory(session, entry = {}) {
   const history = getActionHistory(session);
@@ -85,7 +85,7 @@ export function appendActionHistory(session, entry = {}) {
     id: entry.id ?? null,
     cycleId: entry.cycleId ?? 0,
     poolKey: entry.poolKey ?? null,
-    stepKey: entry.stepKey ?? null,
+    stageKey: entry.stageKey ?? null,
     actionKey: entry.actionKey ?? null,
     actionId: entry.actionId ?? null,
     actionSignature: entry.actionSignature ?? null,
@@ -111,11 +111,11 @@ export function appendActionHistory(session, entry = {}) {
 // inPlay=false durante el ciclo actual.
 export function findAppliedSetPropertyHistory(
   session,
-  { cycleId, property, value, targetId = null, stepKey = null, actionKey = null } = {}
+  { cycleId, property, value, targetId = null, stageKey = null, actionKey = null } = {}
 ) {
   return getActionHistory(session).filter((entry) => {
     if (cycleId !== undefined && entry.cycleId !== cycleId) return false;
-    if (stepKey && entry.stepKey !== stepKey) return false;
+    if (stageKey && entry.stageKey !== stageKey) return false;
     if (actionKey && entry.actionKey !== actionKey) return false;
     if (entry.result !== HISTORY_RESULTS.APPLIED && entry.result !== HISTORY_RESULTS.PARTIAL) {
       return false;

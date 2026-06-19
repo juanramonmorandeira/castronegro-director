@@ -26,7 +26,7 @@ function createSessionGroup(groupInput = {}) {
     sourceActionId: group.sourceActionId,
     roleIds: group.roleIds,
     groupRules: group.groupRules,
-    stepDefinitions: group.stepDefinitions,
+    stageDefinitions: group.stageDefinitions,
     metadata: { ...group.metadata }
   };
 }
@@ -39,15 +39,42 @@ export function createSession({
   players = [],
   roles = [],
   groups = [],
-  stepPools = createPool(),
-  sessionObjectiveRules = [],
+  stagePools = createPool(),
+  specialStages = [],
+  specialStagesActive = specialStages.length > 0,
+  objectiveRules = [],
   achievedObjectives = [],
   playOutcome = null,
   actionHistory = [],
-  stepHistory = [],
+  stageHistory = [],
+  specialStagesHistory = [],
   log = [],
   metadata = {}
 } = {}) {
+  const normalizedSpecialStagesHistory =
+    specialStagesHistory.length > 0
+      ? [...specialStagesHistory]
+      : specialStages.flatMap((stage, index) => [
+          {
+            id: `special-stage-${stage.key ?? 'stage'}-queued-${index}`,
+            cycleId: metadata?.currentCycleId ?? 0,
+            stageKey: stage.key ?? null,
+            operation: 'queued',
+            metadata: { initial: true }
+          },
+          ...(specialStagesActive && index === 0
+            ? [
+                {
+                  id: `special-stage-${stage.key ?? 'stage'}-started-${index}`,
+                  cycleId: metadata?.currentCycleId ?? 0,
+                  stageKey: stage.key ?? null,
+                  operation: 'started',
+                  metadata: { initial: true }
+                }
+              ]
+            : [])
+        ]);
+
   return {
     id: id || `session-${Date.now()}`,
     definitionId: definitionId ? normalizeId(definitionId) : null,
@@ -56,12 +83,15 @@ export function createSession({
     players: players.map(createPlayer),
     roles: roles.map(createSessionRole),
     groups: groups.map(createSessionGroup),
-    stepPools,
-    sessionObjectiveRules: [...sessionObjectiveRules],
+    stagePools,
+    specialStages: [...specialStages],
+    specialStagesActive: specialStagesActive === true,
+    objectiveRules: [...objectiveRules],
     achievedObjectives: [...achievedObjectives],
     playOutcome,
     actionHistory: [...actionHistory],
-    stepHistory: [...stepHistory],
+    stageHistory: [...stageHistory],
+    specialStagesHistory: normalizedSpecialStagesHistory,
     log: [...log],
     metadata: { ...metadata }
   };
@@ -88,14 +118,14 @@ function getDefinitionList(definitions = []) {
 // Ensambla una sesion desde definiciones ya escogidas.
 //
 // createSession solo normaliza un estado de sesion. buildSession hace el paso
-// superior: asientos -> roles y role/group/default steps -> stepPools.
+// superior: asientos -> roles y role/group/default stages -> stagePools.
 export function buildSession({
   seats = [],
   roleDefinitions = {},
   groupDefinitions = [],
-  defaultSteps = [],
-  systemSteps = [],
-  stepPools = null,
+  defaultStages = [],
+  systemStages = [],
+  stagePools = null,
   roles = [],
   validate = true,
   validationOptions = { requireAssigned: true },
@@ -116,14 +146,14 @@ export function buildSession({
     ...sessionBeforePools,
     groups
   };
-  const poolBuild = stepPools
-    ? { ok: true, errors: [], stepPools }
+  const poolBuild = stagePools
+    ? { ok: true, errors: [], stagePools, specialStages: sessionInput.specialStages ?? [] }
     : buildPools({
         session: sessionWithGroups,
         roleDefinitions: Object.values(roleDefinitionMap),
         groupDefinitions,
-        defaultSteps,
-        systemSteps
+        defaultStages,
+        systemStages
       });
 
   if (!poolBuild.ok) {
@@ -136,7 +166,9 @@ export function buildSession({
 
   const sessionWithPools = {
     ...sessionWithGroups,
-    stepPools: poolBuild.stepPools
+    stagePools: poolBuild.stagePools,
+    specialStages: [...(poolBuild.specialStages ?? [])],
+    specialStagesActive: (poolBuild.specialStages ?? []).length > 0
   };
   const validation = validate
     ? validateSession(sessionWithPools, validationOptions)

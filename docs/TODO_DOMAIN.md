@@ -5,12 +5,10 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
 ## Antes de anadir muchos mas roles
 
 - Revisar la jerarquia mecanica:
-  `primaryElement -> action/effect -> recipe -> role/group -> step -> ruleSet`.
+  `primaryElement -> action/effect -> recipe -> role/group -> stage -> ruleSet`.
 - Definir inventario de `primaryElements`.
 - Verificar si el codigo actual se ajusta a esa jerarquia o si hay que mover
   responsabilidades.
-- Migrar `selectionModel`/`selectionRules` hacia `selectionModel` con `candidateRules` y
-  `selectionRules`.
 
 ## ruleSet
 
@@ -28,7 +26,7 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
   - reglas dependientes de objectiveRules.
 - Definir validacion de ruleSet:
   - catalogIds existentes;
-  - colisiones de steps;
+  - colisiones de stages;
   - colisiones de order;
   - objectiveRules presentes;
   - groups validos;
@@ -70,7 +68,7 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
 - Decidir que datos materializa:
   - roles;
   - groups;
-  - stepPools;
+  - stagePools;
   - settings;
   - match/seats.
 - Revisar persistencia vieja para trasladarla al modelo nuevo.
@@ -80,7 +78,6 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
 ## objective
 
 - Completar la migracion de UI y referencias antiguas hacia `objective`.
-- Migrar `session.sessionObjectiveRules` hacia `session.objectiveRules`.
 - Completar persistencia de `achievedObjectives`.
 - Completar resolucion de conflictos entre objectiveRules concluyentes.
 - Eliminar cualquier import antiguo que no use `objectiveModel.js`.

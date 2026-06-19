@@ -293,7 +293,7 @@ export function resolveCandidateIds({
 // - el candidate debe estar inPlay;
 // - cada selector solo puede emitir una seleccion por ronda;
 // - todo candidate debe estar dentro de los candidatos de la ronda;
-// - si selectionRules.required=all_selectors, todos los selectorIds del step deben decidir;
+// - si selectionRules.required=all_selectors, todos los selectorIds del stage deben decidir;
 // - abstenerse solo es valido si selectionRules.abstain lo permite;
 // - si hay restricciones de grupo, selector y candidate no pueden incumplirlas.
 export function validateSelections({
@@ -639,7 +639,7 @@ function evaluateUnanimousSelection({ session, selectorIds = [], selectionTally 
 // Prioridad de reglas:
 // 1. Validar participantes, candidatos y restricciones.
 // 2. Resolver seleccion vacia o totalmente abstenida como null.
-// 3. Aplicar unanimidad si el step la exige.
+// 3. Aplicar unanimidad si el stage la exige.
 // 4. Aplicar abstainResolution si la abstencion domina.
 // 5. Aceptar chosen provisional solo si supera supportThreshold.
 // 6. Resolver empate con tie/runoff/repeatLimit.

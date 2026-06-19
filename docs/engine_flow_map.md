@@ -3,6 +3,12 @@
 Este documento muestra las partes del motor y donde validar cada cosa. La idea
 es poder ubicar una regla nueva sin mezclar responsabilidades.
 
+> Mapa integral actualizado: [domain_architecture.md](./domain_architecture.md).
+> Incluye una imagen PNG de respaldo y una version PDF, por lo que no depende
+> del soporte Mermaid del visor.
+
+![Arquitectura completa del nuevo dominio](./domain_architecture.png)
+
 ## Vista general
 
 ```mermaid
@@ -10,16 +16,17 @@ flowchart TD
   Skin[Skin or setup]
   RoleCatalog[Role catalog]
   GroupCatalog[Group catalog]
-  StepCatalog[Step catalog]
+  StageCatalog[Stage catalog]
   Players[Players and seats]
   BuildSession[buildSession]
   RoleStates[session.roles]
   GroupStates[session.groups]
   BuildPools[buildPools]
-  BuildStepPool[buildStepPool]
-  StepPools[session.stepPools]
-  CurrentStep[Current step]
-  StepModel[stepModel]
+  BuildStagePool[buildStagePool]
+  StagePools[session.stagePools]
+  AutomaticStages[automaticStages]
+  CurrentStage[Current stage]
+  StageModel[stageModel]
   Recipe[Recipe]
   Constraint[constraintModel]
   Action[actionModel]
@@ -29,25 +36,27 @@ flowchart TD
   Objectives[objectiveModel]
   PlayOutcome{playOutcome}
   Event[eventModel]
-  SpecialStep[poolSpecial step]
+  SpecialStage[specialStages stage]
   Result[Result]
 
   Skin --> RoleCatalog
   Skin --> GroupCatalog
-  Skin --> StepCatalog
+  Skin --> StageCatalog
   Skin --> Players
   RoleCatalog --> BuildSession
   GroupCatalog --> BuildSession
-  StepCatalog --> BuildSession
+  StageCatalog --> BuildSession
   Players --> BuildSession
   BuildSession --> RoleStates
   BuildSession --> GroupStates
   BuildSession --> BuildPools
-  BuildPools --> BuildStepPool
-  BuildStepPool --> StepPools
-  StepPools --> CurrentStep
-  CurrentStep --> StepModel
-  StepModel --> Recipe
+  BuildPools --> BuildStagePool
+  BuildStagePool --> StagePools
+  BuildPools --> AutomaticStages
+  AutomaticStages --> Objectives
+  StagePools --> CurrentStage
+  CurrentStage --> StageModel
+  StageModel --> Recipe
   Recipe --> Constraint
   Recipe --> Action
   Constraint --> Action
@@ -55,18 +64,18 @@ flowchart TD
   Resolver --> Effect
   Effect --> Session
   Session --> Event
-  Event -->|reaccion crea step| SpecialStep
-  SpecialStep --> StepPools
+  Event -->|reaccion crea stage| SpecialStage
+  SpecialStage --> StagePools
   Event --> Objectives
   Objectives --> PlayOutcome
-  PlayOutcome -->|No concluyente| CurrentStep
-  PlayOutcome -->|Concluyente| SpecialStep
+  PlayOutcome -->|No concluyente| CurrentStage
+  PlayOutcome -->|Concluyente| SpecialStage
 ```
 
 Lectura corta:
 
 ```text
-skin/setup -> buildSession -> roles + groups + stepPools -> step actual -> receta -> restricciones -> accion pura -> resolver -> aplicar efectos -> eventos/reacciones -> check_objectives -> poolSpecial
+skin/setup -> buildSession -> roles + groups + stagePools -> stage actual -> receta -> restricciones -> accion pura -> resolver -> aplicar efectos -> eventos/reacciones -> automaticStages -> check_objectives -> specialStages
 ```
 
 ## Capas del motor
@@ -77,23 +86,23 @@ skin/setup -> buildSession -> roles + groups + stepPools -> step actual -> recet
 | Definicion de sesion | `sessionDefinition.js` | Crear una sesion viva con players, roles, groups, pools e historiales | Resolver acciones |
 | Definicion de player | `playerDefinition.js` | Crear players de sesion | Aplicar reglas sobre roles |
 | Definicion de rol | `roleDefinition.js` | Crear roles y el estado de esos roles dentro de una sesion | Ejecutar acciones |
-| Definicion de pool | `poolDefinition.js` | Crear pools y organizar steps dentro de pools configurables | Decidir que hace cada step |
+| Definicion de pool | `poolDefinition.js` | Crear pools y organizar stages dentro de pools configurables | Decidir que hace cada stage |
 | Validacion de sesion | `sessionValidation.js` | Detectar datos rotos o incompletos | Corregir datos automaticamente |
 | Historial | `historyModel.js` | Crear y consultar memoria mecanica de la sesion | Resolver acciones o cambiar estado por si mismo |
 | Catalogo de roles | `roleCatalog.js` | Guardar roles mecanicos predefinidos | Vestir roles con nombres de skin |
 | Definicion de grupo | `groupDefinition.js` | Crear grupos y resolver sus roleIds iniciales | Ejecutar acciones |
 | Catalogo de grupos | `groupCatalog.js` | Guardar grupos mecanicos predefinidos | Confundir grupo con skin o alignment narrativa |
-| Cursor de pools | `poolCursorModel.js` | Mover el cursor entre steps activos dentro de los pools | Ejecutar acciones de roles |
-| Steps | `stepModel.js` | Elegir recetas del step actual y cerrar el step cuando proceda | Resolver reglas propias de cada receta |
-| Constructor de steps | `stepDefinition.js` | Crear steps genericos desde key, actor, acciones, completion y metadata | Decidir el orden final de ejecucion |
-| Catalogo de steps | `stepCatalog.js` | Guardar steps predefinidos reutilizables | Definir todas las combinaciones posibles de una skin |
+| Cursor de pools | `poolCursorModel.js` | Mover el cursor entre stages activos dentro de los pools | Ejecutar acciones de roles |
+| Stages | `stageModel.js` | Elegir recetas del stage actual y cerrar el stage cuando proceda | Resolver reglas propias de cada receta |
+| Constructor de stages | `stageDefinition.js` | Crear stages genericos desde key, actor, acciones, completion y metadata | Decidir el orden final de ejecucion |
+| Catalogo de stages | `stageCatalog.js` | Guardar stages predefinidos reutilizables | Definir todas las combinaciones posibles de una skin |
 | Catalogo de recetas | `recipeCatalog.js` | Definir recetas reutilizables del nucleo | Ejecutar recetas o leer la sesion |
-| Recetas | `recipeModel.js` | Validar restricciones y convertir receta en accion pura | Aplicar efectos o avanzar steps |
+| Recetas | `recipeModel.js` | Validar restricciones y convertir receta en accion pura | Aplicar efectos o avanzar stages |
 | Restricciones | `constraintModel.js` | Validar restricciones propias de una receta | Cambiar estado directamente |
 | Acciones | `actionModel.js` | Validar y resolver acciones puras | Evaluar restricciones de receta |
 | Resolver | `resolverModel.js` | Decidir que efectos propuestos sobreviven, se bloquean o generan efectos derivados | Escribir cambios en sesion |
 | Efectos | `effectModel.js` | Escribir efectos finales sobre la sesion | Decidir si un efecto debe existir |
-| Eventos | `eventModel.js` | Convertir efectos finales en eventos y activar reacciones declaradas por roles | Ejecutar la receta del step especial |
+| Eventos | `eventModel.js` | Convertir efectos finales en eventos y activar reacciones declaradas por roles | Ejecutar la receta del stage especial |
 | Objectives | `objectiveModel.js` | Evaluar objetivos y playOutcome | Cerrar administrativamente la session |
 | Seleccion | `selectionModel.js` | Contar elecciones y resolver chosen/empate | Aplicar el efecto de la seleccion |
 
@@ -104,17 +113,17 @@ flowchart TD
   A[Roles seleccionados desde roleCatalog]
   B[Jugadores y asientos]
   C[Groups seleccionados desde groupCatalog]
-  D[Steps de sistema o por defecto]
+  D[Stages de sistema o por defecto]
   E[buildSession]
   F[buildRolesFromSeats]
   G[buildInitialGroups]
   H[buildPools]
-  I[buildStepPool]
+  I[buildStagePool]
   J[createSession]
   K[validateSession]
   L[session.roles]
   M[session.groups]
-  N[session.stepPools]
+  N[session.stagePools]
   O[Session lista para ejecucion]
 
   A --> E
@@ -149,40 +158,40 @@ role dentro de `session.roles`, construido desde `roleDefinition.js`.
 role/player/seat no esta completa, devuelve `ok: false` con errores y conserva
 la sesion construida para inspeccion.
 
-## Flujo de un step
+## Flujo de un stage
 
 ```mermaid
 graph TD
-  A[Sesion] --> B[poolCursorModel obtiene step actual]
-  B --> C{Step enabled}
+  A[Sesion] --> B[poolCursorModel obtiene stage actual]
+  B --> C{Stage enabled}
   C -->|No| D[Resultado invalido]
   C -->|Si| E{Tiene action}
   E -->|No| D
-  E -->|Si| F[stepModel llama recipeModel]
+  E -->|Si| F[stageModel llama recipeModel]
   F --> G{Recipe valida}
-  G -->|No| H[Step sigue abierto]
+  G -->|No| H[Stage sigue abierto]
   G -->|Si| I[actionModel ejecuta accion pura]
-  I --> J[Step sigue abierto]
+  I --> J[Stage sigue abierto]
   J --> K{Cierre explicito}
   K -->|No| J
-  K -->|Si| L[completeCurrentStep]
-  L --> M[poolCursorModel marca step done]
-  M --> N[Cursor al siguiente step runnable]
+  K -->|Si| L[completeCurrentStage]
+  L --> M[poolCursorModel marca stage done]
+  M --> N[Cursor al siguiente stage runnable]
 ```
 
-`stepModel.js` no sustituye a `poolCursorModel.js` ni a `actionModel.js`. Solo une
-ambas piezas y separa ejecutar receta de cerrar step.
+`stageModel.js` no sustituye a `poolCursorModel.js` ni a `actionModel.js`. Solo une
+ambas piezas y separa ejecutar receta de cerrar stage.
 
-Los IDs de step son slots neutros, por ejemplo `step_01`, `step_02` o
-`step_03`. Quien actua se define en `actor`; la accion disponible dentro
-del step describe la mecanica. Si un step ofrece varias acciones, el input debe
+Los IDs de stage son slots neutros, por ejemplo `stage_01`, `stage_02` o
+`stage_03`. Quien actua se define en `actor`; la accion disponible dentro
+del stage describe la mecanica. Si un stage ofrece varias acciones, el input debe
 indicar `actionKey`.
 
 ## Flujo de una receta
 
 ```mermaid
 flowchart TD
-  A[stepModel selecciona actionKey] --> B[recipeCatalog define receta]
+  A[stageModel selecciona actionKey] --> B[recipeCatalog define receta]
   B --> C[recipeModel]
   C --> D[constraintModel]
   D --> E{Restricciones validas}
@@ -223,59 +232,67 @@ viven en `constraintModel.js`.
 
 ## Orden de ejecucion
 
-El motor no usa el nombre del step para decidir que va antes o despues.
+El motor no usa el nombre del stage para decidir que va antes o despues.
 
 ```text
 poolOrder -> orden entre pools
-pools[poolKey] -> orden de steps dentro de ese pool
+pools[poolKey] -> orden de stages dentro de ese pool
 ```
+
+`session.specialStages` es una cola FIFO independiente de `pools`. Antes de
+entrar en cualquier pool normal, el ciclo comprueba si contiene stages
+pendientes y, si los tiene, los resuelve primero.
 
 Ejemplo:
 
 ```js
 createPool({
-  poolOrder: ['poolDeployment', 'poolExposed'],
+  poolOrder: ['poolConcealed', 'poolExposed'],
   pools: {
-    poolDeployment: [
-      { key: 'step_01' },
-      { key: 'step_02' }
+    poolConcealed: [
+      { key: 'stage_03' }
     ],
     poolExposed: [
-      { key: 'step_05' }
+      { key: 'stage_05' }
     ]
   }
 })
+
+session.specialStages = [
+  { key: 'stage_01' },
+  { key: 'stage_02' }
+]
 ```
 
 Una skin puede cambiar ese orden declarando otro array. No hay pesos ni
 prioridades implicitas por ahora; eso se anadira solo si aparece una regla real
-que necesite reordenar steps dinamicamente.
+que necesite reordenar stages dinamicamente.
 
-## Cierre de step
+## Cierre de stage
 
-Resolver una receta y avanzar al siguiente step son operaciones distintas.
+Resolver una receta y avanzar al siguiente stage son operaciones distintas.
 
 ```mermaid
 flowchart LR
-  A[Step actual enabled] --> B[resolveCurrentStep]
+  A[Stage actual enabled] --> B[resolveCurrentStage]
   B --> C[recipeModel valida restricciones]
   C --> D[actionModel ejecuta accion pura]
-  D --> E[Step sigue enabled]
+  D --> E[Stage sigue enabled]
   E --> F{Alguien pide cierre}
-  F -->|player| G[completeCurrentStep]
+  F -->|player| G[completeCurrentStage]
   F -->|director| G
   F -->|system| G
-  G --> H[poolCursorModel marca done y busca siguiente step]
+  G --> H[poolCursorModel marca done y busca siguiente stage]
 ```
 
 Lectura:
 
 ```text
-resolveCurrentStep no marca done.
-completeCurrentStep marca done y avanza.
+resolveCurrentStage no marca done.
+completeCurrentStage marca done y avanza.
 ```
 
-El cierre queda registrado en `session.stepHistory` con `requestedBy`
+El cierre queda registrado en `session.stageHistory` con `requestedBy`
 para distinguir cierres pedidos por player, director o system.
 
 Nota de diseno:
@@ -288,7 +305,7 @@ definiciones de skin/flavor.
 Ese modelo podra aceptar `order` en pools configurables como `poolExposed` y
 `poolConcealed`. `poolCursorModel.js` seguira ejecutando arrays ya ordenados.
 
-`poolSpecial` no debe reordenarse por skin/flavor.
+`specialStages` conserva siempre el orden FIFO de insercion.
 
 ## Flujo de una accion
 
@@ -336,8 +353,8 @@ aplicador:
 |---|---|---|
 | Existe la sesion y sus datos basicos son coherentes? | `sessionValidation.js` | IDs duplicados, grupo apunta a rol inexistente |
 | Que ocurrio antes en esta partida? | `historyModel.js` | efectos aplicados en el ciclo actual |
-| Este step debe ejecutarse ahora? | `poolCursorModel.js` | saltar steps disabled |
-| El step actual tiene una receta ejecutable? | `stepModel.js` | step enabled con `actions` definida |
+| Este stage debe ejecutarse ahora? | `poolCursorModel.js` | saltar stages disabled |
+| El stage actual tiene una receta ejecutable? | `stageModel.js` | stage enabled con `actions` definida |
 | La receta puede usarse ahora? | `recipeModel.js` + `constraintModel.js` | `restore_recent_out_of_play` exige historial previo |
 | La accion esta bien definida? | `actionModel.js` | `set_in_play` debe traer `property: inPlay` |
 | El actor existe? | `actionModel.js` | `missing actor` |
@@ -359,13 +376,15 @@ graph LR
   E --> F[Sesion actualizada]
   F --> G[eventModel crea eventos]
   G --> H{Hay reacciones}
-  H -->|Si| I[Crear steps especiales FIFO]
+  H -->|Si| I[Crear stages especiales FIFO]
   H -->|No| J[check_objectives]
   I --> J
   J --> K{playOutcome concluyente}
-  K -->|Si| L[Ejecutar automaticStage conclude_play]
+  K -->|Si| O{Outcome estable}
+  O -->|Si| L[Ejecutar automaticStage conclude_play]
+  O -->|No| N
   K -->|No| M[Continuar]
-  L --> N[poolSpecial]
+  L --> N[specialStages]
   I --> N
 ```
 
@@ -376,13 +395,13 @@ Una accion no deberia escribir directamente cualquier cosa en la sesion.
 Debe proponer efectos, resolverlos y aplicar solo efectos finales.
 ```
 
-Regla de `poolSpecial`:
+Regla de `specialStages`:
 
 ```text
-Los eventos especiales se registran como respuestas pendientes. Si
-check_objectives emite un playOutcome concluyente, se ejecuta la automaticStage
-conclude_play. La implementacion actual aun usa `poolSpecial`, pero el modelo
-objetivo esta migrando hacia automaticStages.
+Los eventos especiales se registran como stages pendientes en specialStages. Si
+check_objectives emite un playOutcome concluyente, primero se comprueba si algun
+stage pendiente puede alterar ese outcome. conclude_play se ejecuta como
+automaticStage final cuando el outcome es estable.
 ```
 
 Excepcion actual:
@@ -431,7 +450,7 @@ Ejemplos:
 
 - `set_property`: cambiar `role.inPlay`.
 - `set_group`: crear o actualizar un grupo mecanico, por ejemplo `linked`.
-- `close_cycle`: limpiar flags temporales y avanzar ciclo.
+- `start_cycle`: limpiar flags temporales y preparar el nuevo ciclo.
 
 El aplicador de efectos no decide si el cambio es justo, valido o narrativamente
 correcto. Si recibe un efecto final valido, lo escribe.
@@ -474,7 +493,9 @@ graph TD
   D -->|Si| F[objectiveResolution]
   F --> G{playOutcome concluyente}
   G -->|No| H[Registrar achievedObjectives]
-  G -->|Si| I[Ejecutar automaticStage conclude_play]
+  G -->|Si| I{SpecialStages puede alterar outcome}
+  I -->|Si| J[Resolver specialStages antes]
+  I -->|No| K[Ejecutar automaticStage conclude_play]
 ```
 
 Orden objetivo:
@@ -483,14 +504,17 @@ Orden objetivo:
 2. Registrar `achievedObjectives` no concluyentes.
 3. Resolver conflictos entre objectives concluyentes.
 4. Emitir `playOutcome` si la parte jugable queda concluida.
-5. Crear `conclude_play` en `poolSpecial` si hay `playOutcome` concluyente.
+5. Cruzar `objectiveRule.dependencies` con `stage.influences` de stages
+   pendientes en `specialStages`.
+6. Ejecutar `conclude_play` como automaticStage final si hay `playOutcome`
+   concluyente y estable.
 
 Regla importante:
 
 ```text
-check_objectives se ejecuta al final de cada pool, no despues de cada step
-normal, porque steps posteriores del mismo pool pueden modificar el resultado
-de steps anteriores.
+check_objectives se ejecuta al final de cada pool, no despues de cada stage
+normal, porque stages posteriores del mismo pool pueden modificar el resultado
+de stages anteriores.
 ```
 
 Flujo actual de comprobacion de objetivos:
@@ -543,7 +567,7 @@ Cuando aparezca una mecanica nueva, seguir este orden:
 | Si un linked sale de juego, el otro tambien | consecuencia sistemica | `resolverModel.js` |
 | Si solo quedan linked de alignments distintos, cumplen objective especial | objectiveRule sobre group linked | `session.objectiveRules` |
 | Un group de alignment alcanza al resto | `holder_reaches_in_play_parity` | `session.objectiveRules` |
-| Un jugador no puede elegir contra su linked | restriccion de seleccion | `step.selectionRules.groupRestrictions` |
+| Un jugador no puede elegir contra su linked | restriccion de seleccion | `stage.selectionRules.groupRestrictions` |
 
 ## Modelo de seleccion
 
@@ -572,20 +596,20 @@ flowchart TD
 | Estrategia | Idea | Ventaja | Riesgo |
 |---|---|---|---|
 | Mantener acciones concretas | una receta distinta por cada seleccion | Simple para pocos casos | Duplica logica de seleccion cuando aparezcan mas selecciones |
-| Step con selectionRules recomendado | `select` resuelve target y `stepModel` ejecuta la receta declarada | Flexible y anonimo | Requiere que el step declare claramente sus reglas de seleccion |
+| Stage con selectionRules recomendado | `select` resuelve target y `stageModel` ejecuta la receta declarada | Flexible y anonimo | Requiere que el stage declare claramente sus reglas de seleccion |
 | Efecto directo desde seleccion | El seleccion devuelve directamente `set_property` u otro efecto | Rapido de implementar | Mezcla recuento con consecuencias y empobrece la reutilizacion |
 
 La estrategia recomendada es la segunda:
 
 ```text
-step = selectionRules + recipes
+stage = selectionRules + recipes
 ```
 
 Ejemplo conceptual:
 
 ```js
 {
-  key: 'step_05',
+  key: 'stage_05',
   selectionRules: {
     required: 'all_selectors',
     abstain: 'not_allowed',
@@ -628,7 +652,7 @@ Lectura:
 
 ```text
 selectionModel solo dice que roleId ha sido chosen.
-stepModel convierte chosenId en targetIds.
+stageModel convierte chosenId en targetIds.
 recipeModel/actionModel aplican la receta configurada sobre ese target.
 ```
 
@@ -639,7 +663,7 @@ Ejemplos futuros con la misma estructura:
 - `set_group`
 - cualquier otro efecto permitido por el motor
 
-La restriccion de `linked` no aplica a cualquier seleccion. Aplica a los steps que
+La restriccion de `linked` no aplica a cualquier seleccion. Aplica a los stages que
 la declaren en `selectionRules.groupRestrictions`. En el caso actual:
 
 ```text
@@ -694,7 +718,7 @@ receta compuesta. Eso ya queda separado:
 
 ```text
 selectionModel cuenta selecciones.
-stepModel aplica la receta declarada si hay chosen.
+stageModel aplica la receta declarada si hay chosen.
 actionModel resuelve la accion pura configurada.
 ```
 
@@ -702,31 +726,31 @@ Flujo actual de `group_selection + set_out_of_play`:
 
 ```mermaid
 flowchart TD
-  A[step con selectionRules] --> B[select resuelve ronda]
+  A[stage con selectionRules] --> B[select resuelve ronda]
   B --> C{Resultado}
-  C -->|chosen| E[stepModel pasa chosenId como targetId]
-  C -->|null| D[Sin efectos; step listo para cierre manual]
+  C -->|chosen| E[stageModel pasa chosenId como targetId]
+  C -->|null| D[Sin efectos; stage listo para cierre manual]
   C -->|tie + null_on_tie| D
   C -->|tie + runoff_on_tie| R[Pedir nextRound con candidateIds]
-  R --> S[Step sigue abierto para otra ronda]
+  R --> S[Stage sigue abierto para otra ronda]
   E --> F[recipe set_out_of_play]
   F --> G[actionModel resuelve accion pura]
   G --> H[resolverModel deriva consecuencias]
   H --> I[effectModel aplica cambios]
 ```
 
-Contrato del step con seleccion:
+Contrato del stage con seleccion:
 
 ```text
 chosen:
   - selectionModel devuelve chosenId.
-  - stepModel ejecuta la receta del step usando chosenId como targetIds.
+  - stageModel ejecuta la receta del stage usando chosenId como targetIds.
 
 null:
   - No se ejecuta receta.
   - No se generan efectos.
-  - El step queda abierto, pero listo para que player/director/system lo cierre
-    con completeCurrentStep segun sus reglas de completion.
+  - El stage queda abierto, pero listo para que player/director/system lo cierre
+    con completeCurrentStage segun sus reglas de completion.
 
 tie:
   - Si selectionRules.tie no define otra cosa, se trata como null.
@@ -767,7 +791,7 @@ supportThreshold:
   - fraction: exige una fraccion, por ejemplo 2/3.
   - base cast_selections: calcula el minimo sobre selecciones emitidas no abstenidos.
   - base selector_count: calcula el minimo sobre los actores obligados o definidos
-    para el step.
+    para el stage.
   - Si no alcanza el minimo, el resultado pasa a null con reason
     insufficient_support y la receta no se ejecuta.
 

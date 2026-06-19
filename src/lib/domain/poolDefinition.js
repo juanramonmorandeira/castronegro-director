@@ -2,20 +2,17 @@
 // -----------------------------------------------------------------------------
 // Constructor y organizador del contenedor runtime de pools.
 //
-// Un pool contiene steps ya creados. Este archivo no decide que hace cada step:
+// Un pool contiene stages ya creados. Este archivo no decide que hace cada stage:
 // solo prepara y ordena la estructura que poolCursorModel necesita para mover el
 // cursor.
 // -----------------------------------------------------------------------------
 
-import { createStep } from './stepDefinition.js';
+import { createStage } from './stageDefinition.js';
 import { getGroupRoleIds } from './groupModel.js';
-import { DEFAULT_POOL_ORDER, STEP_STATUSES, POOL_KEYS, normalizeId } from './sessionModel.js';
+import { DEFAULT_POOL_ORDER, STAGE_STATUSES, POOL_KEYS, normalizeId } from './sessionModel.js';
 
 // Pools cuyo orden interno podria ser configurable por skin/flavor.
-//
-// poolSpecial queda fuera deliberadamente: sus reglas son interrupciones
-// o resoluciones especiales del motor y no deberian reordenarse por flavor.
-export const CONFIGURABLE_STEP_ORDER_POOLS = Object.freeze([
+export const CONFIGURABLE_STAGE_ORDER_POOLS = Object.freeze([
   POOL_KEYS.POOL_EXPOSED,
   POOL_KEYS.POOL_CONCEALED
 ]);
@@ -23,7 +20,7 @@ export const CONFIGURABLE_STEP_ORDER_POOLS = Object.freeze([
 // Nombre recomendado para la propiedad de orden declarativo.
 //
 // Preferimos "order" a "weight" porque no pondera nada. Indica una posicion de
-// construccion. Dos steps del mismo pool no pueden compartir el mismo order.
+// construccion. Dos stages del mismo pool no pueden compartir el mismo order.
 export const POOL_DEFINITION_ORDER_FIELD = 'order';
 
 export const POOL_DEFINITION_ERRORS = Object.freeze({
@@ -34,15 +31,67 @@ export const POOL_DEFINITION_ERRORS = Object.freeze({
   EMPTY_ACTOR_IDS: 'pool-definition/empty-actor-ids'
 });
 
-// Normaliza un step antes de meterlo dentro del contenedor runtime de pools.
+export const AUTOMATIC_STAGE_KEYS = Object.freeze({
+  START_CYCLE: 'start_cycle',
+  CHECK_OBJECTIVES: 'check_objectives',
+  CONCLUDE_PLAY: 'conclude_play'
+});
+
+function createAutomaticStageDefinition(key, metadata = {}) {
+  return {
+    key: normalizeId(key),
+    metadata: { ...metadata }
+  };
+}
+
+function getDefaultAutomaticStages(poolOrder = DEFAULT_POOL_ORDER) {
+  return poolOrder.reduce((acc, poolKey) => {
+    acc[poolKey] = {
+      onEnter:
+        poolKey === POOL_KEYS.POOL_CONCEALED
+          ? [
+              createAutomaticStageDefinition(AUTOMATIC_STAGE_KEYS.START_CYCLE, {
+                reason: 'prepare_normal_cycle'
+              })
+            ]
+          : [],
+      onExit: [
+        createAutomaticStageDefinition(AUTOMATIC_STAGE_KEYS.CHECK_OBJECTIVES, {
+          reason: 'pool_completed'
+        })
+      ]
+    };
+    return acc;
+  }, {});
+}
+
+function normalizeAutomaticStages(automaticStages = {}, poolOrder = DEFAULT_POOL_ORDER) {
+  const defaults = getDefaultAutomaticStages(poolOrder);
+
+  return poolOrder.reduce((acc, poolKey) => {
+    const override = automaticStages[poolKey] ?? {};
+    acc[poolKey] = {
+      onEnter: (override.onEnter ?? defaults[poolKey]?.onEnter ?? []).map((stage) =>
+        createAutomaticStageDefinition(stage.key, stage.metadata)
+      ),
+      onExit: (override.onExit ?? defaults[poolKey]?.onExit ?? []).map((stage) =>
+        createAutomaticStageDefinition(stage.key, stage.metadata)
+      )
+    };
+    return acc;
+  }, {});
+}
+
+// Normaliza un stage antes de meterlo dentro del contenedor runtime de pools.
 //
-// createStep, en stepDefinition.js, es el unico constructor conceptual de
-// steps. Esta funcion no se exporta porque no queremos dos puertas publicas
+// createStage, en stageDefinition.js, es el unico constructor conceptual de
+// stages. Esta funcion no se exporta porque no queremos dos puertas publicas
 // para crear el mismo tipo de objeto. Solo conserva compatibilidad con datos
 // antiguos que todavia traen `action` en vez de `actions`.
-function normalizePoolStep({
+function normalizePoolStage({
   key,
-  status = STEP_STATUSES.DISABLED,
+  special = false,
+  status = STAGE_STATUSES.DISABLED,
   actorIds = [],
   action = null,
   actions = null,
@@ -59,6 +108,7 @@ function normalizePoolStep({
 
   return {
     key: normalizeId(key),
+    special: special === true,
     status,
     actorIds: [...(actorIds ?? [])],
     completion: completion
@@ -93,34 +143,39 @@ export function createPool({
   poolCurrent = poolOrder[0],
   poolPrevious = null,
   poolNext = poolOrder[1] ?? null,
-  poolCurrentStepIndex = 0,
-  pools = {}
+  poolCurrentStageIndex = 0,
+  pools = {},
+  automaticStages = {}
 } = {}) {
   const normalizedOrder = poolOrder.map(String);
   const normalizedPools = normalizedOrder.reduce((acc, poolKey) => {
-    acc[poolKey] = (pools[poolKey] ?? []).map(normalizePoolStep);
+    acc[poolKey] = (pools[poolKey] ?? []).map(normalizePoolStage);
     return acc;
   }, {});
+  const initialNormalPool = normalizedOrder.includes(poolCurrent)
+    ? poolCurrent
+    : normalizedOrder[0] ?? null;
 
   return {
     poolOrder: normalizedOrder,
-    poolCurrent,
+    poolCurrent: initialNormalPool,
     poolPrevious,
-    poolNext,
-    poolCurrentStepIndex,
-    pools: normalizedPools
+    poolNext: poolNext ?? normalizedOrder[1] ?? normalizedOrder[0] ?? null,
+    poolCurrentStageIndex,
+    pools: normalizedPools,
+    automaticStages: normalizeAutomaticStages(automaticStages, normalizedOrder)
   };
 }
 
-// Construye los steps de un unico pool.
+// Construye los stages de un unico pool.
 //
-// buildStepPool no decide orden global ni mueve cursores. Solo garantiza que
-// cada step queda construido con createStep y asociado al pool indicado.
-export function buildStepPool({ poolKey, steps = [] } = {}) {
-  return (steps ?? []).map((step) =>
-    createStep({
-      ...step,
-      poolKey: step.poolKey ?? poolKey
+// buildStagePool no decide orden global ni mueve cursores. Solo garantiza que
+// cada stage queda construido con createStage y asociado al pool indicado.
+export function buildStagePool({ poolKey, stages = [] } = {}) {
+  return (stages ?? []).map((stage) =>
+    createStage({
+      ...stage,
+      poolKey: stage.poolKey ?? poolKey
     })
   );
 }
@@ -130,30 +185,30 @@ function getDefinitionList(definitions = []) {
   return Object.values(definitions ?? {});
 }
 
-function getStepDefinitionsFromSources(sources = []) {
-  return sources.flatMap((source = {}) => source.stepDefinitions ?? []);
+function getStageDefinitionsFromSources(sources = []) {
+  return sources.flatMap((source = {}) => source.stageDefinitions ?? []);
 }
 
-function createStepWithActors(stepDefinition = {}, actorIds = [], source = {}) {
-  return createStep({
-    ...stepDefinition,
+function createStageWithActors(stageDefinition = {}, actorIds = [], source = {}) {
+  return createStage({
+    ...stageDefinition,
     actorIds,
     metadata: {
-      ...(stepDefinition.metadata ?? {}),
+      ...(stageDefinition.metadata ?? {}),
       source
     }
   });
 }
 
-function getRoleDefinitionSteps(session = {}, roleDefinitions = []) {
+function getRoleDefinitionStages(session = {}, roleDefinitions = []) {
   const roles = session.roles ?? [];
 
   return getDefinitionList(roleDefinitions).flatMap((roleDefinition = {}) => {
     const matchingRoles = roles.filter((role) => role.roleKey === roleDefinition.key);
 
     return matchingRoles.flatMap((role) =>
-      (roleDefinition.stepDefinitions ?? []).map((stepDefinition) =>
-        createStepWithActors(stepDefinition, [role.id], {
+      (roleDefinition.stageDefinitions ?? []).map((stageDefinition) =>
+        createStageWithActors(stageDefinition, [role.id], {
           type: 'role',
           id: role.id,
           key: roleDefinition.key
@@ -163,13 +218,13 @@ function getRoleDefinitionSteps(session = {}, roleDefinitions = []) {
   });
 }
 
-function getGroupDefinitionSteps(session = {}, groupDefinitions = []) {
+function getGroupDefinitionStages(session = {}, groupDefinitions = []) {
   return getDefinitionList(groupDefinitions).flatMap((groupDefinition = {}) => {
     const groupId = groupDefinition.id ?? groupDefinition.key;
     const actorIds = getGroupRoleIds(session, groupId);
 
-    return (groupDefinition.stepDefinitions ?? []).map((stepDefinition) =>
-      createStepWithActors(stepDefinition, actorIds, {
+    return (groupDefinition.stageDefinitions ?? []).map((stageDefinition) =>
+      createStageWithActors(stageDefinition, actorIds, {
         type: 'group',
         id: groupId,
         key: groupDefinition.key
@@ -178,46 +233,46 @@ function getGroupDefinitionSteps(session = {}, groupDefinitions = []) {
   });
 }
 
-function getDirectSteps(steps = [], sourceType = 'direct') {
-  return (steps ?? []).map((stepDefinition) =>
-    createStepWithActors(stepDefinition, stepDefinition.actorIds ?? [], {
+function getDirectStages(stages = [], sourceType = 'direct') {
+  return (stages ?? []).map((stageDefinition) =>
+    createStageWithActors(stageDefinition, stageDefinition.actorIds ?? [], {
       type: sourceType
     })
   );
 }
 
-function getAbstractSourceSteps(sources = []) {
-  return getStepDefinitionsFromSources(getDefinitionList(sources)).map(createStep);
+function getAbstractSourceStages(sources = []) {
+  return getStageDefinitionsFromSources(getDefinitionList(sources)).map(createStage);
 }
 
-function isSystemStep(step = {}) {
-  return step.metadata?.source?.type === 'system';
+function isSystemStage(stage = {}) {
+  return stage.metadata?.source?.type === 'system';
 }
 
-function getStepDefinitionErrors(steps = []) {
-  return (steps ?? []).flatMap((step, index) => {
+function getStageDefinitionErrors(stages = []) {
+  return (stages ?? []).flatMap((stage, index) => {
     const errors = [];
 
-    if (!step.poolKey) {
+    if (!stage.poolKey && stage.special !== true) {
       errors.push({
         code: POOL_DEFINITION_ERRORS.MISSING_POOL_KEY,
-        message: `step "${step.key ?? index}" has no poolKey`,
-        stepKey: step.key ?? null,
+        message: `stage "${stage.key ?? index}" has no poolKey`,
+        stageKey: stage.key ?? null,
         index
       });
     }
 
     if (
-      step.status === STEP_STATUSES.ENABLED &&
-      !isSystemStep(step) &&
-      (step.actorIds ?? []).length === 0
+      stage.status === STAGE_STATUSES.ENABLED &&
+      !isSystemStage(stage) &&
+      (stage.actorIds ?? []).length === 0
     ) {
       errors.push({
         code: POOL_DEFINITION_ERRORS.EMPTY_ACTOR_IDS,
-        message: `step "${step.key ?? index}" is enabled but has no actorIds`,
-        stepKey: step.key ?? null,
+        message: `stage "${stage.key ?? index}" is enabled but has no actorIds`,
+        stageKey: stage.key ?? null,
         index,
-        source: step.metadata?.source ?? null
+        source: stage.metadata?.source ?? null
       });
     }
 
@@ -225,92 +280,94 @@ function getStepDefinitionErrors(steps = []) {
   });
 }
 
-// Ensambla stepPools desde steps de sistema, roles y grupos.
+// Ensambla stagePools desde stages de sistema, roles y grupos.
 //
-// La construccion de cada step sigue perteneciendo a createStep. buildPools solo
+// La construccion de cada stage sigue perteneciendo a createStage. buildPools solo
 // junta contribuciones, exige poolKey y delega validacion/orden en
-// organizePoolSteps.
+// organizePoolStages.
 export function buildPools({
   poolOrder = DEFAULT_POOL_ORDER,
-  defaultSteps = [],
-  systemSteps = [],
+  defaultStages = [],
+  systemStages = [],
   roleDefinitions = [],
   groupDefinitions = [],
   session = null
 } = {}) {
-  const allSteps = [
-    ...getDirectSteps(defaultSteps, 'default'),
-    ...getDirectSteps(systemSteps, 'system'),
+  const allStages = [
+    ...getDirectStages(defaultStages, 'default'),
+    ...getDirectStages(systemStages, 'system'),
     ...(session
-      ? getRoleDefinitionSteps(session, roleDefinitions)
-      : getAbstractSourceSteps(roleDefinitions)),
+      ? getRoleDefinitionStages(session, roleDefinitions)
+      : getAbstractSourceStages(roleDefinitions)),
     ...(session
-      ? getGroupDefinitionSteps(session, groupDefinitions)
-      : getAbstractSourceSteps(groupDefinitions))
+      ? getGroupDefinitionStages(session, groupDefinitions)
+      : getAbstractSourceStages(groupDefinitions))
   ];
-  const errors = getStepDefinitionErrors(allSteps);
+  const errors = getStageDefinitionErrors(allStages);
 
   if (errors.length > 0) {
     return {
       ok: false,
       errors,
-      stepPools: null
+      stagePools: null
     };
   }
 
+  const specialStages = allStages.filter((stage) => stage.special === true);
   const pools = poolOrder.reduce((acc, poolKey) => {
-    acc[poolKey] = buildStepPool({
+    acc[poolKey] = buildStagePool({
       poolKey,
-      steps: allSteps.filter((step) => step.poolKey === poolKey)
+      stages: allStages.filter((stage) => stage.poolKey === poolKey)
     });
     return acc;
   }, {});
 
-  return organizePoolSteps({
+  return organizePoolStages({
     poolOrder,
-    pools
+    pools,
+    specialStages
   });
 }
 
-function isConfigurableStepOrderPool(poolKey) {
-  return CONFIGURABLE_STEP_ORDER_POOLS.includes(poolKey);
+function isConfigurableStageOrderPool(poolKey) {
+  return CONFIGURABLE_STAGE_ORDER_POOLS.includes(poolKey);
 }
 
 // Valida el uso de order dentro de una definicion de pools.
 //
 // Si hay orders duplicados, es error de definicion de skin. No hay empate ni
 // desempate automatico.
-function validateStepsOrder(definition = {}) {
+function validateStagesOrder(definition = {}) {
   const errors = [];
   const pools = definition.pools ?? {};
 
-  Object.entries(pools).forEach(([poolKey, steps = []]) => {
+  Object.entries(pools).forEach(([poolKey, stages = []]) => {
     const seenOrders = new Map();
 
-    (steps ?? []).forEach((step = {}, index) => {
+    (stages ?? []).forEach((stage = {}, index) => {
       const hasOrder =
-        step[POOL_DEFINITION_ORDER_FIELD] !== undefined &&
-        step[POOL_DEFINITION_ORDER_FIELD] !== null;
+        stage[POOL_DEFINITION_ORDER_FIELD] !== undefined &&
+        stage[POOL_DEFINITION_ORDER_FIELD] !== null;
       if (!hasOrder) return;
 
-      if (!isConfigurableStepOrderPool(poolKey)) {
+      if (!isConfigurableStageOrderPool(poolKey)) {
         errors.push({
           code: POOL_DEFINITION_ERRORS.ORDER_NOT_ALLOWED,
-          message: `pool "${poolKey}" does not accept configurable step order`,
+          message: `pool "${poolKey}" does not accept configurable stage order`,
           poolKey,
-          stepKey: step.key ?? null,
+          stageKey: stage.key ?? null,
           index
         });
         return;
       }
 
-      const order = step[POOL_DEFINITION_ORDER_FIELD];
+      const order = stage[POOL_DEFINITION_ORDER_FIELD];
       if (!Number.isFinite(order)) {
         errors.push({
           code: POOL_DEFINITION_ERRORS.INVALID_ORDER,
-          message: `step "${step.key ?? index}" has invalid order`,
+          message: `stage "${stage.key ?? index}" has invalid order`,
           poolKey,
-          stepKey: step.key ?? null,
+          stageKey: stage.key ?? null,
           index,
           order
         });
@@ -322,7 +379,7 @@ function validateStepsOrder(definition = {}) {
           code: POOL_DEFINITION_ERRORS.DUPLICATE_ORDER,
           message: `pool "${poolKey}" has duplicated order "${order}"`,
           poolKey,
-          stepKey: step.key ?? null,
+          stageKey: stage.key ?? null,
           index,
           order,
           firstIndex: seenOrders.get(order)
@@ -341,18 +398,18 @@ function validateStepsOrder(definition = {}) {
 }
 
 // Ordena solo los pools configurables. El resto conserva el orden declarado.
-function getOrderedPoolSteps(definition = {}) {
+function getOrderedPoolStages(definition = {}) {
   const poolOrder = definition.poolOrder ?? Object.keys(definition.pools ?? {});
   const pools = poolOrder.reduce((acc, poolKey) => {
-    const steps = [...(definition.pools?.[poolKey] ?? [])];
+    const stages = [...(definition.pools?.[poolKey] ?? [])];
 
-    acc[poolKey] = isConfigurableStepOrderPool(poolKey)
-      ? steps.sort((a, b) => {
+    acc[poolKey] = isConfigurableStageOrderPool(poolKey)
+      ? stages.sort((a, b) => {
           const aOrder = Number.isFinite(a?.order) ? a.order : Number.POSITIVE_INFINITY;
           const bOrder = Number.isFinite(b?.order) ? b.order : Number.POSITIVE_INFINITY;
           return aOrder - bOrder;
         })
-      : steps;
+      : stages;
 
     return acc;
   }, {});
@@ -364,23 +421,24 @@ function getOrderedPoolSteps(definition = {}) {
   };
 }
 
-// Organiza una definicion declarativa de pools ya compuesta de steps.
+// Organiza una definicion declarativa de pools ya compuesta de stages.
 //
-// stepDefinition construye cada step.
+// stageDefinition construye cada stage.
 // poolDefinition los valida, los ordena y crea el contenedor runtime.
-export function organizePoolSteps(definition = {}) {
-  const validation = validateStepsOrder(definition);
+export function organizePoolStages(definition = {}) {
+  const validation = validateStagesOrder(definition);
   if (!validation.ok) {
     return {
       ok: false,
       errors: validation.errors,
-      stepPools: null
+      stagePools: null
     };
   }
 
   return {
     ok: true,
     errors: [],
-    stepPools: createPool(getOrderedPoolSteps(definition))
+    stagePools: createPool(getOrderedPoolStages(definition)),
+    specialStages: [...(definition.specialStages ?? [])]
   };
 }

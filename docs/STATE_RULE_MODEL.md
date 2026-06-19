@@ -42,19 +42,19 @@ selection.
 `selectionRules` = reglas que gobiernan como `selectorIds` eligen entre
 `candidateIds`.
 
-`step` = periodo ejecutable donde un role o group puede actuar.
+`stage` = periodo ejecutable dentro de un pool.
 
 `automaticStage` = etapa del sistema que no representa actuacion de role/group.
 
-## Steps y automaticStages
+## Stages y automaticStages
 
-Un `step` exige actor mecanico:
+Un `stage` puede tener `actorIds` cuando requiere actuacion de roles:
 
 ```text
-step = periodo donde role/group actua
+stage = periodo donde uno o varios roles actuan
 ```
 
-Ejemplos de steps:
+Ejemplos de stages:
 
 ```text
 vote_out_of_play
@@ -64,15 +64,15 @@ role_blocks_property_change
 group_selects_target
 ```
 
-No son steps:
+No son stages manuales:
 
 ```text
-close_cycle
+start_cycle
 check_objectives
 conclude_play
 ```
 
-Estos son `automaticStages`: rutinas de sistema que ordenan, cierran, limpian o
+Estos son `automaticStages`: rutinas de sistema que preparan ciclo, limpian o
 evalúan estado.
 
 ## Property State
@@ -294,7 +294,7 @@ Campo conceptual:
 
 ```js
 eventExecutionPlace: {
-  timing: 'end_of_step' | 'end_of_pool' | 'first_next_pool' | 'start_of_pool',
+  timing: 'end_of_stage' | 'end_of_pool' | 'first_next_pool' | 'start_of_pool',
   poolKey: null
 }
 ```
@@ -354,7 +354,7 @@ Ejemplos:
 ```text
 crear role
 crear group
-crear step
+crear stage
 crear objectiveRule
 crear group
 crear pool
@@ -385,7 +385,7 @@ sessionAssembler
         +-> ruleAnalyzer
         +-> materializerCoordinator
         |       +-> group creation
-        |       +-> step creation
+        |       +-> stage creation
         |       +-> objectiveRule creation
         |       +-> group creation for linked/collective rules
         |       +-> pool creation
@@ -402,7 +402,7 @@ Categorias iniciales aceptadas:
 selectionRules
 candidateRules
 objectiveRules
-stepRules
+stageRules
 groupRules
 poolRules
 ```

@@ -1,0 +1,106 @@
+digraph DomainArchitecture {
+  graph [
+    rankdir=LR,
+    bgcolor="#ffffff",
+    fontname="Arial",
+    fontsize=20,
+    label="Village Storyteller - Arquitectura del nuevo dominio",
+    labelloc=t,
+    pad=0.3,
+    nodesep=0.35,
+    ranksep=0.7,
+    splines=polyline,
+    compound=true
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    fontname="Arial",
+    fontsize=10,
+    margin="0.14,0.10",
+    color="#46606f",
+    fillcolor="#dff2e3"
+  ];
+
+  edge [
+    color="#607d8b",
+    arrowsize=0.7,
+    fontname="Arial",
+    fontsize=9
+  ];
+
+  inputs [
+    label="ENTRADAS\n\nCatalogs\nruleSet\ngameConfiguration\nmatch\nskin",
+    fillcolor="#e8f2f7"
+  ];
+
+  assembly [
+    label="CONSTRUCCION\n\nbuildSession\ncreateSession\nsessionValidation\n\nDefinitions:\nrole - group - stage - pool",
+    fillcolor="#e8f2f7"
+  ];
+
+  session [
+    label="SESSION VIVA\n\nroles\ngroups\nstagePools\nobjectiveRules\nactionHistory\nstageHistory\nachievedObjectives\nplayOutcome",
+    fillcolor="#dcecf5",
+    penwidth=1.5
+  ];
+
+  cycle [
+    label="CYCLE\n\nsession.cycle\nid\npoolOrder\npoolPrevious\npoolCurrent\npoolNext\n\ncycleModel\nstartCycle\nadvanceFlow",
+    fillcolor="#fff0c7",
+    style="rounded,filled,dashed",
+    color="#c89223",
+    penwidth=1.5
+  ];
+
+  pools [
+    label="POOLS DEL CICLO\n\npoolConcealed\npoolExposed",
+    fillcolor="#dff2e3"
+  ];
+
+  specialStages [
+    label="SPECIAL STAGES\n\nsession.specialStages\ncola FIFO dinamica\nspecialStagesHistory",
+    fillcolor="#dff2e3"
+  ];
+
+  poolRuntime [
+    label="EJECUCION DE UN POOL\n\npreparePool\nvalidatePool\nrunPool\n\nrunPool contiene:\nautomaticStages.onEnter\nstages normales\nautomaticStages.onExit",
+    fillcolor="#fff0c7",
+    style="rounded,filled,dashed",
+    color="#c89223"
+  ];
+
+  stagePipeline [
+    label="PIPELINE DE UN STAGE\n\nstageModel\nselectionModel\nrecipeModel\nconstraintModel\nactionModel\nresolverModel\neffectModel",
+    fillcolor="#dff2e3"
+  ];
+
+  reactions [
+    label="REACCIONES Y OBJETIVOS\n\neventModel\ncrea specialStages\n\nobjectiveModel\ncheck_objectives\nconclude_play",
+    fillcolor="#dff2e3"
+  ];
+
+  services [
+    label="SERVICIOS TRANSVERSALES\n\nhistoryModel\ngroupModel\n\nblockedPropertyChanges:\nproperty + value\nblockedRoleIds\nexpiresAt\n\nreview_property_blocks",
+    fillcolor="#fff0c7",
+    style="rounded,filled,dashed",
+    color="#c89223"
+  ];
+
+  inputs -> assembly -> session -> cycle -> pools -> poolRuntime -> stagePipeline -> reactions;
+  cycle -> specialStages [label="resuelve entre pools"];
+  reactions -> session [label="actualiza estado", constraint=false];
+  reactions -> specialStages [label="encola stage especial", constraint=false];
+  services -> stagePipeline [label="consulta y registra", style=dashed];
+  services -> poolRuntime [label="onEnter revisa bloqueos", style=dashed];
+
+  subgraph cluster_legend {
+    label="Leyenda";
+    color="#d5dde2";
+    style="rounded";
+    implemented [label="Implementado", fillcolor="#dff2e3"];
+    agreed [label="Acordado, pendiente de migracion", fillcolor="#fff0c7", style="rounded,filled,dashed", color="#c89223"];
+    implemented -> agreed [style=invis];
+  }
+}

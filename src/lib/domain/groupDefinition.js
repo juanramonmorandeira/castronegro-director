@@ -13,7 +13,7 @@
 // -----------------------------------------------------------------------------
 
 import { normalizeId } from './sessionModel.js';
-import { createStep } from './stepDefinition.js';
+import { createStage } from './stageDefinition.js';
 
 export const GROUP_MEMBERSHIP_RULE_TYPES = Object.freeze({
   ALIGNMENT: 'alignment',
@@ -36,7 +36,7 @@ export function createGroup({
   membershipRule = null,
   roleIds = [],
   groupRules = [],
-  stepDefinitions = [],
+  stageDefinitions = [],
   metadata = {}
 } = {}) {
   const normalizedType = type ? normalizeId(type) : null;
@@ -61,7 +61,7 @@ export function createGroup({
     ...(normalizedMembershipRule ? { membershipRule: normalizedMembershipRule } : {}),
     roleIds: normalizedRoleIds,
     groupRules: (groupRules ?? []).map((rule) => ({ ...rule })),
-    stepDefinitions: (stepDefinitions ?? []).map(createStep),
+    stageDefinitions: (stageDefinitions ?? []).map(createStage),
     metadata: { ...metadata }
   };
 }

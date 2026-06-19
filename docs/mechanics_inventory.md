@@ -20,21 +20,21 @@ como referencia humana.
 | `block_action` | bloquear, proteger, interferir | implementada | Bloquea una accion concreta con parametros concretos. |
 | `block_out_of_play` | Protector | implementada | Receta que bloquea `set_in_play(inPlay=false)`. |
 | `no_repeat_target` | Protector no repite objetivo | implementada | Restriccion basada en `session.actionHistory`. |
-| `close_cycle` | cierre de noche/ciclo | implementada | Limpia flags temporales y avanza ciclo. |
+| `start_cycle` | inicio de ciclo normal | implementada | Limpia flags temporales y prepara el siguiente ciclo. |
 | `link_targets` | Cupido | parcial | Crea un grupo `linked` entre varios objetivos. |
-| `linked` consequence | Enamorados comparten destino | parcial | Propaga `inPlay=false`; restriccion de seleccion linked implementada en steps con seleccion. |
+| `linked` consequence | Enamorados comparten destino | parcial | Propaga `inPlay=false`; restriccion de seleccion linked implementada en stages con seleccion. |
 | `linked_objective` | Enamorados de bandos distintos | parcial | Implementado en `objectiveModel.js`. |
 | `group_objective_rule` | condicion propia de un group | parcial | `holder_reaches_in_play_parity` y `only_holder_group_remains_in_play` configurables por sesion. |
 | `selection_count` | recuento de seleccion | implementada | `selectionModel.js` valida selecciones, suma unidades y resuelve chosen/empate. |
-| `group_selection` | seleccion de grupo | implementada | El step vota para elegir `chosenId`; despues aplica la receta configurada. |
+| `group_selection` | seleccion de grupo | implementada | El stage vota para elegir `chosenId`; despues aplica la receta configurada. |
 
 ## Mecanicas pendientes detectadas
 
 | Mecanica abstracta candidata | Referencias humanas | Estado | Dependencias |
 |---|---|---|---|
 | `check_objectives` | objetivos de alignments y condiciones especiales | parcial | Ya se evalua al cierre de pool; faltan achievedObjectives persistidos y conflictos. |
-| `configurable_selection_effect` | eleccion de cargo, otras selecciones | parcial | El protocolo `step.selectionRules` + receta aplicada al `chosenId` ya existe; faltan acciones genericas como marcar o conceder recursos. |
-| `block_group_member_selection_candidate` | linked no puede elegir contra linked | implementada | El step con seleccion rechaza selecciones contra target del mismo grupo `linked`. |
+| `configurable_selection_effect` | eleccion de cargo, otras selecciones | parcial | El protocolo `stage.selectionRules` + receta aplicada al `chosenId` ya existe; faltan acciones genericas como marcar o conceder recursos. |
+| `block_group_member_selection_candidate` | linked no puede elegir contra linked | implementada | El stage con seleccion rechaza selecciones contra target del mismo grupo `linked`. |
 | `set_flag` | hechizado, infectado, revelado, acusado | pendiente | Necesita normalizar flags de estado. |
 | `change_alignment` | infeccion, conversion | pendiente | Necesita reglas de alignment y objective. |
 | `change_role` | ladron, actor, sirvienta | pendiente | Necesita reglas de reemplazo de rol. |
@@ -42,7 +42,7 @@ como referencia humana.
 | `inspect_group` | zorro, sabueso u otras inspecciones amplias | pendiente | Ampliacion de `inspect_role`. |
 | `redirect_action` | manipulador u otras alteraciones | pendiente | Necesita resolver acciones compuestas. |
 | `delayed_effect` | caballero, pirotecnico, efectos retardados | pendiente | Necesita cola real de efectos pendientes. |
-| `instant_objective` | angel | pendiente | Necesita eventos de step y causa de salida. |
+| `instant_objective` | angel | pendiente | Necesita eventos de stage y causa de salida. |
 | `all_targets_flagged_objective` | flautista | pendiente | Necesita `set_flag` y evaluador de objetivos por estado. |
 | `role_specific_last_action` | cazador | pendiente | Necesita interrupciones/special events. |
 

@@ -4,29 +4,29 @@
 //
 // Este archivo no ejecuta nada ni exporta automaticamente todos los helpers
 // internos. Solo reexporta las piezas que otros modulos deberian usar para
-// construir sesiones, organizar pools, ejecutar steps y consultar resultados.
+// construir sesiones, organizar pools, ejecutar stages y consultar resultados.
 // -----------------------------------------------------------------------------
 
 export {
   SESSION_STATUSES,
   PLAYER_TYPES,
-  STEP_STATUSES,
+  STAGE_STATUSES,
   POOL_KEYS,
   DEFAULT_POOL_ORDER,
-  SPECIAL_STEP_PRIORITIES,
   normalizeId
 } from './sessionModel.js';
 
 export { createPlayer } from './playerDefinition.js';
 export { createActionToken } from './actionTokenDefinition.js';
 export {
-  CONFIGURABLE_STEP_ORDER_POOLS,
+  CONFIGURABLE_STAGE_ORDER_POOLS,
+  AUTOMATIC_STAGE_KEYS,
   POOL_DEFINITION_ORDER_FIELD,
   POOL_DEFINITION_ERRORS,
-  buildStepPool,
+  buildStagePool,
   buildPools,
   createPool,
-  organizePoolSteps
+  organizePoolStages
 } from './poolDefinition.js';
 export { buildSession, createSession } from './sessionDefinition.js';
 export {
@@ -82,44 +82,55 @@ export {
   getCoreGroupCatalog
 } from './groupCatalog.js';
 
-export { STEP_SOURCE_TYPES, createStep } from './stepDefinition.js';
+export { STAGE_SOURCE_TYPES, createStage } from './stageDefinition.js';
 export {
-  STEP_CATALOG_IDS,
-  STEP_CATALOG,
+  STAGE_CATALOG_IDS,
+  STAGE_CATALOG,
   getManualCompletion,
-  getCatalogStep
-} from './stepCatalog.js';
+  getCatalogStage
+} from './stageCatalog.js';
 export {
-  getPoolSteps,
-  getCurrentStepCursor,
-  isStepRunnable,
-  hasRunnableStep,
+  getPoolStages,
+  getCurrentStageCursor,
+  isStageRunnable,
+  hasRunnableStage,
   findNextRunnableIndex,
-  markStepStatus,
-  hydrateStepPool,
-  hydrateStepPools,
+  markStageStatus,
+  hydrateStagePool,
+  hydrateStagePools,
+  POOL_CURSOR_ERRORS,
   getNextPoolKey,
-  findNextPoolWithRunnableStep,
-  advanceStepCursor
+  enterNextPool,
+  advanceStageCursor
 } from './poolCursorModel.js';
 export {
-  STEP_ERRORS,
-  STEP_COMPLETION_MODES,
-  STEP_COMPLETION_REQUESTED_BY,
-  STEP_KEYS,
-  STEP_ACTION_KEYS,
-  getCurrentStep,
-  getStepActions,
-  getStepActionKey,
-  selectStepAction,
-  validateCurrentStep,
-  isValidStepCompletionRequester,
-  getStepCompletionDefinition,
-  canRequesterCompleteStep,
-  appendStepHistory,
-  completeCurrentStep,
-  resolveCurrentStep
-} from './stepModel.js';
+  STAGE_ERRORS,
+  STAGE_COMPLETION_MODES,
+  STAGE_COMPLETION_REQUESTED_BY,
+  STAGE_KEYS,
+  STAGE_ACTION_KEYS,
+  getCurrentStage,
+  getStageActions,
+  getStageActionKey,
+  selectStageAction,
+  validateCurrentStage,
+  isValidStageCompletionRequester,
+  getStageCompletionDefinition,
+  canRequesterCompleteStage,
+  appendStageHistory,
+  completeCurrentStage,
+  resolveCurrentStage
+} from './stageModel.js';
+export {
+  SPECIAL_STAGE_HISTORY_OPERATIONS,
+  getSpecialStages,
+  hasPendingSpecialStages,
+  getCurrentSpecialStage,
+  appendSpecialStagesHistory,
+  appendSpecialStage,
+  activateSpecialStages,
+  completeSpecialStage
+} from './specialStagesModel.js';
 
 export { RECIPE_KEYS, RECIPE_CATALOG, getCatalogRecipe } from './recipeCatalog.js';
 export {
@@ -147,7 +158,7 @@ export {
   clearCycleFlags,
   applySetPropertyEffect,
   applySetGroupEffect,
-  applyCloseCycle,
+  applyStartCycle,
   applyConcludePlay
 } from './effectModel.js';
 export {
@@ -158,8 +169,6 @@ export {
   getTriggeredReactions,
   resolveEventResponses,
   applyEventResponses,
-  createConcludePlayStep,
-  appendConcludePlayEventResponse,
   processActionResultEvents
 } from './eventModel.js';
 export { resolveProposedEffects } from './resolverModel.js';
@@ -176,7 +185,15 @@ export {
 export {
   OBJECTIVE_EVALUATION_STATUSES,
   OBJECTIVE_CONDITIONS,
+  INFLUENCE_SUBJECTS,
+  INFLUENCE_OPERATIONS,
   getSessionObjectiveRules,
+  getObjectiveRuleDependencies,
+  getActionInfluences,
+  getStageInfluences,
+  isStagePendingForObjectiveStability,
+  canStageInfluenceObjectiveOutcome,
+  getPendingObjectiveInfluenceStages,
   createOngoingObjectiveEvaluation,
   evaluateObjectiveRule,
   evaluateSessionObjectiveRules,

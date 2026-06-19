@@ -38,16 +38,16 @@ export const PLAYER_TYPES = Object.freeze({
   SYSTEM: 'system'
 });
 
-// Estados posibles de una step.
+// Estados posibles de una stage.
 // ENABLED: debe ejecutarse.
 // DISABLED: no aplica en este momento.
 // DONE: ya se ejecuto y el cursor puede seguir.
 //
 // Antes habia un estado BLOCKED, pero lo quitamos por ahora porque todavia no
-// tenemos un caso real implementado. Si mas adelante necesitamos "esta step no
+// tenemos un caso real implementado. Si mas adelante necesitamos "esta stage no
 // puede avanzar hasta que el usuario elija algo", lo recuperaremos con un caso
 // concreto.
-export const STEP_STATUSES = Object.freeze({
+export const STAGE_STATUSES = Object.freeze({
   ENABLED: 'enabled',
   DISABLED: 'disabled',
   DONE: 'done'
@@ -55,35 +55,20 @@ export const STEP_STATUSES = Object.freeze({
 
 // Pools mecanicos del flujo.
 //
-// DEPLOYMENT: configuracion jugable inicial. Debe ejecutarse antes de que
-// acciones recurrentes puedan modificar estados, alignments o grupos.
 // CONCEALED: acciones de informacion privada u oculta.
 // EXPOSED: acciones publicas o visibles para el grupo.
-// SPECIAL: interrupciones o resoluciones excepcionales.
+// SPECIAL: interrupciones, resoluciones excepcionales y stages iniciales.
 export const POOL_KEYS = Object.freeze({
-  POOL_DEPLOYMENT: 'poolDeployment',
   POOL_CONCEALED: 'poolConcealed',
-  POOL_EXPOSED: 'poolExposed',
-  POOL_SPECIAL: 'poolSpecial'
+  POOL_EXPOSED: 'poolExposed'
 });
 
-// Orden por defecto de los grupos de steps.
-// Un "pool" es un bloque de steps relacionados.
+// Orden por defecto de los grupos de stages.
+// Un "pool" es un bloque de stages relacionados.
 export const DEFAULT_POOL_ORDER = Object.freeze([
-  POOL_KEYS.POOL_DEPLOYMENT,
   POOL_KEYS.POOL_CONCEALED,
-  POOL_KEYS.POOL_EXPOSED,
-  POOL_KEYS.POOL_SPECIAL
+  POOL_KEYS.POOL_EXPOSED
 ]);
-
-// Prioridades internas de steps especiales.
-//
-// poolSpecial funciona como cola FIFO, salvo que exista conclusion de la parte
-// jugable: ese step debe resolverse antes que otros eventos pendientes porque ya
-// existe un playOutcome concluyente.
-export const SPECIAL_STEP_PRIORITIES = Object.freeze({
-  CONCLUDE_PLAY: 'conclude_play'
-});
 
 // Convierte cualquier texto en un identificador estable.
 //

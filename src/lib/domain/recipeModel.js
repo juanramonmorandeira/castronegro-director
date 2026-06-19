@@ -3,7 +3,7 @@
 // Gestiona recetas mecanicas.
 //
 // Una receta NO es una accion nueva. Es:
-// - actionKey: nombre mecanico de la receta dentro de un step;
+// - actionKey: nombre mecanico de la receta dentro de un stage;
 // - actionId: accion generica que se ejecutara;
 // - parametros/efecto de esa accion;
 // - restricciones que limitan cuando puede usarse.

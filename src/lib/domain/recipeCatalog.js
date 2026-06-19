@@ -23,8 +23,34 @@ export const RECIPE_KEYS = Object.freeze({
   SET_OUT_OF_PLAY: 'set_out_of_play',
   ONE_SHOT_SET_OUT_OF_PLAY: 'one_shot_set_out_of_play',
   RESTORE_RECENT_OUT_OF_PLAY: 'restore_recent_out_of_play',
-  CLOSE_CYCLE: 'close_cycle',
+  START_CYCLE: 'start_cycle',
   CONCLUDE_PLAY: 'conclude_play'
+});
+
+const ROLE_IN_PLAY_FALSE_INFLUENCE = Object.freeze({
+  subject: 'role',
+  property: 'inPlay',
+  operation: 'set',
+  values: [false]
+});
+
+const ROLE_IN_PLAY_TRUE_INFLUENCE = Object.freeze({
+  subject: 'role',
+  property: 'inPlay',
+  operation: 'set',
+  values: [true]
+});
+
+const GROUP_MEMBERSHIP_INFLUENCE = Object.freeze({
+  subject: 'group',
+  property: 'roleIds',
+  operation: 'set'
+});
+
+const OBJECTIVE_RULE_STATE_INFLUENCE = Object.freeze({
+  subject: 'objectiveRule',
+  property: 'state',
+  operation: 'set'
 });
 
 export const RECIPE_CATALOG = Object.freeze({
@@ -65,6 +91,7 @@ export const RECIPE_CATALOG = Object.freeze({
       property: 'inPlay',
       value: false
     },
+    influences: [ROLE_IN_PLAY_FALSE_INFLUENCE],
     visibility: VISIBILITY.STORYTELLER_ONLY
   },
 
@@ -94,6 +121,7 @@ export const RECIPE_CATALOG = Object.freeze({
       property: 'inPlay',
       value: false
     },
+    influences: [ROLE_IN_PLAY_FALSE_INFLUENCE],
     visibility: VISIBILITY.STORYTELLER_ONLY
   },
 
@@ -127,6 +155,7 @@ export const RECIPE_CATALOG = Object.freeze({
       property: 'inPlay',
       value: true
     },
+    influences: [ROLE_IN_PLAY_TRUE_INFLUENCE],
     visibility: VISIBILITY.STORYTELLER_ONLY
   },
 
@@ -176,20 +205,21 @@ export const RECIPE_CATALOG = Object.freeze({
       groupType: GROUP_TYPES.LINKED,
       active: true
     },
+    influences: [GROUP_MEMBERSHIP_INFLUENCE, OBJECTIVE_RULE_STATE_INFLUENCE],
     visibility: VISIBILITY.STORYTELLER_ONLY
   },
 
-  [RECIPE_KEYS.CLOSE_CYCLE]: {
-    key: RECIPE_KEYS.CLOSE_CYCLE,
+  [RECIPE_KEYS.START_CYCLE]: {
+    key: RECIPE_KEYS.START_CYCLE,
     optional: false,
-    id: ACTION_IDS.CLOSE_CYCLE,
+    id: ACTION_IDS.START_CYCLE,
     actor: { type: 'system' },
     target: {
       type: 'all_roles',
       count: 'automatic'
     },
     effect: {
-      type: EFFECT_TYPES.CLOSE_CYCLE
+      type: EFFECT_TYPES.START_CYCLE
     },
     visibility: VISIBILITY.ALL
   },

@@ -14,7 +14,7 @@ restricciones y convierte la receta en accion pura.
 
 `recipeCatalog.js` contiene recetas reutilizables ya definidas. No ejecuta
 nada: solo devuelve objetos de receta para que una skin, roleDefinition o
-poolDefinition los coloque dentro de un step.
+poolDefinition los coloque dentro de un stage.
 
 Separacion:
 
@@ -24,21 +24,21 @@ recipeModel        -> valida y resuelve una receta recibida
 actionModel        -> ejecuta acciones puras
 ```
 
-Resolver una receta no cierra el step. El flujo normal es:
+Resolver una receta no cierra el stage. El flujo normal es:
 
 ```text
-resolveCurrentStep  -> ejecuta una receta
-completeCurrentStep -> cierra el step cuando player/director/sistema lo pide
+resolveCurrentStage  -> ejecuta una receta
+completeCurrentStage -> cierra el stage cuando player/director/sistema lo pide
 ```
 
-Esto permite que un mismo step tenga varias recetas opcionales y que el ritmo
+Esto permite que un mismo stage tenga varias recetas opcionales y que el ritmo
 lo controle una decision explicita, no la velocidad del motor.
 
-Formato recomendado para un step con varias recetas:
+Formato recomendado para un stage con varias recetas:
 
 ```js
 {
-  key: 'step_03',
+  key: 'stage_03',
   completion: {
     mode: 'manual',
     allowedRequesters: ['player', 'director', 'system']
@@ -56,7 +56,7 @@ Formato recomendado para un step con varias recetas:
 }
 ```
 
-`optional` expresa si la receta puede omitirse antes de cerrar el step. No
+`optional` expresa si la receta puede omitirse antes de cerrar el stage. No
 desactiva validaciones cuando la receta se ejecuta.
 
 ## Restricciones disponibles
@@ -311,14 +311,14 @@ vez en la partida.
 
 ### Seleccion + receta
 
-`select` ya no es una receta de catalogo. Es un mecanismo de step:
+`select` ya no es una receta de catalogo. Es un mecanismo de stage:
 
 ```text
-step.selectionRules -> selectionModel -> chosenId / empate / nulo
+stage.selectionRules -> selectionModel -> chosenId / empate / nulo
 ```
 
-Si hay `chosenId`, `stepModel` ejecuta la receta normal declarada en
-`step.actions` usando ese `chosenId` como `targetId`.
+Si hay `chosenId`, `stageModel` ejecuta la receta normal declarada en
+`stage.actions` usando ese `chosenId` como `targetId`.
 
 Ejemplo actual:
 
@@ -344,12 +344,12 @@ Lectura: el seleccion elige un target; la receta `set_out_of_play` aplica
 `set_in_play(inPlay=false)` sobre ese target. La misma estructura podra elegir
 para aplicar otra receta distinta sin crear una receta compuesta nueva.
 
-### `close_cycle`
+### `start_cycle`
 
 Accion pura:
 
 ```text
-close_cycle
+start_cycle
 ```
 
 Configuracion principal:

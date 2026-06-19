@@ -23,7 +23,7 @@ Ejemplos actuales:
 - `block_action`: bloquea una accion concreta sobre un objetivo concreto.
 - `link_targets`: intenta enlazar varios objetivos.
 - `vote`: cuenta elecciones y devuelve un resultado.
-- `close_cycle`: cierra el ciclo actual.
+- `start_cycle`: prepara el nuevo ciclo normal.
 
 La accion no es narrativa. Una skin puede presentar `link_targets` como
 "enamorar", "sincronizar" o "atar destinos"; el motor solo ve la accion.
@@ -38,7 +38,7 @@ Ejemplo:
 restore_recent_out_of_play = set_in_play(true) + require_recent_set_property
 ```
 
-La receta no decide en que momento se ejecuta. Esa ubicacion vive en `Step` y
+La receta no decide en que momento se ejecuta. Esa ubicacion vive en `Stage` y
 `Pool`.
 
 ### Restricciones
@@ -81,7 +81,7 @@ Ejemplos actuales:
 - `set_property`
 - `block_action`
 - `set_group`
-- `close_cycle`
+- `start_cycle`
 
 El aplicador de efectos escribe datos, pero no decide si una accion era valida.
 
@@ -93,9 +93,11 @@ La sesion es el estado vivo de la partida:
 - `roles`
 - `groups`
 - `groups`
-- `stepPools`
+- `stagePools` en el modelo conceptual. En el codigo actual todavia aparece
+  como `stagePools`.
 - `actionHistory`
-- `stepHistory`
+- `stageHistory` en el modelo conceptual. En el codigo actual todavia aparece
+  como `stageHistory`.
 - `objectiveRules`
 - `achievedObjectives`
 - `playOutcome`
@@ -105,7 +107,7 @@ La sesion es el estado vivo de la partida:
 ## Flujo
 
 ```text
-Step actual
+Stage actual
 -> Recipe
 -> Constraint
 -> Action
@@ -113,19 +115,38 @@ Step actual
 -> Effect
 -> Session
 -> Event
+-> automaticStages.onExit
 -> check_objectives
 -> conclude_play si la parte jugable concluye
 ```
 
-Los steps especiales se registran en `poolSpecial`. Si existe un step
-`conclude_play`, tiene prioridad al resolver ese pool.
+El loop normal de la parte jugable es:
+
+```text
+specialStages inicial si hay stages pendientes
+-> automaticStages.onEnter de poolConcealed: start_cycle
+-> poolConcealed
+-> automaticStages.onExit: check_objectives
+-> specialStages si hay stages pendientes
+-> poolExposed
+-> automaticStages.onExit: check_objectives
+-> specialStages si hay stages pendientes
+```
+
+Los stages especiales se registran en `specialStages`. `conclude_play` no se
+registra como stage especial: se ejecuta como automaticStage final cuando existe
+un playOutcome estable. Si aun hay stages pendientes capaces de alterar ese
+outcome, `conclude_play` no debe ejecutarse todavia.
 
 `conclude_play` no cierra administrativamente la session. Solo gestiona la
 conclusion de la parte jugable. El cierre de la session corresponde al creador o
 al flujo de administracion de la aplicacion.
 
-`resolveCurrentStep` ejecuta una receta, pero no cierra el step. `completeCurrentStep`
-marca el step como `done` y avanza el cursor.
+`resolveCurrentStage` ejecuta una receta, pero no cierra el stage. `completeCurrentStage`
+marca el stage como `done` y avanza el cursor.
+
+Si ese avance dispara automaticStages, `completeCurrentStage` devuelve
+`automaticStageResults` con las ejecuciones realizadas.
 
 ## Regla de nombres
 

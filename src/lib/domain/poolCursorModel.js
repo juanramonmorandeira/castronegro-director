@@ -1,171 +1,166 @@
-import { POOL_KEYS, SPECIAL_STEP_PRIORITIES, STEP_STATUSES } from './sessionModel.js';
+import { STAGE_STATUSES } from './sessionModel.js';
+
+export const POOL_CURSOR_ERRORS = Object.freeze({
+  NO_RUNNABLE_STAGES: 'pool/no-runnable-stages'
+});
 
 // poolCursorModel.js
 // -----------------------------------------------------------------------------
-// Este archivo mueve el cursor de steps.
+// Este archivo mueve el cursor de stages.
 //
 // No sabe que es una bruja, un lobo o una vidente.
 // Solo sabe trabajar con:
-// - pools: grupos de steps;
-// - steps concretos dentro de cada pool;
+// - pools: grupos de stages;
+// - stages concretos dentro de cada pool;
 // - status: enabled, disabled o done.
 //
-// El orden no depende del nombre del step. Depende de:
+// El orden no depende del nombre del stage. Depende de:
 // - poolOrder: orden de pools;
-// - orden del array de steps dentro de cada pool.
+// - orden del array de stages dentro de cada pool.
 //
 // Esto permite que una skin/flavor cambie el orden declarando otra lista, sin
 // que el motor tenga que entender nombres tematicos como vidente, defensor o
 // sheriff.
 //
 // La idea es separar dos preguntas:
-// 1. Que steps existen?                    -> definiciones/catalogos
-// 2. Cual es el siguiente step ejecutable? -> este archivo
+// 1. Que stages existen?                    -> definiciones/catalogos
+// 2. Cual es el siguiente stage ejecutable? -> este archivo
 // -----------------------------------------------------------------------------
 
-// Devuelve los steps que hay dentro de un pool.
+// Devuelve los stages que hay dentro de un pool.
 //
 // Ejemplo:
-// getPoolSteps(stepPools, 'poolDeployment')
+// getPoolStages(stagePools, 'poolConcealed')
 // podria devolver:
 // [
 //   { key: 'seer_inspects', status: 'enabled' },
 //   { key: 'wolves_attack', status: 'enabled' }
 // ]
-export function getPoolSteps(stepPools, poolKey = stepPools?.poolCurrent) {
-  if (!stepPools || !poolKey) return [];
-  return stepPools.pools?.[poolKey] ?? [];
+export function getPoolStages(stagePools, poolKey = stagePools?.poolCurrent) {
+  if (!stagePools || !poolKey) return [];
+  return stagePools.pools?.[poolKey] ?? [];
 }
 
-function isConcludePlaySpecialStep(step = {}) {
-  return step?.metadata?.specialPriority === SPECIAL_STEP_PRIORITIES.CONCLUDE_PLAY;
-}
-
-// Devuelve el step actual segun el cursor.
+// Devuelve el stage actual segun el cursor.
 //
 // El cursor se compone de:
 // - poolCurrent: en que grupo estamos;
-// - poolCurrentStepIndex: que posicion dentro de ese grupo.
-export function getCurrentStepCursor(stepPools) {
-  if (!stepPools?.poolCurrent) return null;
-  const steps = getPoolSteps(stepPools, stepPools.poolCurrent);
-  const index = Number.isFinite(stepPools.poolCurrentStepIndex)
-    ? stepPools.poolCurrentStepIndex
+// - poolCurrentStageIndex: que posicion dentro de ese grupo.
+export function getCurrentStageCursor(stagePools) {
+  if (!stagePools?.poolCurrent) return null;
+  const stages = getPoolStages(stagePools, stagePools.poolCurrent);
+  const index = Number.isFinite(stagePools.poolCurrentStageIndex)
+    ? stagePools.poolCurrentStageIndex
     : 0;
-  const priorityIndex =
-    stepPools.poolCurrent === POOL_KEYS.POOL_SPECIAL
-      ? steps.findIndex((step) => isStepRunnable(step) && isConcludePlaySpecialStep(step))
-      : -1;
-  const resolvedIndex = priorityIndex >= 0 ? priorityIndex : index;
-  const step = steps[resolvedIndex] ?? null;
+  const stage = stages[index] ?? null;
 
-  if (!step) return null;
+  if (!stage) return null;
 
   return {
-    poolKey: stepPools.poolCurrent,
-    stepKey: step.key,
-    status: step.status,
-    index: resolvedIndex,
-    step
+    poolKey: stagePools.poolCurrent,
+    stageKey: stage.key,
+    status: stage.status,
+    index,
+    stage
   };
 }
 
-// Un step es "runnable" si se puede ejecutar.
+// Un stage es "runnable" si se puede ejecutar.
 // Por ahora solo ENABLED significa ejecutable.
 // DISABLED se salta.
 // DONE ya paso.
-export function isStepRunnable(step) {
-  return step?.status === STEP_STATUSES.ENABLED;
+export function isStageRunnable(stage) {
+  return stage?.status === STAGE_STATUSES.ENABLED;
 }
 
-// Responde: "este pool tiene al menos un step ejecutable?"
-export function hasRunnableStep(stepPools, poolKey) {
-  return getPoolSteps(stepPools, poolKey).some(isStepRunnable);
+// Responde: "este pool tiene al menos un stage ejecutable?"
+export function hasRunnableStage(stagePools, poolKey) {
+  return getPoolStages(stagePools, poolKey).some(isStageRunnable);
 }
 
-// Busca el siguiente step ejecutable dentro de una lista de steps.
+// Busca el siguiente stage ejecutable dentro de una lista de stages.
 //
-// Devuelve el indice, no el step.
+// Devuelve el indice, no el stage.
 // Por eso se llama "Index".
 //
 // Ejemplo:
 // [done, disabled, enabled] empezando en 0 devuelve 2.
-export function findNextRunnableIndex(steps = [], startIndex = 0) {
-  for (let index = startIndex; index < steps.length; index += 1) {
-    if (isStepRunnable(steps[index])) return index;
+export function findNextRunnableIndex(stages = [], startIndex = 0) {
+  for (let index = startIndex; index < stages.length; index += 1) {
+    if (isStageRunnable(stages[index])) return index;
   }
   return null;
 }
 
-// Cambia el estado de un step concreto.
+// Cambia el estado de un stage concreto.
 //
 // Ejemplo:
-// markStepStatus(pools, 'poolDay', 'select', 'done')
+// markStageStatus(pools, 'poolDay', 'select', 'done')
 //
 // No modifica el objeto original. Devuelve una copia actualizada.
-export function markStepStatus(stepPools, poolKey, stepKey, status) {
-  const pools = { ...(stepPools?.pools ?? {}) };
-  const steps = (pools[poolKey] ?? []).map((step) =>
-    step.key === stepKey ? { ...step, status } : step
+export function markStageStatus(stagePools, poolKey, stageKey, status) {
+  const pools = { ...(stagePools?.pools ?? {}) };
+  const stages = (pools[poolKey] ?? []).map((stage) =>
+    stage.key === stageKey ? { ...stage, status } : stage
   );
 
   return {
-    ...stepPools,
+    ...stagePools,
     pools: {
       ...pools,
-      [poolKey]: steps
+      [poolKey]: stages
     }
   };
 }
 
-// Hidratar significa recalcular que steps estan activos segun el estado actual.
+// Hidratar significa recalcular que stages estan activos segun el estado actual.
 //
 // Ejemplo:
 // - si hay observer en juego, observer_inspects pasa a enabled;
 // - si no hay observer en juego, observer_inspects pasa a disabled.
 //
 // Esta funcion hidrata UN pool.
-export function hydrateStepPool(stepPools, poolKey, ruleMap = {}, sessionState = {}) {
-  const pools = { ...(stepPools?.pools ?? {}) };
-  const steps = (pools[poolKey] ?? []).map((step) => {
-    const rule = ruleMap[step.key];
-    if (typeof rule !== 'function') return step;
-    const enabled = !!rule(sessionState, step);
+export function hydrateStagePool(stagePools, poolKey, ruleMap = {}, sessionState = {}) {
+  const pools = { ...(stagePools?.pools ?? {}) };
+  const stages = (pools[poolKey] ?? []).map((stage) => {
+    const rule = ruleMap[stage.key];
+    if (typeof rule !== 'function') return stage;
+    const enabled = !!rule(sessionState, stage);
     return {
-      ...step,
-      status: enabled ? STEP_STATUSES.ENABLED : STEP_STATUSES.DISABLED
+      ...stage,
+      status: enabled ? STAGE_STATUSES.ENABLED : STAGE_STATUSES.DISABLED
     };
   });
 
   return {
-    ...stepPools,
+    ...stagePools,
     pools: {
       ...pools,
-      [poolKey]: steps
+      [poolKey]: stages
     }
   };
 }
 
-// Igual que hydrateStepPool, pero para TODOS los pools.
+// Igual que hydrateStagePool, pero para TODOS los pools.
 //
 // Diferencia:
-// - hydrateStepPool: recalcula un grupo concreto.
-// - hydrateStepPools: recalcula todos los grupos.
-export function hydrateStepPools(stepPools, rulesByPool = {}, sessionState = {}) {
-  return (stepPools?.poolOrder ?? []).reduce((nextPools, poolKey) => {
-    return hydrateStepPool(nextPools, poolKey, rulesByPool[poolKey] ?? {}, sessionState);
-  }, stepPools);
+// - hydrateStagePool: recalcula un grupo concreto.
+// - hydrateStagePools: recalcula todos los grupos.
+export function hydrateStagePools(stagePools, rulesByPool = {}, sessionState = {}) {
+  return (stagePools?.poolOrder ?? []).reduce((nextPools, poolKey) => {
+    return hydrateStagePool(nextPools, poolKey, rulesByPool[poolKey] ?? {}, sessionState);
+  }, stagePools);
 }
 
 // Devuelve la key del siguiente pool segun poolOrder.
 //
 // "key" aqui significa identificador estable.
 // Ejemplo:
-// poolCurrent = 'poolDeployment'
-// poolOrder = ['poolDeployment', 'poolConcealed', 'poolExposed']
+// poolCurrent = 'poolConcealed'
+// poolOrder = ['poolConcealed', 'poolExposed']
 // getNextPoolKey(...) devuelve 'poolExposed'
-export function getNextPoolKey(stepPools, fromPoolKey = stepPools?.poolCurrent) {
-  const order = stepPools?.poolOrder ?? [];
+export function getNextPoolKey(stagePools, fromPoolKey = stagePools?.poolCurrent) {
+  const order = stagePools?.poolOrder ?? [];
   if (!order.length) return null;
 
   const currentIndex = order.indexOf(fromPoolKey);
@@ -174,60 +169,77 @@ export function getNextPoolKey(stepPools, fromPoolKey = stepPools?.poolCurrent) 
   return order[(currentIndex + 1) % order.length] ?? null;
 }
 
-// Busca el siguiente pool que tenga algun step ejecutable.
-//
-// Diferencia con findNextRunnableIndex:
-// - findNextRunnableIndex busca dentro de UN pool.
-// - findNextPoolWithRunnableStep busca ENTRE pools.
-export function findNextPoolWithRunnableStep(stepPools, fromPoolKey = stepPools?.poolCurrent) {
-  const order = stepPools?.poolOrder ?? [];
-  if (!order.length) return null;
-
-  const startIndex = Math.max(0, order.indexOf(fromPoolKey));
-
-  for (let offset = 1; offset <= order.length; offset += 1) {
-    const poolKey = order[(startIndex + offset) % order.length];
-    if (hasRunnableStep(stepPools, poolKey)) return poolKey;
-  }
-
-  return null;
-}
-
-// Avanza el cursor de steps.
-//
-// Pasos:
-// 1. Mira el step actual.
-// 2. Si estaba enabled, la marca como done.
-// 3. Busca el siguiente step enabled dentro del mismo pool.
-// 4. Si no hay, busca el siguiente pool con algun step enabled.
-// 5. Devuelve el nuevo stepPools y una explicacion corta en "reason".
-export function advanceStepCursor(stepPools, options = {}) {
-  const markCurrentDone = options.markCurrentDone ?? true;
-  const current = getCurrentStepCursor(stepPools);
-
-  if (!current) {
+export function enterNextPool(stagePools, nextNormalPoolKey = stagePools?.poolNext) {
+  if (!nextNormalPoolKey || !hasRunnableStage(stagePools, nextNormalPoolKey)) {
     return {
-      stepPools,
-      current: null,
+      ok: false,
+      errors: [
+        {
+          severity: 'error',
+          code: POOL_CURSOR_ERRORS.NO_RUNNABLE_STAGES,
+          poolKey: nextNormalPoolKey,
+          message: `pool "${nextNormalPoolKey ?? 'unknown'}" has no runnable stages`
+        }
+      ],
+      stagePools,
       next: null,
-      changed: false,
-      reason: 'missing-current-step'
+      reason: 'next-pool-not-runnable'
     };
   }
 
-  let nextPools = stepPools;
+  const nextPools = {
+    ...stagePools,
+    poolPrevious: stagePools.poolCurrent,
+    poolCurrent: nextNormalPoolKey,
+    poolNext: getNextPoolKey(stagePools, nextNormalPoolKey),
+    poolCurrentStageIndex:
+      findNextRunnableIndex(getPoolStages(stagePools, nextNormalPoolKey), 0) ?? 0
+  };
+
+  return {
+    ok: true,
+    errors: [],
+    stagePools: nextPools,
+    next: getCurrentStageCursor(nextPools),
+    reason: 'next-pool'
+  };
+}
+
+// Avanza el cursor de stages.
+//
+// Pasos:
+// 1. Mira el stage actual.
+// 2. Si estaba enabled, la marca como done.
+// 3. Busca el siguiente stage enabled dentro del mismo pool.
+// 4. Si no hay, termina el pool y deja preparada la proxima entrada normal.
+// 5. La entrada efectiva se decide despues de ejecutar automaticStages.onExit.
+export function advanceStageCursor(stagePools, options = {}) {
+  const markCurrentDone = options.markCurrentDone ?? true;
+  const current = getCurrentStageCursor(stagePools);
+
+  if (!current) {
+    return {
+      stagePools,
+      current: null,
+      next: null,
+      changed: false,
+      reason: 'missing-current-stage'
+    };
+  }
+
+  let nextPools = stagePools;
 
   if (markCurrentDone) {
-    nextPools = markStepStatus(
+    nextPools = markStageStatus(
       nextPools,
       current.poolKey,
-      current.stepKey,
-      STEP_STATUSES.DONE
+      current.stageKey,
+      STAGE_STATUSES.DONE
     );
   }
 
-  const currentPoolSteps = getPoolSteps(nextPools, current.poolKey);
-  const nextIndex = findNextRunnableIndex(currentPoolSteps, current.index + 1);
+  const currentPoolStages = getPoolStages(nextPools, current.poolKey);
+  const nextIndex = findNextRunnableIndex(currentPoolStages, current.index + 1);
 
   if (nextIndex !== null) {
     nextPools = {
@@ -235,43 +247,38 @@ export function advanceStepCursor(stepPools, options = {}) {
       poolPrevious: current.poolKey,
       poolCurrent: current.poolKey,
       poolNext: getNextPoolKey(nextPools, current.poolKey),
-      poolCurrentStepIndex: nextIndex
+      poolCurrentStageIndex: nextIndex
     };
 
     return {
-      stepPools: nextPools,
+      stagePools: nextPools,
       current,
-      next: getCurrentStepCursor(nextPools),
+      next: getCurrentStageCursor(nextPools),
       changed: true,
-      reason: 'next-step-in-current-pool'
+      reason: 'next-stage-in-current-pool'
     };
   }
 
-  const nextPoolKey = findNextPoolWithRunnableStep(nextPools, current.poolKey);
+  const nextNormalPoolKey = getNextPoolKey(nextPools, current.poolKey);
 
-  if (!nextPoolKey) {
+  if (!nextNormalPoolKey) {
     return {
-      stepPools: nextPools,
+      stagePools: nextPools,
       current,
       next: null,
       changed: true,
-      reason: 'no-runnable-step'
+      reason: 'no-runnable-stage'
     };
   }
 
-  nextPools = {
-    ...nextPools,
-    poolPrevious: current.poolKey,
-    poolCurrent: nextPoolKey,
-    poolNext: getNextPoolKey(nextPools, nextPoolKey),
-    poolCurrentStepIndex: findNextRunnableIndex(getPoolSteps(nextPools, nextPoolKey), 0) ?? 0
-  };
-
   return {
-    stepPools: nextPools,
+    stagePools: {
+      ...nextPools,
+      poolNext: nextNormalPoolKey
+    },
     current,
-    next: getCurrentStepCursor(nextPools),
+    next: null,
     changed: true,
-    reason: 'next-pool'
+    reason: 'pool-completed'
   };
 }

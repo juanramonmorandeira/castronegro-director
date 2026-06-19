@@ -29,8 +29,12 @@ Define datos basicos para preparar una partida:
 - `ruleSetId`;
 - `skinId`;
 - `playersExpected`;
-- idioma de juego si aplica a la partida;
+- `sessionLanguage`;
 - opciones generales visibles para el creador.
+
+`sessionLanguage` es el idioma de la session de juego. No es el idioma global
+de la aplicacion. El motor no traduce textos: la UI usa `skinId` y
+`sessionLanguage` para pedir a la skin los textos adecuados.
 
 ### runModeConfiguration
 
@@ -46,7 +50,7 @@ En la aplicacion vieja hay referencias relacionadas en:
 
 - `src/pages/Configure.svelte`
 - `src/components/config/Properties.svelte`
-- `assistTasks`
+- `delegatedTasks`
 - `storyteller`
 
 No migrar todavia sin revisar ese flujo.
@@ -57,9 +61,8 @@ Define la seleccion concreta dentro del ruleSet:
 
 - roles seleccionados;
 - cantidades de roles seleccionados;
-- alignments que entran en juego;
 - reglas opcionales activadas;
-- variante de voteRules elegida si el ruleSet ofrece varias;
+- variantes de selectionRules elegidas si el ruleSet ofrece varias;
 - grupos opcionales activados;
 - objectiveRules opcionales activadas.
 
@@ -69,8 +72,8 @@ Regla:
 ruleSetConfiguration solo puede elegir entre opciones definidas por ruleSet.
 ```
 
-No puede alterar parametros libres como `voteRules.tie` si esa variante no esta
-predefinida en el ruleSet.
+No puede alterar parametros libres como `selectionRules.tie` si esa variante no
+esta predefinida en el ruleSet.
 
 ## GameConfiguration
 
@@ -88,11 +91,12 @@ Ejemplo conceptual:
   basicConfiguration: {
     ruleSetId: 'classic_hidden_roles',
     skinId: 'castronegro_like',
-    playersExpected: 8
+    playersExpected: 8,
+    sessionLanguage: 'es'
   },
   runModeConfiguration: {
     mode: 'human',
-    assistTasks: []
+    delegatedTasks: []
   },
   ruleSetConfiguration: {
     selectedRoles: [
@@ -100,8 +104,8 @@ Ejemplo conceptual:
       { roleKey: 'role_blocks_out_of_play', count: 1 },
       { roleKey: 'role_reactive', count: 1 }
     ],
-    selectedAlignments: ['alignment_a', 'alignment_b'],
-    enabledOptionalRules: []
+    enabledOptionalRules: [],
+    distributionOverride: false
   }
 }
 ```
@@ -155,7 +159,6 @@ La session deberia guardar:
 - los datos materializados derivados de `matchConfiguration`;
 - `players`;
 - `roles`;
-- `groups`;
 - `groups`;
 - `stepPools`;
 - historiales.

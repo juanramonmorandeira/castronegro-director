@@ -11,7 +11,7 @@ Los catalogos son la biblioteca mecanica del software:
 
 - `roleCatalog`
 - `groupCatalog`
-- `stepCatalog`
+- `stageCatalog`
 - `recipeCatalog`
 - futuros catalogos de objectives, resources, groups o buildings.
 
@@ -26,7 +26,7 @@ No desactiva partes internas de un elemento catalogado.
 No combina piezas libres para crear roles nuevos.
 ```
 
-Si se necesita una variante de una receta, role, group o step, esa variante debe
+Si se necesita una variante de una receta, role, group o stage, esa variante debe
 existir como nuevo elemento de catalogo.
 
 Esto conserva una regla simple:
@@ -104,7 +104,7 @@ Pendiente:
 
 ```text
 Antes de anadir muchos mas roles, revisar si el modelo actual separa bien:
-primaryElement -> action/effect -> recipe -> role/group -> step -> ruleSet.
+primaryElement -> action/effect -> recipe -> role/group -> stage -> ruleSet.
 ```
 
 ## Campos minimos propuestos
@@ -117,7 +117,7 @@ primaryElement -> action/effect -> recipe -> role/group -> step -> ruleSet.
   catalogRefs: {
     roles: [],
     groups: [],
-    steps: [],
+    stages: [],
     objectiveRules: []
   },
   poolOrder: [],
@@ -138,7 +138,7 @@ usan:
 - `objectiveRules`;
 - `groupRules`;
 - reglas de seleccion de configuration;
-- reglas de activacion de steps;
+- reglas de activacion de stages;
 - reglas de target.
 
 Decision aceptada:
@@ -176,7 +176,7 @@ sean legibles sin contaminar el motor con narrativa.
 - roles disponibles;
 - alignments declarados;
 - groups disponibles;
-- steps disponibles o aportados por roles/groups;
+- stages disponibles o aportados por roles/groups;
 - objectiveRules disponibles;
 - poolOrder;
 - reglas opcionales disponibles;
@@ -213,10 +213,10 @@ Decision aceptada:
 
 ```text
 Las recomendaciones por alignment se definen en ruleSet mediante
-alignmentDistributionRules.
+distributionRules.
 ```
 
-`alignmentDistributionRules` relaciona `playersExpected` con una distribucion de
+`distributionRules` relaciona `playersExpected` con una distribucion de
 alignments.
 
 Ejemplo conceptual:
@@ -233,13 +233,17 @@ Ejemplo conceptual:
 }
 ```
 
-El ruleSet debe declarar si esta tabla admite override:
+El ruleSet debe declarar si esta distribucion admite override:
 
 ```js
 {
-  alignmentDistributionRules: {
+  distributionRules: {
     allowOverride: true,
-    byPlayersExpected: {}
+    formula: {
+      type: 'classic_hidden_roles_distribution',
+      minPlayers: 5,
+      maxPlayers: 15
+    }
   }
 }
 ```
@@ -259,6 +263,62 @@ Reglas aceptadas:
 
 Las restricciones impuestas por un role concreto no viven aqui. Viven en
 `roleDefinition` mediante `instanceRule`.
+
+## ruleSet listo para session
+
+`selectedRuleSet` es el ruleSet elegido desde catalogo.
+
+`ruleSet`, cuando se usa como input de `buildSession`, es el ruleSet ya acotado
+para una session concreta.
+
+Se construye cruzando:
+
+```text
+selectedRuleSet + skin + ruleSetConfiguration -> buildRuleSet -> ruleSet
+```
+
+`buildSession` debe recibir este `ruleSet` ya construido, no el ruleSet bruto del
+catalogo.
+
+Estructura de trabajo:
+
+```js
+{
+  id,
+  version,
+  roles: {
+    baseRoles: [],
+    optionalRoles: []
+  },
+  rules: {
+    baseRules: [],
+    optionalRules: [],
+    objectiveRules: [],
+    stageRules: [],
+    selectionRules: [],
+    candidateRules: [],
+    configurationRules: []
+  },
+  groups: [
+    {
+      groupKey,
+      members: [],
+      groupRules: []
+    }
+  ],
+  pools: [
+    {
+      poolKey,
+      stages: [],
+      poolRules: []
+    }
+  ],
+  skinRequirements: {}
+}
+```
+
+Las categorias `stageRules`, `candidateRules` y `configurationRules` siguen
+abiertas a revision. Solo deben mantenerse si tienen comportamiento propio.
 
 Preguntas pendientes:
 
@@ -285,7 +345,7 @@ No esta resuelto como demostrar que un `ruleSet` es valido.
 Preguntas abiertas:
 
 - todos los catalogIds existen?
-- hay steps duplicados conflictivos?
+- hay stages duplicados conflictivos?
 - hay colisiones de `order` dentro de pools configurables?
 - los groups referenciados existen?
 - las objectiveRules referenciadas existen?
@@ -311,8 +371,8 @@ Los cambios que alteran logica mecanica obligan a crear una nueva version.
 ```
 
 Los cambios cosmeticos no pertenecen a ruleSet. Si en el futuro existe un editor
-de ruleSets, cualquier cambio que pueda afectar a roles, groups, recipes, steps,
-voteRules, objectiveRules o poolOrder debe tratarse como cambio mecanico.
+de ruleSets, cualquier cambio que pueda afectar a roles, groups, recipes, stages,
+selectionRules, objectiveRules o poolOrder debe tratarse como cambio mecanico.
 
 ## Nota de futuro: editor de catalog
 
@@ -322,7 +382,7 @@ Futura mejora del software:
 Permitir que creadores avanzados creen nuevos elementos de catalogo.
 ```
 
-Ese editor podria permitir construir roles, steps, recipes, groups, resources u
+Ese editor podria permitir construir roles, stages, recipes, groups, resources u
 objectiveRules a partir de elementos mecanicos disponibles.
 
 No forma parte del objetivo actual. Primero necesitamos un flujo minimo

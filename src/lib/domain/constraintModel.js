@@ -146,7 +146,7 @@ export function evaluateRequireRecentSetPropertyConstraint({ session, targets, c
           property: constraint.property,
           value: constraint.value,
           targetId: target.id,
-          stepKey: constraint.stepKey ?? null,
+          stageKey: constraint.stageKey ?? null,
           actionKey: constraint.actionKey ?? null
         }).length > 0
       );
@@ -164,7 +164,7 @@ export function evaluateRequireRecentSetPropertyConstraint({ session, targets, c
         property: constraint.property,
         value: constraint.value,
         actionKey: constraint.actionKey ?? null,
-        stepKey: constraint.stepKey ?? null,
+        stageKey: constraint.stageKey ?? null,
         window
       }
     ];
@@ -192,7 +192,7 @@ export function isEntryInsideLimitedUseWindow(entry, currentCycleId, window) {
 // Decision actual:
 // limited_uses siempre se cuenta por actor + receta. En datos eso significa:
 // - actorIds: que roles usaron la receta;
-// - actionKey: que receta concreta dentro del step se uso.
+// - actionKey: que receta concreta dentro del stage se uso.
 //
 // No exponemos un campo "scope" en las recetas normales porque todavia no
 // tenemos una regla real que necesite contar por actor global o por receta
