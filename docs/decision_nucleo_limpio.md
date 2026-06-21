@@ -41,7 +41,7 @@ El primer paso solo define modelos y validaciones basicas:
 - `GameSession`
 - `Player`
 - `RoleInstance`
-- `ActionToken`
+- `Resource`
 - `PhasePools`
 - validacion de Match completo
 - validacion de IDs duplicados

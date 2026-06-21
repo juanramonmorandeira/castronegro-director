@@ -44,9 +44,7 @@ selection.
 
 `stage` = periodo ejecutable dentro de un pool.
 
-`automaticStage` = etapa del sistema que no representa actuacion de role/group.
-
-## Stages y automaticStages
+## Stages y ciclos de vida
 
 Un `stage` puede tener `actorIds` cuando requiere actuacion de roles:
 
@@ -67,13 +65,12 @@ group_selects_target
 No son stages manuales:
 
 ```text
-start_cycle
 check_objectives
 conclude_play
 ```
 
-Estos son `automaticStages`: rutinas de sistema que preparan ciclo, limpian o
-evalúan estado.
+`check_objectives` y `conclude_play` son operaciones de ciclo de vida.
+`startCycle` pertenece a `cycleModel`.
 
 ## Property State
 
@@ -285,40 +282,79 @@ los objetivos se evaluan siempre al final de cada pool
 Esto evita cerrar la parte jugable antes de que todos los roles de ese pool
 hayan podido modificar, bloquear o compensar resultados anteriores.
 
-## Pool execution places
+## Identidad runtime
 
-Algunas reglas pueden necesitar ejecutarse o materializarse en un lugar concreto
-del flujo.
+Las claves describen definiciones mecanicas. Los ids distinguen objetos
+materializados:
 
-Campo conceptual:
+```text
+cycleId = numero de iteracion del ciclo
+poolKey = posicion mecanica estable dentro del ciclo
+stageKey = definicion mecanica compartible
+stageId = stage runtime concreto
+```
+
+Una ejecucion de pool queda localizada por `cycleId + poolKey`. Por eso no
+existe `poolId`.
+
+Una ejecucion de stage queda localizada por:
 
 ```js
-eventExecutionPlace: {
-  timing: 'end_of_stage' | 'end_of_pool' | 'first_next_pool' | 'start_of_pool',
-  poolKey: null
+{
+  cycleId: 3,
+  poolKey: 'poolConcealed',
+  stageId: 'stage_poolconcealed_stage_01_role-0',
+  stageKey: 'stage_01'
 }
 ```
 
-Ejemplos:
+El cursor modifica stages por `stageId`, nunca por `stageKey`, porque dos roles
+materializados pueden aportar stages procedentes de la misma definicion.
 
-```text
-role-repeat-select pide repetir una seleccion al final del pool actual
-role-reactive pide actuar al principio del siguiente pool
-check_objectives se ejecuta al final de cada pool
+## Special stages
+
+`session.specialStages` es la unica cola FIFO de stages dinamicos. No es un
+pool, no se prepara y no participa en `cycle.poolOrder`.
+
+Los stages generados durante un pool se ejecutan despues de que ese pool haya
+completado `onExit` y antes de entrar en el siguiente pool. Siguen perteneciendo
+causalmente al ciclo actual.
+
+No existen por ahora contenedores separados `poolSpecialStages` y
+`cycleSpecialStages`. La segunda categoria solo se incorporara si aparece una
+mecanica real que deba ejecutarse entre dos ciclos.
+
+## Duraciones de bloqueos
+
+Una recipe declara una duracion relativa:
+
+```js
+duration: {
+  unit: 'stage' | 'pool' | 'cycle' | 'session',
+  offset: 0,
+  boundary: 'before' | 'after'
+}
 ```
 
-Decision pendiente:
+Al ejecutarse, `recipeModel` la convierte en `expiresAt` absoluto. Los offsets
+de pool recorren circularmente `cycle.poolOrder`; al envolver, incrementan
+`cycleId`. Los offsets de stage cuentan solo stages `enabled` pendientes del
+pool actual. Si no existe el stage destino, el bloqueo vence en
+`pool_boundary.after`.
+
+`before` con `offset: 0` es invalido. `specialStages` no participa en los
+offsets de stage o pool.
+
+Las fronteras se revisan en este orden:
 
 ```text
-mantener specialEventsPool
-o reemplazarlo por insercion explicita en pool/posicion definida por regla
+cycle before -> startCycle
+pool before -> preparePool -> validatePool
+stage before -> ejecutar stage
+registrar cierre -> stage after -> avanzar cursor
+pool after -> check_objectives
+specialStages pendientes -> cycle after -> siguiente cycle before
 ```
-
-Lectura actual:
-
-- `specialEventsPool` puede ser mas limpio programaticamente.
-- `eventExecutionPlace` puede ser mas preciso conceptualmente.
-- No se debe decidir hasta revisar mas eventos especiales reales.
 
 ## RuleAnalyzer
 
@@ -445,7 +481,12 @@ Ejemplo `linked`:
     { roleId: 'role_b', memberRole: 'member' }
   ],
   groupRules: [
-    { type: 'share_property_change', property: 'inPlay', value: false },
+    {
+      type: 'propagate_property_change',
+      when: { property: 'inPlay', value: false },
+      apply: { property: 'inPlay', value: false },
+      targets: 'other_members'
+    },
     { type: 'members_cannot_select_each_other' }
   ]
 }
@@ -575,12 +616,7 @@ Decision pendiente.
 
 ## Decisiones pendientes
 
-1. Decidir si `specialEventsPool` se conserva o se reemplaza por
-   `eventExecutionPlace`.
-2. Migrar `selectionModel` hacia `selectionModel` y eliminar el vocabulario historico
-   cuando la migracion este verificada.
-3. Definir el formato exacto de `role.properties`.
-4. Definir si `inPlay` migra inmediatamente a property avanzada o si se mantiene
-   como boolean hasta que el modelo este probado.
-5. Definir como registrar snapshots de inicio de pool.
-6. Definir un diccionario formal de rule types y function names.
+1. Definir el formato exacto de `role.properties`.
+2. Definir si `inPlay` migra a property avanzada o se mantiene como boolean.
+3. Definir como registrar snapshots de inicio de pool.
+4. Definir un diccionario formal de rule types y function names.

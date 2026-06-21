@@ -416,7 +416,7 @@ export function evaluateObjectiveRule(session = {}, rule = {}) {
   return null;
 }
 
-export function createOngoingObjectiveEvaluation(reason = 'no_objective_condition_met') {
+function getOngoingObjectiveEvaluation(reason = 'no_objective_condition_met') {
   return {
     status: OBJECTIVE_EVALUATION_STATUSES.ONGOING,
     reason,
@@ -463,7 +463,7 @@ export function checkObjectives(session = {}) {
   const fulfilledRules = evaluateSessionObjectiveRules(session);
 
   if (!fulfilledRules.length) {
-    return createOngoingObjectiveEvaluation();
+    return getOngoingObjectiveEvaluation();
   }
 
   return createFulfilledObjectiveEvaluation(fulfilledRules);

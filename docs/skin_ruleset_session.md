@@ -207,7 +207,7 @@ Es el punto donde convergen:
 - asientos;
 - elecciones del narrador o creador de la partida;
 - decisiones tomadas durante la partida;
-- estado actual de roles, groups y stagePools;
+- estado actual de roles, groups y cycle;
 - `objectiveRules`;
 - `achievedObjectives`;
 - `playOutcome`;
@@ -232,7 +232,7 @@ session
   roles: [...]
   groups: [...]
   groups: [...]
-  stagePools: ...
+  cycle: ...
   objectiveRules: [...]
   achievedObjectives: [...]
   playOutcome: null

@@ -97,7 +97,7 @@ Ejemplos actuales:
 - cambiar una propiedad: `set_property`
 - crear un grupo: `set_group`
 - revelar una propiedad: `reveal_property`
-- bloquear una accion: `block_action`
+- bloquear un cambio de propiedad: `block_property_change`
 - contar votos: `vote`
 
 Pendiente:

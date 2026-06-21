@@ -13,7 +13,12 @@
 import { ACTION_IDS, VISIBILITY } from './actionModel.js';
 import { CONSTRAINT_TYPES, CONSTRAINT_WINDOWS, createConstraint } from './constraintModel.js';
 import { EFFECT_TYPES } from './effectModel.js';
-import { GROUP_TYPES } from './groupDefinition.js';
+import {
+  GROUP_RULE_TARGETS,
+  GROUP_RULE_TYPES,
+  GROUP_TYPES,
+  defineGroupRule
+} from './groupDefinition.js';
 import { createRecipe } from './recipeModel.js';
 
 export const RECIPE_KEYS = Object.freeze({
@@ -23,7 +28,6 @@ export const RECIPE_KEYS = Object.freeze({
   SET_OUT_OF_PLAY: 'set_out_of_play',
   ONE_SHOT_SET_OUT_OF_PLAY: 'one_shot_set_out_of_play',
   RESTORE_RECENT_OUT_OF_PLAY: 'restore_recent_out_of_play',
-  START_CYCLE: 'start_cycle',
   CONCLUDE_PLAY: 'conclude_play'
 });
 
@@ -162,7 +166,7 @@ export const RECIPE_CATALOG = Object.freeze({
   [RECIPE_KEYS.BLOCK_OUT_OF_PLAY]: {
     key: RECIPE_KEYS.BLOCK_OUT_OF_PLAY,
     optional: true,
-    id: ACTION_IDS.BLOCK_ACTION,
+    id: ACTION_IDS.BLOCK_PROPERTY_CHANGE,
     actor: { type: 'role_holder' },
     target: {
       type: 'role',
@@ -176,15 +180,20 @@ export const RECIPE_CATALOG = Object.freeze({
       }
     ],
     effect: {
-      type: EFFECT_TYPES.BLOCK_ACTION,
-      blocks: {
-        actionId: ACTION_IDS.SET_IN_PLAY,
-        params: {
-          property: 'inPlay',
-          value: false
-        }
+      type: EFFECT_TYPES.BLOCK_PROPERTY_CHANGE,
+      blockedPropertyChange: {
+        property: 'inPlay',
+        value: false
       },
-      duration: 'current_cycle'
+      blockedFor: {
+        groupIds: ['alignment_set_out_of_play'],
+        alignmentIds: ['alignment_b']
+      },
+      duration: {
+        unit: 'pool',
+        offset: 0,
+        boundary: 'after'
+      }
     },
     visibility: VISIBILITY.STORYTELLER_ONLY
   },
@@ -203,25 +212,24 @@ export const RECIPE_CATALOG = Object.freeze({
       type: EFFECT_TYPES.SET_GROUP,
       targetType: 'group',
       groupType: GROUP_TYPES.LINKED,
+      groupRules: [
+        defineGroupRule({
+          type: GROUP_RULE_TYPES.PROPAGATE_PROPERTY_CHANGE,
+          when: {
+            property: 'inPlay',
+            value: false
+          },
+          apply: {
+            property: 'inPlay',
+            value: false
+          },
+          targets: GROUP_RULE_TARGETS.OTHER_MEMBERS
+        })
+      ],
       active: true
     },
     influences: [GROUP_MEMBERSHIP_INFLUENCE, OBJECTIVE_RULE_STATE_INFLUENCE],
     visibility: VISIBILITY.STORYTELLER_ONLY
-  },
-
-  [RECIPE_KEYS.START_CYCLE]: {
-    key: RECIPE_KEYS.START_CYCLE,
-    optional: false,
-    id: ACTION_IDS.START_CYCLE,
-    actor: { type: 'system' },
-    target: {
-      type: 'all_roles',
-      count: 'automatic'
-    },
-    effect: {
-      type: EFFECT_TYPES.START_CYCLE
-    },
-    visibility: VISIBILITY.ALL
   },
 
   [RECIPE_KEYS.CONCLUDE_PLAY]: {

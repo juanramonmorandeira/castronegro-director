@@ -14,35 +14,32 @@ No debe exportar automaticamente todos los helpers internos de cada archivo. Si
 una funcion auxiliar necesita salir por `index.js`, primero debe tener sentido
 como API estable del nucleo.
 
-### `*Definition.js`
+### `defineX`, `createX` y `buildX`
 
-Constructores de objetos del motor.
+Las definiciones y los objetos runtime tienen puertas distintas:
 
 Ejemplos:
 
-- `createSession` en `sessionDefinition.js`
-- `createRole` en `roleDefinition.js`
-- `createSessionRole` en `roleDefinition.js`
-- `createGroup` en `groupDefinition.js`
-- `createStage` en `stageDefinition.js`
-- `createPool` en `poolDefinition.js`
-
-### `buildX`
-
-Funciones de ensamblaje.
+- `defineRole` describe un role antes de session.
+- `createRole` materializa un role runtime.
+- `buildRoles` ensambla roles desde definiciones y asientos.
+- `defineGroup` describe un group antes de session.
+- `createGroup` materializa un group runtime.
+- `buildGroups` ensambla groups desde definiciones.
+- `defineStage` describe un stage antes de session.
+- `createStage` materializa un stage runtime.
 
 Ejemplos:
 
 - `buildSession`: crea roles y pools a partir de configuracion.
-- `buildInitialGroups`: resuelve miembros iniciales de grupos.
+- `buildGroups`: ensambla grupos runtime desde sus definiciones.
 - `buildPools`: junta stages de roles, grupos y sistema.
-- `buildStagePool`: nombre actual de codigo para construir los stages de un pool
-  concreto.
 
 Regla practica:
 
 ```text
-createX construye un objeto.
+defineX describe un objeto antes de session.
+createX materializa un unico objeto runtime.
 buildX ensambla varios objetos/definiciones para preparar una parte jugable.
 ```
 
@@ -118,13 +115,12 @@ specialStages inicial si hay stages pendientes
 comprueba después de terminar completamente el pool actual y antes de entrar en
 el siguiente pool normal.
 
-`start_cycle` es una `automaticStage` de entrada a `poolConcealed`. Prepara el
-nuevo ciclo normal y sustituye al viejo cierre de ciclo. `check_objectives` es
-una `automaticStage` de salida de cada pool.
+`startCycle` pertenece a `cycleModel` y se ejecuta antes de preparar
+`poolConcealed`. `check_objectives` forma parte de `pool.onExit`.
 
-Cuando el cierre de un stage dispara automaticStages, `completeCurrentStage`
-devuelve `automaticStageResults` para que la capa superior pueda ver que se
-ejecuto, por ejemplo, `check_objectives`, `start_cycle` o `conclude_play`.
+Cuando el cierre de un stage completa un pool, `completeCurrentStage`
+devuelve `lifecycleResults` para que la capa superior pueda ver que se
+ejecuto, por ejemplo, `check_objectives` o `conclude_play`.
 
 ## Roles, stages y recetas
 
@@ -174,8 +170,7 @@ La sesion guarda:
 - `players`
 - `roles`
 - `groups`
-- `stagePools` en el modelo conceptual. En codigo aparece todavia como
-  `stagePools`.
+- `session.cycle.pools` contiene el mapa de pools runtime.
 - `actionHistory`
 - `stageHistory` en el modelo conceptual. En codigo aparece todavia como
   `stageHistory`.

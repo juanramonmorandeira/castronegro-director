@@ -73,7 +73,7 @@ Ejemplo:
 
 ```text
 obsolete_composite_vote_recipe = vote + obsolete_followup_action(set_in_play false)
-linked puede propagar inPlay=false
+una groupRule puede propagar inPlay=false
 objectiveModel comprueba si hay un playOutcome concluyente
 ```
 

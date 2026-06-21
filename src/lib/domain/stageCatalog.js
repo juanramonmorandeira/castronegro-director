@@ -2,13 +2,12 @@
 // -----------------------------------------------------------------------------
 // Catalogo de stages mecanicos reutilizables.
 //
-// El catalogo guarda stages predefinidos. No expone un constructor por cada tipo
-// de stage. El constructor unico sigue siendo createStage.
+// El catalogo guarda stageDefinitions predefinidas mediante defineStage.
 // -----------------------------------------------------------------------------
 
 import { GROUP_TYPES } from './groupDefinition.js';
 import { STAGE_STATUSES } from './sessionModel.js';
-import { createStage } from './stageDefinition.js';
+import { defineStage } from './stageDefinition.js';
 import {
   STAGE_COMPLETION_MODES,
   STAGE_COMPLETION_REQUESTED_BY,
@@ -31,8 +30,7 @@ export const STAGE_CATALOG_IDS = Object.freeze({
   ROLE_IN_PLAY_CONTROL: 'role_in_play_control',
   ROLE_REACTIVE_RESPONSE: 'role_reactive_response',
   GROUP_SET_OUT_OF_PLAY: 'group_set_out_of_play',
-  GROUP_SELECTION: 'group_selection',
-  SYSTEM_STARTS_CYCLE: 'system_starts_cycle'
+  GROUP_SELECTION: 'group_selection'
 });
 
 export function getManualCompletion(allowedRequesters = Object.values(STAGE_COMPLETION_REQUESTED_BY)) {
@@ -43,7 +41,7 @@ export function getManualCompletion(allowedRequesters = Object.values(STAGE_COMP
 }
 
 export const STAGE_CATALOG = Object.freeze({
-  [STAGE_CATALOG_IDS.ROLE_INSPECTS]: createStage({
+  [STAGE_CATALOG_IDS.ROLE_INSPECTS]: defineStage({
     key: STAGE_KEYS.STAGE_01,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
@@ -54,7 +52,7 @@ export const STAGE_CATALOG = Object.freeze({
     }
   }),
 
-  [STAGE_CATALOG_IDS.ROLE_LINKS_TARGETS]: createStage({
+  [STAGE_CATALOG_IDS.ROLE_LINKS_TARGETS]: defineStage({
     key: STAGE_KEYS.STAGE_02,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
@@ -65,7 +63,7 @@ export const STAGE_CATALOG = Object.freeze({
     }
   }),
 
-  [STAGE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY]: createStage({
+  [STAGE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY]: defineStage({
     key: STAGE_KEYS.STAGE_02,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
@@ -76,7 +74,7 @@ export const STAGE_CATALOG = Object.freeze({
     }
   }),
 
-  [STAGE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL]: createStage({
+  [STAGE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL]: defineStage({
     key: STAGE_KEYS.STAGE_03,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
@@ -90,7 +88,7 @@ export const STAGE_CATALOG = Object.freeze({
     }
   }),
 
-  [STAGE_CATALOG_IDS.ROLE_REACTIVE_RESPONSE]: createStage({
+  [STAGE_CATALOG_IDS.ROLE_REACTIVE_RESPONSE]: defineStage({
     key: STAGE_KEYS.STAGE_07,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
@@ -110,7 +108,7 @@ export const STAGE_CATALOG = Object.freeze({
     }
   }),
 
-  [STAGE_CATALOG_IDS.GROUP_SET_OUT_OF_PLAY]: createStage({
+  [STAGE_CATALOG_IDS.GROUP_SET_OUT_OF_PLAY]: defineStage({
     key: STAGE_KEYS.STAGE_04,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
@@ -121,7 +119,7 @@ export const STAGE_CATALOG = Object.freeze({
     }
   }),
 
-  [STAGE_CATALOG_IDS.GROUP_SELECTION]: createStage({
+  [STAGE_CATALOG_IDS.GROUP_SELECTION]: defineStage({
     key: STAGE_KEYS.STAGE_05,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
@@ -150,17 +148,6 @@ export const STAGE_CATALOG = Object.freeze({
     metadata: {
       catalogId: STAGE_CATALOG_IDS.GROUP_SELECTION
     }
-  }),
-
-  [STAGE_CATALOG_IDS.SYSTEM_STARTS_CYCLE]: createStage({
-    key: STAGE_KEYS.STAGE_06,
-    status: STAGE_STATUSES.ENABLED,
-    actorIds: [],
-    completion: getManualCompletion([STAGE_COMPLETION_REQUESTED_BY.SYSTEM]),
-    actions: [getCatalogRecipe(RECIPE_KEYS.START_CYCLE)],
-    metadata: {
-      catalogId: STAGE_CATALOG_IDS.SYSTEM_STARTS_CYCLE
-    }
   })
 });
 
@@ -178,7 +165,7 @@ export function getCatalogStage(stageCatalogId, overrides = {}) {
   const baseStage = STAGE_CATALOG[stageCatalogId];
   if (!baseStage) return null;
 
-  return createStage({
+  return defineStage({
     ...cloneCatalogValue(baseStage),
     ...overrides,
     actorIds: overrides.actorIds

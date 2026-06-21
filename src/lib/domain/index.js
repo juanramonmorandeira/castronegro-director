@@ -17,13 +17,11 @@ export {
 } from './sessionModel.js';
 
 export { createPlayer } from './playerDefinition.js';
-export { createActionToken } from './actionTokenDefinition.js';
 export {
   CONFIGURABLE_STAGE_ORDER_POOLS,
-  AUTOMATIC_STAGE_KEYS,
+  POOL_LIFECYCLE_OPERATION_TYPES,
   POOL_DEFINITION_ORDER_FIELD,
   POOL_DEFINITION_ERRORS,
-  buildStagePool,
   buildPools,
   createPool,
   organizePoolStages
@@ -48,9 +46,9 @@ export {
 
 export {
   ROLE_DEFINITION_TYPES,
-  buildRolesFromSeats,
+  buildRoles,
   createRole,
-  createSessionRole
+  defineRole
 } from './roleDefinition.js';
 export {
   ROLE_CATALOG_IDS,
@@ -61,13 +59,18 @@ export {
 export {
   GROUP_TYPES,
   GROUP_MEMBERSHIP_RULE_TYPES,
-  createGroup
+  GROUP_RULE_TARGETS,
+  GROUP_RULE_TYPES,
+  createGroup,
+  defineGroupRule,
+  defineGroup
 } from './groupDefinition.js';
 export {
   addRoleToGroup,
-  buildInitialGroups,
+  buildGroups,
   findGroupsForRole,
   getGroup,
+  getGroupRuleEffects,
   getGroupMemberRoleIds,
   getGroupRoleIds,
   getGroupRoles,
@@ -82,7 +85,12 @@ export {
   getCoreGroupCatalog
 } from './groupCatalog.js';
 
-export { STAGE_SOURCE_TYPES, createStage } from './stageDefinition.js';
+export {
+  AVAILABILITY_RULE_TYPES,
+  STAGE_SOURCE_TYPES,
+  createStage,
+  defineStage
+} from './stageDefinition.js';
 export {
   STAGE_CATALOG_IDS,
   STAGE_CATALOG,
@@ -97,12 +105,25 @@ export {
   findNextRunnableIndex,
   markStageStatus,
   hydrateStagePool,
-  hydrateStagePools,
-  POOL_CURSOR_ERRORS,
-  getNextPoolKey,
-  enterNextPool,
   advanceStageCursor
 } from './poolCursorModel.js';
+export {
+  CYCLE_ERRORS,
+  createCycle,
+  enterNextPool,
+  getCurrentCycleStage,
+  getCurrentPool,
+  getNextPoolKey,
+  startCycle,
+  updateCyclePool
+} from './cycleModel.js';
+export {
+  POOL_ERRORS,
+  POOL_HISTORY_OPERATIONS,
+  createPoolHistoryEntry,
+  preparePool,
+  validatePool
+} from './poolModel.js';
 export {
   STAGE_ERRORS,
   STAGE_COMPLETION_MODES,
@@ -152,15 +173,20 @@ export {
 export {
   EFFECT_TYPES,
   getCurrentCycleId,
-  advanceSessionCycle,
-  getActionBlockKey,
-  hasActionBlock,
-  clearCycleFlags,
   applySetPropertyEffect,
   applySetGroupEffect,
-  applyStartCycle,
   applyConcludePlay
 } from './effectModel.js';
+export {
+  PROPERTY_BLOCK_BOUNDARIES,
+  PROPERTY_BLOCK_DURATION_UNITS,
+  PROPERTY_BLOCK_EXPIRATION_TYPES,
+  createBlockedPropertyChange,
+  addBlockedPropertyChange,
+  isPropertyChangeBlocked,
+  materializePropertyBlockExpiration,
+  reviewPropertyBlocks
+} from './roleModel.js';
 export {
   EVENT_TYPES,
   EVENT_TRIGGER_TARGETS,
@@ -194,7 +220,6 @@ export {
   isStagePendingForObjectiveStability,
   canStageInfluenceObjectiveOutcome,
   getPendingObjectiveInfluenceStages,
-  createOngoingObjectiveEvaluation,
   evaluateObjectiveRule,
   evaluateSessionObjectiveRules,
   checkObjectives
@@ -214,9 +239,7 @@ export {
   SELECTION_RESTRICTION_TYPES,
   CANDIDATE_RULE_TYPES,
   createSelection,
-  createAbstainResolution,
   createSelectionRules,
-  createSupportThreshold,
   getDefaultSelectionCandidateIds,
   resolveCandidateIds,
   validateSelections,

@@ -102,7 +102,12 @@ si mismo puede o debe materializar en una session.
 vinculos o colecciones temporales. No siempre necesita persistir; solo se
 materializa cuando una regla necesita una referencia estable a esa coleccion.
 
-`groupRules` = reglas asociadas a un group.
+`groupRules` = reglas declarativas asociadas a un group. El resolver no deduce
+comportamiento a partir de `group.type`; interpreta estas reglas.
+
+`propagate_property_change` = groupRule que observa un cambio `(property,
+value)` sobre un miembro y genera otro cambio sobre los miembros indicados por
+`targets`. Cada efecto derivado usa como `causedBy` el id del group.
 
 `memberRole` = rol interno provisional de un miembro dentro de un group. Solo se
 conservara si aparece un caso real de grupo direccional.
@@ -111,40 +116,62 @@ conservara si aparece un caso real de grupo direccional.
 uno o varios roles, pero no necesita distinguir conceptualmente si proceden de
 un role individual o de un group.
 
-`automaticStage` = etapa automatica del sistema. No representa actuacion de
-role/group. Ejemplos aceptados: `start_cycle`, `check_objectives`,
-`conclude_play`.
+`stageKey` = clave mecanica estable de una definicion de stage. Varias
+materializaciones pueden compartirla.
 
-`automaticStages.onEnter` = automaticStages que se ejecutan al entrar en un
-pool. Por ahora solo `poolConcealed` declara `start_cycle`.
+`stageId` = identificador unico de un stage materializado dentro de la session.
+El cursor y los historiales lo usan para distinguir stages con el mismo
+`stageKey`.
 
-`automaticStages.onExit` = automaticStages que se ejecutan al terminar un pool.
-Por ahora todos los pools declaran `check_objectives`.
+`pool.onEnter` = ciclo de entrada completo del pool. Contiene operaciones
+obligatorias y configurables que deben ejecutarse antes de sus stages.
 
-`pool` = coleccion ordenada de stages y automaticStages.
+`pool.onExit` = ciclo de salida completo del pool. Contiene operaciones
+obligatorias y configurables que deben ejecutarse tras sus stages.
+
+`pool` = coleccion ordenada de stages con ciclos de vida `onEnter` y `onExit`.
+
+`poolKey` = clave mecanica estable que identifica la posicion y finalidad de un
+pool dentro del ciclo, por ejemplo `poolConcealed` o `poolExposed`. No existe
+`poolId`: una ejecucion queda identificada por `cycleId + poolKey`.
 
 `cycle` = entidad runtime superior a los pools. Conoce el orden de los pools,
 la iteracion actual y cuando debe resolver `specialStages` antes de continuar
 con `poolConcealed` o `poolExposed`.
 
+`cycleId` = numero de la iteracion actual del ciclo. En codigo vive como
+`session.cycle.id`. El ciclo inicial previo al primer ciclo normal usa `0`.
+
+`cycleKey` = concepto no implementado. No se necesita mientras la session solo
+tenga una unica definicion de ciclo repetitivo.
+
 `specialStages` = cola FIFO runtime de stages dinamicos que se resuelven entre
 pools. No es un pool, no se prepara y cada stage se elimina al completarse.
+Cada elemento tiene `stageId`, `stageKey` y metadatos de origen. Los stages
+generados durante un pool se resuelven despues de completar ese pool y antes
+del siguiente, conservando su relacion causal con el ciclo actual.
+
+`poolSpecialStages` / `cycleSpecialStages` = contenedores no implementados. No
+se separan mientras no exista una mecanica real que necesite stages ejecutados
+entre ciclos. El unico contenedor runtime actual es `session.specialStages`.
 
 `specialStagesHistory` = historial propio de altas, inicios, cierres y fallos de
 la cola `specialStages`.
 
 `cycleModel` = modelo runtime responsable de iniciar ciclos, contar sus
-iteraciones y mover el flujo entre pools. La migracion desde `poolCursorModel`
-esta acordada pero todavia no implementada.
+iteraciones y mover el flujo entre pools.
+
+`startCycle` = operacion de `cycleModel` que incrementa `cycle.id`. No es action,
+recipe, effect ni stage, y no modifica directamente estado de roles.
 
 `preparePool` = operacion previa que prepara los stages persistentes del pool
-seleccionado.
+seleccionado evaluando sus `availabilityRules`.
 
 `validatePool` = operacion que valida un pool despues de prepararlo y antes de
 ejecutarlo.
 
-`runPool` = ejecucion completa de un pool: `automaticStages.onEnter`, stages
-normales y `automaticStages.onExit`.
+`runPool` = ejecucion incremental de `pool.onEnter`, stages y `pool.onExit`.
+Puede quedar esperando input humano durante un stage.
 
 `recipe` = receta mecanica que combina una o varias acciones con restricciones.
 
@@ -194,15 +221,40 @@ para sostener su condicion.
 `influences` = propiedades o estructuras de estado que una action, recipe o
 stage puede modificar, incluyendo operacion y valores posibles cuando aplique.
 
-`check_objectives` = automaticStage del cierre de pool que evalua objectiveRules
+`check_objectives` = operacion de `pool.onExit` que evalua objectiveRules
 de session y emite achievedObjectives o playOutcome.
 
-`conclude_play` = automaticStage que gestiona la conclusion de la parte jugable
+`conclude_play` = operacion de ciclo de vida que gestiona la conclusion jugable
 cuando existe un playOutcome concluyente y estable.
 
 `resources` = recursos mecanicos consumibles o contadores que un role materializa
 en session. Sustituye a los viejos tokens consumibles cuando no hacen falta como
 elemento visual de tablero.
+
+`blockedPropertyChanges` = bloqueos runtime almacenados en cada role. Cada
+entrada identifica `property`, `value`, los `blockedFor.actorIds` afectados y
+su `expiresAt`.
+
+`block_property_change` = action generica que añade una entrada tipada a
+`role.blockedPropertyChanges`. No bloquea una action por nombre: bloquea un
+cambio mecanico `(property, value)`.
+
+`review_property_blocks` = operacion de ciclo de vida que elimina bloqueos cuyo
+`expiresAt` coincide con la frontera actual.
+
+`duration` = coordenada temporal relativa declarada por una recipe:
+`unit: stage | pool | cycle | session`, `offset` no negativo y `boundary:
+before | after`. `before + offset 0` es invalido.
+
+`expiresAt` = coordenada runtime absoluta calculada al materializar la recipe.
+Puede señalar `stage_boundary`, `pool_boundary`, `cycle_boundary` o `session`.
+
+`causedBy` = causa mecanica inmediata de un efecto. Identifica el role o group
+cuya accion o regla genera directamente ese cambio, no el origen remoto de una
+cadena de propagaciones.
+
+`preventedPropertyChanges` = cambios de propiedad que una action intento
+producir pero fueron impedidos por `blockedPropertyChanges`.
 
 `roleChoiceSet` = concepto pendiente para roles que necesitan una lista de roles
 elegibles sobre los que asumir, copiar, intercambiar o activar comportamiento.

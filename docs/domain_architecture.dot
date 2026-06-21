@@ -41,7 +41,7 @@ digraph DomainArchitecture {
   ];
 
   session [
-    label="SESSION VIVA\n\nroles\ngroups\nstagePools\nobjectiveRules\nactionHistory\nstageHistory\nachievedObjectives\nplayOutcome",
+    label="SESSION VIVA\n\nroles\ngroups\ncycle\nobjectiveRules\nactionHistory\nstageHistory\nachievedObjectives\nplayOutcome",
     fillcolor="#dcecf5",
     penwidth=1.5
   ];

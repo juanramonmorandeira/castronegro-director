@@ -68,7 +68,7 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
 - Decidir que datos materializa:
   - roles;
   - groups;
-  - stagePools;
+  - cycle y pools;
   - settings;
   - match/seats.
 - Revisar persistencia vieja para trasladarla al modelo nuevo.
@@ -100,6 +100,25 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
 - Definir si necesitamos `errorLog` dentro de session o solo resultados de
   validacion antes de crear session.
 - Definir textos de error para UI sin contaminar el motor.
+
+## Bloqueos temporales
+
+- Mantener sin offsets negativos hasta que exista una mecanica real que los
+  justifique.
+- No aplicar duraciones de stage a `specialStages` hasta que exista un caso
+  real.
+- Anadir nuevas `groupRules` solo cuando aparezcan mecanicas reales; la primera
+  implementada es `propagate_property_change`.
+
+## Pool runtime
+
+- Definir `runPool` como coordinador incremental, porque los stages pueden
+  esperar input humano.
+- Completar `poolHistory` con `started`, `completed` y `failed` durante la
+  ejecucion incremental.
+- Aplicar pausa administrativa en session cuando un error ascienda desde pool.
+- No crear `cycleSpecialStages` hasta que exista una mecanica real ejecutada
+  entre ciclos. Mantener mientras tanto una unica cola `session.specialStages`.
 
 ## Futuro editor de catalog
 

@@ -13,8 +13,6 @@
 //   entradas.
 // -----------------------------------------------------------------------------
 
-import { getActionBlockKey } from './effectModel.js';
-
 export const HISTORY_RESULTS = Object.freeze({
   APPLIED: 'applied',
   BLOCKED: 'blocked',
@@ -32,16 +30,14 @@ export function getActionHistory(session) {
 
 // Construye una firma estable para comparar acciones en actionHistory.
 //
-// Para block_action no basta con action.id, porque puede bloquear muchas cosas
-// distintas. Por eso incluimos la blockKey de la accion bloqueada:
-//
-// block_out_of_play -> block_action|set_in_play:property:inPlay:value:false
-//
-// En una accion normal, la firma es simplemente su id.
 export function getActionHistorySignature(action = {}) {
-  const blockedAction = action?.effect?.blocks;
-  if (blockedAction?.actionId) {
-    return `${action.id ?? 'unknown'}|${getActionBlockKey(blockedAction)}`;
+  const blockedPropertyChange = action?.effect?.blockedPropertyChange;
+  if (blockedPropertyChange?.property) {
+    return [
+      action.id ?? 'unknown',
+      blockedPropertyChange.property,
+      String(blockedPropertyChange.value)
+    ].join('|');
   }
 
   return action.id ?? 'unknown';
@@ -85,6 +81,7 @@ export function appendActionHistory(session, entry = {}) {
     id: entry.id ?? null,
     cycleId: entry.cycleId ?? 0,
     poolKey: entry.poolKey ?? null,
+    stageId: entry.stageId ?? null,
     stageKey: entry.stageKey ?? null,
     actionKey: entry.actionKey ?? null,
     actionId: entry.actionId ?? null,
@@ -94,7 +91,7 @@ export function appendActionHistory(session, entry = {}) {
     targetIds: [...(entry.targetIds ?? [])],
     proposedEffects: [...(entry.proposedEffects ?? [])],
     finalEffects: [...(entry.finalEffects ?? [])],
-    blockedActions: [...(entry.blockedActions ?? [])],
+    preventedPropertyChanges: [...(entry.preventedPropertyChanges ?? [])],
     blockedEffects: [...(entry.blockedEffects ?? [])],
     result: entry.result ?? HISTORY_RESULTS.NO_EFFECT,
     metadata: { ...(entry.metadata ?? {}) }

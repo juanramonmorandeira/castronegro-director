@@ -32,9 +32,9 @@ flowchart TD
   PREPARE["preparePool"]
   VALIDATE["validatePool"]
   RUN["runPool"]
-  ENTER["automaticStages.onEnter"]
+  ENTER["pool.onEnter"]
   STAGES["stages normales"]
-  EXIT["automaticStages.onExit"]
+  EXIT["pool.onExit"]
   PIPELINE["recipe -> constraint -> action -> resolver -> effect"]
   EVENTS["eventModel"]
   OBJECTIVES["objectiveModel"]
@@ -71,25 +71,19 @@ session
     ├── coordina specialStages entre pools
     ├── poolConcealed
     └── poolExposed
-        ├── automaticStages.onEnter
+        ├── pool.onEnter
         ├── stages
-        └── automaticStages.onExit
+        └── pool.onExit
 ```
 
 `cycle` entiende la relacion entre pools y sus iteraciones. Un pool entiende
 solo de sus propios stages. Un stage coordina selection y recipes, pero no mueve
 otros pools.
 
-## Migracion pendiente
+## Estado materializado
 
-Los siguientes acuerdos todavia no estan materializados completamente:
-
-1. Crear `session.cycle`.
-2. Mover `poolCurrent`, `poolPrevious`, `poolNext` y `poolOrder` desde
-   `stagePools` hacia `session.cycle`.
-3. Mover la navegacion entre pools desde `poolCursorModel` hacia `cycleModel`.
-4. Mantener `session.specialStages` como cola FIFO independiente que elimina
-   cada stage completado.
-5. Crear `preparePool`, `validatePool` y `runPool`.
-6. Mover `start_cycle` desde action/recipe/effect hacia `cycleModel`.
-7. Sustituir `blockedActions` por `blockedPropertyChanges`.
+- `session.cycle` administra la navegacion entre pools.
+- `session.specialStages` es una cola FIFO independiente.
+- `preparePool` y `validatePool` preparan cada entrada.
+- `startCycle` pertenece a `cycleModel`.
+- `role.blockedPropertyChanges` sustituye los bloqueos booleanos antiguos.

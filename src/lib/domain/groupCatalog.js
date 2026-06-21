@@ -2,20 +2,19 @@
 // -----------------------------------------------------------------------------
 // Catalogo de grupos mecanicos predefinidos.
 //
-// El constructor unico de grupo es createGroup. El catalogo guarda grupos ya
-// definidos para reutilizarlos al construir sesiones.
+// El catalogo usa defineGroup porque guarda definiciones previas a session.
 // -----------------------------------------------------------------------------
 
 import { POOL_KEYS } from './sessionModel.js';
 import { getCatalogStage, STAGE_CATALOG_IDS } from './stageCatalog.js';
-import { createGroup, GROUP_MEMBERSHIP_RULE_TYPES } from './groupDefinition.js';
+import { defineGroup, GROUP_MEMBERSHIP_RULE_TYPES } from './groupDefinition.js';
 
 export const GROUP_CATALOG_IDS = Object.freeze({
   ALIGNMENT_SET_OUT_OF_PLAY: 'alignment_set_out_of_play'
 });
 
 export const GROUP_CATALOG = Object.freeze({
-  [GROUP_CATALOG_IDS.ALIGNMENT_SET_OUT_OF_PLAY]: createGroup({
+  [GROUP_CATALOG_IDS.ALIGNMENT_SET_OUT_OF_PLAY]: defineGroup({
     key: GROUP_CATALOG_IDS.ALIGNMENT_SET_OUT_OF_PLAY,
     membershipRule: {
       type: GROUP_MEMBERSHIP_RULE_TYPES.ALIGNMENT,
@@ -48,7 +47,7 @@ export function getCatalogGroup(groupCatalogId, overrides = {}) {
   const baseGroup = GROUP_CATALOG[groupCatalogId];
   if (!baseGroup) return null;
 
-  return createGroup({
+  return defineGroup({
     ...cloneCatalogValue(baseGroup),
     ...overrides,
     membershipRule: overrides.membershipRule

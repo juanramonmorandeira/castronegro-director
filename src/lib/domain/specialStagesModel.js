@@ -5,11 +5,12 @@
 // No es un pool:
 // - no se prepara;
 // - no se ordena;
-// - no tiene automaticStages;
+// - no tiene onEnter/onExit de pool;
 // - el stage completado se elimina de la cola.
 // -----------------------------------------------------------------------------
 
 import { appendEntry } from './historyModel.js';
+import { assignUniqueStageIds, createStage } from './stageDefinition.js';
 
 export const SPECIAL_STAGE_HISTORY_OPERATIONS = Object.freeze({
   QUEUED: 'queued',
@@ -32,7 +33,8 @@ export function getCurrentSpecialStage(session = {}) {
 
 export function appendSpecialStagesHistory(session, entry = {}) {
   const normalizedEntry = {
-    cycleId: entry.cycleId ?? session?.cycle?.id ?? session?.metadata?.currentCycleId ?? 0,
+    cycleId: entry.cycleId ?? session?.cycle?.id ?? 0,
+    stageId: entry.stageId ?? null,
     stageKey: entry.stageKey ?? null,
     operation: entry.operation ?? null,
     metadata: { ...(entry.metadata ?? {}) }
@@ -45,13 +47,23 @@ export function appendSpecialStagesHistory(session, entry = {}) {
 }
 
 export function appendSpecialStage(session, stage, metadata = {}) {
+  const historicalStageIds = (session?.specialStagesHistory ?? [])
+    .map((entry) => entry.stageId)
+    .filter(Boolean)
+    .map((id) => ({ id }));
+  const normalizedStage = assignUniqueStageIds([
+    ...historicalStageIds,
+    ...getSpecialStages(session),
+    createStage(stage)
+  ]).at(-1);
   const nextSession = {
     ...session,
-    specialStages: [...getSpecialStages(session), stage]
+    specialStages: [...getSpecialStages(session), normalizedStage]
   };
 
   return appendSpecialStagesHistory(nextSession, {
-    stageKey: stage?.key ?? null,
+    stageId: normalizedStage?.id ?? null,
+    stageKey: normalizedStage?.key ?? null,
     operation: SPECIAL_STAGE_HISTORY_OPERATIONS.QUEUED,
     metadata
   });
@@ -66,6 +78,7 @@ export function activateSpecialStages(session) {
   };
   const stage = getCurrentSpecialStage(nextSession);
   return appendSpecialStagesHistory(nextSession, {
+    stageId: stage?.id ?? null,
     stageKey: stage?.key ?? null,
     operation: SPECIAL_STAGE_HISTORY_OPERATIONS.STARTED
   });
@@ -82,6 +95,7 @@ export function completeSpecialStage(session, metadata = {}) {
   };
 
   const completedSession = appendSpecialStagesHistory(nextSession, {
+    stageId: currentStage.id,
     stageKey: currentStage.key,
     operation: SPECIAL_STAGE_HISTORY_OPERATIONS.COMPLETED,
     metadata
@@ -90,6 +104,7 @@ export function completeSpecialStage(session, metadata = {}) {
 
   return nextStage
     ? appendSpecialStagesHistory(completedSession, {
+        stageId: nextStage.id,
         stageKey: nextStage.key,
         operation: SPECIAL_STAGE_HISTORY_OPERATIONS.STARTED
       })

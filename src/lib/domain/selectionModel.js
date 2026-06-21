@@ -111,15 +111,15 @@ export function createSelectionRules({
     runoff,
     nullResult,
     repeatLimit: Number.isInteger(repeatLimit) && repeatLimit >= 0 ? repeatLimit : 1,
-    supportThreshold: createSupportThreshold(supportThreshold),
-    abstainResolution: createAbstainResolution(abstainResolution),
+    supportThreshold: normalizeSupportThreshold(supportThreshold),
+    abstainResolution: normalizeAbstainResolution(abstainResolution),
     groupRestrictions: (groupRestrictions ?? []).map((restriction) => ({ ...restriction })),
     candidateIds: Array.isArray(candidateIds) ? [...candidateIds] : null,
     candidateRules: (candidateRules ?? []).map((rule) => ({ ...rule }))
   };
 }
 
-export function createSupportThreshold({
+function normalizeSupportThreshold({
   type = SELECTION_SUPPORT_THRESHOLD_TYPES.NONE,
   base = SELECTION_SUPPORT_BASES.CAST_SELECTIONS,
   numerator = 1,
@@ -140,7 +140,7 @@ export function createSupportThreshold({
   };
 }
 
-export function createAbstainResolution({
+function normalizeAbstainResolution({
   type = SELECTION_ABSTAIN_RESOLUTION_TYPES.IGNORE
 } = {}) {
   return {

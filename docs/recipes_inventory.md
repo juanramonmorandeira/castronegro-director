@@ -187,13 +187,15 @@ ninguna
 Accion pura:
 
 ```text
-block_action
+block_property_change
 ```
 
 Configuracion principal:
 
 ```text
-blocks: set_in_play(property=inPlay, value=false)
+blockedPropertyChange: property=inPlay, value=false
+blockedFor: group alignment_set_out_of_play y roles con alignment_b materializados
+duration: pool actual, boundary after
 target: 1 role
 filters: in_play, not_self
 ```

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import {
   ACTION_IDS,
+  AVAILABILITY_RULE_TYPES,
   EFFECT_TYPES,
   HISTORY_RESULTS,
   CONSTRAINT_TYPES,
@@ -25,17 +26,23 @@ import {
   SELECTION_SUPPORT_THRESHOLD_TYPES,
   SELECTION_TIE_RULES,
   buildPools,
-  buildInitialGroups,
-  buildRolesFromSeats,
+  buildGroups,
+  buildRoles,
   buildSession,
-  buildStagePool,
+  advanceStageCursor,
   completeCurrentStage,
+  createCycle,
   createPool,
+  preparePool,
+  startCycle,
+  validatePool,
   organizePoolStages,
   createSelectionRules,
   createSession,
   createGroup,
+  defineGroup,
   addRoleToGroup,
+  addBlockedPropertyChange,
   getCoreGroupCatalog,
   getCurrentStage,
   getCurrentStageCursor,
@@ -46,7 +53,6 @@ import {
   canStageInfluenceObjectiveOutcome,
   checkObjectives,
   findAppliedSetPropertyHistory,
-  getActionBlockKey,
   STAGE_STATUSES,
   POOL_DEFINITION_ERRORS,
   POOL_KEYS,
@@ -63,8 +69,12 @@ import {
   STAGE_COMPLETION_MODES,
   STAGE_COMPLETION_REQUESTED_BY,
   STAGE_KEYS,
-  AUTOMATIC_STAGE_KEYS,
+  POOL_LIFECYCLE_OPERATION_TYPES,
+  PROPERTY_BLOCK_BOUNDARIES,
+  PROPERTY_BLOCK_DURATION_UNITS,
+  PROPERTY_BLOCK_EXPIRATION_TYPES,
   SESSION_STATUSES,
+  materializePropertyBlockExpiration,
   getCatalogRecipe,
   getCatalogStage,
   validateSession
@@ -112,8 +122,6 @@ const setOutOfPlayAfterSelectionRecipe = getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF
   },
   visibility: VISIBILITY.ALL
 });
-const startCycleAction = getCatalogRecipe(RECIPE_KEYS.START_CYCLE);
-
 const selectionOutOfPlayRules = createSelectionRules({
   required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
   abstain: SELECTION_ABSTAIN_RULES.NOT_ALLOWED,
@@ -155,7 +163,7 @@ function createBaseSession({
       alignmentId: 'alignment_b'
     }
   };
-  const roles = buildRolesFromSeats(
+  const roles = buildRoles(
     [
       { seat: 0, playerId: 'player-1', role: 'alignment_b_attacker' },
       { seat: 1, playerId: 'player-2', role: 'alignment_a_blocker' },
@@ -198,7 +206,15 @@ function createLinkedGroup({
   id = 'linked-test-group',
   roleIds = ['alignment_a_target-0', 'alignment_a_plain-0'],
   active = true,
-  sourceActionId = ACTION_IDS.LINK_TARGETS
+  sourceActionId = ACTION_IDS.LINK_TARGETS,
+  groupRules = [
+    {
+      type: 'propagate_property_change',
+      when: { property: 'inPlay', value: false },
+      apply: { property: 'inPlay', value: false },
+      targets: 'other_members'
+    }
+  ]
 } = {}) {
   return createGroup({
     id,
@@ -206,7 +222,8 @@ function createLinkedGroup({
     type: GROUP_TYPES.LINKED,
     roleIds,
     active,
-    sourceActionId
+    sourceActionId,
+    groupRules
   });
 }
 
@@ -231,10 +248,19 @@ function roleById(session, roleKey) {
   return session.roles.find((role) => role.id === roleKey);
 }
 
-function withStagePools(session, stagePools) {
+function withCycle(session, cycle) {
   return {
     ...session,
-    stagePools
+    cycle
+  };
+}
+
+function advanceTestCycle(session) {
+  return {
+    session: {
+      ...session,
+      cycle: startCycle(session.cycle).cycle
+    }
   };
 }
 
@@ -250,9 +276,9 @@ function createSelectionOutOfPlayStage(overrides = {}) {
 }
 
 function resolveSelectionOutOfPlayStage(session, input = {}, stageOverrides = {}) {
-  const sessionWithSelectionStage = withStagePools(
+  const sessionWithSelectionStage = withCycle(
     session,
-    createPool({
+    createCycle({
       poolOrder: ['poolExposed'],
       poolCurrent: 'poolExposed',
       poolNext: 'poolExposed',
@@ -368,7 +394,7 @@ test('resolveCurrentStage ejecuta receta y completeCurrentStage avanza el cursor
   assert.equal(linkedAction.stageAdvance, null);
   assert.equal(linked.ok, false);
   assert.equal(linked.stageAdvance.reason, 'next-pool-not-runnable');
-  assert.equal(linked.errors[0].code, 'pool/no-runnable-stages');
+  assert.equal(linked.errors[0].code, 'cycle/no-runnable-stages');
   assert.equal(linked.session.specialStages.length, 0);
   assert.deepEqual(
     linked.session.specialStagesHistory.map((entry) => entry.operation),
@@ -434,31 +460,268 @@ test('poolDefinition organiza stages construidos por stageDefinition', () => {
   });
 
   assert.equal(created.ok, true);
-  assert.equal(created.stagePools.pools.poolExposed[0].key, STAGE_KEYS.STAGE_01);
-  assert.deepEqual(created.stagePools.pools.poolExposed[0].actorIds, [
+  assert.equal(created.pools.poolExposed.stages[0].key, STAGE_KEYS.STAGE_01);
+  assert.deepEqual(created.pools.poolExposed.stages[0].actorIds, [
     'alignment_a_target-0',
     'alignment_a_plain-0'
   ]);
-  assert.equal(created.stagePools.pools.poolExposed[1].key, STAGE_KEYS.STAGE_02);
+  assert.equal(created.pools.poolExposed.stages[1].key, STAGE_KEYS.STAGE_02);
   assert.equal(duplicated.ok, false);
   assert.equal(duplicated.errors[0].code, POOL_DEFINITION_ERRORS.DUPLICATE_ORDER);
 });
 
-test('poolDefinition declara automaticStages de ciclo y objetivos por pool', () => {
-  const stagePools = createPool();
+test('poolDefinition declara onEnter y onExit del pool', () => {
+  const cycle = createCycle();
 
   assert.deepEqual(
-    stagePools.automaticStages.poolConcealed.onEnter.map((stage) => stage.key),
-    [AUTOMATIC_STAGE_KEYS.START_CYCLE]
+    cycle.pools.poolConcealed.onEnter.map((operation) => operation.type),
+    []
   );
   assert.deepEqual(
-    stagePools.automaticStages.poolConcealed.onExit.map((stage) => stage.key),
-    [AUTOMATIC_STAGE_KEYS.CHECK_OBJECTIVES]
+    cycle.pools.poolConcealed.onExit.map((operation) => operation.type),
+    [
+      POOL_LIFECYCLE_OPERATION_TYPES.REVIEW_PROPERTY_BLOCKS,
+      POOL_LIFECYCLE_OPERATION_TYPES.CHECK_OBJECTIVES
+    ]
   );
   assert.deepEqual(
-    stagePools.automaticStages.poolExposed.onExit.map((stage) => stage.key),
-    [AUTOMATIC_STAGE_KEYS.CHECK_OBJECTIVES]
+    cycle.pools.poolExposed.onExit.map((operation) => operation.type),
+    [
+      POOL_LIFECYCLE_OPERATION_TYPES.REVIEW_PROPERTY_BLOCKS,
+      POOL_LIFECYCLE_OPERATION_TYPES.CHECK_OBJECTIVES
+    ]
   );
+});
+
+test('stageId distingue materializaciones que comparten stageKey', () => {
+  const pool = createPool({
+    key: POOL_KEYS.POOL_CONCEALED,
+    stages: [
+      createStage({
+        key: STAGE_KEYS.STAGE_01,
+        status: STAGE_STATUSES.ENABLED,
+        actorIds: ['role-1'],
+        actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+      }),
+      createStage({
+        key: STAGE_KEYS.STAGE_01,
+        status: STAGE_STATUSES.ENABLED,
+        actorIds: ['role-1'],
+        actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+      })
+    ]
+  });
+
+  assert.equal(pool.stages[0].key, pool.stages[1].key);
+  assert.notEqual(pool.stages[0].id, pool.stages[1].id);
+
+  const advanced = advanceStageCursor(pool);
+  assert.equal(advanced.pool.stages[0].status, STAGE_STATUSES.DONE);
+  assert.equal(advanced.pool.stages[1].status, STAGE_STATUSES.ENABLED);
+});
+
+test('materializePropertyBlockExpiration resuelve offsets de stage, pool, cycle y session', () => {
+  const cycle = createCycle({
+    id: 2,
+    poolOrder: [POOL_KEYS.POOL_CONCEALED, POOL_KEYS.POOL_EXPOSED],
+    poolCurrent: POOL_KEYS.POOL_CONCEALED,
+    pools: {
+      [POOL_KEYS.POOL_CONCEALED]: [
+        createStage({
+          id: 'stage-current',
+          key: STAGE_KEYS.STAGE_01,
+          status: STAGE_STATUSES.ENABLED,
+          actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+        }),
+        createStage({
+          id: 'stage-disabled',
+          key: STAGE_KEYS.STAGE_02,
+          status: STAGE_STATUSES.DISABLED,
+          actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+        }),
+        createStage({
+          id: 'stage-next',
+          key: STAGE_KEYS.STAGE_03,
+          status: STAGE_STATUSES.ENABLED,
+          actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+        })
+      ],
+      [POOL_KEYS.POOL_EXPOSED]: [
+        createStage({
+          key: STAGE_KEYS.STAGE_04,
+          status: STAGE_STATUSES.ENABLED,
+          actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+        })
+      ]
+    }
+  });
+  const session = createSession({ ...createBaseSession(), cycle });
+  const context = {
+    poolKey: POOL_KEYS.POOL_CONCEALED,
+    stageId: 'stage-current'
+  };
+
+  assert.deepEqual(
+    materializePropertyBlockExpiration(
+      session,
+      {
+        unit: PROPERTY_BLOCK_DURATION_UNITS.STAGE,
+        offset: 1,
+        boundary: PROPERTY_BLOCK_BOUNDARIES.BEFORE
+      },
+      context
+    ).expiresAt,
+    {
+      type: PROPERTY_BLOCK_EXPIRATION_TYPES.STAGE_BOUNDARY,
+      cycleId: 2,
+      poolKey: POOL_KEYS.POOL_CONCEALED,
+      stageId: 'stage-next',
+      boundary: PROPERTY_BLOCK_BOUNDARIES.BEFORE
+    }
+  );
+  assert.deepEqual(
+    materializePropertyBlockExpiration(
+      session,
+      {
+        unit: PROPERTY_BLOCK_DURATION_UNITS.STAGE,
+        offset: 2,
+        boundary: PROPERTY_BLOCK_BOUNDARIES.AFTER
+      },
+      context
+    ).expiresAt,
+    {
+      type: PROPERTY_BLOCK_EXPIRATION_TYPES.POOL_BOUNDARY,
+      cycleId: 2,
+      poolKey: POOL_KEYS.POOL_CONCEALED,
+      stageId: null,
+      boundary: PROPERTY_BLOCK_BOUNDARIES.AFTER
+    }
+  );
+  assert.deepEqual(
+    materializePropertyBlockExpiration(
+      session,
+      {
+        unit: PROPERTY_BLOCK_DURATION_UNITS.POOL,
+        offset: 1,
+        boundary: PROPERTY_BLOCK_BOUNDARIES.BEFORE
+      },
+      context
+    ).expiresAt,
+    {
+      type: PROPERTY_BLOCK_EXPIRATION_TYPES.POOL_BOUNDARY,
+      cycleId: 2,
+      poolKey: POOL_KEYS.POOL_EXPOSED,
+      stageId: null,
+      boundary: PROPERTY_BLOCK_BOUNDARIES.BEFORE
+    }
+  );
+  assert.deepEqual(
+    materializePropertyBlockExpiration(
+      session,
+      {
+        unit: PROPERTY_BLOCK_DURATION_UNITS.POOL,
+        offset: 2,
+        boundary: PROPERTY_BLOCK_BOUNDARIES.AFTER
+      },
+      context
+    ).expiresAt,
+    {
+      type: PROPERTY_BLOCK_EXPIRATION_TYPES.POOL_BOUNDARY,
+      cycleId: 3,
+      poolKey: POOL_KEYS.POOL_CONCEALED,
+      stageId: null,
+      boundary: PROPERTY_BLOCK_BOUNDARIES.AFTER
+    }
+  );
+  assert.deepEqual(
+    materializePropertyBlockExpiration(session, {
+      unit: PROPERTY_BLOCK_DURATION_UNITS.CYCLE,
+      offset: 1,
+      boundary: PROPERTY_BLOCK_BOUNDARIES.BEFORE
+    }).expiresAt,
+    {
+      type: PROPERTY_BLOCK_EXPIRATION_TYPES.CYCLE_BOUNDARY,
+      cycleId: 3,
+      poolKey: null,
+      stageId: null,
+      boundary: PROPERTY_BLOCK_BOUNDARIES.BEFORE
+    }
+  );
+  assert.deepEqual(
+    materializePropertyBlockExpiration(session, {
+      unit: PROPERTY_BLOCK_DURATION_UNITS.SESSION
+    }).expiresAt,
+    {
+      type: PROPERTY_BLOCK_EXPIRATION_TYPES.SESSION,
+      cycleId: null,
+      poolKey: null,
+      stageId: null,
+      boundary: null
+    }
+  );
+  assert.equal(
+    materializePropertyBlockExpiration(session, {
+      unit: PROPERTY_BLOCK_DURATION_UNITS.POOL,
+      offset: 0,
+      boundary: PROPERTY_BLOCK_BOUNDARIES.BEFORE
+    }).errors[0].code,
+    'property-block/invalid-before-current-boundary'
+  );
+});
+
+test('preparePool evalua availabilityRules all/any y conserva finished', () => {
+  const pool = createPool({
+    key: POOL_KEYS.POOL_CONCEALED,
+    stages: [
+      createStage({
+        key: 'available_stage',
+        status: STAGE_STATUSES.DONE,
+        actorIds: ['role-1'],
+        availabilityRules: {
+          all: [
+            { type: AVAILABILITY_RULE_TYPES.ACTOR_IN_PLAY },
+            { type: AVAILABILITY_RULE_TYPES.HAS_EXECUTABLE_ACTION }
+          ],
+          any: [
+            { type: AVAILABILITY_RULE_TYPES.WITHIN_EXECUTION_WINDOW, firstCycle: 2 },
+            { type: AVAILABILITY_RULE_TYPES.ALWAYS_AVAILABLE }
+          ]
+        },
+        actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+      }),
+      createStage({
+        key: 'finished_stage',
+        status: STAGE_STATUSES.FINISHED,
+        actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+      })
+    ]
+  });
+  const prepared = preparePool(pool, {
+    cycleId: 1,
+    poolKey: POOL_KEYS.POOL_CONCEALED,
+    roleStates: [{ id: 'role-1', inPlay: true }]
+  });
+
+  assert.equal(prepared.ok, true);
+  assert.equal(prepared.pool.stages[0].status, STAGE_STATUSES.ENABLED);
+  assert.equal(prepared.pool.stages[1].status, STAGE_STATUSES.FINISHED);
+});
+
+test('validatePool rechaza pools sin stages ejecutables', () => {
+  const pool = createPool({
+    key: POOL_KEYS.POOL_EXPOSED,
+    stages: [
+      createStage({
+        key: 'disabled_stage',
+        status: STAGE_STATUSES.DISABLED,
+        actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+      })
+    ]
+  });
+  const validation = validatePool(pool, Object.values(POOL_LIFECYCLE_OPERATION_TYPES));
+
+  assert.equal(validation.ok, false);
+  assert.equal(validation.errors[0].code, 'pool/no-runnable-stages');
 });
 
 test('specialStages tiene prioridad inicial sin formar parte de pools', () => {
@@ -471,7 +734,7 @@ test('specialStages tiene prioridad inicial sin formar parte de pools', () => {
         actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
       })
     ],
-    stagePools: createPool({
+    cycle: createCycle({
       pools: {
         [POOL_KEYS.POOL_CONCEALED]: [
           createStage({
@@ -484,7 +747,7 @@ test('specialStages tiene prioridad inicial sin formar parte de pools', () => {
     })
   });
 
-  assert.deepEqual(session.stagePools.poolOrder, [
+  assert.deepEqual(session.cycle.poolOrder, [
     POOL_KEYS.POOL_CONCEALED,
     POOL_KEYS.POOL_EXPOSED
   ]);
@@ -525,9 +788,11 @@ test('stageDefinition define completion y recetas opcionales', () => {
   assert.equal(stage.actions[1].optional, true);
 });
 
-test('stageCatalog crea un stage reutilizable de control inPlay', () => {
-  const stage = getCatalogStage(STAGE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL, {
-    key: STAGE_KEYS.STAGE_03,
+test('stageCatalog define y createStage materializa un stage de control inPlay', () => {
+  const stage = createStage({
+    ...getCatalogStage(STAGE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL, {
+      key: STAGE_KEYS.STAGE_03
+    }),
     actorIds: ['alignment_a_blocker-0']
   });
 
@@ -555,8 +820,7 @@ test('stageCatalog expone los stages mecanicos ya definidos', () => {
     getCatalogStage(STAGE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL, { key: STAGE_KEYS.STAGE_03 }),
     getCatalogStage(STAGE_CATALOG_IDS.ROLE_REACTIVE_RESPONSE, { key: STAGE_KEYS.STAGE_07 }),
     getCatalogStage(STAGE_CATALOG_IDS.GROUP_SET_OUT_OF_PLAY, { key: STAGE_KEYS.STAGE_04 }),
-    getCatalogStage(STAGE_CATALOG_IDS.GROUP_SELECTION, { key: STAGE_KEYS.STAGE_05 }),
-    getCatalogStage(STAGE_CATALOG_IDS.SYSTEM_STARTS_CYCLE, { key: STAGE_KEYS.STAGE_06 })
+    getCatalogStage(STAGE_CATALOG_IDS.GROUP_SELECTION, { key: STAGE_KEYS.STAGE_05 })
   ];
 
   assert.deepEqual(
@@ -568,12 +832,10 @@ test('stageCatalog expone los stages mecanicos ya definidos', () => {
       [STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY, STAGE_ACTION_KEYS.ONE_SHOT_SET_OUT_OF_PLAY],
       [STAGE_ACTION_KEYS.SET_OUT_OF_PLAY],
       [STAGE_ACTION_KEYS.SET_OUT_OF_PLAY],
-      [STAGE_ACTION_KEYS.SET_OUT_OF_PLAY],
-      [STAGE_ACTION_KEYS.START_CYCLE]
+      [STAGE_ACTION_KEYS.SET_OUT_OF_PLAY]
     ]
   );
-  assert.deepEqual(stages.map((stage) => stage.actorIds), [[], [], [], [], [], [], [], []]);
-  assert.deepEqual(stages[7].completion.allowedRequesters, [STAGE_COMPLETION_REQUESTED_BY.SYSTEM]);
+  assert.equal(stages.every((stage) => stage.actorIds === undefined), true);
 });
 
 test('roleCatalog declara roles mecanicos y razones de orden', () => {
@@ -629,9 +891,9 @@ test('groupCatalog declara grupos mecanicos y razones de orden', () => {
   assert.equal(stageDefinition.metadata.orderReason.includes('after blockers'), true);
 });
 
-test('buildStagePool construye stages asociados a un pool concreto', () => {
-  const stages = buildStagePool({
-    poolKey: POOL_KEYS.POOL_CONCEALED,
+test('createPool materializa los stages de un pool concreto', () => {
+  const pool = createPool({
+    key: POOL_KEYS.POOL_CONCEALED,
     stages: [
       getCatalogStage(STAGE_CATALOG_IDS.ROLE_INSPECTS, {
         order: 10
@@ -639,10 +901,10 @@ test('buildStagePool construye stages asociados a un pool concreto', () => {
     ]
   });
 
-  assert.equal(stages.length, 1);
-  assert.equal(stages[0].poolKey, POOL_KEYS.POOL_CONCEALED);
-  assert.equal(stages[0].order, 10);
-  assert.equal(stages[0].actions[0].key, STAGE_ACTION_KEYS.INSPECT_ROLE);
+  assert.equal(pool.stages.length, 1);
+  assert.equal(pool.stages[0].poolKey, POOL_KEYS.POOL_CONCEALED);
+  assert.equal(pool.stages[0].order, 10);
+  assert.equal(pool.stages[0].actions[0].key, STAGE_ACTION_KEYS.INSPECT_ROLE);
 });
 
 test('buildPools ensambla stages desde roles y grupos', () => {
@@ -652,7 +914,7 @@ test('buildPools ensambla stages desde roles y grupos', () => {
   const groupDefinitions = getCoreGroupCatalog();
   const roleDefinitionMap = Object.fromEntries(roleDefinitions.map((role) => [role.key, role]));
   const session = createSession({
-    roles: buildRolesFromSeats(
+    roles: buildRoles(
       [
         { seat: 0, role: ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS, alignmentId: 'alignment_a' },
         { seat: 1, role: ROLE_CATALOG_IDS.ROLE_INSPECTS, alignmentId: 'alignment_a' },
@@ -664,7 +926,7 @@ test('buildPools ensambla stages desde roles y grupos', () => {
   });
   const sessionWithGroups = {
     ...session,
-    groups: buildInitialGroups(session, groupDefinitions)
+    groups: buildGroups(session, groupDefinitions)
   };
   const built = buildPools({
     session: sessionWithGroups,
@@ -674,15 +936,15 @@ test('buildPools ensambla stages desde roles y grupos', () => {
 
   assert.equal(built.ok, true);
   assert.equal(built.specialStages.length, 1);
-  assert.equal(built.stagePools.pools.poolConcealed.length, 4);
+  assert.equal(built.pools.poolConcealed.stages.length, 4);
   assert.deepEqual(built.specialStages[0].actorIds, [
     `${ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS}-0`
   ]);
   assert.deepEqual(
-    built.stagePools.pools.poolConcealed.map((stage) => stage.order),
+    built.pools.poolConcealed.stages.map((stage) => stage.order),
     [10, 20, 30, 40]
   );
-  assert.deepEqual(built.stagePools.pools.poolConcealed[2].actorIds, [
+  assert.deepEqual(built.pools.poolConcealed.stages[2].actorIds, [
     `${ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL}-0`
   ]);
 });
@@ -690,7 +952,7 @@ test('buildPools ensambla stages desde roles y grupos', () => {
 test('role reactive crea un stage especial al recibir inPlay=false final', () => {
   const roleDefinitions = getCoreRoleCatalog();
   const roleDefinitionMap = Object.fromEntries(roleDefinitions.map((role) => [role.key, role]));
-  const session = withStagePools(
+  const session = withCycle(
     createSession({
       id: 'reactive-test-session',
       players: [
@@ -698,7 +960,7 @@ test('role reactive crea un stage especial al recibir inPlay=false final', () =>
         { id: 'player-2', displayName: 'Player 2' },
         { id: 'player-3', displayName: 'Player 3' }
       ],
-      roles: buildRolesFromSeats(
+      roles: buildRoles(
         [
           { seat: 0, playerId: 'player-1', role: ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL, alignmentId: 'alignment_b' },
           { seat: 1, playerId: 'player-2', role: ROLE_CATALOG_IDS.ROLE_REACTIVE, alignmentId: 'alignment_a' },
@@ -707,7 +969,7 @@ test('role reactive crea un stage especial al recibir inPlay=false final', () =>
         roleDefinitionMap
       )
     }),
-    createPool({
+    createCycle({
       poolCurrent: POOL_KEYS.POOL_CONCEALED,
       poolNext: POOL_KEYS.POOL_EXPOSED,
       pools: {
@@ -750,14 +1012,14 @@ test('role reactive crea un stage especial al recibir inPlay=false final', () =>
 test('specialStages resuelve stages pendientes antes de conclude_play si pueden alterar outcome', () => {
   const roleDefinitions = getCoreRoleCatalog();
   const roleDefinitionMap = Object.fromEntries(roleDefinitions.map((role) => [role.key, role]));
-  const session = withStagePools(
+  const session = withCycle(
     createSession({
       id: 'reactive-finished-test-session',
       players: [
         { id: 'player-1', displayName: 'Player 1' },
         { id: 'player-2', displayName: 'Player 2' }
       ],
-      roles: buildRolesFromSeats(
+      roles: buildRoles(
         [
           { seat: 0, playerId: 'player-1', role: ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL, alignmentId: 'alignment_b' },
           { seat: 1, playerId: 'player-2', role: ROLE_CATALOG_IDS.ROLE_REACTIVE, alignmentId: 'alignment_a' }
@@ -780,7 +1042,7 @@ test('specialStages resuelve stages pendientes antes de conclude_play si pueden 
         })
       ]
     }),
-    createPool({
+    createCycle({
       poolCurrent: POOL_KEYS.POOL_CONCEALED,
       poolNext: POOL_KEYS.POOL_EXPOSED,
       pools: {
@@ -825,17 +1087,17 @@ test('specialStages resuelve stages pendientes antes de conclude_play si pueden 
   );
 });
 
-test('conclude_play se aplica como automaticStage cuando el outcome es estable', () => {
+test('conclude_play se aplica como lifecycleOperation cuando el outcome es estable', () => {
   const roleDefinitions = getCoreRoleCatalog();
   const roleDefinitionMap = Object.fromEntries(roleDefinitions.map((role) => [role.key, role]));
-  const session = withStagePools(
+  const session = withCycle(
     createSession({
       id: 'stable-finished-test-session',
       players: [
         { id: 'player-1', displayName: 'Player 1' },
         { id: 'player-2', displayName: 'Player 2' }
       ],
-      roles: buildRolesFromSeats(
+      roles: buildRoles(
         [
           { seat: 0, playerId: 'player-1', role: ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL, alignmentId: 'alignment_b' },
           { seat: 1, playerId: 'player-2', role: ROLE_CATALOG_IDS.ROLE_INSPECTS, alignmentId: 'alignment_a' }
@@ -858,7 +1120,7 @@ test('conclude_play se aplica como automaticStage cuando el outcome es estable',
         })
       ]
     }),
-    createPool({
+    createCycle({
       poolCurrent: POOL_KEYS.POOL_CONCEALED,
       poolNext: POOL_KEYS.POOL_EXPOSED,
       pools: {
@@ -887,13 +1149,17 @@ test('conclude_play se aplica como automaticStage cuando el outcome es estable',
   assert.equal(completed.stageAdvance.next, null);
   assert.equal(completed.session.specialStages.length, 0);
   assert.deepEqual(
-    completed.automaticStageResults.map((entry) => entry.key),
-    [STAGE_ACTION_KEYS.CHECK_OBJECTIVES, STAGE_ACTION_KEYS.CONCLUDE_PLAY]
+    completed.lifecycleResults.map((entry) => entry.key),
+    [
+      POOL_LIFECYCLE_OPERATION_TYPES.REVIEW_PROPERTY_BLOCKS,
+      STAGE_ACTION_KEYS.CHECK_OBJECTIVES,
+      STAGE_ACTION_KEYS.CONCLUDE_PLAY
+    ]
   );
-  assert.equal(completed.automaticStageResults[1].result.type, EFFECT_TYPES.CONCLUDE_PLAY);
+  assert.equal(completed.lifecycleResults[2].result.type, EFFECT_TYPES.CONCLUDE_PLAY);
 });
 
-test('automaticStages ejecuta check_objectives al salir y start_cycle al entrar en poolConcealed', () => {
+test('cycle inicia un nuevo ciclo antes de entrar en poolConcealed', () => {
   const session = createSession({
     ...createBaseSession(),
     specialStagesActive: true,
@@ -905,7 +1171,7 @@ test('automaticStages ejecuta check_objectives al salir y start_cycle al entrar 
         actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
       })
     ],
-    stagePools: createPool({
+    cycle: createCycle({
       poolCurrent: POOL_KEYS.POOL_EXPOSED,
       poolNext: POOL_KEYS.POOL_CONCEALED,
       pools: {
@@ -937,15 +1203,15 @@ test('automaticStages ejecuta check_objectives al salir y start_cycle al entrar 
   assert.equal(completed.stageAdvance.reason, 'next-pool');
   assert.equal(completed.stageAdvance.next.poolKey, POOL_KEYS.POOL_CONCEALED);
   assert.deepEqual(
-    completed.automaticStageResults.map((entry) => entry.key),
-    [STAGE_ACTION_KEYS.CHECK_OBJECTIVES, STAGE_ACTION_KEYS.START_CYCLE]
+    completed.lifecycleResults.map((entry) => entry.key),
+    [STAGE_ACTION_KEYS.CHECK_OBJECTIVES]
   );
-  assert.equal(completed.automaticStageResults[0].result.status, OBJECTIVE_EVALUATION_STATUSES.ONGOING);
-  assert.equal(completed.automaticStageResults[1].result.type, EFFECT_TYPES.START_CYCLE);
-  assert.equal(completed.session.metadata.currentCycleId, 2);
+  assert.equal(completed.lifecycleResults[0].result.status, OBJECTIVE_EVALUATION_STATUSES.ONGOING);
+  assert.equal(completed.session.cycle.id, 1);
+  assert.equal(completed.session.cycleHistory.at(-1).operation, 'started');
 });
 
-test('buildSession crea roles y stagePools desde configuracion', () => {
+test('buildSession crea roles y cycle desde configuracion', () => {
   const selectedRoles = getCoreRoleCatalog().filter((role) =>
     [ROLE_CATALOG_IDS.ROLE_INSPECTS, ROLE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY].includes(role.key)
   );
@@ -969,7 +1235,7 @@ test('buildSession crea roles y stagePools desde configuracion', () => {
   assert.equal(built.session.roles[0].roleKey, ROLE_CATALOG_IDS.ROLE_INSPECTS);
   assert.equal(built.session.groups.length, 0);
   assert.equal(built.session.specialStages.length, 0);
-  assert.equal(built.session.stagePools.pools.poolConcealed.length, 2);
+  assert.equal(built.session.cycle.pools.poolConcealed.stages.length, 2);
 });
 
 test('buildSession rechaza stages enabled creados desde grupos sin actores', () => {
@@ -996,11 +1262,11 @@ test('buildSession crea grupos con miembros resueltos desde membershipRules', ()
     players: session.players,
     roles: session.roles,
     groupDefinitions: [
-      createGroup({
+      defineGroup({
         key: 'all_roles',
         membershipRule: { type: GROUP_MEMBERSHIP_RULE_TYPES.ALL_ROLES }
       }),
-      createGroup({
+      defineGroup({
         key: 'alignment_b_roles',
         membershipRule: {
           type: GROUP_MEMBERSHIP_RULE_TYPES.ALIGNMENT,
@@ -1048,9 +1314,9 @@ test('groupModel anade y elimina roles de grupos persistentes de sesion', () => 
 });
 
 test('resolveCurrentStage exige actionKey cuando un stage ofrece varias acciones', () => {
-  const session = withStagePools(
+  const session = withCycle(
     createBaseSession(),
-    createPool({
+    createCycle({
       poolOrder: ['poolConcealed'],
       poolCurrent: 'poolConcealed',
       poolNext: 'poolConcealed',
@@ -1099,9 +1365,9 @@ test('resolveCurrentStage exige actionKey cuando un stage ofrece varias acciones
 });
 
 test('resolveCurrentStage ejecuta stage_05 con seleccion y receta set_out_of_play', () => {
-  const session = withStagePools(
+  const session = withCycle(
     createBaseSession(),
-    createPool({
+    createCycle({
       poolOrder: ['poolExposed'],
       poolCurrent: 'poolExposed',
       poolNext: 'poolExposed',
@@ -1141,17 +1407,17 @@ test('resolveCurrentStage ejecuta stage_05 con seleccion y receta set_out_of_pla
   assert.equal(resolved.stageAdvance, null);
   assert.equal(completed.ok, false);
   assert.equal(
-    completed.session.stagePools.pools.poolExposed[0].status,
+    completed.session.cycle.pools.poolExposed.stages[0].status,
     STAGE_STATUSES.DONE
   );
   assert.equal(completed.stageAdvance.reason, 'next-pool-not-runnable');
-  assert.equal(completed.errors[0].code, 'pool/no-runnable-stages');
+  assert.equal(completed.errors[0].code, 'cycle/no-runnable-stages');
 });
 
 test('resolveCurrentStage usa actorIds del stage como participantes de seleccion', () => {
-  const session = withStagePools(
+  const session = withCycle(
     createBaseSession(),
-    createPool({
+    createCycle({
       poolOrder: ['poolExposed'],
       poolCurrent: 'poolExposed',
       poolNext: 'poolExposed',
@@ -1180,9 +1446,9 @@ test('resolveCurrentStage usa actorIds del stage como participantes de seleccion
 });
 
 test('resolveCurrentStage ejecuta stage_02 con receta block_out_of_play', () => {
-  const session = withStagePools(
+  const session = withCycle(
     createBaseSession(),
-    createPool({
+    createCycle({
       poolOrder: ['poolConcealed'],
       poolCurrent: 'poolConcealed',
       poolNext: 'poolConcealed',
@@ -1209,27 +1475,38 @@ test('resolveCurrentStage ejecuta stage_02 con receta block_out_of_play', () => 
   assert.equal(blocking.ok, true);
   assert.equal(blocking.stage.stageKey, STAGE_KEYS.STAGE_02);
   assert.equal(blocking.stageAdvance, null);
+  assert.deepEqual(
+    roleById(blocking.session, 'alignment_a_target-0').blockedPropertyChanges[0].blockedFor.actorIds,
+    ['alignment_b_attacker-0', 'alignment_b_target-0', 'hidden_enemy-0']
+  );
   const completed = completeCurrentStage(blocking.session, {
     requestedBy: STAGE_COMPLETION_REQUESTED_BY.PLAYER,
     actorIds: ['alignment_a_blocker-0']
   });
   assert.equal(completed.ok, false);
   assert.equal(
-    completed.session.stagePools.pools.poolConcealed[0].status,
+    completed.session.cycle.pools.poolConcealed.stages[0].status,
     STAGE_STATUSES.DONE
   );
   assert.equal(completed.stageAdvance.reason, 'next-pool-not-runnable');
-  assert.equal(completed.errors[0].code, 'pool/no-runnable-stages');
+  assert.equal(completed.errors[0].code, 'cycle/no-runnable-stages');
+  assert.deepEqual(
+    roleById(completed.session, 'alignment_a_target-0').blockedPropertyChanges,
+    []
+  );
   assert.equal(attackAfterBlocking.ok, true);
   assert.equal(roleById(attackAfterBlocking.session, 'alignment_a_target-0').inPlay, true);
-  assert.deepEqual(attackAfterBlocking.result.proposedEffects, []);
-  assert.equal(attackAfterBlocking.result.blockedActions[0].reason, 'blocked_action');
+  assert.equal(attackAfterBlocking.result.proposedEffects.length, 1);
+  assert.equal(
+    attackAfterBlocking.result.preventedPropertyChanges[0].reason,
+    'blocked_property_change'
+  );
 });
 
 test('resolveCurrentStage ejecuta stage_04 con receta set_out_of_play', () => {
-  const session = withStagePools(
+  const session = withCycle(
     createBaseSession(),
-    createPool({
+    createCycle({
       poolOrder: ['poolConcealed'],
       poolCurrent: 'poolConcealed',
       poolNext: 'poolConcealed',
@@ -1268,23 +1545,26 @@ test('resolveCurrentStage ejecuta stage_04 con receta set_out_of_play', () => {
   assert.equal(blockedAttempt.ok, true);
   assert.equal(blockedAttempt.stage.stageKey, STAGE_KEYS.STAGE_04);
   assert.equal(roleById(blockedAttempt.session, 'alignment_a_target-0').inPlay, true);
-  assert.deepEqual(blockedAttempt.result.proposedEffects, []);
-  assert.equal(blockedAttempt.result.blockedActions[0].reason, 'blocked_action');
+  assert.equal(blockedAttempt.result.proposedEffects.length, 1);
+  assert.equal(
+    blockedAttempt.result.preventedPropertyChanges[0].reason,
+    'blocked_property_change'
+  );
   const blockedCompleted = completeCurrentStage(blockedAttempt.session, {
     requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
   });
   assert.equal(blockedCompleted.ok, false);
-  assert.equal(blockedCompleted.errors[0].code, 'pool/no-runnable-stages');
+  assert.equal(blockedCompleted.errors[0].code, 'cycle/no-runnable-stages');
   assert.equal(
-    blockedCompleted.session.stagePools.pools.poolConcealed[1].status,
+    blockedCompleted.session.cycle.pools.poolConcealed.stages[1].status,
     STAGE_STATUSES.DONE
   );
 });
 
-test('actionHistory registra stage, efectos finales y acciones bloqueadas', () => {
-  const session = withStagePools(
+test('actionHistory registra stage, efectos finales y cambios impedidos', () => {
+  const session = withCycle(
     createBaseSession(),
-    createPool({
+    createCycle({
       poolOrder: ['poolConcealed'],
       poolCurrent: 'poolConcealed',
       poolNext: 'poolConcealed',
@@ -1314,6 +1594,7 @@ test('actionHistory registra stage, efectos finales y acciones bloqueadas', () =
   });
 
   assert.equal(resolved.ok, true);
+  assert.equal(historyEntry.stageId, resolved.stage.stageId);
   assert.equal(historyEntry.stageKey, STAGE_KEYS.STAGE_04);
   assert.equal(historyEntry.actionKey, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY);
   assert.equal(historyEntry.actionId, ACTION_IDS.SET_IN_PLAY);
@@ -1324,9 +1605,9 @@ test('actionHistory registra stage, efectos finales y acciones bloqueadas', () =
 });
 
 test('restore_recent_out_of_play ejecuta set_in_play(true) solo sobre un set_out_of_play previo', () => {
-  const session = withStagePools(
+  const session = withCycle(
     createBaseSession(),
-    createPool({
+    createCycle({
       poolOrder: ['poolConcealed'],
       poolCurrent: 'poolConcealed',
       poolNext: 'poolConcealed',
@@ -1375,7 +1656,7 @@ test('restore_recent_out_of_play ejecuta set_in_play(true) solo sobre un set_out
   assert.equal(roleById(restored.session, 'alignment_a_target-0').inPlay, true);
   assert.equal(restored.stageAdvance, null);
   assert.equal(
-    restored.session.stagePools.pools.poolConcealed[1].status,
+    restored.session.cycle.pools.poolConcealed.stages[1].status,
     STAGE_STATUSES.ENABLED
   );
   assert.equal(restored.session.actionHistory.at(-1).stageKey, STAGE_KEYS.STAGE_03);
@@ -1408,9 +1689,9 @@ test('un stage con recetas opcionales permanece abierto hasta cierre explicito',
     },
     STAGE_ACTION_KEYS.SET_OUT_OF_PLAY
   );
-  const session = withStagePools(
+  const session = withCycle(
     preStageSetOut.session,
-    createPool({
+    createCycle({
       poolOrder: ['poolConcealed'],
       poolCurrent: 'poolConcealed',
       poolNext: 'poolConcealed',
@@ -1451,7 +1732,7 @@ test('un stage con recetas opcionales permanece abierto hasta cierre explicito',
   assert.equal(roleById(restored.session, 'alignment_a_target-0').inPlay, true);
   assert.equal(restored.stageAdvance, null);
   assert.equal(
-    restored.session.stagePools.pools.poolConcealed[0].status,
+    restored.session.cycle.pools.poolConcealed.stages[0].status,
     STAGE_STATUSES.ENABLED
   );
   assert.equal(setOut.ok, true);
@@ -1459,9 +1740,9 @@ test('un stage con recetas opcionales permanece abierto hasta cierre explicito',
   assert.equal(setOut.stageAdvance, null);
   assert.equal(completed.ok, false);
   assert.equal(completed.stageAdvance.reason, 'next-pool-not-runnable');
-  assert.equal(completed.errors[0].code, 'pool/no-runnable-stages');
+  assert.equal(completed.errors[0].code, 'cycle/no-runnable-stages');
   assert.equal(
-    completed.session.stagePools.pools.poolConcealed[0].status,
+    completed.session.cycle.pools.poolConcealed.stages[0].status,
     STAGE_STATUSES.DONE
   );
   assert.equal(completed.completion.requestedBy, STAGE_COMPLETION_REQUESTED_BY.DIRECTOR);
@@ -1477,9 +1758,9 @@ test('completeCurrentStage respeta allowedRequesters del stage', () => {
     },
     actions: [actionRecipe(restoreRecentOutOfPlayAction, STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY)]
   });
-  const session = withStagePools(
+  const session = withCycle(
     createBaseSession(),
-    createPool({
+    createCycle({
       poolOrder: ['poolConcealed'],
       poolCurrent: 'poolConcealed',
       poolNext: 'poolConcealed',
@@ -1500,16 +1781,16 @@ test('completeCurrentStage respeta allowedRequesters del stage', () => {
   assert.equal(actorClose.errors[0].code, 'stage/completion-not-allowed');
   assert.deepEqual(actorClose.errors[0].allowedRequesters, [STAGE_COMPLETION_REQUESTED_BY.DIRECTOR]);
   assert.equal(directorClose.ok, false);
-  assert.equal(directorClose.errors[0].code, 'pool/no-runnable-stages');
+  assert.equal(directorClose.errors[0].code, 'cycle/no-runnable-stages');
   assert.equal(directorClose.completion.requestedBy, STAGE_COMPLETION_REQUESTED_BY.DIRECTOR);
 });
 
 test('restore_recent_out_of_play rechaza targets sin set_out_of_play aplicado este ciclo', () => {
-  const session = withStagePools(
+  const session = withCycle(
     withInPlayState(createBaseSession(), {
       'alignment_a_target-0': false
     }),
-    createPool({
+    createCycle({
       poolOrder: ['poolConcealed'],
       poolCurrent: 'poolConcealed',
       poolNext: 'poolConcealed',
@@ -1541,9 +1822,9 @@ test('restore_recent_out_of_play rechaza targets sin set_out_of_play aplicado es
 });
 
 test('restore_recent_out_of_play rechaza un set_out_of_play bloqueado', () => {
-  const session = withStagePools(
+  const session = withCycle(
     createBaseSession(),
-    createPool({
+    createCycle({
       poolOrder: ['poolConcealed'],
       poolCurrent: 'poolConcealed',
       poolNext: 'poolConcealed',
@@ -1658,7 +1939,7 @@ test('limited_uses con ventana current_cycle permite reutilizar en otro ciclo', 
     actorIds: ['alignment_a_blocker-0'],
     targetIds: ['alignment_a_target-0']
   });
-  const nextCycle = resolveAction(firstRestore.session, startCycleAction);
+  const nextCycle = advanceTestCycle(firstRestore.session);
   const secondSetOut = resolveRecipe(nextCycle.session, setOutRecipe, {
     actorIds: ['alignment_b_attacker-0'],
     targetIds: ['alignment_a_plain-0']
@@ -1697,7 +1978,7 @@ test('limited_uses con ventana next_cycle cuenta usos del ciclo anterior', () =>
     actorIds: ['alignment_a_blocker-0'],
     targetIds: ['alignment_a_target-0']
   });
-  const nextCycle = resolveAction(firstRestore.session, startCycleAction);
+  const nextCycle = advanceTestCycle(firstRestore.session);
   const secondSetOut = resolveRecipe(nextCycle.session, setOutRecipe, {
     actorIds: ['alignment_b_attacker-0'],
     targetIds: ['alignment_a_plain-0']
@@ -1738,7 +2019,7 @@ test('limited_uses con ventana current_or_next_cycle cuenta el ciclo actual y el
     actorIds: ['alignment_a_blocker-0'],
     targetIds: ['alignment_a_target-0']
   });
-  const nextCycle = resolveAction(firstRestore.session, startCycleAction);
+  const nextCycle = advanceTestCycle(firstRestore.session);
   const secondSetOut = resolveRecipe(nextCycle.session, setOutRecipe, {
     actorIds: ['alignment_b_attacker-0'],
     targetIds: ['alignment_a_plain-0']
@@ -1769,7 +2050,7 @@ test('limited_uses cuenta una receta aunque su efecto quede bloqueado', () => {
     },
     STAGE_ACTION_KEYS.SET_OUT_OF_PLAY
   );
-  const blocking = resolveAction(createBaseSession(), blockOutOfPlayRecipe, {
+  const blocking = resolveRecipe(createBaseSession(), blockOutOfPlayRecipe, {
     actorIds: ['alignment_a_blocker-0'],
     targetIds: ['alignment_a_target-0']
   });
@@ -1783,7 +2064,10 @@ test('limited_uses cuenta una receta aunque su efecto quede bloqueado', () => {
   });
 
   assert.equal(blockedUse.ok, true);
-  assert.equal(blockedUse.result.blockedActions[0].reason, 'blocked_action');
+  assert.equal(
+    blockedUse.result.preventedPropertyChanges[0].reason,
+    'blocked_property_change'
+  );
   assert.equal(blockedUse.session.actionHistory.at(-1).result, 'blocked');
   assert.equal(secondUse.ok, false);
   assert.equal(secondUse.errors[0].code, 'constraint/limited_uses');
@@ -1800,12 +2084,16 @@ test('set_in_play(false) cambia inPlay solo en el objetivo directo', () => {
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
   assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, true);
   assert.equal(resolved.result.proposedEffects.length, 1);
-  assert.equal(resolved.result.blockedActions.length, 0);
+  assert.deepEqual(resolved.result.proposedEffects[0].causedBy, {
+    type: 'role',
+    id: 'alignment_b_attacker-0'
+  });
+  assert.equal(resolved.result.preventedPropertyChanges.length, 0);
 });
 
 test('block_out_of_play bloquea set_in_play(false) solo sobre su target', () => {
   const session = createBaseSession();
-  const blocking = resolveAction(session, blockOutOfPlayRecipe, {
+  const blocking = resolveRecipe(session, blockOutOfPlayRecipe, {
     actorIds: ['alignment_a_blocker-0'],
     targetIds: ['alignment_a_target-0']
   });
@@ -1821,13 +2109,18 @@ test('block_out_of_play bloquea set_in_play(false) solo sobre su target', () => 
   assert.equal(blocking.ok, true);
   assert.equal(blockedTarget.ok, true);
   assert.equal(roleById(blockedTarget.session, 'alignment_a_target-0').inPlay, true);
-  assert.deepEqual(blockedTarget.result.proposedEffects, []);
+  assert.equal(blockedTarget.result.proposedEffects.length, 1);
   assert.deepEqual(blockedTarget.result.finalEffects, []);
-  assert.deepEqual(blockedTarget.result.blockedActions, [
+  assert.deepEqual(blockedTarget.result.preventedPropertyChanges, [
     {
-      actionId: ACTION_IDS.SET_IN_PLAY,
-      reason: 'blocked_action',
-      targetId: 'alignment_a_target-0'
+      property: 'inPlay',
+      value: false,
+      reason: 'blocked_property_change',
+      targetId: 'alignment_a_target-0',
+      causedBy: {
+        type: 'role',
+        id: 'alignment_b_attacker-0'
+      }
     }
   ]);
 
@@ -1835,21 +2128,185 @@ test('block_out_of_play bloquea set_in_play(false) solo sobre su target', () => 
   assert.equal(roleById(unblockedTarget.session, 'alignment_a_plain-0').inPlay, false);
 });
 
-test('start_cycle limpia bloqueos temporales y avanza ciclo', () => {
-  const session = createBaseSession();
-  const blockingKey = getActionBlockKey(blockOutOfPlayRecipe.effect.blocks);
-  const blocking = resolveAction(session, blockOutOfPlayRecipe, {
-    actorIds: ['alignment_a_blocker-0'],
+test('blockedPropertyChanges vence en stage_boundary.after antes de avanzar', () => {
+  const stageBlockRecipe = {
+    ...blockOutOfPlayRecipe,
+    effect: {
+      ...blockOutOfPlayRecipe.effect,
+      duration: {
+        unit: PROPERTY_BLOCK_DURATION_UNITS.STAGE,
+        offset: 0,
+        boundary: PROPERTY_BLOCK_BOUNDARIES.AFTER
+      }
+    }
+  };
+  const session = withCycle(
+    createBaseSession(),
+    createCycle({
+      poolOrder: [POOL_KEYS.POOL_CONCEALED],
+      poolCurrent: POOL_KEYS.POOL_CONCEALED,
+      poolNext: POOL_KEYS.POOL_CONCEALED,
+      pools: {
+        [POOL_KEYS.POOL_CONCEALED]: [
+          {
+            id: 'stage-block-current',
+            key: STAGE_KEYS.STAGE_02,
+            status: STAGE_STATUSES.ENABLED,
+            actorIds: ['alignment_a_blocker-0'],
+            actions: [actionRecipe(stageBlockRecipe, STAGE_ACTION_KEYS.BLOCK_OUT_OF_PLAY)]
+          },
+          {
+            id: 'stage-after-block',
+            key: STAGE_KEYS.STAGE_01,
+            status: STAGE_STATUSES.ENABLED,
+            actorIds: ['role_inspector-0'],
+            actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+          }
+        ]
+      }
+    })
+  );
+  const blocking = resolveCurrentStage(session, {
     targetIds: ['alignment_a_target-0']
   });
-  const closed = resolveAction(blocking.session, startCycleAction);
+  const completed = completeCurrentStage(blocking.session, {
+    requestedBy: STAGE_COMPLETION_REQUESTED_BY.PLAYER
+  });
 
   assert.equal(
-    roleById(blocking.session, 'alignment_a_target-0').flags.blockedActions[blockingKey],
-    true
+    roleById(blocking.session, 'alignment_a_target-0').blockedPropertyChanges.length,
+    1
   );
-  assert.equal(roleById(closed.session, 'alignment_a_target-0').flags.blockedActions, undefined);
-  assert.equal(closed.result.nextCycleId, 2);
+  assert.equal(
+    roleById(completed.session, 'alignment_a_target-0').blockedPropertyChanges.length,
+    0
+  );
+  assert.equal(completed.stageAdvance.next.stageId, 'stage-after-block');
+});
+
+test('blockedPropertyChanges vence en stage_boundary.before al entrar en el siguiente stage', () => {
+  const nextStageBlockRecipe = {
+    ...blockOutOfPlayRecipe,
+    effect: {
+      ...blockOutOfPlayRecipe.effect,
+      duration: {
+        unit: PROPERTY_BLOCK_DURATION_UNITS.STAGE,
+        offset: 1,
+        boundary: PROPERTY_BLOCK_BOUNDARIES.BEFORE
+      }
+    }
+  };
+  const session = withCycle(
+    createBaseSession(),
+    createCycle({
+      poolOrder: [POOL_KEYS.POOL_CONCEALED],
+      poolCurrent: POOL_KEYS.POOL_CONCEALED,
+      poolNext: POOL_KEYS.POOL_CONCEALED,
+      pools: {
+        [POOL_KEYS.POOL_CONCEALED]: [
+          {
+            id: 'stage-block-before-next',
+            key: STAGE_KEYS.STAGE_02,
+            status: STAGE_STATUSES.ENABLED,
+            actorIds: ['alignment_a_blocker-0'],
+            actions: [
+              actionRecipe(nextStageBlockRecipe, STAGE_ACTION_KEYS.BLOCK_OUT_OF_PLAY)
+            ]
+          },
+          {
+            id: 'stage-next-set-out',
+            key: STAGE_KEYS.STAGE_04,
+            status: STAGE_STATUSES.ENABLED,
+            actorIds: ['alignment_b_attacker-0'],
+            actions: [
+              actionRecipe(setInPlayFalseAction, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY)
+            ]
+          }
+        ]
+      }
+    })
+  );
+  const blocking = resolveCurrentStage(session, {
+    targetIds: ['alignment_a_target-0']
+  });
+  const completed = completeCurrentStage(blocking.session, {
+    requestedBy: STAGE_COMPLETION_REQUESTED_BY.PLAYER
+  });
+  const setOut = resolveCurrentStage(completed.session, {
+    targetIds: ['alignment_a_target-0']
+  });
+
+  assert.equal(
+    roleById(completed.session, 'alignment_a_target-0').blockedPropertyChanges.length,
+    1
+  );
+  assert.equal(roleById(setOut.session, 'alignment_a_target-0').inPlay, false);
+  assert.equal(
+    roleById(setOut.session, 'alignment_a_target-0').blockedPropertyChanges.length,
+    0
+  );
+});
+
+test('blockedPropertyChanges vence en cycle_boundary.after antes de startCycle', () => {
+  const cycleBlockRecipe = {
+    ...blockOutOfPlayRecipe,
+    effect: {
+      ...blockOutOfPlayRecipe.effect,
+      duration: {
+        unit: PROPERTY_BLOCK_DURATION_UNITS.CYCLE,
+        offset: 0,
+        boundary: PROPERTY_BLOCK_BOUNDARIES.AFTER
+      }
+    }
+  };
+  const session = withCycle(
+    createBaseSession(),
+    createCycle({
+      id: 1,
+      poolOrder: [POOL_KEYS.POOL_CONCEALED, POOL_KEYS.POOL_EXPOSED],
+      poolCurrent: POOL_KEYS.POOL_EXPOSED,
+      poolNext: POOL_KEYS.POOL_CONCEALED,
+      pools: {
+        [POOL_KEYS.POOL_CONCEALED]: [
+          {
+            key: STAGE_KEYS.STAGE_01,
+            status: STAGE_STATUSES.ENABLED,
+            actorIds: ['role_inspector-0'],
+            actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+          }
+        ],
+        [POOL_KEYS.POOL_EXPOSED]: [
+          {
+            key: STAGE_KEYS.STAGE_02,
+            status: STAGE_STATUSES.ENABLED,
+            actorIds: ['alignment_a_blocker-0'],
+            actions: [actionRecipe(cycleBlockRecipe, STAGE_ACTION_KEYS.BLOCK_OUT_OF_PLAY)]
+          }
+        ]
+      }
+    })
+  );
+  const blocking = resolveCurrentStage(session, {
+    targetIds: ['alignment_a_target-0']
+  });
+  const completed = completeCurrentStage(blocking.session, {
+    requestedBy: STAGE_COMPLETION_REQUESTED_BY.PLAYER
+  });
+
+  assert.equal(completed.session.cycle.id, 2);
+  assert.equal(
+    roleById(completed.session, 'alignment_a_target-0').blockedPropertyChanges.length,
+    0
+  );
+});
+
+test('startCycle solo avanza el ciclo y no modifica estado de roles', () => {
+  const cycle = createCycle({ id: 3 });
+  const started = startCycle(cycle);
+
+  assert.equal(started.ok, true);
+  assert.equal(started.cycle.id, 4);
+  assert.equal(started.changes[0].property, 'id');
 });
 
 test('no_repeat_target impide repetir el mismo bloqueo sobre el mismo target', () => {
@@ -1858,7 +2315,7 @@ test('no_repeat_target impide repetir el mismo bloqueo sobre el mismo target', (
     actorIds: ['alignment_a_blocker-0'],
     targetIds: ['alignment_a_target-0']
   });
-  const nextCycle = resolveAction(firstBlocking.session, startCycleAction);
+  const nextCycle = advanceTestCycle(firstBlocking.session);
   const repeatedBlocking = resolveRecipe(nextCycle.session, blockOutOfPlayRecipe, {
     actorIds: ['alignment_a_blocker-0'],
     targetIds: ['alignment_a_target-0']
@@ -1887,8 +2344,8 @@ test('no_repeat_target con ventana session impide repetir target durante toda la
     actorIds: ['alignment_a_blocker-0'],
     targetIds: ['alignment_a_target-0']
   });
-  const cycle2 = resolveAction(firstBlocking.session, startCycleAction);
-  const cycle3 = resolveAction(cycle2.session, startCycleAction);
+  const cycle2 = advanceTestCycle(firstBlocking.session);
+  const cycle3 = advanceTestCycle(cycle2.session);
   const repeatedBlocking = resolveRecipe(cycle3.session, sessionOnlyRecipe, {
     actorIds: ['alignment_a_blocker-0'],
     targetIds: ['alignment_a_target-0']
@@ -1919,11 +2376,24 @@ test('link_targets crea un grupo linked en la sesion', () => {
     key: 'linked_alignment_a_plain_0_alignment_a_target_0',
     type: GROUP_TYPES.LINKED,
     active: true,
-    createdCycleId: 1,
+    createdCycleId: 0,
     sourceActionId: ACTION_IDS.LINK_TARGETS,
     roleIds: ['alignment_a_plain-0', 'alignment_a_target-0'],
-    groupRules: [],
-    stageDefinitions: [],
+    groupRules: [
+      {
+        type: 'propagate_property_change',
+        when: {
+          property: 'inPlay',
+          value: false
+        },
+        apply: {
+          property: 'inPlay',
+          value: false
+        },
+        targets: 'other_members',
+        metadata: {}
+      }
+    ],
     metadata: {}
   });
   assert.equal(linked.result.finalEffects[0].type, EFFECT_TYPES.SET_GROUP);
@@ -1944,10 +2414,164 @@ test('linked deriva inPlay=false hacia los roles enlazados', () => {
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
   assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, false);
   assert.equal(resolved.result.finalEffects.length, 2);
-  assert.deepEqual(resolved.result.finalEffects[1].derivedFrom, {
+  assert.deepEqual(resolved.result.finalEffects[1].causedBy, {
     type: 'group',
-    groupType: GROUP_TYPES.LINKED,
+    id: 'linked_alignment_a_plain_0_alignment_a_target_0'
+  });
+  assert.deepEqual(resolved.result.finalEffects[1].derivedFrom, {
+    type: 'group_rule',
+    groupId: 'linked_alignment_a_plain_0_alignment_a_target_0',
+    groupRuleType: 'propagate_property_change',
     sourceTargetId: 'alignment_a_target-0'
+  });
+});
+
+test('groupRule usa causedBy del group al comprobar bloqueos derivados', () => {
+  const linked = resolveAction(createBaseSession(), linkTargetsAction, {
+    actorIds: ['role_inspector-0'],
+    targetIds: ['alignment_a_target-0', 'alignment_a_plain-0']
+  });
+  const linkedGroupId = linked.session.groups[0].id;
+  const sessionBlockedForOriginalActor = {
+    ...linked.session,
+    roles: linked.session.roles.map((role) =>
+      role.id === 'alignment_a_plain-0'
+        ? addBlockedPropertyChange(role, {
+            property: 'inPlay',
+            value: false,
+            blockedFor: {
+              actorIds: ['alignment_b_attacker-0']
+            },
+            expiresAt: {
+              type: PROPERTY_BLOCK_EXPIRATION_TYPES.SESSION
+            }
+          })
+        : role
+    )
+  };
+  const propagatedDespiteOriginalActorBlock = resolveAction(
+    sessionBlockedForOriginalActor,
+    setInPlayFalseAction,
+    {
+      actorIds: ['alignment_b_attacker-0'],
+      targetIds: ['alignment_a_target-0']
+    }
+  );
+  const sessionBlockedForGroup = {
+    ...linked.session,
+    roles: linked.session.roles.map((role) =>
+      role.id === 'alignment_a_plain-0'
+        ? addBlockedPropertyChange(role, {
+            property: 'inPlay',
+            value: false,
+            blockedFor: {
+              actorIds: [linkedGroupId]
+            },
+            expiresAt: {
+              type: PROPERTY_BLOCK_EXPIRATION_TYPES.SESSION
+            }
+          })
+        : role
+    )
+  };
+  const blockedPropagation = resolveAction(sessionBlockedForGroup, setInPlayFalseAction, {
+    actorIds: ['alignment_b_attacker-0'],
+    targetIds: ['alignment_a_target-0']
+  });
+
+  assert.equal(
+    roleById(propagatedDespiteOriginalActorBlock.session, 'alignment_a_target-0').inPlay,
+    false
+  );
+  assert.equal(
+    roleById(propagatedDespiteOriginalActorBlock.session, 'alignment_a_plain-0').inPlay,
+    false
+  );
+  assert.equal(roleById(blockedPropagation.session, 'alignment_a_target-0').inPlay, false);
+  assert.equal(roleById(blockedPropagation.session, 'alignment_a_plain-0').inPlay, true);
+  assert.deepEqual(blockedPropagation.result.blockedEffects[0].causedBy, {
+    type: 'group',
+    id: linkedGroupId
+  });
+});
+
+test('propagate_property_change no depende del type linked', () => {
+  const propagationGroup = createGroup({
+    id: 'generic-propagation-group',
+    type: 'custom',
+    roleIds: ['alignment_a_target-0', 'alignment_a_plain-0'],
+    groupRules: [
+      {
+        type: 'propagate_property_change',
+        when: { property: 'inPlay', value: false },
+        apply: { property: 'inPlay', value: false },
+        targets: 'other_members'
+      }
+    ]
+  });
+  const session = createBaseSession({
+    groups: [propagationGroup]
+  });
+  const resolved = resolveAction(session, setInPlayFalseAction, {
+    actorIds: ['alignment_b_attacker-0'],
+    targetIds: ['alignment_a_target-0']
+  });
+
+  assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
+  assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, false);
+  assert.deepEqual(resolved.result.finalEffects[1].causedBy, {
+    type: 'group',
+    id: 'generic_propagation_group'
+  });
+});
+
+test('resolver permite otra causa si la primera propagacion queda bloqueada', () => {
+  const propagationRule = {
+    type: 'propagate_property_change',
+    when: { property: 'inPlay', value: false },
+    apply: { property: 'inPlay', value: false },
+    targets: 'other_members'
+  };
+  const blockedGroup = createGroup({
+    id: 'blocked-propagation-group',
+    roleIds: ['alignment_a_target-0', 'alignment_a_plain-0'],
+    groupRules: [propagationRule]
+  });
+  const allowedGroup = createGroup({
+    id: 'allowed-propagation-group',
+    roleIds: ['alignment_a_target-0', 'alignment_a_plain-0'],
+    groupRules: [propagationRule]
+  });
+  const baseSession = createBaseSession({
+    groups: [blockedGroup, allowedGroup]
+  });
+  const session = {
+    ...baseSession,
+    roles: baseSession.roles.map((role) =>
+      role.id === 'alignment_a_plain-0'
+        ? addBlockedPropertyChange(role, {
+            property: 'inPlay',
+            value: false,
+            blockedFor: {
+              actorIds: [blockedGroup.id]
+            },
+            expiresAt: {
+              type: PROPERTY_BLOCK_EXPIRATION_TYPES.SESSION
+            }
+          })
+        : role
+    )
+  };
+  const resolved = resolveAction(session, setInPlayFalseAction, {
+    actorIds: ['alignment_b_attacker-0'],
+    targetIds: ['alignment_a_target-0']
+  });
+
+  assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, false);
+  assert.equal(resolved.result.blockedEffects.length, 1);
+  assert.deepEqual(resolved.result.finalEffects[1].causedBy, {
+    type: 'group',
+    id: allowedGroup.id
   });
 });
 
@@ -2942,6 +3566,7 @@ test('stage con seleccion y set_out_of_play aplica inPlay=false al chosen de la 
       targetType: 'role',
       property: 'inPlay',
       value: false,
+      causedBy: null,
       targetId: 'alignment_a_target-0'
     }
   ]);
@@ -3077,7 +3702,7 @@ test('stage con seleccion y set_out_of_play permite cerrar el stage cuando todos
   assert.equal(resolved.stageAdvance, null);
   assert.equal(completed.ok, false);
   assert.equal(completed.stageAdvance.reason, 'next-pool-not-runnable');
-  assert.equal(completed.errors[0].code, 'pool/no-runnable-stages');
+  assert.equal(completed.errors[0].code, 'cycle/no-runnable-stages');
 });
 
 test('stage con seleccion y set_out_of_play trata un empate sin regla especial como null', () => {
@@ -3200,9 +3825,14 @@ test('stage con seleccion y set_out_of_play propaga inPlay=false por linked cuan
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
   assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, false);
   assert.equal(resolved.result.finalEffects.length, 2);
-  assert.deepEqual(resolved.result.finalEffects[1].derivedFrom, {
+  assert.deepEqual(resolved.result.finalEffects[1].causedBy, {
     type: 'group',
-    groupType: GROUP_TYPES.LINKED,
+    id: 'linked_selection_target'
+  });
+  assert.deepEqual(resolved.result.finalEffects[1].derivedFrom, {
+    type: 'group_rule',
+    groupId: 'linked_selection_target',
+    groupRuleType: 'propagate_property_change',
     sourceTargetId: 'alignment_a_target-0'
   });
 });

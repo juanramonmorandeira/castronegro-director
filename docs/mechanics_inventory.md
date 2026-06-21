@@ -17,12 +17,12 @@ como referencia humana.
 |---|---|---|---|
 | `inspect_role` | Vidente | implementada | Revela una propiedad del objetivo. Ahora usamos `roleId`. |
 | `set_in_play` | eliminar, expulsar, apartar | implementada | Cambia `inPlay`; no implica muerte narrativa. |
-| `block_action` | bloquear, proteger, interferir | implementada | Bloquea una accion concreta con parametros concretos. |
-| `block_out_of_play` | Protector | implementada | Receta que bloquea `set_in_play(inPlay=false)`. |
+| `block_property_change` | bloquear, proteger, interferir | implementada | Bloquea un cambio `(property, value)` para actores concretos. |
+| `block_out_of_play` | Protector | implementada | Receta que bloquea `inPlay=false` frente a los roles materializados de `alignment_b`. |
 | `no_repeat_target` | Protector no repite objetivo | implementada | Restriccion basada en `session.actionHistory`. |
-| `start_cycle` | inicio de ciclo normal | implementada | Limpia flags temporales y prepara el siguiente ciclo. |
-| `link_targets` | Cupido | parcial | Crea un grupo `linked` entre varios objetivos. |
-| `linked` consequence | Enamorados comparten destino | parcial | Propaga `inPlay=false`; restriccion de seleccion linked implementada en stages con seleccion. |
+| `startCycle` | inicio de ciclo normal | implementada | Incrementa `cycle.id`; no limpia estado de roles. |
+| `link_targets` | Cupido | implementada | Crea un group con miembros y `groupRules`. |
+| `propagate_property_change` | Enamorados comparten destino | implementada | Propaga cambios por regla declarativa; no depende del `group.type`. |
 | `linked_objective` | Enamorados de bandos distintos | parcial | Implementado en `objectiveModel.js`. |
 | `group_objective_rule` | condicion propia de un group | parcial | `holder_reaches_in_play_parity` y `only_holder_group_remains_in_play` configurables por sesion. |
 | `selection_count` | recuento de seleccion | implementada | `selectionModel.js` valida selecciones, suma unidades y resuelve chosen/empate. |

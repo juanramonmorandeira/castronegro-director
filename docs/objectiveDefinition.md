@@ -137,12 +137,12 @@ Responsabilidades:
 4. emitir `playOutcome` si la parte jugable queda concluida;
 5. comprobar si hay stages pendientes en `specialStages` que pueden alterar el
    outcome;
-6. ejecutar `conclude_play` como automaticStage final solo si existe un
+6. ejecutar `conclude_play` como operacion final solo si existe un
    `playOutcome` concluyente y estable.
 
 ### conclude_play
 
-`conclude_play` es la automaticStage que gestiona la conclusion de la parte
+`conclude_play` es la operacion que gestiona la conclusion de la parte
 jugable.
 
 No cierra la session. Cerrar la session es responsabilidad exclusiva del creador
@@ -150,7 +150,7 @@ o del flujo de administracion de la aplicacion.
 
 `conclude_play` no se encola en `specialStages`. Si hay stages pendientes que
 puedan alterar el outcome, se resuelve primero `specialStages`. Si no los hay,
-`conclude_play` se ejecuta como automaticStage final y el flujo de pools deja de
+`conclude_play` se ejecuta como operacion final y el flujo de pools deja de
 avanzar.
 
 ## Dependencies e influences

@@ -50,7 +50,8 @@ export const PLAYER_TYPES = Object.freeze({
 export const STAGE_STATUSES = Object.freeze({
   ENABLED: 'enabled',
   DISABLED: 'disabled',
-  DONE: 'done'
+  DONE: 'done',
+  FINISHED: 'finished'
 });
 
 // Pools mecanicos del flujo.

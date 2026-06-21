@@ -17,7 +17,7 @@ Una skin puede vestir esos elementos con nombres, textos, imagenes y traduccione
 Definicion mecanica de un tipo de rol.
 
 ```js
-createRole({
+defineRole({
   key: 'role_01',
   alignmentId: 'alignment_a',
   stageDefinitions: []
@@ -33,7 +33,7 @@ flujo.
 Rol concreto dentro de una sesion.
 
 ```js
-createSessionRole({
+createRole({
   id: 'role_01-0',
   roleKey: 'role_01',
   playerId: 'player-1',
@@ -72,13 +72,14 @@ relacion.
 
 Unidad ejecutable dentro de un pool.
 
-El stage define:
+La stageDefinition define:
 
 - `key`
-- `actor`
 - `actions`
 - `completion`
 - `metadata`
+
+El stage runtime anade datos de session como `actorIds` y `status`.
 
 El nombre del stage debe ser neutro, por ejemplo `stage_01`.
 
@@ -98,6 +99,16 @@ El orden vive en arrays, no en nombres narrativos.
 
 `specialStages` no es un pool. Es una cola FIFO independiente de stages
 dinamicos administrada por `specialStagesModel.js`.
+
+Identidad:
+
+- `cycle.id` representa `cycleId`, el numero de iteracion.
+- `pool.key` representa `poolKey`; no existe `poolId`.
+- `stage.key` representa `stageKey`, la definicion mecanica.
+- `stage.id` representa `stageId`, la materializacion runtime unica.
+
+Dos stages pueden compartir `stageKey`, pero nunca `stageId`. El cursor cambia
+estado por `stageId`.
 
 ### Recipe
 
@@ -130,10 +141,9 @@ Ejemplos actuales:
 
 - `inspect_role`
 - `set_in_play`
-- `block_action`
+- `block_property_change`
 - `link_targets`
 - `select`
-- `start_cycle`
 
 ### Effect
 
@@ -144,8 +154,7 @@ Ejemplos actuales:
 - `reveal_property`
 - `set_property`
 - `set_group`
-- `block_action`
-- `start_cycle`
+- `block_property_change`
 
 ### Group
 
@@ -165,7 +174,7 @@ createGroup({
 Buenos nombres para el motor:
 
 - `set_in_play`
-- `block_action`
+- `block_property_change`
 - `link_targets`
 - `inspect_role`
 - `linked`

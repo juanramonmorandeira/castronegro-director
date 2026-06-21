@@ -1,13 +1,13 @@
 // poolDefinition.js
 // -----------------------------------------------------------------------------
-// Constructor y organizador del contenedor runtime de pools.
+// Constructor y organizador de pools runtime.
 //
 // Un pool contiene stages ya creados. Este archivo no decide que hace cada stage:
 // solo prepara y ordena la estructura que poolCursorModel necesita para mover el
 // cursor.
 // -----------------------------------------------------------------------------
 
-import { createStage } from './stageDefinition.js';
+import { assignUniqueStageIds, createStage } from './stageDefinition.js';
 import { getGroupRoleIds } from './groupModel.js';
 import { DEFAULT_POOL_ORDER, STAGE_STATUSES, POOL_KEYS, normalizeId } from './sessionModel.js';
 
@@ -31,55 +31,43 @@ export const POOL_DEFINITION_ERRORS = Object.freeze({
   EMPTY_ACTOR_IDS: 'pool-definition/empty-actor-ids'
 });
 
-export const AUTOMATIC_STAGE_KEYS = Object.freeze({
-  START_CYCLE: 'start_cycle',
+export const POOL_LIFECYCLE_OPERATION_TYPES = Object.freeze({
+  REVIEW_PROPERTY_BLOCKS: 'review_property_blocks',
   CHECK_OBJECTIVES: 'check_objectives',
   CONCLUDE_PLAY: 'conclude_play'
 });
 
-function createAutomaticStageDefinition(key, metadata = {}) {
+function createLifecycleOperation(type, metadata = {}) {
   return {
-    key: normalizeId(key),
+    type: normalizeId(type),
     metadata: { ...metadata }
   };
 }
 
-function getDefaultAutomaticStages(poolOrder = DEFAULT_POOL_ORDER) {
-  return poolOrder.reduce((acc, poolKey) => {
-    acc[poolKey] = {
-      onEnter:
-        poolKey === POOL_KEYS.POOL_CONCEALED
-          ? [
-              createAutomaticStageDefinition(AUTOMATIC_STAGE_KEYS.START_CYCLE, {
-                reason: 'prepare_normal_cycle'
-              })
-            ]
-          : [],
-      onExit: [
-        createAutomaticStageDefinition(AUTOMATIC_STAGE_KEYS.CHECK_OBJECTIVES, {
-          reason: 'pool_completed'
-        })
-      ]
-    };
-    return acc;
-  }, {});
+function getDefaultLifecycleOperations() {
+  return {
+    onEnter: [],
+    onExit: [
+      createLifecycleOperation(POOL_LIFECYCLE_OPERATION_TYPES.REVIEW_PROPERTY_BLOCKS, {
+        boundary: 'after'
+      }),
+      createLifecycleOperation(POOL_LIFECYCLE_OPERATION_TYPES.CHECK_OBJECTIVES, {
+        reason: 'pool_completed'
+      })
+    ]
+  };
 }
 
-function normalizeAutomaticStages(automaticStages = {}, poolOrder = DEFAULT_POOL_ORDER) {
-  const defaults = getDefaultAutomaticStages(poolOrder);
-
-  return poolOrder.reduce((acc, poolKey) => {
-    const override = automaticStages[poolKey] ?? {};
-    acc[poolKey] = {
-      onEnter: (override.onEnter ?? defaults[poolKey]?.onEnter ?? []).map((stage) =>
-        createAutomaticStageDefinition(stage.key, stage.metadata)
-      ),
-      onExit: (override.onExit ?? defaults[poolKey]?.onExit ?? []).map((stage) =>
-        createAutomaticStageDefinition(stage.key, stage.metadata)
-      )
-    };
-    return acc;
-  }, {});
+function normalizeLifecycleOperations({ onEnter, onExit } = {}) {
+  const defaults = getDefaultLifecycleOperations();
+  return {
+    onEnter: (onEnter ?? defaults.onEnter).map((operation) =>
+      createLifecycleOperation(operation.type, operation.metadata)
+    ),
+    onExit: (onExit ?? defaults.onExit).map((operation) =>
+      createLifecycleOperation(operation.type, operation.metadata)
+    )
+  };
 }
 
 // Normaliza un stage antes de meterlo dentro del contenedor runtime de pools.
@@ -139,45 +127,28 @@ function normalizePoolStage({
 }
 
 export function createPool({
-  poolOrder = DEFAULT_POOL_ORDER,
-  poolCurrent = poolOrder[0],
-  poolPrevious = null,
-  poolNext = poolOrder[1] ?? null,
-  poolCurrentStageIndex = 0,
-  pools = {},
-  automaticStages = {}
+  key,
+  stages = [],
+  onEnter = null,
+  onExit = null
 } = {}) {
-  const normalizedOrder = poolOrder.map(String);
-  const normalizedPools = normalizedOrder.reduce((acc, poolKey) => {
-    acc[poolKey] = (pools[poolKey] ?? []).map(normalizePoolStage);
-    return acc;
-  }, {});
-  const initialNormalPool = normalizedOrder.includes(poolCurrent)
-    ? poolCurrent
-    : normalizedOrder[0] ?? null;
+  const normalizedKey = String(key ?? '');
 
+  const lifecycle = normalizeLifecycleOperations({ onEnter, onExit });
   return {
-    poolOrder: normalizedOrder,
-    poolCurrent: initialNormalPool,
-    poolPrevious,
-    poolNext: poolNext ?? normalizedOrder[1] ?? normalizedOrder[0] ?? null,
-    poolCurrentStageIndex,
-    pools: normalizedPools,
-    automaticStages: normalizeAutomaticStages(automaticStages, normalizedOrder)
+    key: normalizedKey,
+    stages: assignUniqueStageIds(
+      (stages ?? []).map((stage) =>
+        createStage({
+          ...stage,
+          poolKey: stage.poolKey ?? normalizedKey
+        })
+      )
+    ),
+    onEnter: lifecycle.onEnter,
+    onExit: lifecycle.onExit,
+    currentStageIndex: 0
   };
-}
-
-// Construye los stages de un unico pool.
-//
-// buildStagePool no decide orden global ni mueve cursores. Solo garantiza que
-// cada stage queda construido con createStage y asociado al pool indicado.
-export function buildStagePool({ poolKey, stages = [] } = {}) {
-  return (stages ?? []).map((stage) =>
-    createStage({
-      ...stage,
-      poolKey: stage.poolKey ?? poolKey
-    })
-  );
 }
 
 function getDefinitionList(definitions = []) {
@@ -280,7 +251,7 @@ function getStageDefinitionErrors(stages = []) {
   });
 }
 
-// Ensambla stagePools desde stages de sistema, roles y grupos.
+// Ensambla el mapa de pools desde stages de sistema, roles y grupos.
 //
 // La construccion de cada stage sigue perteneciendo a createStage. buildPools solo
 // junta contribuciones, exige poolKey y delega validacion/orden en
@@ -309,16 +280,13 @@ export function buildPools({
     return {
       ok: false,
       errors,
-      stagePools: null
+      pools: null
     };
   }
 
   const specialStages = allStages.filter((stage) => stage.special === true);
   const pools = poolOrder.reduce((acc, poolKey) => {
-    acc[poolKey] = buildStagePool({
-      poolKey,
-      stages: allStages.filter((stage) => stage.poolKey === poolKey)
-    });
+    acc[poolKey] = allStages.filter((stage) => stage.poolKey === poolKey);
     return acc;
   }, {});
 
@@ -431,14 +399,21 @@ export function organizePoolStages(definition = {}) {
     return {
       ok: false,
       errors: validation.errors,
-      stagePools: null
+      pools: null
     };
   }
 
   return {
     ok: true,
     errors: [],
-    stagePools: createPool(getOrderedPoolStages(definition)),
-    specialStages: [...(definition.specialStages ?? [])]
+    pools: Object.fromEntries(
+      Object.entries(getOrderedPoolStages(definition).pools).map(([poolKey, stages]) => [
+        poolKey,
+        createPool({ key: poolKey, stages })
+      ])
+    ),
+    specialStages: assignUniqueStageIds(
+      (definition.specialStages ?? []).map((stage) => createStage(stage))
+    )
   };
 }

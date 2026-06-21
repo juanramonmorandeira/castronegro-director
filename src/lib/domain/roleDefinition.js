@@ -1,20 +1,17 @@
 // roleDefinition.js
 // -----------------------------------------------------------------------------
-// Constructor y adaptadores de roles.
+// Definicion, constructor y ensamblador de roles.
 //
-// createRole define un tipo mecanico de rol:
+// defineRole describe un tipo mecanico de rol:
 // - a que alignment mecanico pertenece por defecto;
 // - que stageDefinitions puede proponer;
-// - si necesita estar inPlay para actuar.
 //
-// createSessionRole crea el estado de ese rol dentro de una sesion concreta.
-// Lo mantenemos en este archivo porque no queremos multiplicar archivos
-// "InstanceDefinition" para cada objeto del motor.
+// createRole materializa su estado dentro de una sesion concreta.
+// buildRoles ensambla roles runtime desde definiciones y asientos.
 // -----------------------------------------------------------------------------
 
-import { createActionToken } from './actionTokenDefinition.js';
 import { normalizeId } from './sessionModel.js';
-import { createStage } from './stageDefinition.js';
+import { defineStage } from './stageDefinition.js';
 
 export const ROLE_DEFINITION_TYPES = Object.freeze({
   ROLE: 'role',
@@ -25,25 +22,34 @@ export const ROLE_DEFINITION_TYPES = Object.freeze({
 //
 // Mantener una sola puerta evita que una reaction catalogada y una reaction ya
 // materializada diverjan en forma. El stage de respuesta se vuelve a pasar por
-// createStage para preservar los defaults de stageDefinition.
-function createRoleReaction(reaction = {}) {
+// defineStage para preservar los defaults de stageDefinition.
+function defineRoleReaction(reaction = {}) {
   return {
     ...reaction,
     trigger: { ...(reaction.trigger ?? {}) },
     response: {
       ...(reaction.response ?? {}),
-      stage: reaction.response?.stage ? createStage(reaction.response.stage) : null
+      stage: reaction.response?.stage ? defineStage(reaction.response.stage) : null
     },
     metadata: { ...(reaction.metadata ?? {}) }
   };
 }
 
-export function createRole({
+function normalizeResource({ key, count = 0, metadata = {} } = {}) {
+  return {
+    key: normalizeId(key),
+    count: Number.isInteger(count) && count >= 0 ? count : 0,
+    metadata: { ...metadata }
+  };
+}
+
+export function defineRole({
   key,
   type = ROLE_DEFINITION_TYPES.ROLE,
   alignmentId = null,
   stageDefinitions = [],
   reactions = [],
+  resources = [],
   metadata = {}
 } = {}) {
   const normalizedKey = normalizeId(key);
@@ -52,15 +58,16 @@ export function createRole({
     key: normalizedKey,
     type: normalizeId(type),
     alignmentId: alignmentId ? normalizeId(alignmentId) : null,
-    stageDefinitions: (stageDefinitions ?? []).map(createStage),
+    stageDefinitions: (stageDefinitions ?? []).map(defineStage),
     // Las reacciones son definicion mecanica del rol: "si ocurre X, puedo
     // responder con Y". eventModel sera quien las evalue durante la sesion.
-    reactions: (reactions ?? []).map(createRoleReaction),
+    reactions: (reactions ?? []).map(defineRoleReaction),
+    resources: (resources ?? []).map(normalizeResource),
     metadata: { ...metadata }
   };
 }
 
-export function createSessionRole({
+export function createRole({
   id,
   roleKey,
   alignmentId = null,
@@ -69,7 +76,8 @@ export function createSessionRole({
   inPlay = true,
   revealed = false,
   reactions = [],
-  actionTokens = [],
+  resources = [],
+  blockedPropertyChanges = [],
   flags = {},
   counters = {},
   metadata = {}
@@ -84,8 +92,16 @@ export function createSessionRole({
     seat,
     inPlay: !!inPlay,
     revealed: !!revealed,
-    reactions: (reactions ?? []).map(createRoleReaction),
-    actionTokens: actionTokens.map(createActionToken),
+    reactions: (reactions ?? []).map(defineRoleReaction),
+    resources: (resources ?? []).map(normalizeResource),
+    blockedPropertyChanges: (blockedPropertyChanges ?? []).map((block) => ({
+      ...block,
+      blockedFor: {
+        actorIds: [...(block.blockedFor?.actorIds ?? [])]
+      },
+      expiresAt: { ...(block.expiresAt ?? {}) },
+      metadata: { ...(block.metadata ?? {}) }
+    })),
     flags: { ...flags },
     counters: { ...counters },
     metadata: { ...metadata }
@@ -97,7 +113,7 @@ export function createSessionRole({
 // Esta funcion traduce una configuracion externa de seating al formato mecanico
 // de session.roles. No crea un tipo nuevo de objeto: convierte roles ya
 // definidos en roles concretos de sesion.
-export function buildRolesFromSeats(seats = [], roleDefinitions = {}) {
+export function buildRoles(seats = [], roleDefinitions = {}) {
   const counters = new Map();
 
   return (seats ?? []).map((seatEntry = {}, index) => {
@@ -107,20 +123,14 @@ export function buildRolesFromSeats(seats = [], roleDefinitions = {}) {
 
     const roleId = seatEntry.id || (roleKey ? `${roleKey}-${count}` : `empty-${index}`);
     const definition = roleDefinitions[roleKey] ?? {};
-    const actionTokens = (definition.actionTokens ?? []).map((token, tokenIndex) => ({
-      ...token,
-      id: token.id || `${roleId}-${normalizeId(token.actionId)}-${tokenIndex}`,
-      ownerRoleId: token.ownerRoleId ?? roleId
-    }));
-
-    return createSessionRole({
+    return createRole({
       id: roleId,
       roleKey,
       alignmentId: seatEntry.alignmentId ?? definition.alignmentId ?? null,
       playerId: seatEntry.playerId ?? seatEntry.player_id ?? null,
       seat: Number.isFinite(seatEntry.seat) ? seatEntry.seat : index,
       reactions: definition.reactions ?? [],
-      actionTokens,
+      resources: definition.resources ?? [],
       flags: definition.defaultFlags ?? {},
       counters: definition.defaultCounters ?? {},
       metadata: {

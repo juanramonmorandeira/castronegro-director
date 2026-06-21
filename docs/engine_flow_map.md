@@ -22,9 +22,9 @@ flowchart TD
   RoleStates[session.roles]
   GroupStates[session.groups]
   BuildPools[buildPools]
-  BuildStagePool[buildStagePool]
-  StagePools[session.stagePools]
-  AutomaticStages[automaticStages]
+  CreatePool[createPool]
+  CyclePools[session.cycle.pools]
+  PoolLifecycle[pool onEnter/onExit]
   CurrentStage[Current stage]
   StageModel[stageModel]
   Recipe[Recipe]
@@ -75,7 +75,7 @@ flowchart TD
 Lectura corta:
 
 ```text
-skin/setup -> buildSession -> roles + groups + stagePools -> stage actual -> receta -> restricciones -> accion pura -> resolver -> aplicar efectos -> eventos/reacciones -> automaticStages -> check_objectives -> specialStages
+skin/setup -> buildSession -> roles + groups + cycle.pools -> stage actual -> receta -> restricciones -> accion pura -> resolver -> aplicar efectos -> eventos/reacciones -> pool.onExit -> check_objectives -> specialStages
 ```
 
 ## Capas del motor
@@ -115,15 +115,15 @@ flowchart TD
   C[Groups seleccionados desde groupCatalog]
   D[Stages de sistema o por defecto]
   E[buildSession]
-  F[buildRolesFromSeats]
-  G[buildInitialGroups]
+  F[buildRoles]
+  G[buildGroups]
   H[buildPools]
-  I[buildStagePool]
+  I[createPool]
   J[createSession]
   K[validateSession]
   L[session.roles]
   M[session.groups]
-  N[session.stagePools]
+  N[session.cycle.pools]
   O[Session lista para ejecucion]
 
   A --> E
@@ -243,6 +243,18 @@ pools[poolKey] -> orden de stages dentro de ese pool
 entrar en cualquier pool normal, el ciclo comprueba si contiene stages
 pendientes y, si los tiene, los resuelve primero.
 
+Identidad usada por el flujo:
+
+```text
+cycle.id                 -> cycleId de la iteracion
+pool.key                 -> poolKey estable
+stage.key                -> stageKey de definicion
+stage.id                 -> stageId runtime unico
+```
+
+El cursor usa `stage.id`. `stage.key` puede repetirse cuando varios roles
+materializados aportan la misma definicion de stage.
+
 Ejemplo:
 
 ```js
@@ -259,8 +271,8 @@ createPool({
 })
 
 session.specialStages = [
-  { key: 'stage_01' },
-  { key: 'stage_02' }
+  { id: 'stage-special-stage_01-role-0', key: 'stage_01' },
+  { id: 'stage-special-stage_02-role-1', key: 'stage_02' }
 ]
 ```
 
@@ -360,8 +372,8 @@ aplicador:
 | El actor existe? | `actionModel.js` | `missing actor` |
 | Los objetivos existen y cumplen filtros? | `actionModel.js` | `in_play`, `not_self`, `not_same_alignment`, `distinct` |
 | Esta receta tiene una restriccion propia? | `constraintModel.js` | no repetir mismo objetivo en ciclos consecutivos |
-| Una accion queda bloqueada? | `actionModel.js` | `block_action` bloquea `set_in_play(false)` contra un target |
-| Un efecto genera consecuencias globales? | `resolverModel.js` | `linked` propaga `inPlay=false` |
+| Un cambio de propiedad queda bloqueado? | `roleModel.js` | `block_property_change` bloquea `inPlay=false` frente a actores concretos |
+| Un efecto genera consecuencias de group? | `groupModel.js` + `resolverModel.js` | `propagate_property_change` genera efectos derivados |
 | Como se escribe un cambio final? | `effectModel.js` | `set_property`, `set_group` |
 | La parte jugable ha concluido? | `objectiveModel.js` | `holder_reaches_in_play_parity`, `only_holder_group_remains_in_play`, `no_roles_in_play` |
 
@@ -381,7 +393,7 @@ graph LR
   I --> J
   J --> K{playOutcome concluyente}
   K -->|Si| O{Outcome estable}
-  O -->|Si| L[Ejecutar automaticStage conclude_play]
+  O -->|Si| L[Ejecutar conclude_play]
   O -->|No| N
   K -->|No| M[Continuar]
   L --> N[specialStages]
@@ -401,16 +413,12 @@ Regla de `specialStages`:
 Los eventos especiales se registran como stages pendientes en specialStages. Si
 check_objectives emite un playOutcome concluyente, primero se comprueba si algun
 stage pendiente puede alterar ese outcome. conclude_play se ejecuta como
-automaticStage final cuando el outcome es estable.
+operacion final cuando el outcome es estable.
 ```
 
-Excepcion actual:
-
-```text
-block_action guarda flags temporales directamente porque su funcion es marcar
-un bloqueo del ciclo actual. Si crece en complejidad, podria pasar tambien
-por una ruta de efectos mas estricta.
-```
+`block_property_change` guarda entradas tipadas en
+`role.blockedPropertyChanges`. `pool.onExit` revisa sus vencimientos antes de
+evaluar objetivos.
 
 ## Resolver vs Effect Model
 
@@ -470,8 +478,9 @@ graph TD
   B --> C[session.groups]
   C --> D{Grupo activo}
   D -->|No| E[No ocurre nada mas]
-  D -->|Si| F[resolverModel deriva efectos linked]
-  F --> G[effectModel aplica cambios]
+  D -->|Si| F[groupModel interpreta groupRules]
+  F --> G[resolverModel procesa efectos derivados]
+  G --> H[effectModel aplica cambios]
 ```
 
 Lectura:
@@ -479,7 +488,8 @@ Lectura:
 ```text
 link_targets no elimina a nadie.
 link_targets solo crea un grupo.
-El group linked tiene consecuencias cuando otro efecto lo activa.
+El group linked declara `propagate_property_change`. Su `type` no activa
+ninguna logica especial por si solo.
 ```
 
 ## Flujo de objectives
@@ -495,7 +505,7 @@ graph TD
   G -->|No| H[Registrar achievedObjectives]
   G -->|Si| I{SpecialStages puede alterar outcome}
   I -->|Si| J[Resolver specialStages antes]
-  I -->|No| K[Ejecutar automaticStage conclude_play]
+  I -->|No| K[Ejecutar conclude_play]
 ```
 
 Orden objetivo:
@@ -506,7 +516,7 @@ Orden objetivo:
 4. Emitir `playOutcome` si la parte jugable queda concluida.
 5. Cruzar `objectiveRule.dependencies` con `stage.influences` de stages
    pendientes en `specialStages`.
-6. Ejecutar `conclude_play` como automaticStage final si hay `playOutcome`
+6. Ejecutar `conclude_play` como operacion final si hay `playOutcome`
    concluyente y estable.
 
 Regla importante:
@@ -561,10 +571,10 @@ Cuando aparezca una mecanica nueva, seguir este orden:
 | Regla humana | Clasificacion abstracta | Lugar probable |
 |---|---|---|
 | La Vidente mira una carta | accion `inspect_role` | `actionModel.js` |
-| El Protector protege antes del ataque | accion `block_action` | `actionModel.js` |
+| El Protector protege antes del ataque | accion `block_property_change` | `actionModel.js` + `roleModel.js` |
 | No puede bloquear al mismo objetivo dos ciclos seguidos | restriccion `no_repeat_target` | `constraintModel.js` |
-| Cupido enlaza dos jugadores | accion `link_targets` + group linked futuro | `groupModel.js` |
-| Si un linked sale de juego, el otro tambien | consecuencia sistemica | `resolverModel.js` |
+| Cupido enlaza dos jugadores | accion `link_targets` + group con reglas | `groupModel.js` |
+| Si un miembro sale de juego, el otro tambien | `propagate_property_change` | `groupModel.js` + `resolverModel.js` |
 | Si solo quedan linked de alignments distintos, cumplen objective especial | objectiveRule sobre group linked | `session.objectiveRules` |
 | Un group de alignment alcanza al resto | `holder_reaches_in_play_parity` | `session.objectiveRules` |
 | Un jugador no puede elegir contra su linked | restriccion de seleccion | `stage.selectionRules.groupRestrictions` |

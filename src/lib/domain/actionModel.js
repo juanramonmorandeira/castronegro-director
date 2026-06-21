@@ -5,11 +5,10 @@
 // Acciones implementadas por ahora:
 // - inspect_role: revela informacion.
 // - set_in_play: intenta cambiar si un objetivo sigue en el juego principal.
-// - block_action: bloquea una accion concreta contra un objetivo.
+// - block_property_change: bloquea un cambio concreto contra un objetivo.
 // - link_targets: crea un grupo mecanico entre varios objetivos.
 // - select: resuelve una seleccion y devuelve chosen/empate/nulo.
-// - start_cycle: prepara un nuevo ciclo y limpia efectos temporales.
-// - conclude_play: concluye la parte jugable desde una automaticStage final.
+// - conclude_play: concluye la parte jugable desde pool.onExit.
 //
 // Importante:
 // - No sabe que es "La Vidente".
@@ -23,13 +22,14 @@
 import {
   EFFECT_TYPES,
   applyConcludePlay as applyConcludePlayFromModel,
-  applyStartCycle as applyStartCycleFromModel,
   applySetGroupEffect,
   applySetPropertyEffect,
-  getActionBlockKey,
-  getCurrentCycleId,
-  hasActionBlock
+  getCurrentCycleId
 } from './effectModel.js';
+import {
+  PROPERTY_BLOCK_EXPIRATION_TYPES,
+  addBlockedPropertyChange
+} from './roleModel.js';
 import {
   HISTORY_RESULTS,
   appendActionHistory,
@@ -45,10 +45,9 @@ import {
 export const ACTION_IDS = Object.freeze({
   INSPECT_ROLE: 'inspect_role',
   SET_IN_PLAY: 'set_in_play',
-  BLOCK_ACTION: 'block_action',
+  BLOCK_PROPERTY_CHANGE: 'block_property_change',
   LINK_TARGETS: 'link_targets',
   SELECT: 'select',
-  START_CYCLE: 'start_cycle',
   CONCLUDE_PLAY: 'conclude_play'
 });
 
@@ -86,7 +85,7 @@ export function canResolveWithoutActor(action) {
 // Comprueba si un objetivo cumple un filtro.
 //
 // Por ahora implementamos solo los filtros que necesitan inspect_role y
-// set_in_play y block_action:
+// set_in_play y block_property_change:
 // - in_play: el objetivo debe seguir participando en la partida principal.
 // - not_self: el actor no puede elegirse a si mismo.
 // - not_same_alignment: actor y objetivo no pueden pertenecer al mismo alignment.
@@ -223,18 +222,24 @@ export function validateActionDefinition(action) {
     }
   }
 
-  if (action?.id === ACTION_IDS.BLOCK_ACTION) {
-    const blockedAction = action?.effect?.blocks;
-    if (action?.effect?.type !== EFFECT_TYPES.BLOCK_ACTION) {
+  if (action?.id === ACTION_IDS.BLOCK_PROPERTY_CHANGE) {
+    const blockedPropertyChange = action?.effect?.blockedPropertyChange;
+    if (action?.effect?.type !== EFFECT_TYPES.BLOCK_PROPERTY_CHANGE) {
       errors.push({
         code: 'action/invalid-effect-type',
-        message: `${action.id} requires a block_action effect`
+        message: `${action.id} requires a block_property_change effect`
       });
     }
-    if (!blockedAction?.actionId) {
+    if (!blockedPropertyChange?.property) {
       errors.push({
-        code: 'action/missing-blocked-action',
-        message: `${action.id} requires effect.blocks.actionId`
+        code: 'action/missing-blocked-property',
+        message: `${action.id} requires effect.blockedPropertyChange.property`
+      });
+    }
+    if ((action?.effect?.blockedFor?.actorIds ?? []).length === 0) {
+      errors.push({
+        code: 'action/missing-blocked-actors',
+        message: `${action.id} requires effect.blockedFor.actorIds`
       });
     }
   }
@@ -331,55 +336,20 @@ export function applyRevealPropertyEffect({ action, actor, targets }) {
 // Para set_in_play guardamos property/value porque queremos distinguir:
 // - set_in_play inPlay=false: deja al objetivo fuera del juego principal.
 // - set_in_play inPlay=true: lo devuelve al juego principal.
-export function getBlockableActionDescriptor(action) {
-  if (action?.id === ACTION_IDS.SET_IN_PLAY) {
-    return {
-      actionId: action.id,
-      params: {
-        property: action?.effect?.property ?? 'inPlay',
-        value: action?.effect?.value
-      }
-    };
-  }
-
-  return {
-    actionId: action?.id ?? 'unknown',
-    params: action?.params ?? {}
-  };
-}
-
-// Devuelve la descripcion de accion que un bloqueo guarda como bloqueada.
-//
-// Ejemplo conceptual:
-// block_action(set_in_play, { property: 'inPlay', value: false }; target)
-//
-// En datos queda dividido asi:
-// - action.effect.blocks guarda set_in_play + params;
-// - input.targetIds guarda target;
-// - role.flags.blockedActions guarda la clave en el propio objetivo.
-export function getBlockedActionDescriptor(action) {
-  return action?.effect?.blocks ?? {
-    actionId: 'unknown',
-    params: {}
-  };
-}
-
-// Devuelve true si el objetivo tiene bloqueada esta accion concreta.
-export function isActionBlockedForTarget({ action, target }) {
-  return hasActionBlock(target, getBlockableActionDescriptor(action));
-}
-
 // Traduce efectos/bloqueos a un resultado resumido de historial.
 //
 // El detalle completo queda guardado en proposedEffects, finalEffects y
-// blockedActions. Este campo sirve para consultas rapidas.
-export function getHistoryResultFromResolution({ finalEffects = [], blockedActions = [] } = {}) {
+// preventedPropertyChanges. Este campo sirve para consultas rapidas.
+export function getHistoryResultFromResolution({
+  finalEffects = [],
+  preventedPropertyChanges = []
+} = {}) {
   const hasFinalEffects = (finalEffects ?? []).length > 0;
-  const hasBlockedActions = (blockedActions ?? []).length > 0;
+  const hasPreventedChanges = (preventedPropertyChanges ?? []).length > 0;
 
-  if (hasFinalEffects && hasBlockedActions) return HISTORY_RESULTS.PARTIAL;
+  if (hasFinalEffects && hasPreventedChanges) return HISTORY_RESULTS.PARTIAL;
   if (hasFinalEffects) return HISTORY_RESULTS.APPLIED;
-  if (hasBlockedActions) return HISTORY_RESULTS.BLOCKED;
+  if (hasPreventedChanges) return HISTORY_RESULTS.BLOCKED;
   return HISTORY_RESULTS.NO_EFFECT;
 }
 
@@ -399,6 +369,22 @@ export function applyFinalEffects({ session, finalEffects = [] }) {
   }, session);
 }
 
+function getImmediateCause(actor = null, context = {}) {
+  if (context.causedBy?.id) {
+    return {
+      type: context.causedBy.type ?? 'role',
+      id: context.causedBy.id
+    };
+  }
+
+  return actor?.id
+    ? {
+        type: 'role',
+        id: actor.id
+      }
+    : null;
+}
+
 // Resuelve la consecuencia principal de set_in_play.
 //
 // Distincion importante:
@@ -410,27 +396,30 @@ export function applyFinalEffects({ session, finalEffects = [] }) {
 export function resolveSetInPlayEffect({ session, action, actor, targets, context = {} }) {
   const visibility = action?.visibility ?? VISIBILITY.STORYTELLER_ONLY;
   const currentCycleId = getCurrentCycleId(session);
-  const blockedTargetIds = new Set(
-    targets
-      .filter((target) => isActionBlockedForTarget({ action, target }))
-      .map((target) => target.id)
-  );
-  const proposedEffects = targets
-    .filter((target) => !blockedTargetIds.has(target.id))
-    .map((target) => ({
-      ...action.effect,
-      targetId: target.id
+  const causedBy = getImmediateCause(actor, context);
+  const proposedEffects = targets.map((target) => ({
+    ...action.effect,
+    causedBy,
+    targetId: target.id
   }));
   const effectResolution = resolveProposedEffects({ session, proposedEffects });
-  const { finalEffects } = effectResolution;
-  const blockedActions = [...blockedTargetIds].map((targetId) => ({
-    actionId: action.id,
-    reason: 'blocked_action',
-    targetId
-  }));
+  const { finalEffects, blockedEffects } = effectResolution;
+  const preventedPropertyChanges = blockedEffects
+    .filter((effect) => effect.type === EFFECT_TYPES.SET_PROPERTY)
+    .map((effect) => ({
+      property: effect.property,
+      value: effect.value,
+      reason: effect.reason,
+      targetId: effect.targetId,
+      causedBy: effect.causedBy ?? null
+    }));
+  const blockedTargetIds = new Set(
+    preventedPropertyChanges.map((change) => change.targetId)
+  );
   const nextSession = appendActionHistory(applyFinalEffects({ session, finalEffects }), {
     cycleId: currentCycleId,
     poolKey: context.poolKey ?? null,
+    stageId: context.stageId ?? null,
     stageKey: context.stageKey ?? null,
     actionKey: context.actionKey ?? action.key ?? action.id,
     actionId: action.id,
@@ -439,11 +428,11 @@ export function resolveSetInPlayEffect({ session, action, actor, targets, contex
     targetIds: targets.map((target) => target.id),
     proposedEffects,
     finalEffects,
-    blockedActions,
-    blockedEffects: effectResolution.blockedEffects,
+    preventedPropertyChanges,
+    blockedEffects,
     result: getHistoryResultFromResolution({
       finalEffects,
-      blockedActions
+      preventedPropertyChanges
     })
   });
 
@@ -457,83 +446,72 @@ export function resolveSetInPlayEffect({ session, action, actor, targets, contex
       targets: targets.map((target) => ({
         targetId: target.id,
         actionAttempted: true,
-        actionBlocked: blockedTargetIds.has(target.id),
-        failureReason: blockedTargetIds.has(target.id) ? 'blocked_action' : null
+        propertyChangePrevented: blockedTargetIds.has(target.id),
+        failureReason: blockedTargetIds.has(target.id) ? 'blocked_property_change' : null
       })),
       proposedEffects,
       finalEffects,
-      blockedActions,
-      blockedEffects: effectResolution.blockedEffects
+      causedBy,
+      preventedPropertyChanges,
+      blockedEffects
     }
   };
 }
 
-// Aplica un bloqueo temporal contra una accion.
-//
-// block_action es la primitiva del motor. Una receta como block_out_of_play
-// puede definirse encima de ella indicando:
-//
-// {
-//   actionId: 'set_in_play',
-//   params: { property: 'inPlay', value: false }
-// }
-//
-// Esta accion es anticipada, no reactiva:
-// - Si se aplica antes de set_in_play, ese intento falla contra el objetivo.
-// - Si el objetivo ya no esta en juego, el filtro in_play la rechaza.
-export function applyBlockAction({ session, action, actor, targets, context = {} }) {
-  const blockedAction = getBlockedActionDescriptor(action);
-  const blockKey = getActionBlockKey(blockedAction);
+export function applyPropertyBlock({ session, action, actor, targets, context = {} }) {
+  const blockedPropertyChange = action.effect?.blockedPropertyChange ?? {};
   const visibility = action?.visibility ?? VISIBILITY.STORYTELLER_ONLY;
   const currentCycleId = getCurrentCycleId(session);
+  const causedBy = getImmediateCause(actor, context);
   const targetIds = new Set(targets.map((target) => target.id));
+  const blockedFor = action.effect?.blockedFor ?? { actorIds: [] };
+  const expiresAt = action.effect?.expiresAt ?? {
+    type: PROPERTY_BLOCK_EXPIRATION_TYPES.SESSION
+  };
 
   const sessionWithBlock = {
     ...session,
     roles: (session.roles ?? []).map((role) => {
       if (!targetIds.has(role.id)) return role;
-
-      const blockedActions = {
-        ...(role.flags?.blockedActions ?? {}),
-        [blockKey]: true
-      };
-      const nextFlags = {
-        ...(role.flags ?? {}),
-        blockedActions
-      };
-
-      return {
-        ...role,
-        flags: nextFlags
-      };
+      return addBlockedPropertyChange(role, {
+        property: blockedPropertyChange.property,
+        value: blockedPropertyChange.value,
+        blockedFor,
+        expiresAt,
+        metadata: {
+          createdByRoleId: actor?.id ?? null,
+          actionKey: context.actionKey ?? action.key ?? action.id
+        }
+      });
     })
   };
   const nextSession = appendActionHistory(sessionWithBlock, {
     cycleId: currentCycleId,
     poolKey: context.poolKey ?? null,
+    stageId: context.stageId ?? null,
     stageKey: context.stageKey ?? null,
     actionKey: context.actionKey ?? action.key ?? action.id,
-    actionId: action?.id ?? ACTION_IDS.BLOCK_ACTION,
+    actionId: action?.id ?? ACTION_IDS.BLOCK_PROPERTY_CHANGE,
     actionSignature: getActionHistorySignature(action),
     actorIds: [actor.id],
     targetIds: targets.map((target) => target.id),
-    blockKey,
-    blockedAction,
     result: HISTORY_RESULTS.APPLIED
   });
 
   return {
     session: nextSession,
     result: {
-      type: EFFECT_TYPES.BLOCK_ACTION,
+      type: EFFECT_TYPES.BLOCK_PROPERTY_CHANGE,
       visibility,
       actorIds: [actor.id],
-      blockKey,
-      blockedAction,
+      blockedPropertyChange,
+      blockedFor,
+      expiresAt,
+      causedBy,
       cycleId: currentCycleId,
       targets: targets.map((target) => ({
         targetId: target.id,
-        blockedAction: blockKey
+        blockedPropertyChange
       }))
     }
   };
@@ -544,13 +522,14 @@ export function applyBlockAction({ session, action, actor, targets, context = {}
 // Separacion conceptual:
 // - link_targets es la accion: alguien intenta enlazar objetivos.
 // - set_group es el efecto final: se escribe un grupo en la sesion.
-// - linked se interpreta despues en resolverModel cuando otro efecto lo active.
+// - las groupRules materializadas deciden despues si un cambio se propaga.
 export function applyLinkTargets({ session, action, actor, targets }) {
   const visibility = action?.visibility ?? VISIBILITY.STORYTELLER_ONLY;
   const currentCycleId = getCurrentCycleId(session);
   const proposedEffects = [
     {
       ...action.effect,
+      causedBy: actor?.id ? { type: 'role', id: actor.id } : null,
       roleIds: targets.map((target) => target.id),
       sourceActionId: action.id
     }
@@ -638,18 +617,13 @@ export function applySelection({ session, action, input = {} }) {
 // En esta version todavia no tenemos una cola real de efectos pendientes. Las
 // acciones actuales resuelven y aplican sus efectos inmediatamente. Aun asi,
 // mantenemos esta accion de sistema para limpiar bloqueos temporales y avanzar
-// currentCycleId antes del siguiente poolConcealed.
+// cycle.id antes del siguiente poolConcealed.
 //
 // Limpia flags temporales para empezar el siguiente ciclo sin basura:
-// - blockedActions.
-export function applyStartCycleAction({ session, action }) {
-  const visibility = action?.visibility ?? VISIBILITY.ALL;
-  return applyStartCycleFromModel({ session, visibility });
-}
-
+// - preventedPropertyChanges.
 // Ejecuta conclude_play.
 //
-// Esta accion la dispara una automaticStage final cuando el playOutcome ya es
+// Esta accion la dispara una operacion de pool.onExit cuando el playOutcome es
 // estable. No se encola en specialStages.
 export function applyConcludePlayAction({ session, action, input = {} }) {
   const visibility = action?.visibility ?? VISIBILITY.ALL;
@@ -746,7 +720,7 @@ export function resolveSetInPlay(session, action, input = {}, context = {}) {
   };
 }
 
-// Ejecuta block_action o una receta basada en block_action.
+// Ejecuta block_property_change o una receta basada en esa primitiva.
 //
 // Flujo:
 // 1. Busca al actor.
@@ -754,7 +728,7 @@ export function resolveSetInPlay(session, action, input = {}, context = {}) {
 // 3. Valida count y filtros. Las restricciones ya las valido recipeModel.
 // 4. Marca al objetivo como prevenido contra la accion indicada.
 // 5. Registra el bloqueo aplicado en session.actionHistory.
-export function resolveBlockAction(session, action, input = {}, context = {}) {
+export function resolveBlockPropertyChange(session, action, input = {}, context = {}) {
   const actors = getActionActors(session, input.actorIds ?? []);
   const actor = actors[0] ?? null;
   const targets = (input.targetIds ?? []).map((id) => findRole(session, id));
@@ -763,14 +737,20 @@ export function resolveBlockAction(session, action, input = {}, context = {}) {
   if (!validation.ok) {
     return {
       ok: false,
-      actionId: action?.id ?? ACTION_IDS.BLOCK_ACTION,
+      actionId: action?.id ?? ACTION_IDS.BLOCK_PROPERTY_CHANGE,
       errors: validation.errors,
       session,
       result: null
     };
   }
 
-  const applied = applyBlockAction({ session, action, actor, targets, context });
+  const applied = applyPropertyBlock({
+    session,
+    action,
+    actor,
+    targets,
+    context
+  });
 
   return {
     ok: true,
@@ -841,22 +821,6 @@ export function resolveSelection(session, action, input = {}) {
   };
 }
 
-// Ejecuta start_cycle.
-//
-// Esta accion normalmente la ejecutara el sistema al comenzar un ciclo normal.
-// Por eso no exige actor ni objetivos manuales.
-export function resolveStartCycle(session, action) {
-  const applied = applyStartCycleAction({ session, action });
-
-  return {
-    ok: true,
-    actionId: action?.id ?? ACTION_IDS.START_CYCLE,
-    errors: [],
-    session: applied.session,
-    result: applied.result
-  };
-}
-
 export function resolveConcludePlay(session, action, input = {}) {
   const definitionValidation = validateActionDefinition(action);
 
@@ -886,11 +850,10 @@ export function resolveConcludePlay(session, action, input = {}) {
 // Por ahora entiende:
 // - inspect_role
 // - set_in_play
-// - block_action
+// - block_property_change
 // - block_out_of_play
 // - link_targets
 // - select
-// - start_cycle
 //
 // Las proximas acciones genericas se conectaran aqui.
 export function resolveAction(session, action, input = {}, context = {}) {
@@ -900,17 +863,14 @@ export function resolveAction(session, action, input = {}, context = {}) {
   if (action?.id === ACTION_IDS.SET_IN_PLAY) {
     return resolveSetInPlay(session, action, input, context);
   }
-  if (action?.id === ACTION_IDS.BLOCK_ACTION) {
-    return resolveBlockAction(session, action, input, context);
+  if (action?.id === ACTION_IDS.BLOCK_PROPERTY_CHANGE) {
+    return resolveBlockPropertyChange(session, action, input, context);
   }
   if (action?.id === ACTION_IDS.LINK_TARGETS) {
     return resolveLinkTargets(session, action, input);
   }
   if (action?.id === ACTION_IDS.SELECT) {
     return resolveSelection(session, action, input);
-  }
-  if (action?.id === ACTION_IDS.START_CYCLE) {
-    return resolveStartCycle(session, action);
   }
   if (action?.id === ACTION_IDS.CONCLUDE_PLAY) {
     return resolveConcludePlay(session, action, input);

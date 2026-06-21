@@ -7,10 +7,12 @@
 // -----------------------------------------------------------------------------
 
 import { createPlayer } from './playerDefinition.js';
-import { buildPools, createPool } from './poolDefinition.js';
+import { buildPools } from './poolDefinition.js';
+import { createCycle } from './cycleModel.js';
 import { createGroup } from './groupDefinition.js';
-import { buildInitialGroups } from './groupModel.js';
-import { buildRolesFromSeats, createSessionRole } from './roleDefinition.js';
+import { buildGroups } from './groupModel.js';
+import { buildRoles, createRole } from './roleDefinition.js';
+import { assignUniqueStageIds, createStage } from './stageDefinition.js';
 import { SESSION_STATUSES, normalizeId } from './sessionModel.js';
 import { validateSession } from './sessionValidation.js';
 
@@ -26,7 +28,6 @@ function createSessionGroup(groupInput = {}) {
     sourceActionId: group.sourceActionId,
     roleIds: group.roleIds,
     groupRules: group.groupRules,
-    stageDefinitions: group.stageDefinitions,
     metadata: { ...group.metadata }
   };
 }
@@ -39,25 +40,31 @@ export function createSession({
   players = [],
   roles = [],
   groups = [],
-  stagePools = createPool(),
+  cycle = createCycle(),
   specialStages = [],
   specialStagesActive = specialStages.length > 0,
   objectiveRules = [],
   achievedObjectives = [],
   playOutcome = null,
   actionHistory = [],
+  cycleHistory = [],
+  poolHistory = [],
   stageHistory = [],
   specialStagesHistory = [],
   log = [],
   metadata = {}
 } = {}) {
+  const normalizedSpecialStages = assignUniqueStageIds(
+    specialStages.map((stage) => createStage(stage))
+  );
   const normalizedSpecialStagesHistory =
     specialStagesHistory.length > 0
       ? [...specialStagesHistory]
-      : specialStages.flatMap((stage, index) => [
+      : normalizedSpecialStages.flatMap((stage, index) => [
           {
             id: `special-stage-${stage.key ?? 'stage'}-queued-${index}`,
-            cycleId: metadata?.currentCycleId ?? 0,
+            cycleId: cycle?.id ?? 0,
+            stageId: stage.id,
             stageKey: stage.key ?? null,
             operation: 'queued',
             metadata: { initial: true }
@@ -66,7 +73,8 @@ export function createSession({
             ? [
                 {
                   id: `special-stage-${stage.key ?? 'stage'}-started-${index}`,
-                  cycleId: metadata?.currentCycleId ?? 0,
+                  cycleId: cycle?.id ?? 0,
+                  stageId: stage.id,
                   stageKey: stage.key ?? null,
                   operation: 'started',
                   metadata: { initial: true }
@@ -81,15 +89,17 @@ export function createSession({
     status,
     settings: { ...settings },
     players: players.map(createPlayer),
-    roles: roles.map(createSessionRole),
+    roles: roles.map(createRole),
     groups: groups.map(createSessionGroup),
-    stagePools,
-    specialStages: [...specialStages],
+    cycle: createCycle(cycle),
+    specialStages: normalizedSpecialStages,
     specialStagesActive: specialStagesActive === true,
     objectiveRules: [...objectiveRules],
     achievedObjectives: [...achievedObjectives],
     playOutcome,
     actionHistory: [...actionHistory],
+    cycleHistory: [...cycleHistory],
+    poolHistory: [...poolHistory],
     stageHistory: [...stageHistory],
     specialStagesHistory: normalizedSpecialStagesHistory,
     log: [...log],
@@ -118,14 +128,14 @@ function getDefinitionList(definitions = []) {
 // Ensambla una sesion desde definiciones ya escogidas.
 //
 // createSession solo normaliza un estado de sesion. buildSession hace el paso
-// superior: asientos -> roles y role/group/default stages -> stagePools.
+// superior: asientos -> roles y role/group/default stages -> cycle.pools.
 export function buildSession({
   seats = [],
   roleDefinitions = {},
   groupDefinitions = [],
   defaultStages = [],
   systemStages = [],
-  stagePools = null,
+  cycle = null,
   roles = [],
   validate = true,
   validationOptions = { requireAssigned: true },
@@ -134,20 +144,20 @@ export function buildSession({
   const roleDefinitionMap = getRoleDefinitionMap(roleDefinitions);
   const builtRoles =
     roles.length > 0
-      ? roles.map(createSessionRole)
-      : buildRolesFromSeats(seats, roleDefinitionMap);
+      ? roles.map(createRole)
+      : buildRoles(seats, roleDefinitionMap);
   const sessionBeforePools = createSession({
     ...sessionInput,
     roles: builtRoles,
     groups: []
   });
-  const groups = buildInitialGroups(sessionBeforePools, getDefinitionList(groupDefinitions));
+  const groups = buildGroups(sessionBeforePools, getDefinitionList(groupDefinitions));
   const sessionWithGroups = {
     ...sessionBeforePools,
     groups
   };
-  const poolBuild = stagePools
-    ? { ok: true, errors: [], stagePools, specialStages: sessionInput.specialStages ?? [] }
+  const poolBuild = cycle?.pools
+    ? { ok: true, errors: [], pools: cycle.pools, specialStages: sessionInput.specialStages ?? [] }
     : buildPools({
         session: sessionWithGroups,
         roleDefinitions: Object.values(roleDefinitionMap),
@@ -166,7 +176,10 @@ export function buildSession({
 
   const sessionWithPools = {
     ...sessionWithGroups,
-    stagePools: poolBuild.stagePools,
+    cycle: createCycle({
+      ...(cycle ?? {}),
+      pools: poolBuild.pools
+    }),
     specialStages: [...(poolBuild.specialStages ?? [])],
     specialStagesActive: (poolBuild.specialStages ?? []).length > 0
   };

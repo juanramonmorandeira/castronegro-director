@@ -15,6 +15,7 @@
 import { resolveAction, findRole } from './actionModel.js';
 import { evaluateRecipeConstraints } from './constraintModel.js';
 import { normalizeId } from './sessionModel.js';
+import { materializePropertyBlockExpiration } from './roleModel.js';
 
 export function getRecipeKey(recipe = {}) {
   return normalizeId(recipe.key ?? recipe.actionKey ?? recipe.id);
@@ -53,6 +54,51 @@ export function getRecipeActorAndTargets(session, input = {}) {
 export function getRecipeConstraints(recipe = {}) {
   if (Array.isArray(recipe?.constraints)) return recipe.constraints;
   return [];
+}
+
+function resolveBlockedForActorIds(session = {}, blockedFor = {}) {
+  const explicitActorIds = blockedFor.actorIds ?? [];
+  const groupActorIds = (blockedFor.groupIds ?? []).flatMap((groupId) => {
+    const group = (session.groups ?? []).find(
+      (entry) => entry.id === groupId || entry.key === groupId
+    );
+    return group?.id ? [group.id] : [];
+  });
+  const alignmentActorIds = (session.roles ?? [])
+    .filter((role) => (blockedFor.alignmentIds ?? []).includes(role.alignmentId))
+    .map((role) => role.id);
+
+  return [...new Set([...explicitActorIds, ...groupActorIds, ...alignmentActorIds])];
+}
+
+function materializeRecipeForSession(session = {}, recipe = {}, context = {}) {
+  if (recipe.effect?.type !== 'block_property_change') {
+    return { ok: true, errors: [], recipe };
+  }
+
+  const expiration = materializePropertyBlockExpiration(
+    session,
+    recipe.effect.duration,
+    context
+  );
+  if (!expiration.ok) {
+    return { ok: false, errors: expiration.errors, recipe: null };
+  }
+
+  return {
+    ok: true,
+    errors: [],
+    recipe: {
+      ...recipe,
+      effect: {
+        ...recipe.effect,
+        blockedFor: {
+          actorIds: resolveBlockedForActorIds(session, recipe.effect.blockedFor)
+        },
+        expiresAt: expiration.expiresAt
+      }
+    }
+  };
 }
 
 export function validateRecipeConstraints({ session, recipe, input = {} }) {
@@ -97,7 +143,19 @@ export function resolveRecipe(session, recipe, input = {}, context = {}) {
     };
   }
 
-  return resolveAction(session, getActionFromRecipe(recipe), input, {
+  const materialization = materializeRecipeForSession(session, recipe, context);
+  if (!materialization.ok) {
+    return {
+      ok: false,
+      actionId: recipe?.id ?? null,
+      actionKey,
+      errors: materialization.errors,
+      session,
+      result: null
+    };
+  }
+
+  return resolveAction(session, getActionFromRecipe(materialization.recipe), input, {
     ...context,
     actionKey
   });

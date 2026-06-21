@@ -4,7 +4,7 @@
 //
 // groupDefinition.js describe como se define un grupo. Este modelo trabaja con
 // los grupos ya presentes en una sesion:
-// - crea los grupos iniciales desde reglas de membresia;
+// - ensambla grupos desde reglas de membresia;
 // - consulta grupos y roles miembros;
 // - anade o elimina roles de un grupo durante la partida.
 //
@@ -12,7 +12,12 @@
 // { id, key, type, active, roleIds, groupRules, metadata }.
 // -----------------------------------------------------------------------------
 
-import { createGroup, GROUP_MEMBERSHIP_RULE_TYPES } from './groupDefinition.js';
+import {
+  createGroup,
+  GROUP_MEMBERSHIP_RULE_TYPES,
+  GROUP_RULE_TARGETS,
+  GROUP_RULE_TYPES
+} from './groupDefinition.js';
 import { normalizeId } from './sessionModel.js';
 
 function uniqueIds(ids = []) {
@@ -78,7 +83,7 @@ function createSessionGroup(groupDefinition = {}, roleIds = []) {
 }
 
 // Construye los grupos iniciales de sesion desde definiciones de grupo.
-export function buildInitialGroups(session = {}, groupDefinitions = []) {
+export function buildGroups(session = {}, groupDefinitions = []) {
   return (groupDefinitions ?? []).map((groupDefinition) =>
     createSessionGroup(
       groupDefinition,
@@ -136,6 +141,54 @@ export function getGroupMemberRoleIds(session = {}, roleId = null, type = null) 
     findGroupsForRole(session, roleId, type)
       .flatMap((group) => group.roleIds ?? [])
       .filter((memberRoleId) => memberRoleId && memberRoleId !== roleId)
+  );
+}
+
+function groupRuleMatchesEffect(rule = {}, effect = {}) {
+  return (
+    effect?.type === 'set_property' &&
+    effect?.targetType === 'role' &&
+    rule.when?.property === effect.property &&
+    rule.when?.value === effect.value
+  );
+}
+
+function getGroupRuleTargetIds(group = {}, sourceRoleId = null, rule = {}) {
+  if (rule.targets === GROUP_RULE_TARGETS.OTHER_MEMBERS) {
+    return (group.roleIds ?? []).filter((roleId) => roleId !== sourceRoleId);
+  }
+  return [];
+}
+
+// Interpreta las reglas declaradas por los groups que contienen al objetivo de
+// un efecto. No aplica cambios: devuelve nuevos efectos para que resolverModel
+// los procese mediante la misma cola y las mismas validaciones.
+export function getGroupRuleEffects({ session = {}, effect = {} } = {}) {
+  if (effect?.targetType !== 'role' || !effect?.targetId) return [];
+
+  return findGroupsForRole(session, effect.targetId).flatMap((group) =>
+    (group.groupRules ?? []).flatMap((rule) => {
+      if (rule.type !== GROUP_RULE_TYPES.PROPAGATE_PROPERTY_CHANGE) return [];
+      if (!groupRuleMatchesEffect(rule, effect)) return [];
+
+      return getGroupRuleTargetIds(group, effect.targetId, rule).map((targetId) => ({
+        type: 'set_property',
+        targetType: 'role',
+        targetId,
+        property: rule.apply.property,
+        value: rule.apply.value,
+        causedBy: {
+          type: 'group',
+          id: group.id
+        },
+        derivedFrom: {
+          type: 'group_rule',
+          groupId: group.id,
+          groupRuleType: rule.type,
+          sourceTargetId: effect.targetId
+        }
+      }));
+    })
   );
 }
 

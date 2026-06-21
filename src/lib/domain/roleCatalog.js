@@ -2,13 +2,12 @@
 // -----------------------------------------------------------------------------
 // Catalogo de roles mecanicos predefinidos.
 //
-// El constructor unico de rol es createRole. El catalogo guarda roles ya
-// definidos para que las sesiones puedan reutilizarlos sin duplicar datos.
+// El catalogo usa defineRole porque guarda definiciones previas a session.
 // -----------------------------------------------------------------------------
 
 import { POOL_KEYS } from './sessionModel.js';
 import { getCatalogStage, STAGE_CATALOG_IDS } from './stageCatalog.js';
-import { createRole, ROLE_DEFINITION_TYPES } from './roleDefinition.js';
+import { defineRole, ROLE_DEFINITION_TYPES } from './roleDefinition.js';
 import {
   EVENT_RESPONSE_TYPES,
   EVENT_TRIGGER_TARGETS,
@@ -24,7 +23,7 @@ export const ROLE_CATALOG_IDS = Object.freeze({
 });
 
 export const ROLE_CATALOG = Object.freeze({
-  [ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS]: createRole({
+  [ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS]: defineRole({
     key: ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS,
     type: ROLE_DEFINITION_TYPES.ROLE,
     stageDefinitions: [
@@ -40,7 +39,7 @@ export const ROLE_CATALOG = Object.freeze({
     ]
   }),
 
-  [ROLE_CATALOG_IDS.ROLE_INSPECTS]: createRole({
+  [ROLE_CATALOG_IDS.ROLE_INSPECTS]: defineRole({
     key: ROLE_CATALOG_IDS.ROLE_INSPECTS,
     type: ROLE_DEFINITION_TYPES.ROLE,
     stageDefinitions: [
@@ -55,7 +54,7 @@ export const ROLE_CATALOG = Object.freeze({
     ]
   }),
 
-  [ROLE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY]: createRole({
+  [ROLE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY]: defineRole({
     key: ROLE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY,
     type: ROLE_DEFINITION_TYPES.ROLE,
     stageDefinitions: [
@@ -70,7 +69,7 @@ export const ROLE_CATALOG = Object.freeze({
     ]
   }),
 
-  [ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL]: createRole({
+  [ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL]: defineRole({
     key: ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL,
     type: ROLE_DEFINITION_TYPES.ROLE,
     stageDefinitions: [
@@ -85,7 +84,7 @@ export const ROLE_CATALOG = Object.freeze({
     ]
   }),
 
-  [ROLE_CATALOG_IDS.ROLE_REACTIVE]: createRole({
+  [ROLE_CATALOG_IDS.ROLE_REACTIVE]: defineRole({
     key: ROLE_CATALOG_IDS.ROLE_REACTIVE,
     type: ROLE_DEFINITION_TYPES.ROLE,
     stageDefinitions: [],
@@ -132,7 +131,7 @@ export function getCatalogRole(roleCatalogId, overrides = {}) {
   const baseRole = ROLE_CATALOG[roleCatalogId];
   if (!baseRole) return null;
 
-  return createRole({
+  return defineRole({
     ...cloneCatalogValue(baseRole),
     ...overrides,
     stageDefinitions: overrides.stageDefinitions

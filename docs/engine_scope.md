@@ -20,10 +20,9 @@ Ejemplos actuales:
 
 - `inspect_role`: inspecciona una propiedad de un objetivo.
 - `set_in_play`: intenta cambiar `inPlay`.
-- `block_action`: bloquea una accion concreta sobre un objetivo concreto.
+- `block_property_change`: bloquea un cambio de propiedad para actores concretos.
 - `link_targets`: intenta enlazar varios objetivos.
-- `vote`: cuenta elecciones y devuelve un resultado.
-- `start_cycle`: prepara el nuevo ciclo normal.
+- `select`: resuelve una seleccion y devuelve un resultado.
 
 La accion no es narrativa. Una skin puede presentar `link_targets` como
 "enamorar", "sincronizar" o "atar destinos"; el motor solo ve la accion.
@@ -79,9 +78,8 @@ Ejemplos actuales:
 
 - `reveal_property`
 - `set_property`
-- `block_action`
+- `block_property_change`
 - `set_group`
-- `start_cycle`
 
 El aplicador de efectos escribe datos, pero no decide si una accion era valida.
 
@@ -93,8 +91,7 @@ La sesion es el estado vivo de la partida:
 - `roles`
 - `groups`
 - `groups`
-- `stagePools` en el modelo conceptual. En el codigo actual todavia aparece
-  como `stagePools`.
+- `session.cycle.pools` como mapa de pools runtime.
 - `actionHistory`
 - `stageHistory` en el modelo conceptual. En el codigo actual todavia aparece
   como `stageHistory`.
@@ -115,7 +112,7 @@ Stage actual
 -> Effect
 -> Session
 -> Event
--> automaticStages.onExit
+-> pool.onExit
 -> check_objectives
 -> conclude_play si la parte jugable concluye
 ```
@@ -124,17 +121,17 @@ El loop normal de la parte jugable es:
 
 ```text
 specialStages inicial si hay stages pendientes
--> automaticStages.onEnter de poolConcealed: start_cycle
+-> cycle.startCycle
 -> poolConcealed
--> automaticStages.onExit: check_objectives
+-> pool.onExit: review_property_blocks, check_objectives
 -> specialStages si hay stages pendientes
 -> poolExposed
--> automaticStages.onExit: check_objectives
+-> pool.onExit: review_property_blocks, check_objectives
 -> specialStages si hay stages pendientes
 ```
 
 Los stages especiales se registran en `specialStages`. `conclude_play` no se
-registra como stage especial: se ejecuta como automaticStage final cuando existe
+registra como stage especial: se ejecuta como operacion final cuando existe
 un playOutcome estable. Si aun hay stages pendientes capaces de alterar ese
 outcome, `conclude_play` no debe ejecutarse todavia.
 
@@ -145,8 +142,8 @@ al flujo de administracion de la aplicacion.
 `resolveCurrentStage` ejecuta una receta, pero no cierra el stage. `completeCurrentStage`
 marca el stage como `done` y avanza el cursor.
 
-Si ese avance dispara automaticStages, `completeCurrentStage` devuelve
-`automaticStageResults` con las ejecuciones realizadas.
+Si ese avance dispara operaciones de ciclo de vida, `completeCurrentStage`
+devuelve `lifecycleResults` con las ejecuciones realizadas.
 
 ## Regla de nombres
 
@@ -155,7 +152,7 @@ Preferimos nombres mecanicos y anonimos:
 ```text
 set_property inPlay false
 set_group linked true
-block_action set_in_play false
+block_property_change inPlay false
 ```
 
 Evitamos nombres narrativos o ligados a una ambientacion. La skin decide si

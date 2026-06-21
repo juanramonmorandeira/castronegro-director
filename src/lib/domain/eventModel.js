@@ -14,7 +14,7 @@
 import { createStage } from './stageDefinition.js';
 import { EFFECT_TYPES } from './effectModel.js';
 import { STAGE_STATUSES, normalizeId } from './sessionModel.js';
-import { appendSpecialStage, getSpecialStages } from './specialStagesModel.js';
+import { appendSpecialStage } from './specialStagesModel.js';
 
 export const EVENT_TYPES = Object.freeze({
   PROPERTY_CHANGED: 'property_changed'
@@ -60,6 +60,7 @@ function getPropertyChangeEvent({ previousSession, effect, source = {} }) {
       actionId: source.actionId ?? null,
       actionKey: source.actionKey ?? null,
       poolKey: source.poolKey ?? null,
+      stageId: source.stageId ?? null,
       stageKey: source.stageKey ?? null,
       effect
     }
@@ -68,7 +69,7 @@ function getPropertyChangeEvent({ previousSession, effect, source = {} }) {
 
 // Convierte efectos finales ya aplicados en eventos mecanicos.
 //
-// Usamos finalEffects, no proposedEffects, porque una accion bloqueada no debe
+// Usamos finalEffects, no proposedEffects, porque un cambio impedido no debe
 // disparar una reaccion: no produjo cambio real de estado.
 export function getEventsFromActionResult({
   previousSession,
@@ -79,6 +80,7 @@ export function getEventsFromActionResult({
     actionId: actionResult?.actionId ?? null,
     actionKey: context.actionKey ?? null,
     poolKey: context.poolKey ?? null,
+    stageId: context.stageId ?? null,
     stageKey: context.stageKey ?? null
   };
 
@@ -115,26 +117,11 @@ export function getTriggeredReactions({ session = {}, events = [] } = {}) {
   );
 }
 
-function getUniqueStageKey(specialStages, baseKey) {
-  const existingKeys = new Set((specialStages ?? []).map((stage) => stage.key));
-  const normalizedBaseKey = normalizeId(baseKey || 'event_stage');
-
-  if (!existingKeys.has(normalizedBaseKey)) return normalizedBaseKey;
-
-  let index = 1;
-  let nextKey = `${normalizedBaseKey}_${index}`;
-  while (existingKeys.has(nextKey)) {
-    index += 1;
-    nextKey = `${normalizedBaseKey}_${index}`;
-  }
-  return nextKey;
-}
-
 function createStageFromReactionResponse({ session, triggeredReaction }) {
   const response = triggeredReaction.reaction.response ?? {};
   const stage = createStage({
     ...(response.stage ?? {}),
-    key: getUniqueStageKey(getSpecialStages(session), response.stage?.key),
+    key: normalizeId(response.stage?.key || 'event_stage'),
     poolKey: null,
     special: true,
     status: response.stage?.status ?? STAGE_STATUSES.ENABLED,
