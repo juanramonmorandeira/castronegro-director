@@ -28,7 +28,7 @@ import { appendEntry } from './historyModel.js';
 import { resolveRecipe } from './recipeModel.js';
 import { ACTION_IDS, VISIBILITY, resolveAction } from './actionModel.js';
 import { processActionResultEvents } from './eventModel.js';
-import { normalizeId } from './sessionModel.js';
+import { CURRENT_STAGE_SOURCES, normalizeId } from './sessionModel.js';
 import { getCatalogRecipe, RECIPE_KEYS } from './recipeCatalog.js';
 import {
   POOL_HISTORY_OPERATIONS,
@@ -44,12 +44,14 @@ import {
 } from './objectiveModel.js';
 import { SELECTION_OUTCOME_TYPES } from './selectionModel.js';
 import {
-  activateSpecialStages,
+  startSpecialStages,
   completeSpecialStage,
   getCurrentSpecialStage,
   hasPendingSpecialStages
 } from './specialStagesModel.js';
 import { reviewPropertyBlocks } from './roleModel.js';
+import { createMessagesFromEngineErrors } from '../messages/messageModel.js';
+import { routeMessages } from '../messages/messageLogModel.js';
 
 export const STAGE_ERRORS = Object.freeze({
   MISSING_SESSION: 'stage/missing-session',
@@ -72,6 +74,19 @@ export const STAGE_COMPLETION_REQUESTED_BY = Object.freeze({
   DIRECTOR: 'director',
   SYSTEM: 'system'
 });
+
+function appendEngineErrors(session, errors, context = {}) {
+  const messages = createMessagesFromEngineErrors({
+    session,
+    errors,
+    context
+  });
+
+  return {
+    session: routeMessages({ session }, messages).session,
+    messages
+  };
+}
 
 // IDs anonimos recomendados para slots de ejecucion.
 //
@@ -107,7 +122,7 @@ export const STAGE_ACTION_KEYS = Object.freeze({
 //
 // Devuelve el stage apuntado por el cursor de pools.
 export function getCurrentStage(session) {
-  if (session?.specialStagesActive) {
+  if (session?.currentStageSource === CURRENT_STAGE_SOURCES.SPECIAL_STAGES) {
     const stage = getCurrentSpecialStage(session);
     if (!stage) return null;
     return {
@@ -116,26 +131,11 @@ export function getCurrentStage(session) {
       stageKey: stage.key,
       status: stage.status,
       index: 0,
-      special: true,
+      source: CURRENT_STAGE_SOURCES.SPECIAL_STAGES,
       stage
     };
   }
   return getCurrentCycleStage(session?.cycle);
-}
-
-// Extrae las acciones declaradas por un stage.
-//
-// Soportamos dos ubicaciones:
-// - stage.actions: formato recomendado;
-// - stage.action: compatibilidad temporal;
-// - stage.metadata.action: compatibilidad con definiciones antiguas.
-export function getStageActions(stage) {
-  if (Array.isArray(stage?.actions) && stage.actions.length > 0) {
-    return stage.actions.map((action) => ({ ...action }));
-  }
-  if (stage?.action) return [{ ...stage.action }];
-  if (stage?.metadata?.action) return [{ ...stage.metadata.action }];
-  return [];
 }
 
 // Devuelve la clave mecanica de una receta de accion.
@@ -226,7 +226,7 @@ export function validateCurrentStage(session, { actionKey = null } = {}) {
     };
   }
 
-  if (!session.cycle && !session.specialStagesActive) {
+  if (!session.cycle && session.currentStageSource !== CURRENT_STAGE_SOURCES.SPECIAL_STAGES) {
     errors.push({
       code: STAGE_ERRORS.MISSING_STAGE_POOLS,
       message: 'session has no cycle'
@@ -260,7 +260,7 @@ export function validateCurrentStage(session, { actionKey = null } = {}) {
     });
   }
 
-  const actions = getStageActions(currentStage.stage);
+  const actions = (currentStage.stage?.actions ?? []).map((action) => ({ ...action }));
   const selectedAction = selectStageAction(actions, actionKey);
 
   if (!selectedAction.ok) {
@@ -646,16 +646,23 @@ function prepareAndValidatePoolEntry(session = {}, poolKey = null) {
   const prepared = preparePool(pool, context);
 
   if (!prepared.ok) {
+    const failedSession = appendPoolHistory(sessionAfterBoundaryReview, {
+      cycleId: context.cycleId,
+      poolKey,
+      operation: POOL_HISTORY_OPERATIONS.FAILED,
+      stageIndex: pool?.currentStageIndex ?? 0,
+      metadata: { phase: 'prepare' }
+    });
+    const messageState = appendEngineErrors(failedSession, prepared.errors, {
+      ...context,
+      phase: 'prepare'
+    });
+
     return {
       ok: false,
       errors: prepared.errors,
-      session: appendPoolHistory(sessionAfterBoundaryReview, {
-        cycleId: context.cycleId,
-        poolKey,
-        operation: POOL_HISTORY_OPERATIONS.FAILED,
-        stageIndex: pool?.currentStageIndex ?? 0,
-        metadata: { phase: 'prepare' }
-      })
+      messages: messageState.messages,
+      session: messageState.session
     };
   }
 
@@ -676,16 +683,23 @@ function prepareAndValidatePoolEntry(session = {}, poolKey = null) {
   );
 
   if (!validation.ok) {
+    const failedSession = appendPoolHistory(nextSession, {
+      cycleId: context.cycleId,
+      poolKey,
+      operation: POOL_HISTORY_OPERATIONS.FAILED,
+      stageIndex: prepared.pool.currentStageIndex,
+      metadata: { phase: 'validate' }
+    });
+    const messageState = appendEngineErrors(failedSession, validation.errors, {
+      ...context,
+      phase: 'validate'
+    });
+
     return {
       ok: false,
       errors: validation.errors,
-      session: appendPoolHistory(nextSession, {
-        cycleId: context.cycleId,
-        poolKey,
-        operation: POOL_HISTORY_OPERATIONS.FAILED,
-        stageIndex: prepared.pool.currentStageIndex,
-        metadata: { phase: 'validate' }
-      })
+      messages: messageState.messages,
+      session: messageState.session
     };
   }
 
@@ -718,7 +732,7 @@ function getPostCompletionLifecycleOperationState({ session, stageAdvance }) {
     poolKey: stageAdvance.current?.poolKey
   });
   const sessionBeforePoolEntry = hasPendingSpecialStages(exitState.session)
-    ? activateSpecialStages(exitState.session)
+    ? startSpecialStages(exitState.session)
     : exitState.session;
   const specialStage = getCurrentSpecialStage(sessionBeforePoolEntry);
   const poolEntry = exitState.session.playOutcome
@@ -741,7 +755,7 @@ function getPostCompletionLifecycleOperationState({ session, stageAdvance }) {
             stageKey: specialStage.key,
             status: specialStage.status,
             index: 0,
-            special: true,
+            source: CURRENT_STAGE_SOURCES.SPECIAL_STAGES,
             stage: specialStage
           }
         }
@@ -842,7 +856,7 @@ function completeCurrentSpecialStage(session, currentStage, input, requestedBy) 
     reason: input.reason ?? 'manual_completion',
     metadata: {
       ...(input.metadata ?? {}),
-      special: true
+      source: CURRENT_STAGE_SOURCES.SPECIAL_STAGES
     }
   });
   const nextSpecialStage = getCurrentSpecialStage(sessionWithCompletion);
@@ -863,7 +877,7 @@ function completeCurrentSpecialStage(session, currentStage, input, requestedBy) 
           stageKey: nextSpecialStage.key,
           status: nextSpecialStage.status,
           index: 0,
-          special: true,
+          source: CURRENT_STAGE_SOURCES.SPECIAL_STAGES,
           stage: nextSpecialStage
         }
       },
@@ -893,7 +907,6 @@ function completeCurrentSpecialStage(session, currentStage, input, requestedBy) 
       );
   const sessionAfterPoolEntry = {
     ...objectiveState.session,
-    specialStagesActive: false,
     cycle: poolEntry.cycle
   };
   const startedSession =
@@ -1014,7 +1027,7 @@ export function completeCurrentStage(session, input = {}) {
     };
   }
 
-  if (!session.cycle && !session.specialStagesActive) {
+  if (!session.cycle && session.currentStageSource !== CURRENT_STAGE_SOURCES.SPECIAL_STAGES) {
     return {
       ok: false,
       errors: [
@@ -1087,7 +1100,7 @@ export function completeCurrentStage(session, input = {}) {
     };
   }
 
-  if (currentStage.special) {
+  if (currentStage.source === CURRENT_STAGE_SOURCES.SPECIAL_STAGES) {
     return completeCurrentSpecialStage(session, currentStage, input, requestedBy);
   }
 
@@ -1151,14 +1164,12 @@ export function completeCurrentStage(session, input = {}) {
 // 3. Si la action falla, conserva la sesion y no avanza.
 // 4. Si la action termina bien, el stage sigue abierto.
 //
-// Pasar al siguiente stage es responsabilidad de completeCurrentStage. La opcion
-// advanceOnSuccess queda solo como compatibilidad para pruebas o automatizaciones
-// explicitamente pedidas.
-export function resolveCurrentStage(session, input = {}, options = {}) {
-  const advanceOnSuccess = options.advanceOnSuccess ?? false;
+// Pasar al siguiente stage es responsabilidad de completeCurrentStage.
+export function resolveCurrentStage(session, input = {}) {
   const currentStageBeforeReview = getCurrentStage(session);
   const workingSession =
-    currentStageBeforeReview && !currentStageBeforeReview.special
+    currentStageBeforeReview &&
+    currentStageBeforeReview.source !== CURRENT_STAGE_SOURCES.SPECIAL_STAGES
       ? reviewPropertyBlocks(session, {
           type: 'stage_boundary',
           cycleId: session.cycle?.id ?? 0,
@@ -1168,16 +1179,25 @@ export function resolveCurrentStage(session, input = {}, options = {}) {
         }).session
       : session;
   const stageValidation = validateCurrentStage(workingSession, {
-    actionKey: input.actionKey ?? options.actionKey ?? null
+    actionKey: input.actionKey ?? null
   });
 
   if (!stageValidation.ok) {
+    const messageState = appendEngineErrors(workingSession, stageValidation.errors, {
+      cycleId: workingSession?.cycle?.id ?? null,
+      poolKey: stageValidation.currentStage?.poolKey ?? workingSession?.cycle?.poolCurrent ?? null,
+      stageId: stageValidation.currentStage?.stageId ?? null,
+      stageKey: stageValidation.currentStage?.stageKey ?? null,
+      actionKey: input.actionKey ?? null
+    });
+
     return {
       ok: false,
       actionId: stageValidation.action?.id ?? null,
       actionKey: stageValidation.actionKey,
       errors: stageValidation.errors,
-      session: workingSession,
+      messages: messageState.messages,
+      session: messageState.session,
       result: null,
       stage: stageValidation.currentStage,
       stageAdvance: null
@@ -1231,35 +1251,9 @@ export function resolveCurrentStage(session, input = {}, options = {}) {
       }
     : actionResolution;
 
-  if (!resolutionWithEvents.ok || !advanceOnSuccess) {
-    return {
-      ...resolutionWithEvents,
-      stage: stageValidation.currentStage,
-      stageAdvance: null
-    };
-  }
-
-  const completion = completeCurrentStage(resolutionWithEvents.session, {
-    requestedBy: options.requestedBy ?? STAGE_COMPLETION_REQUESTED_BY.SYSTEM,
-    actorIds: [...(input.actorIds ?? [])],
-    actionKey: stageValidation.actionKey,
-    reason: options.completionReason ?? 'auto_advance_on_success'
-  });
-
-  if (!completion.ok) {
-    return {
-      ...resolutionWithEvents,
-      stage: stageValidation.currentStage,
-      stageAdvance: null,
-      completion
-    };
-  }
-
   return {
     ...resolutionWithEvents,
-    session: completion.session,
     stage: stageValidation.currentStage,
-    stageAdvance: completion.stageAdvance,
-    completion: completion.completion
+    stageAdvance: null
   };
 }

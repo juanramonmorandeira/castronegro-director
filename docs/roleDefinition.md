@@ -9,10 +9,11 @@ elige jugadores ni asientos. Esa informacion pertenece a match/session.
 
 Un roleDefinition puede definir:
 
-- `roleKey`;
+- `key`;
 - `alignmentId` inicial;
 - `instanceRule`;
-- `stepDefinitions` que puede aportar;
+- `stageDefinitions` que aporta a pools;
+- `specialStageDefinitions` iniciales que aporta a `specialStages`;
 - `resources` que materializa en session;
 - `reactions`;
 - `roleChoiceSet` si necesita elegir/asumir otros roles;
@@ -63,7 +64,7 @@ Un role tambien puede forzar paquetes exactos:
 Lectura:
 
 ```text
-Una misma roleDefinition puede materializar varios sessionRoleIds.
+Una misma roleDefinition puede materializar varios `roleId`.
 ```
 
 Ejemplo:
@@ -71,7 +72,7 @@ Ejemplo:
 ```text
 roleDefinition role_group_of_three
 count seleccionado: 3
-sessionRoleIds:
+roleIds runtime:
   role_group_of_three-0
   role_group_of_three-1
   role_group_of_three-2
@@ -104,7 +105,7 @@ Si una restriccion impide usar la recipe antes de ejecutarla, el resource no se
 consume.
 ```
 
-Por eso el consumo pertenece a recipeModel/constraintModel, no al step como
+Por eso el consumo pertenece a recipeModel/constraintModel, no al stage como
 concepto general.
 
 ## roleChoiceSet
@@ -151,7 +152,8 @@ Ejemplos de validacion:
 
 Al crear session:
 
-- cada role seleccionado se materializa en uno o varios `sessionRoleIds`;
+- cada role seleccionado se materializa en uno o varios `roleId`;
 - cada resource se copia como estado vivo de ese sessionRole;
 - cada reaction queda disponible para `eventModel`;
-- cada stepDefinition aplicable puede aportar steps a los pools.
+- cada `stageDefinition` aplicable puede aportar stages a los pools;
+- cada `specialStageDefinition` aplicable se añade a la cola inicial.

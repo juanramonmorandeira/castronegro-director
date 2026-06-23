@@ -15,21 +15,34 @@ import {
 } from './eventModel.js';
 
 export const ROLE_CATALOG_IDS = Object.freeze({
+  ROLE_COLLECTIVE_SET_OUT_OF_PLAY: 'role_collective_set_out_of_play',
   ROLE_INSPECTS: 'role_inspects',
   ROLE_LINKS_TARGETS: 'role_links_targets',
   ROLE_BLOCKS_OUT_OF_PLAY: 'role_blocks_out_of_play',
   ROLE_IN_PLAY_CONTROL: 'role_in_play_control',
-  ROLE_REACTIVE: 'role_reactive'
+  ROLE_REACTIVE: 'role_reactive',
+  ROLE_PLAIN: 'role_plain'
 });
 
 export const ROLE_CATALOG = Object.freeze({
+  [ROLE_CATALOG_IDS.ROLE_COLLECTIVE_SET_OUT_OF_PLAY]: defineRole({
+    key: ROLE_CATALOG_IDS.ROLE_COLLECTIVE_SET_OUT_OF_PLAY,
+    type: ROLE_DEFINITION_TYPES.ROLE,
+    alignmentId: 'alignment_b',
+    stageDefinitions: [],
+    metadata: {
+      mechanicalFamily: 'collective_actor',
+      contributesThroughAlignment: 'alignment_b'
+    }
+  }),
+
   [ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS]: defineRole({
     key: ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS,
     type: ROLE_DEFINITION_TYPES.ROLE,
-    stageDefinitions: [
+    alignmentId: 'alignment_a',
+    specialStageDefinitions: [
       getCatalogStage(STAGE_CATALOG_IDS.ROLE_LINKS_TARGETS, {
         poolKey: null,
-        special: true,
         order: null,
         metadata: {
           orderReason:
@@ -42,6 +55,7 @@ export const ROLE_CATALOG = Object.freeze({
   [ROLE_CATALOG_IDS.ROLE_INSPECTS]: defineRole({
     key: ROLE_CATALOG_IDS.ROLE_INSPECTS,
     type: ROLE_DEFINITION_TYPES.ROLE,
+    alignmentId: 'alignment_a',
     stageDefinitions: [
       getCatalogStage(STAGE_CATALOG_IDS.ROLE_INSPECTS, {
         poolKey: POOL_KEYS.POOL_CONCEALED,
@@ -57,6 +71,7 @@ export const ROLE_CATALOG = Object.freeze({
   [ROLE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY]: defineRole({
     key: ROLE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY,
     type: ROLE_DEFINITION_TYPES.ROLE,
+    alignmentId: 'alignment_a',
     stageDefinitions: [
       getCatalogStage(STAGE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY, {
         poolKey: POOL_KEYS.POOL_CONCEALED,
@@ -72,6 +87,7 @@ export const ROLE_CATALOG = Object.freeze({
   [ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL]: defineRole({
     key: ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL,
     type: ROLE_DEFINITION_TYPES.ROLE,
+    alignmentId: 'alignment_a',
     stageDefinitions: [
       getCatalogStage(STAGE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL, {
         poolKey: POOL_KEYS.POOL_CONCEALED,
@@ -81,12 +97,17 @@ export const ROLE_CATALOG = Object.freeze({
             'Runs after set_out_of_play because restore_recent_out_of_play needs a same-cycle inPlay=false history entry.'
         }
       })
+    ],
+    resources: [
+      { key: 'restore_in_play', count: 1 },
+      { key: 'set_out_of_play', count: 1 }
     ]
   }),
 
   [ROLE_CATALOG_IDS.ROLE_REACTIVE]: defineRole({
     key: ROLE_CATALOG_IDS.ROLE_REACTIVE,
     type: ROLE_DEFINITION_TYPES.ROLE,
+    alignmentId: 'alignment_a',
     stageDefinitions: [],
     reactions: [
       {
@@ -102,7 +123,6 @@ export const ROLE_CATALOG = Object.freeze({
           type: EVENT_RESPONSE_TYPES.CREATE_STAGE,
           stage: getCatalogStage(STAGE_CATALOG_IDS.ROLE_REACTIVE_RESPONSE, {
             poolKey: null,
-            special: true,
             metadata: {
               orderReason:
                 'Created only after this role receives a final inPlay=false effect.'
@@ -113,6 +133,16 @@ export const ROLE_CATALOG = Object.freeze({
     ],
     metadata: {
       mechanicalFamily: 'reactive'
+    }
+  }),
+
+  [ROLE_CATALOG_IDS.ROLE_PLAIN]: defineRole({
+    key: ROLE_CATALOG_IDS.ROLE_PLAIN,
+    type: ROLE_DEFINITION_TYPES.ROLE,
+    alignmentId: 'alignment_a',
+    stageDefinitions: [],
+    metadata: {
+      mechanicalFamily: 'plain'
     }
   })
 });
@@ -137,6 +167,9 @@ export function getCatalogRole(roleCatalogId, overrides = {}) {
     stageDefinitions: overrides.stageDefinitions
       ? cloneCatalogValue(overrides.stageDefinitions)
       : cloneCatalogValue(baseRole.stageDefinitions),
+    specialStageDefinitions: overrides.specialStageDefinitions
+      ? cloneCatalogValue(overrides.specialStageDefinitions)
+      : cloneCatalogValue(baseRole.specialStageDefinitions ?? []),
     metadata: {
       ...cloneCatalogValue(baseRole.metadata ?? {}),
       ...(overrides.metadata ?? {})
@@ -149,10 +182,12 @@ export function getCatalogRole(roleCatalogId, overrides = {}) {
 
 export function getCoreRoleCatalog() {
   return [
+    getCatalogRole(ROLE_CATALOG_IDS.ROLE_COLLECTIVE_SET_OUT_OF_PLAY),
     getCatalogRole(ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS),
     getCatalogRole(ROLE_CATALOG_IDS.ROLE_INSPECTS),
     getCatalogRole(ROLE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY),
     getCatalogRole(ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL),
-    getCatalogRole(ROLE_CATALOG_IDS.ROLE_REACTIVE)
+    getCatalogRole(ROLE_CATALOG_IDS.ROLE_REACTIVE),
+    getCatalogRole(ROLE_CATALOG_IDS.ROLE_PLAIN)
   ];
 }

@@ -1,0 +1,40 @@
+The Werewolves of Castronegro
+🧑‍🌾 VILLAGERS ============================================================================
+Common Villager: Has no special powers. Must rely on observation and persuasion to identify the Werewolves and avoid being wrongly executed.
+Villager-Villager: A known, confirmed Villager with no secret powers. Their role is public from the start, making them a trustworthy figure. May be targeted early by Werewolves due to their influence. Can serve as Sheriff or Guard.
+Seer: Each night, she discovers the true nature of a player of her choice. She must help the other Villagers, but with discretion, to avoid being discovered by the Werewolves.
+Cupid: On the first night, Cupid links two players (possibly including himself) as lovers. If one dies, the other dies of heartbreak. Lovers cannot vote against each other.
+Witch: The Witch has two potions: one heals a player attacked by the Werewolves, the other kills a player during the night. Each potion can be used only once per game, even both on the same night. She can use them on herself.
+Hunter: If the Hunter dies (devoured or lynched), he must shoot and eliminate a player of his choice before leaving. If he dies of heartbreak as a lover, he still shoots. If no one survives, no one wins.
+Little Girl: May secretly peek during the Werewolves’ night phase. If caught spying, she dies silently instead of the intended victim. She must not open her eyes fully or pretend to be a Werewolf.
+Protector: Each night, the Protector chooses one player to shield from the Werewolves. The chosen player cannot be devoured that night. The Protector may protect themselves but not the same person two nights in a row. Does not block the infection from the Infected Father of All Wolves.
+Elder: The Elder survives the first Werewolf attack. A second attack kills him. Other causes (lynching, poison, bullet) kill him instantly. If he dies, all Villagers lose their special powers. He resists the infection of the Infected Father of All Wolves if it’s the first time he is bitten.
+Scapegoat: If there’s a tie in the vote, the Scapegoat is lynched instead. If lynched, he chooses who can vote in the next lynching. If only one person gets to vote, they’re likely to be devoured that night. If so, there may be no lynching the next day.
+Village Fool: If the Fool is voted out, he reveals his role and is pardoned, but loses his right to vote for the rest of the game. He dies if attacked by Werewolves or shot by the Hunter. If he was the Sheriff, that role is lost.
+Two Sisters: Know each other from the first night and may briefly consult in silence during the game (e.g., every other night or as the narrator decides). A loyal duo that can help guide the village through uncertain times.
+Three Brothers: Know each other from the first night and may silently consult during the game (e.g., every other night or as the narrator sees fit). 
+Fox: Each night, the Fox can check a group of three neighboring players by pointing to the one in the middle. If at least one is a Werewolf, he keeps his power for the next night. If not, he loses it.
+Bear Tamer: Each morning, if at least one living Werewolf is seated next to the Bear Tamer, the narrator growls to indicate danger. Eliminated players are not counted. If the Bear Tamer is infected, the narrator growls every morning until they are eliminated.
+Stuttering Judge: Once per game, the Stuttering Judge can trigger two consecutive lynchings by giving a secret signal during a vote. The second vote happens right after the first, with no debate.
+Knight of the Rusty Sword: If the Knight is devoured, the Werewolf to his left (among those who attacked) falls ill and dies the next night. This death is announced the following morning. All players between them are confirmed innocent.
+Pyromaniac: Once per game, may target a building during the night. The next morning, that building is destroyed, and its occupant becomes a Wanderer (not eliminated). If the building belonged to a Werewolf victim, the nearest Werewolf to their right dies, and the attack is cancelled (no victim that night).
+Raven: Each night, may secretly place a Raven token (anonymous note) on a player’s building. That player receives 2 extra votes against them in the next vote. May target the Tavern, even if the Innkeeper has immunity. Cannot target Wanderers.
+Gypsy: Each night, may choose to activate one Spiritism card (chosen by the narrator). Selects 1 of 4 questions silently and assigns a villager to ask it. The next morning, the first eliminated player answers with “Yes” or “No.” That card is then removed from play.
+🐺 WEREWOLVES ===========================================================================
+Werewolf: Each night, the Werewolves choose one Villager to devour. They must stay hidden during the day. Their number varies by game setup. They can’t devour one of their own.
+Big Bad Wolf: He attacks with the Werewolves each night. As long as no Werewolf, Wild Child, or Wolf-Hound has died, he wakes a second time to devour a victim alone. He can’t devour other Werewolves.
+Infectious Father of All Wolves: Each night, he acts with the Werewolves. Once per game, he may secretly infect a victim instead of devouring them. That player becomes a hidden Werewolf and keeps any special power they had.
+🎭 AMBIGUOUS ROLES ======================================================================
+Thief: On the first night, may look at two extra face-down roles and optionally swap with one. If both are Werewolves, the Thief must become one. Plays with the new role for the rest of the game.
+Devoted Servant: Before a lynched player’s role is revealed, the Servant may show her card and take that player’s role (with full powers), keeping it secret. She cannot do this if in love. Temporary effects on the original player do not transfer.
+Comedian: At the start, the narrator shows 3 special role cards (non-Werewolf). Each night, the Comedian may use the power of one. Once used, that role is removed.
+Wild Child: On the first night, the Wild Child chooses a role model. He is a Villager unless that player dies—then he becomes a Werewolf starting the next night. His win condition depends on his final team. He may help eliminate his role model.
+Wolf-Hound: On the first night, the Wolf-Hound chooses to be either a Villager or a Werewolf. Once chosen, his role cannot be changed.
+🔮 OUTSIDERS ============================================================================
+White Werewolf: Joins the Werewolves’ attack every night. Starting from Night 2, wakes alone every other night after the wolves and may kill one Werewolf. Wins only if they are the sole survivor.
+Angel: Before the first night, the game starts with a daytime vote. If the Angel is eliminated by vote or Werewolves during that first round, they win immediately. If not, they become a normal Villager for the rest of the game.
+Pied Piper: Each night, enchants two players. Wins if all players become enchanted, even through lynching or attacks. If infected, becomes a Regular Werewolf and abandons original goal.
+Abominable Sectarian: Before the game, the village is split into two visible groups (e.g., men vs. women, tall vs. short). Assigned to one group. Wins if all players from the other group are eliminated. Has no powers, just persuasion. If infected, becomes a Werewolf.
+🔮 HONORARY POSITION ============================================================================
+Sheriff:
+Guard:

@@ -150,7 +150,7 @@ Define, por ejemplo:
 - roles disponibles del ruleSet que entran en esta session;
 - cantidad de cada rol seleccionado;
 - grupos o reglas opcionales activadas;
-- que reglas de voto disponibles se aplican;
+- que `selectionRules` disponibles se aplican;
 - que objectiveRules opcionales se activan;
 - orden o variantes permitidas por el ruleSet;
 - opciones elegidas por el narrador, servidor o creador de la partida.
@@ -230,7 +230,6 @@ session
   skinId: castronegro_like
   players: [...]
   roles: [...]
-  groups: [...]
   groups: [...]
   cycle: ...
   objectiveRules: [...]

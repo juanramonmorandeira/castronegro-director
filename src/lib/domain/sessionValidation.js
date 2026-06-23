@@ -14,6 +14,8 @@
 // - dos roles en el mismo asiento.
 // -----------------------------------------------------------------------------
 
+import { CURRENT_STAGE_SOURCES } from './sessionModel.js';
+
 // Comprueba si el Match esta completo.
 //
 // En este nucleo, "Match completo" significa:
@@ -203,6 +205,23 @@ export function validateSession(session = {}, options = {}) {
   errors.push(...validateUniqueIds(session.players ?? [], 'player'));
   errors.push(...validateRoles(session.roles ?? [], options));
   errors.push(...validateGroups(session.groups ?? [], session.roles ?? []));
+
+  if (!Object.values(CURRENT_STAGE_SOURCES).includes(session.currentStageSource)) {
+    errors.push({
+      code: 'session/invalid-current-stage-source',
+      message: `session has invalid currentStageSource "${session.currentStageSource}"`
+    });
+  }
+
+  if (
+    session.currentStageSource === CURRENT_STAGE_SOURCES.SPECIAL_STAGES &&
+    (session.specialStages ?? []).length === 0
+  ) {
+    errors.push({
+      code: 'session/missing-current-special-stage',
+      message: 'session points to specialStages but the queue is empty'
+    });
+  }
 
   return {
     ok: errors.length === 0,

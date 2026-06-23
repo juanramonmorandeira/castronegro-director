@@ -13,7 +13,7 @@ import { createGroup } from './groupDefinition.js';
 import { buildGroups } from './groupModel.js';
 import { buildRoles, createRole } from './roleDefinition.js';
 import { assignUniqueStageIds, createStage } from './stageDefinition.js';
-import { SESSION_STATUSES, normalizeId } from './sessionModel.js';
+import { CURRENT_STAGE_SOURCES, SESSION_STATUSES, normalizeId } from './sessionModel.js';
 import { validateSession } from './sessionValidation.js';
 
 function createSessionGroup(groupInput = {}) {
@@ -42,7 +42,9 @@ export function createSession({
   groups = [],
   cycle = createCycle(),
   specialStages = [],
-  specialStagesActive = specialStages.length > 0,
+  currentStageSource = specialStages.length > 0
+    ? CURRENT_STAGE_SOURCES.SPECIAL_STAGES
+    : CURRENT_STAGE_SOURCES.POOL,
   objectiveRules = [],
   achievedObjectives = [],
   playOutcome = null,
@@ -51,6 +53,8 @@ export function createSession({
   poolHistory = [],
   stageHistory = [],
   specialStagesHistory = [],
+  sessionMessageLog = [],
+  errorLog = [],
   log = [],
   metadata = {}
 } = {}) {
@@ -69,7 +73,7 @@ export function createSession({
             operation: 'queued',
             metadata: { initial: true }
           },
-          ...(specialStagesActive && index === 0
+          ...(currentStageSource === CURRENT_STAGE_SOURCES.SPECIAL_STAGES && index === 0
             ? [
                 {
                   id: `special-stage-${stage.key ?? 'stage'}-started-${index}`,
@@ -93,7 +97,7 @@ export function createSession({
     groups: groups.map(createSessionGroup),
     cycle: createCycle(cycle),
     specialStages: normalizedSpecialStages,
-    specialStagesActive: specialStagesActive === true,
+    currentStageSource,
     objectiveRules: [...objectiveRules],
     achievedObjectives: [...achievedObjectives],
     playOutcome,
@@ -102,6 +106,8 @@ export function createSession({
     poolHistory: [...poolHistory],
     stageHistory: [...stageHistory],
     specialStagesHistory: normalizedSpecialStagesHistory,
+    sessionMessageLog: [...sessionMessageLog],
+    errorLog: [...errorLog],
     log: [...log],
     metadata: { ...metadata }
   };
@@ -128,30 +134,49 @@ function getDefinitionList(definitions = []) {
 // Ensambla una sesion desde definiciones ya escogidas.
 //
 // createSession solo normaliza un estado de sesion. buildSession hace el paso
-// superior: asientos -> roles y role/group/default stages -> cycle.pools.
+// superior: asientos -> roles y role/group stages -> cycle.pools.
 export function buildSession({
   seats = [],
-  roleDefinitions = {},
-  groupDefinitions = [],
-  defaultStages = [],
-  systemStages = [],
+  ruleSet = null,
+  roleDefinitions = null,
+  groupDefinitions = null,
   cycle = null,
   roles = [],
   validate = true,
   validationOptions = { requireAssigned: true },
   ...sessionInput
 } = {}) {
-  const roleDefinitionMap = getRoleDefinitionMap(roleDefinitions);
+  const effectiveRoleDefinitions =
+    roleDefinitions ?? ruleSet?.roles?.baseRoles ?? {};
+  const effectiveGroupDefinitions =
+    groupDefinitions ?? ruleSet?.groups ?? [];
+  const effectiveObjectiveRules =
+    sessionInput.objectiveRules ?? ruleSet?.rules?.objectiveRules ?? [];
+  const effectiveSettings = {
+    ...(sessionInput.settings ?? {}),
+    ...(ruleSet
+      ? {
+          ruleSetId: ruleSet.id,
+          ruleSetVersion: ruleSet.version
+        }
+      : {})
+  };
+  const roleDefinitionMap = getRoleDefinitionMap(effectiveRoleDefinitions);
   const builtRoles =
     roles.length > 0
       ? roles.map(createRole)
       : buildRoles(seats, roleDefinitionMap);
   const sessionBeforePools = createSession({
     ...sessionInput,
+    settings: effectiveSettings,
+    objectiveRules: effectiveObjectiveRules,
     roles: builtRoles,
     groups: []
   });
-  const groups = buildGroups(sessionBeforePools, getDefinitionList(groupDefinitions));
+  const groups = buildGroups(
+    sessionBeforePools,
+    getDefinitionList(effectiveGroupDefinitions)
+  );
   const sessionWithGroups = {
     ...sessionBeforePools,
     groups
@@ -161,9 +186,7 @@ export function buildSession({
     : buildPools({
         session: sessionWithGroups,
         roleDefinitions: Object.values(roleDefinitionMap),
-        groupDefinitions,
-        defaultStages,
-        systemStages
+        groupDefinitions: effectiveGroupDefinitions
       });
 
   if (!poolBuild.ok) {
@@ -178,10 +201,16 @@ export function buildSession({
     ...sessionWithGroups,
     cycle: createCycle({
       ...(cycle ?? {}),
+      poolOrder:
+        cycle?.poolOrder ??
+        ruleSet?.poolOrder ??
+        sessionWithGroups.cycle?.poolOrder,
       pools: poolBuild.pools
     }),
     specialStages: [...(poolBuild.specialStages ?? [])],
-    specialStagesActive: (poolBuild.specialStages ?? []).length > 0
+    currentStageSource: (poolBuild.specialStages ?? []).length > 0
+      ? CURRENT_STAGE_SOURCES.SPECIAL_STAGES
+      : CURRENT_STAGE_SOURCES.POOL
   };
   const validation = validate
     ? validateSession(sessionWithPools, validationOptions)

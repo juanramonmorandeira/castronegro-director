@@ -3,7 +3,7 @@
 `skin` define como se presenta un juego mecanico anonimo.
 
 No cambia reglas. No crea roles mecanicos. No altera recipes, actions,
-voteRules ni objectiveRules.
+selectionRules ni objectiveRules.
 
 La skin da forma visible:
 
@@ -16,7 +16,10 @@ La skin da forma visible:
 - fantasia;
 - metatrama.
 
-## Grupo con ruleSet
+Tambien presenta los `gameplayMessages` emitidos por el motor. No presenta
+diagnosticos tecnicos ni mensajes generales de la aplicacion.
+
+## Relacion con ruleSet
 
 Una skin se define sobre uno o varios `ruleSet`.
 
@@ -59,12 +62,11 @@ Una skin puede proporcionar presentacion para:
 
 - roles;
 - groups;
-- groups;
 - recipes;
 - actions;
 - tokens;
 - buildings;
-- steps;
+- stages;
 - playOutcome;
 - achievedObjectives;
 - eventos especiales;
@@ -97,8 +99,7 @@ No pertenece a skin:
   labels: {
     roles: {},
     groups: {},
-    groups: {},
-    steps: {},
+    stages: {},
     recipes: {},
     tokens: {},
     buildings: {}
@@ -113,6 +114,13 @@ No pertenece a skin:
     tokens: {},
     buildings: {},
     backgrounds: {}
+  },
+  messages: {
+    es: {
+      resource_already_consumed: {
+        default: '{resource} ya ha sido usado.'
+      }
+    }
   },
   metadata: {}
 }
@@ -132,7 +140,7 @@ skinRequirements: {
   },
   optional: {
     tokens: ['linked_marker'],
-    steps: ['step_05']
+    stages: ['stage_05']
   }
 }
 ```
@@ -180,8 +188,9 @@ Una skin es compatible si:
 - sus assets obligatorios existen;
 - sus claves de texto existen para los idiomas soportados;
 - no usa ids inexistentes.
+- cubre las messageKeys obligatorias en los idiomas declarados.
 
-## Grupo con UI
+## Relacion con UI
 
 La UI debe pedir a la skin presentacion para un elemento mecanico.
 

@@ -5,7 +5,7 @@
 No es una partida concreta. No elige jugadores. No elige cuantos roles entran
 en una session. No contiene textos ni imagenes de skin.
 
-## Grupo con Catalog
+## Relacion con Catalog
 
 Los catalogos son la biblioteca mecanica del software:
 
@@ -98,7 +98,7 @@ Ejemplos actuales:
 - crear un grupo: `set_group`
 - revelar una propiedad: `reveal_property`
 - bloquear un cambio de propiedad: `block_property_change`
-- contar votos: `vote`
+- resolver una seleccion: `select`
 
 Pendiente:
 
@@ -107,13 +107,47 @@ Antes de anadir muchos mas roles, revisar si el modelo actual separa bien:
 primaryElement -> action/effect -> recipe -> role/group -> stage -> ruleSet.
 ```
 
+## Primera implementacion ejecutable
+
+El dominio ya contiene:
+
+- `ruleSetDefinition.js`: normaliza un ruleSet y construye la seleccion
+  mecanica para una session;
+- `ruleSetCatalog.js`: contiene el ruleSet anonimo `classic_hidden_roles`;
+- `buildSession({ ruleSet, ... })`: consume directamente el ruleSet ya
+  construido.
+
+Estados de soporte:
+
+```text
+ready = puede seleccionarse y ejecutarse con las primitivas actuales.
+partial = existe una parte mecanica, pero faltan reglas necesarias.
+pending = faltan primitivas de dominio.
+```
+
+Cobertura inicial:
+
+| Opcion mecanica | Estado | Observacion |
+| --- | --- | --- |
+| `role_collective_set_out_of_play` | ready | Actua mediante `group_alignment_b`. |
+| `role_inspects` | ready | Inspeccion privada. |
+| `role_reactive` | ready | Crea una specialStage al cambiar a `inPlay=false`. |
+| `role_in_play_control` | ready | Dos acciones limitadas durante la session. |
+| `role_plain` | ready | Sin stage personal. |
+| `role_links_targets` | partial | Falta objectiveRule dinamica y restriccion completa entre miembros. |
+| `role_assumes_role` | pending | Falta `roleChoiceSet` y asuncion de role. |
+| `role_observes_selection` | pending | Falta observacion y sustitucion del candidate elegido. |
+| `position_selection_authority` | pending | Falta cargo adicional, voto ponderado, desempate y sucesion. |
+
+Los nombres anteriores son exclusivamente mecanicos. Ninguno es texto visible
+de una skin.
+
 ## Campos minimos propuestos
 
 ```js
 {
   id: 'classic_hidden_roles',
   version: 1,
-  alignments: [],
   catalogRefs: {
     roles: [],
     groups: [],
@@ -130,7 +164,9 @@ primaryElement -> action/effect -> recipe -> role/group -> stage -> ruleSet.
 
 ## Alignments
 
-Un `alignment` es una etiqueta mecanica declarada por el ruleSet.
+Un `alignment` es una propiedad mecanica de un role. El ruleSet no necesita un
+catalogo o listado de alignments separado: los conoce indirectamente por los
+roles que expone y por las reglas que consultan `alignmentId`.
 
 No es una regla por si misma. Solo afecta a la partida cuando otras reglas lo
 usan:
@@ -141,16 +177,10 @@ usan:
 - reglas de activacion de stages;
 - reglas de target.
 
-Decision aceptada:
+El motor no limita cuantos valores de alignment pueden aparecer en un ruleSet
+si sus roles y reglas son coherentes.
 
-```text
-El motor no limita cuantos alignments puede tener un ruleSet.
-```
-
-Un ruleSet puede declarar dos, cuatro, seis o cualquier otro numero de
-alignments si sus reglas mecanicas son coherentes.
-
-Convencion recomendada para ruleSets basicos de identidad oculta:
+Convencion inicial para los roles del catalogo:
 
 ```text
 alignment_a
@@ -168,13 +198,13 @@ Lectura:
 - `alignment_independent`: role con objective propio o separado del
   eje principal.
 
-Esta convencion no es obligatoria. Es una guia para que los ruleSets basicos
-sean legibles sin contaminar el motor con narrativa.
+El catalogo puede ampliarse en el futuro. Por ahora no existe
+`alignmentCatalog`: `alignmentId` forma parte de `roleDefinition`.
 
 ## Campos que si pertenecen a ruleSet
 
 - roles disponibles;
-- alignments declarados;
+- alignments usados indirectamente por sus roles y reglas;
 - groups disponibles;
 - stages disponibles o aportados por roles/groups;
 - objectiveRules disponibles;
@@ -302,7 +332,7 @@ Estructura de trabajo:
   groups: [
     {
       groupKey,
-      members: [],
+      roleIds: [],
       groupRules: []
     }
   ],

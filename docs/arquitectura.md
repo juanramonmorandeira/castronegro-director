@@ -1,10 +1,13 @@
-# Village Storyteller — Arquitectura (borrador vivo)
+# Village Storyteller - Arquitectura de aplicacion
 
 > Documento de trabajo. Los diagramas Mermaid se renderizan en GitHub y en la vista previa de VS Code.
 
-> Referencia de migracion: el modelo objetivo para la nueva gestion de steps y roles esta documentado en [`modelo_objetivo_sesion.md`](./modelo_objetivo_sesion.md).
+> El dominio vigente esta documentado en [`README.md`](./README.md) y
+> [`domain_architecture.md`](./domain_architecture.md).
 
-> Memoria recuperada: el resumen de transcripciones antiguas de Codex esta en [`historial_codex_resumen.md`](./historial_codex_resumen.md).
+> [`historial_codex_resumen.md`](./historial_codex_resumen.md) y
+> [`modelo_objetivo_sesion.md`](./modelo_objetivo_sesion.md) son archivo
+> historico y no definen el motor actual.
 
 > Decision tecnica: la extraccion del nucleo limpio esta descrita en [`decision_nucleo_limpio.md`](./decision_nucleo_limpio.md).
 
@@ -31,7 +34,7 @@ flowchart LR
     DISTRIBUTION --Colse--> C
     C --> QR_MODAL([Share<br>- QR code<br>- session ID])
     QR_MODAL --Close--> C
-    C --Start--> S[Session panel<br>- night phase order<br>- day phase order<br>- map<br>- bitacora]
+    C --Start--> S[Session panel<br>- pool and stage flow<br>- map<br>- bitacora]
     C --Cancel--> L
     S --Edit--> C
     L --View session--> S
@@ -65,7 +68,8 @@ stateDiagram-v2
     se muestra aquí antes del check final.
   end note
   ready --> in_progress: startGame()
-  in_progress --> finished: concludePlay(playOutcome)
+  in_progress --> in_progress: concludePlay(playOutcome)
+  in_progress --> finished: creator closes session
   in_progress --> paused: pauseGame()
   paused --> in_progress: resume()
   draft --> cancelled
@@ -76,7 +80,8 @@ stateDiagram-v2
 
   note right of in_progress
     Transiciones válidas:
-    - in_progress → finished
+    - conclude_play no cierra administrativamente la session
+    - in_progress → finished por decision del creador
     - in_progress → paused
     - in_progress → cancelled
   end note
@@ -103,16 +108,15 @@ erDiagram
     string display_name
     string avatar_url
     string role_id
-    bool is_alive
+    bool in_play
     bool is_storyteller
     timestamp joined_at
   }
 
   ROLES {
     string id PK
-    string name
-    string alignment
-    string description
+    string role_key
+    string alignment_id
     bool enabled
   }
 
@@ -134,4 +138,5 @@ erDiagram
 - <!-- pendiente: --> Validar qué reglas específicas se controlan desde `Properties` (roles predefinidos vs. configuración ad-hoc) para modelarlo en la base de datos.
 - <!-- pendiente: --> Definir si el flujo de `Selection` necesita mostrar sesiones previas abiertas por el mismo storyteller o sólo acepta QR/ID directo.
 - <!-- pendiente: --> Confirmar si la pantalla `Character roll` debe persistir mensajes personalizados por jugador o si basta con derivarlos del catálogo de roles.
-- <!-- nota: --> `alignment` en roles se acota a `villager|wolf|neutral|special`; `type` en logs a `info|warn|error|action`.
+- <!-- nota: --> Los nombres visibles, textos e imagenes pertenecen a skin. El
+  motor guarda `roleKey`, `alignmentId` y estado runtime.

@@ -31,7 +31,7 @@ digraph DomainArchitecture {
   ];
 
   inputs [
-    label="ENTRADAS\n\nCatalogs\nruleSet\ngameConfiguration\nmatch\nskin",
+    label="ENTRADAS\n\nCatalogs\nruleSet\nrunMode\nmatch\n\nskin se valida fuera del motor",
     fillcolor="#e8f2f7"
   ];
 
@@ -41,16 +41,14 @@ digraph DomainArchitecture {
   ];
 
   session [
-    label="SESSION VIVA\n\nroles\ngroups\ncycle\nobjectiveRules\nactionHistory\nstageHistory\nachievedObjectives\nplayOutcome",
+    label="SESSION VIVA\n\nroles\ngroups\ncycle\nspecialStages\ncurrentStageSource\nobjectiveRules\nhistoriales\nachievedObjectives\nplayOutcome",
     fillcolor="#dcecf5",
     penwidth=1.5
   ];
 
   cycle [
-    label="CYCLE\n\nsession.cycle\nid\npoolOrder\npoolPrevious\npoolCurrent\npoolNext\n\ncycleModel\nstartCycle\nadvanceFlow",
-    fillcolor="#fff0c7",
-    style="rounded,filled,dashed",
-    color="#c89223",
+    label="CYCLE\n\nsession.cycle\nid\npoolOrder\npoolPrevious\npoolCurrent\npoolNext\n\ncycleModel\nstartCycle\nenterNextPool",
+    fillcolor="#dff2e3",
     penwidth=1.5
   ];
 
@@ -65,10 +63,8 @@ digraph DomainArchitecture {
   ];
 
   poolRuntime [
-    label="EJECUCION DE UN POOL\n\npreparePool\nvalidatePool\nrunPool\n\nrunPool contiene:\nautomaticStages.onEnter\nstages normales\nautomaticStages.onExit",
-    fillcolor="#fff0c7",
-    style="rounded,filled,dashed",
-    color="#c89223"
+    label="EJECUCION DE UN POOL\n\npool.onEnter\npreparePool\nvalidatePool\nstages normales\npool.onExit",
+    fillcolor="#dff2e3"
   ];
 
   stagePipeline [
@@ -82,18 +78,26 @@ digraph DomainArchitecture {
   ];
 
   services [
-    label="SERVICIOS TRANSVERSALES\n\nhistoryModel\ngroupModel\n\nblockedPropertyChanges:\nproperty + value\nblockedRoleIds\nexpiresAt\n\nreview_property_blocks",
-    fillcolor="#fff0c7",
-    style="rounded,filled,dashed",
-    color="#c89223"
+    label="SERVICIOS TRANSVERSALES\n\nhistoryModel\ngroupModel\n\nblockedPropertyChanges:\nproperty + value\nblockedFor.actorIds\nexpiresAt\n\nreview_property_blocks",
+    fillcolor="#dff2e3"
+  ];
+
+  messages [
+    label="MENSAJES Y PRESENTACION\n\ngameplayMessage -> sessionMessageLog\ndiagnosticMessage -> errorLog\napplicationMessage -> applicationLog\n\nmessagePresenter\nskin + language -> UI",
+    fillcolor="#e8f2f7"
   ];
 
   inputs -> assembly -> session -> cycle -> pools -> poolRuntime -> stagePipeline -> reactions;
-  cycle -> specialStages [label="resuelve entre pools"];
+  session -> specialStages [label="cola FIFO"];
+  cycle -> specialStages [label="consulta entre pools"];
+  specialStages -> stagePipeline [label="ejecuta stage"];
   reactions -> session [label="actualiza estado", constraint=false];
   reactions -> specialStages [label="encola stage especial", constraint=false];
+  reactions -> messages [label="emite mensajes", constraint=false];
+  session -> messages [label="guarda logs", constraint=false];
+  inputs -> messages [label="skin", style=dashed, constraint=false];
   services -> stagePipeline [label="consulta y registra", style=dashed];
-  services -> poolRuntime [label="onEnter revisa bloqueos", style=dashed];
+  services -> poolRuntime [label="fronteras revisan bloqueos", style=dashed];
 
   subgraph cluster_legend {
     label="Leyenda";

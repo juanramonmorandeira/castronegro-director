@@ -67,7 +67,8 @@ nombre, texto, imagen o recurso dentro de una skin.
 `presentationKey` = alternativa tecnica aceptable para `skinKey` si el codigo lo
 requiere, pero la preferencia actual es `skinKey`.
 
-`sessionRoleId` = id de un role vivo dentro de una session concreta.
+`roleId` = id de un role vivo dentro de una session concreta. En los objetos
+runtime se guarda como `role.id`.
 
 `playerId` = id de un jugador de la aplicacion.
 
@@ -109,9 +110,6 @@ comportamiento a partir de `group.type`; interpreta estas reglas.
 value)` sobre un miembro y genera otro cambio sobre los miembros indicados por
 `targets`. Cada efecto derivado usa como `causedBy` el id del group.
 
-`memberRole` = rol interno provisional de un miembro dentro de un group. Solo se
-conservara si aparece un caso real de grupo direccional.
-
 `stage` = periodo ejecutable dentro de un pool. Normalmente permite actuar a
 uno o varios roles, pero no necesita distinguir conceptualmente si proceden de
 un role individual o de un group.
@@ -151,9 +149,12 @@ Cada elemento tiene `stageId`, `stageKey` y metadatos de origen. Los stages
 generados durante un pool se resuelven despues de completar ese pool y antes
 del siguiente, conservando su relacion causal con el ciclo actual.
 
-`poolSpecialStages` / `cycleSpecialStages` = contenedores no implementados. No
-se separan mientras no exista una mecanica real que necesite stages ejecutados
-entre ciclos. El unico contenedor runtime actual es `session.specialStages`.
+`specialStageDefinitions` = stages iniciales que una definicion aporta
+directamente a `session.specialStages`. No usan una bandera dentro del stage.
+
+`currentStageSource` = indica si el cursor ejecuta actualmente un stage de
+`cycle.pools` o de `session.specialStages`. Sus valores son `pool` y
+`specialStages`.
 
 `specialStagesHistory` = historial propio de altas, inicios, cierres y fallos de
 la cola `specialStages`.
@@ -282,14 +283,14 @@ selection.
 
 `rule` = declaracion que combina condition, action, consequence o restriction.
 
-`ruleAnalyzer` = responsabilidad que lee reglas, detecta objetos necesarios y
-solicita materializacion cuando faltan.
+`ruleAnalyzer` = responsabilidad futura que leera reglas, detectara objetos
+necesarios y solicitara su materializacion. Todavia no es una API runtime.
 
-`materializerCoordinator` = responsabilidad que coordina que creador debe
-materializar cada objeto solicitado por ruleAnalyzer.
+`materializerCoordinator` = responsabilidad futura que coordinara los
+constructores solicitados por `ruleAnalyzer`.
 
-`sessionAssembler` = coordinador general que ensambla una session jugable desde
-ruleSet, configuration y match.
+`buildSession` = ensamblador actual que construye la session desde piezas ya
+seleccionadas y materializables.
 
 ## Estado
 
@@ -305,7 +306,24 @@ ruleSet, configuration y match.
 
 `stageHistory` = historial de cierres y avances de stages.
 
-`errorLog` = futuro registro de warnings, errors y fatals.
+`gameplayMessage` = mensaje estructurado producido por una regla o resultado
+esperado de la partida. Se presenta mediante skin.
+
+`diagnosticMessage` = mensaje estructurado sobre un fallo tecnico del dominio.
+Se guarda en `session.errorLog`.
+
+`applicationMessage` = mensaje externo a la partida, gestionado por la
+aplicacion y su propio i18n.
+
+`sessionMessageLog` = historial de gameplayMessages. Conserva siempre el
+mensaje estructurado y puede conservar tambien el texto exacto presentado.
+
+`errorLog` = registro de diagnosticMessages de una session.
+
+`applicationLog` = registro externo a session para mensajes de aplicacion.
+
+`messagePresenter` = capa que combina mensaje estructurado, skin, idioma y
+estado de session para producir texto listo para UI.
 
 ## Validacion
 

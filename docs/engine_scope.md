@@ -10,6 +10,9 @@ estado de sesion + accion intentada -> nueva sesion + reporte mecanico
 El motor no conoce Svelte, Firebase, i18n, imagenes, CSS ni nombres narrativos
 de una skin concreta.
 
+El motor puede emitir mensajes mecanicos estructurados, pero nunca texto final
+de skin.
+
 ## Responsabilidades
 
 ### Acciones
@@ -90,16 +93,16 @@ La sesion es el estado vivo de la partida:
 - `players`
 - `roles`
 - `groups`
-- `groups`
 - `session.cycle.pools` como mapa de pools runtime.
 - `actionHistory`
-- `stageHistory` en el modelo conceptual. En el codigo actual todavia aparece
-  como `stageHistory`.
+- `stageHistory`
 - `objectiveRules`
 - `achievedObjectives`
 - `playOutcome`
 - `settings`
 - `status`
+- `sessionMessageLog`
+- `errorLog`
 
 ## Flujo
 
@@ -151,7 +154,7 @@ Preferimos nombres mecanicos y anonimos:
 
 ```text
 set_property inPlay false
-set_group linked true
+set_group linked
 block_property_change inPlay false
 ```
 

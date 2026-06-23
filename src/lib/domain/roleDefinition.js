@@ -4,7 +4,7 @@
 //
 // defineRole describe un tipo mecanico de rol:
 // - a que alignment mecanico pertenece por defecto;
-// - que stageDefinitions puede proponer;
+// - que stages de pool y stages iniciales especiales puede proponer;
 //
 // createRole materializa su estado dentro de una sesion concreta.
 // buildRoles ensambla roles runtime desde definiciones y asientos.
@@ -48,6 +48,7 @@ export function defineRole({
   type = ROLE_DEFINITION_TYPES.ROLE,
   alignmentId = null,
   stageDefinitions = [],
+  specialStageDefinitions = [],
   reactions = [],
   resources = [],
   metadata = {}
@@ -59,6 +60,7 @@ export function defineRole({
     type: normalizeId(type),
     alignmentId: alignmentId ? normalizeId(alignmentId) : null,
     stageDefinitions: (stageDefinitions ?? []).map(defineStage),
+    specialStageDefinitions: (specialStageDefinitions ?? []).map(defineStage),
     // Las reacciones son definicion mecanica del rol: "si ocurre X, puedo
     // responder con Y". eventModel sera quien las evalue durante la sesion.
     reactions: (reactions ?? []).map(defineRoleReaction),

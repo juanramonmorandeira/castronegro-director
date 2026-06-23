@@ -16,6 +16,8 @@ import { resolveAction, findRole } from './actionModel.js';
 import { evaluateRecipeConstraints } from './constraintModel.js';
 import { normalizeId } from './sessionModel.js';
 import { materializePropertyBlockExpiration } from './roleModel.js';
+import { createMessagesFromEngineErrors } from '../messages/messageModel.js';
+import { routeMessages } from '../messages/messageLogModel.js';
 
 export function getRecipeKey(recipe = {}) {
   return normalizeId(recipe.key ?? recipe.actionKey ?? recipe.id);
@@ -124,6 +126,19 @@ export function validateRecipeConstraints({ session, recipe, input = {} }) {
   };
 }
 
+function appendEngineErrorMessages(session, errors, context = {}) {
+  const messages = createMessagesFromEngineErrors({
+    session,
+    errors,
+    context
+  });
+
+  return {
+    session: routeMessages({ session }, messages).session,
+    messages
+  };
+}
+
 // Resuelve una receta:
 // 1. Valida restricciones de receta.
 // 2. Convierte la receta en accion pura.
@@ -133,25 +148,39 @@ export function resolveRecipe(session, recipe, input = {}, context = {}) {
   const constraintValidation = validateRecipeConstraints({ session, recipe, input });
 
   if (!constraintValidation.ok) {
+    const messageState = appendEngineErrorMessages(session, constraintValidation.errors, {
+      ...context,
+      actionId: recipe?.id ?? null,
+      actionKey
+    });
+
     return {
       ok: false,
       actionId: recipe?.id ?? null,
       actionKey,
       errors: constraintValidation.errors,
-      session,
-      result: null
+      session: messageState.session,
+      result: null,
+      messages: messageState.messages
     };
   }
 
   const materialization = materializeRecipeForSession(session, recipe, context);
   if (!materialization.ok) {
+    const messageState = appendEngineErrorMessages(session, materialization.errors, {
+      ...context,
+      actionId: recipe?.id ?? null,
+      actionKey
+    });
+
     return {
       ok: false,
       actionId: recipe?.id ?? null,
       actionKey,
       errors: materialization.errors,
-      session,
-      result: null
+      session: messageState.session,
+      result: null,
+      messages: messageState.messages
     };
   }
 

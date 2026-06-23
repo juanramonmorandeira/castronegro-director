@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 
 import {
   ACTION_IDS,
+  ALIGNMENT_IDS,
   AVAILABILITY_RULE_TYPES,
+  BASIC_ROLE_OPTION_KEYS,
   EFFECT_TYPES,
   HISTORY_RESULTS,
   CONSTRAINT_TYPES,
@@ -35,6 +37,7 @@ import {
   createPool,
   preparePool,
   startCycle,
+  startSpecialStages,
   validatePool,
   organizePoolStages,
   createSelectionRules,
@@ -43,6 +46,7 @@ import {
   defineGroup,
   addRoleToGroup,
   addBlockedPropertyChange,
+  appendSpecialStage,
   getCoreGroupCatalog,
   getCurrentStage,
   getCurrentStageCursor,
@@ -54,16 +58,23 @@ import {
   checkObjectives,
   findAppliedSetPropertyHistory,
   STAGE_STATUSES,
+  CURRENT_STAGE_SOURCES,
   POOL_DEFINITION_ERRORS,
   POOL_KEYS,
   GROUP_CATALOG_IDS,
   GROUP_MEMBERSHIP_RULE_TYPES,
   ROLE_CATALOG_IDS,
+  ROLE_CATALOG,
+  RULE_SET_CATALOG_IDS,
+  RULE_SET_SUPPORT_STATUSES,
   RECIPE_KEYS,
   resolveSelectionRound,
   resolveAction,
   resolveCurrentStage,
   resolveRecipe,
+  buildRuleSet,
+  getBasicAlignmentDistribution,
+  getCatalogRuleSet,
   STAGE_ACTION_KEYS,
   STAGE_CATALOG_IDS,
   STAGE_COMPLETION_MODES,
@@ -79,6 +90,21 @@ import {
   getCatalogStage,
   validateSession
 } from '../index.js';
+import {
+  MESSAGE_AUDIENCE_TYPES,
+  MESSAGE_CATALOG,
+  MESSAGE_IMPLEMENTATION_STATUSES,
+  MESSAGE_KEYS,
+  MESSAGE_SEVERITIES,
+  MESSAGE_TYPES,
+  createMessage,
+  defineSkin,
+  presentMessage,
+  recordRenderedSessionMessage,
+  routeMessage,
+  toToastInput,
+  validateSkinCoverage
+} from '../../messages/index.js';
 
 const tests = [];
 
@@ -344,17 +370,15 @@ test('inspect_role revela roleKey sin modificar la sesion', () => {
 test('resolveCurrentStage ejecuta receta y completeCurrentStage avanza el cursor', () => {
   const session = createSession({
     ...createBaseSession(),
-    specialStagesActive: true,
+    currentStageSource: CURRENT_STAGE_SOURCES.SPECIAL_STAGES,
     specialStages: [
       createStage({
         key: STAGE_KEYS.STAGE_01,
-        special: true,
         status: STAGE_STATUSES.ENABLED,
         actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
       }),
       createStage({
         key: STAGE_KEYS.STAGE_02,
-        special: true,
         status: STAGE_STATUSES.ENABLED,
         actions: [actionRecipe(linkTargetsAction, STAGE_ACTION_KEYS.LINK_TARGETS)]
       })
@@ -408,11 +432,10 @@ test('resolveCurrentStage ejecuta receta y completeCurrentStage avanza el cursor
 test('resolveCurrentStage rechaza un stage ejecutable sin action declarada', () => {
   const session = createSession({
     ...createBaseSession(),
-    specialStagesActive: true,
+    currentStageSource: CURRENT_STAGE_SOURCES.SPECIAL_STAGES,
     specialStages: [
       createStage({
         key: 'stageMissingAction',
-        special: true,
         status: STAGE_STATUSES.ENABLED
       })
     ]
@@ -425,6 +448,9 @@ test('resolveCurrentStage rechaza un stage ejecutable sin action declarada', () 
     resolved.session.specialStages[0].status,
     STAGE_STATUSES.ENABLED
   );
+  assert.equal(resolved.messages[0].key, MESSAGE_KEYS.INVALID_STAGE);
+  assert.equal(resolved.session.errorLog.length, 1);
+  assert.equal(resolved.session.errorLog[0].message.context.stageKey, 'stagemissingaction');
 });
 
 test('poolDefinition organiza stages construidos por stageDefinition', () => {
@@ -726,10 +752,10 @@ test('validatePool rechaza pools sin stages ejecutables', () => {
 
 test('specialStages tiene prioridad inicial sin formar parte de pools', () => {
   const session = createSession({
+    currentStageSource: CURRENT_STAGE_SOURCES.SPECIAL_STAGES,
     specialStages: [
       createStage({
         key: STAGE_KEYS.STAGE_01,
-        special: true,
         status: STAGE_STATUSES.ENABLED,
         actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
       })
@@ -751,8 +777,40 @@ test('specialStages tiene prioridad inicial sin formar parte de pools', () => {
     POOL_KEYS.POOL_CONCEALED,
     POOL_KEYS.POOL_EXPOSED
   ]);
-  assert.equal(session.specialStagesActive, true);
+  assert.equal(session.currentStageSource, CURRENT_STAGE_SOURCES.SPECIAL_STAGES);
   assert.equal(getCurrentStage(session).stageKey, STAGE_KEYS.STAGE_01);
+});
+
+test('specialStages pendientes no interrumpen el pool hasta cambiar currentStageSource', () => {
+  const session = createSession({
+    cycle: createCycle({
+      pools: {
+        [POOL_KEYS.POOL_CONCEALED]: [
+          createStage({
+            key: STAGE_KEYS.STAGE_02,
+            status: STAGE_STATUSES.ENABLED,
+            actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+          })
+        ]
+      }
+    })
+  });
+  const queued = appendSpecialStage(
+    session,
+    createStage({
+      key: STAGE_KEYS.STAGE_07,
+      status: STAGE_STATUSES.ENABLED,
+      actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+    })
+  );
+
+  assert.equal(queued.currentStageSource, CURRENT_STAGE_SOURCES.POOL);
+  assert.equal(getCurrentStage(queued).stageKey, STAGE_KEYS.STAGE_02);
+
+  const started = startSpecialStages(queued);
+
+  assert.equal(started.currentStageSource, CURRENT_STAGE_SOURCES.SPECIAL_STAGES);
+  assert.equal(getCurrentStage(started).stageKey, STAGE_KEYS.STAGE_07);
 });
 
 test('stageDefinition define completion y recetas opcionales', () => {
@@ -844,19 +902,19 @@ test('roleCatalog declara roles mecanicos y razones de orden', () => {
 
   assert.deepEqual(
     [
-      byKey[ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS].stageDefinitions[0].special,
+      byKey[ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS].specialStageDefinitions.length,
       byKey[ROLE_CATALOG_IDS.ROLE_INSPECTS].stageDefinitions[0].poolKey,
       byKey[ROLE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY].stageDefinitions[0].poolKey,
       byKey[ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL].stageDefinitions[0].poolKey
     ],
     [
-      true,
+      1,
       POOL_KEYS.POOL_CONCEALED,
       POOL_KEYS.POOL_CONCEALED,
       POOL_KEYS.POOL_CONCEALED
     ]
   );
-  assert.equal(byKey[ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS].stageDefinitions[0].order, null);
+  assert.equal(byKey[ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS].specialStageDefinitions[0].order, null);
   assert.equal(byKey[ROLE_CATALOG_IDS.ROLE_INSPECTS].stageDefinitions[0].order, 10);
   assert.equal(byKey[ROLE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY].stageDefinitions[0].order, 20);
   assert.equal(byKey[ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL].stageDefinitions[0].order, 40);
@@ -868,10 +926,7 @@ test('roleCatalog declara roles mecanicos y razones de orden', () => {
   );
   assert.equal(byKey[ROLE_CATALOG_IDS.ROLE_REACTIVE].stageDefinitions.length, 0);
   assert.equal(byKey[ROLE_CATALOG_IDS.ROLE_REACTIVE].reactions.length, 1);
-  assert.equal(
-    byKey[ROLE_CATALOG_IDS.ROLE_REACTIVE].reactions[0].response.stage.special,
-    true
-  );
+  assert.equal(byKey[ROLE_CATALOG_IDS.ROLE_REACTIVE].reactions[0].response.stage.poolKey, null);
 });
 
 test('groupCatalog declara grupos mecanicos y razones de orden', () => {
@@ -1004,7 +1059,7 @@ test('role reactive crea un stage especial al recibir inPlay=false final', () =>
     `${ROLE_CATALOG_IDS.ROLE_REACTIVE}-0`
   ]);
   assert.equal(completed.stageAdvance.reason, 'special-stages-before-next-pool');
-  assert.equal(completed.stageAdvance.next.special, true);
+  assert.equal(completed.stageAdvance.next.source, CURRENT_STAGE_SOURCES.SPECIAL_STAGES);
   assert.equal(specialResolution.ok, true);
   assert.equal(roleById(specialResolution.session, `${ROLE_CATALOG_IDS.ROLE_INSPECTS}-0`).inPlay, false);
 });
@@ -1080,7 +1135,7 @@ test('specialStages resuelve stages pendientes antes de conclude_play si pueden 
     STAGE_KEYS.STAGE_07
   ]);
   assert.equal(completed.session.specialStages.length, 1);
-  assert.equal(completed.stageAdvance.next.special, true);
+  assert.equal(completed.stageAdvance.next.source, CURRENT_STAGE_SOURCES.SPECIAL_STAGES);
   assert.equal(
     completed.stageAdvance.next.stage.metadata.source.metadata.reactionKey,
     'self_out_of_play_creates_special_stage'
@@ -1162,11 +1217,10 @@ test('conclude_play se aplica como lifecycleOperation cuando el outcome es estab
 test('cycle inicia un nuevo ciclo antes de entrar en poolConcealed', () => {
   const session = createSession({
     ...createBaseSession(),
-    specialStagesActive: true,
+    currentStageSource: CURRENT_STAGE_SOURCES.SPECIAL_STAGES,
     specialStages: [
       createStage({
         key: STAGE_KEYS.STAGE_01,
-        special: true,
         status: STAGE_STATUSES.ENABLED,
         actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
       })
@@ -1913,6 +1967,134 @@ test('limited_uses bloquea una segunda ejecucion de la misma receta por el mismo
   assert.equal(secondRestore.ok, false);
   assert.equal(secondRestore.errors[0].code, 'constraint/limited_uses');
   assert.equal(secondRestore.errors[0].window, CONSTRAINT_WINDOWS.SESSION);
+  assert.equal(secondRestore.messages[0].key, MESSAGE_KEYS.RESOURCE_ALREADY_CONSUMED);
+  assert.equal(secondRestore.session.sessionMessageLog.length, 1);
+  assert.equal(
+    secondRestore.session.sessionMessageLog[0].message.audience.type,
+    MESSAGE_AUDIENCE_TYPES.ROLE
+  );
+});
+
+test('skin presenta gameplayMessage y conserva estructura junto al texto mostrado', () => {
+  const skin = defineSkin({
+    id: 'test_skin',
+    defaultLanguage: 'es',
+    entities: {
+      roles: {
+        alignment_a_blocker: { displayName: 'Bruja' }
+      },
+      resources: {
+        restore_recent_out_of_play: { displayName: 'pocion de restauracion' }
+      }
+    },
+    messages: {
+      es: {
+        [MESSAGE_KEYS.RESOURCE_ALREADY_CONSUMED]: {
+          role: '{actor}, la {resource} ya ha sido usada.'
+        }
+      }
+    }
+  });
+  const session = createBaseSession();
+  const message = createMessage({
+    id: 'message-1',
+    type: MESSAGE_TYPES.GAMEPLAY,
+    key: MESSAGE_KEYS.RESOURCE_ALREADY_CONSUMED,
+    severity: MESSAGE_SEVERITIES.WARNING,
+    audience: {
+      type: MESSAGE_AUDIENCE_TYPES.ROLE,
+      ids: ['alignment_a_blocker-0']
+    },
+    params: {
+      actor: {
+        entityType: 'role',
+        id: 'alignment_a_blocker-0'
+      },
+      resource: {
+        entityType: 'resource',
+        id: 'restore_recent_out_of_play'
+      },
+      limit: 1,
+      used: 1
+    }
+  });
+  const presented = presentMessage({ message, skin, language: 'es', session });
+
+  assert.equal(presented.ok, true);
+  assert.equal(
+    presented.presentation.text,
+    'Bruja, la pocion de restauracion ya ha sido usada.'
+  );
+  assert.deepEqual(toToastInput(presented.presentation), {
+    message: 'Bruja, la pocion de restauracion ya ha sido usada.',
+    variant: 'info'
+  });
+
+  const routed = routeMessage({
+    session,
+    message
+  }).session;
+  const recorded = recordRenderedSessionMessage(
+    routed,
+    routed.sessionMessageLog[0].id,
+    presented.presentation
+  );
+
+  assert.equal(recorded.sessionMessageLog[0].message.key, message.key);
+  assert.equal(recorded.sessionMessageLog[0].rendered.text, presented.presentation.text);
+});
+
+test('skinValidation distingue cobertura obligatoria y opcional', () => {
+  const skin = defineSkin({
+    id: 'partial_skin',
+    defaultLanguage: 'es',
+    messages: {
+      es: {
+        [MESSAGE_KEYS.RESOURCE_ALREADY_CONSUMED]: {
+          default: 'Recurso consumido.'
+        }
+      }
+    },
+    entities: {
+      roles: {
+        role_required: { displayName: 'Rol requerido' }
+      }
+    }
+  });
+  const validation = validateSkinCoverage({
+    skin,
+    language: 'es',
+    requiredMessageKeys: [
+      MESSAGE_KEYS.RESOURCE_ALREADY_CONSUMED,
+      MESSAGE_KEYS.OBJECTIVE_ACHIEVED
+    ],
+    requiredEntities: {
+      roles: {
+        required: ['role_required'],
+        optional: ['role_optional']
+      }
+    }
+  });
+
+  assert.equal(validation.ok, false);
+  assert.equal(validation.errors[0].code, 'skin/missing-required-message');
+  assert.equal(validation.warnings[0].code, 'skin/missing-optional-entity');
+});
+
+test('applicationMessage se registra fuera de session', () => {
+  const session = createBaseSession();
+  const message = createMessage({
+    type: MESSAGE_TYPES.APPLICATION,
+    key: MESSAGE_KEYS.APPLICATION_OPERATION_FAILED,
+    severity: MESSAGE_SEVERITIES.ERROR,
+    audience: { type: MESSAGE_AUDIENCE_TYPES.SYSTEM },
+    params: { code: 'network/offline' }
+  });
+  const routed = routeMessage({ session, applicationLog: [], message });
+
+  assert.equal(routed.session, session);
+  assert.equal(routed.applicationLog.length, 1);
+  assert.equal(routed.applicationLog[0].message.params.code, 'network/offline');
 });
 
 test('limited_uses con ventana current_cycle permite reutilizar en otro ciclo', () => {
@@ -3904,6 +4086,152 @@ test('stage con seleccion y set_out_of_play no permite desactivar restricciones 
 
   assert.equal(resolved.ok, false);
   assert.equal(resolved.errors[0].code, 'selection/restricted-group-member-candidate');
+});
+
+test('catalogo basico usa formula mecanica anonima para distribuir alignments', () => {
+  assert.deepEqual(getBasicAlignmentDistribution(8), {
+    [ALIGNMENT_IDS.ALIGNMENT_A]: 6,
+    [ALIGNMENT_IDS.ALIGNMENT_B]: 2,
+    [ALIGNMENT_IDS.ALIGNMENT_UNDEFINED]: 0,
+    [ALIGNMENT_IDS.ALIGNMENT_INDEPENDENT]: 0
+  });
+  assert.deepEqual(getBasicAlignmentDistribution(12), {
+    [ALIGNMENT_IDS.ALIGNMENT_A]: 9,
+    [ALIGNMENT_IDS.ALIGNMENT_B]: 3,
+    [ALIGNMENT_IDS.ALIGNMENT_UNDEFINED]: 0,
+    [ALIGNMENT_IDS.ALIGNMENT_INDEPENDENT]: 0
+  });
+  assert.deepEqual(getBasicAlignmentDistribution(18), {
+    [ALIGNMENT_IDS.ALIGNMENT_A]: 14,
+    [ALIGNMENT_IDS.ALIGNMENT_B]: 4,
+    [ALIGNMENT_IDS.ALIGNMENT_UNDEFINED]: 0,
+    [ALIGNMENT_IDS.ALIGNMENT_INDEPENDENT]: 0
+  });
+  assert.equal(getBasicAlignmentDistribution(7), null);
+});
+
+test('ruleSet basico declara cinco roles listos y bloquea mecanicas incompletas', () => {
+  const selectedRuleSet = getCatalogRuleSet(RULE_SET_CATALOG_IDS.CLASSIC_HIDDEN_ROLES);
+  const options = Object.fromEntries(
+    selectedRuleSet.availableRoles.map((option) => [option.roleKey, option])
+  );
+
+  assert.equal(options[BASIC_ROLE_OPTION_KEYS.PLAIN].support, RULE_SET_SUPPORT_STATUSES.READY);
+  assert.equal(options[BASIC_ROLE_OPTION_KEYS.LINKS_TARGETS].support, RULE_SET_SUPPORT_STATUSES.PARTIAL);
+  assert.equal(options[BASIC_ROLE_OPTION_KEYS.ASSUMES_ROLE].support, RULE_SET_SUPPORT_STATUSES.PENDING);
+  assert.equal(options[BASIC_ROLE_OPTION_KEYS.OBSERVES_SELECTION].selectable, false);
+  assert.equal(options[BASIC_ROLE_OPTION_KEYS.SELECTION_AUTHORITY].selectable, false);
+});
+
+test('buildRuleSet ensambla solo roles mecanicamente listos', () => {
+  const selectedRuleSet = getCatalogRuleSet(RULE_SET_CATALOG_IDS.CLASSIC_HIDDEN_ROLES);
+  const built = buildRuleSet({
+    selectedRuleSet,
+    selectedRoleKeys: [
+      BASIC_ROLE_OPTION_KEYS.COLLECTIVE_SET_OUT_OF_PLAY,
+      BASIC_ROLE_OPTION_KEYS.INSPECTS,
+      BASIC_ROLE_OPTION_KEYS.REACTIVE,
+      BASIC_ROLE_OPTION_KEYS.IN_PLAY_CONTROL,
+      BASIC_ROLE_OPTION_KEYS.PLAIN
+    ],
+    roleCatalog: ROLE_CATALOG
+  });
+
+  assert.equal(built.ok, true);
+  assert.equal(built.ruleSet.roles.baseRoles.length, 5);
+  assert.equal(built.ruleSet.groups.length, 2);
+  assert.equal(built.ruleSet.rules.objectiveRules.length, 3);
+  assert.deepEqual(
+    built.ruleSet.roles.baseRoles.map((role) => role.alignmentId),
+    ['alignment_b', 'alignment_a', 'alignment_a', 'alignment_a', 'alignment_a']
+  );
+  assert.deepEqual(
+    built.ruleSet.roles.baseRoles.find(
+      (role) => role.key === ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL
+    ).resources,
+    [
+      { key: 'restore_in_play', count: 1, metadata: {} },
+      { key: 'set_out_of_play', count: 1, metadata: {} }
+    ]
+  );
+});
+
+test('buildRuleSet rechaza un role parcial con sus requisitos pendientes', () => {
+  const selectedRuleSet = getCatalogRuleSet(RULE_SET_CATALOG_IDS.CLASSIC_HIDDEN_ROLES);
+  const built = buildRuleSet({
+    selectedRuleSet,
+    selectedRoleKeys: [BASIC_ROLE_OPTION_KEYS.LINKS_TARGETS],
+    roleCatalog: ROLE_CATALOG
+  });
+
+  assert.equal(built.ok, false);
+  assert.equal(built.errors[0].code, 'ruleset/role-not-ready');
+  assert.deepEqual(built.errors[0].missingMechanics, [
+    'dynamic_objective_rule',
+    'linked_group_selection_restriction'
+  ]);
+});
+
+test('buildSession consume directamente un ruleSet ya construido', () => {
+  const selectedRuleSet = getCatalogRuleSet(RULE_SET_CATALOG_IDS.CLASSIC_HIDDEN_ROLES);
+  const builtRuleSet = buildRuleSet({
+    selectedRuleSet,
+    selectedRoleKeys: [
+      BASIC_ROLE_OPTION_KEYS.COLLECTIVE_SET_OUT_OF_PLAY,
+      BASIC_ROLE_OPTION_KEYS.INSPECTS,
+      BASIC_ROLE_OPTION_KEYS.PLAIN
+    ],
+    roleCatalog: ROLE_CATALOG
+  });
+  const builtSession = buildSession({
+    id: 'basic-ruleset-session',
+    ruleSet: builtRuleSet.ruleSet,
+    seats: [
+      {
+        seat: 0,
+        playerId: 'player-1',
+        role: BASIC_ROLE_OPTION_KEYS.COLLECTIVE_SET_OUT_OF_PLAY
+      },
+      {
+        seat: 1,
+        playerId: 'player-2',
+        role: BASIC_ROLE_OPTION_KEYS.INSPECTS
+      },
+      {
+        seat: 2,
+        playerId: 'player-3',
+        role: BASIC_ROLE_OPTION_KEYS.PLAIN
+      }
+    ],
+    validate: false
+  });
+
+  assert.equal(builtSession.ok, true);
+  assert.equal(
+    builtSession.session.settings.ruleSetId,
+    RULE_SET_CATALOG_IDS.CLASSIC_HIDDEN_ROLES
+  );
+  assert.equal(builtSession.session.groups.length, 2);
+  assert.equal(builtSession.session.objectiveRules.length, 3);
+  assert.deepEqual(builtSession.session.cycle.poolOrder, [
+    POOL_KEYS.POOL_CONCEALED,
+    POOL_KEYS.POOL_EXPOSED
+  ]);
+});
+
+test('catalogo de mensajes distingue keys implementadas y planificadas con audiencia', () => {
+  assert.equal(
+    MESSAGE_CATALOG[MESSAGE_KEYS.RESOURCE_ALREADY_CONSUMED].status,
+    MESSAGE_IMPLEMENTATION_STATUSES.IMPLEMENTED
+  );
+  assert.equal(
+    MESSAGE_CATALOG[MESSAGE_KEYS.INSPECTION_REVEALED].defaultAudience,
+    MESSAGE_AUDIENCE_TYPES.ROLE
+  );
+  assert.equal(
+    MESSAGE_CATALOG[MESSAGE_KEYS.SELECTION_AUTHORITY_ASSIGNED].status,
+    MESSAGE_IMPLEMENTATION_STATUSES.PLANNED
+  );
 });
 
 async function runTests() {

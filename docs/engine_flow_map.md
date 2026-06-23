@@ -50,11 +50,9 @@ flowchart TD
   BuildSession --> RoleStates
   BuildSession --> GroupStates
   BuildSession --> BuildPools
-  BuildPools --> BuildStagePool
-  BuildStagePool --> StagePools
-  BuildPools --> AutomaticStages
-  AutomaticStages --> Objectives
-  StagePools --> CurrentStage
+  BuildPools --> CyclePools
+  CyclePools --> PoolLifecycle
+  PoolLifecycle --> CurrentStage
   CurrentStage --> StageModel
   StageModel --> Recipe
   Recipe --> Constraint
@@ -65,7 +63,7 @@ flowchart TD
   Effect --> Session
   Session --> Event
   Event -->|reaccion crea stage| SpecialStage
-  SpecialStage --> StagePools
+  SpecialStage --> CurrentStage
   Event --> Objectives
   Objectives --> PlayOutcome
   PlayOutcome -->|No concluyente| CurrentStage
@@ -90,7 +88,8 @@ skin/setup -> buildSession -> roles + groups + cycle.pools -> stage actual -> re
 | Validacion de sesion | `sessionValidation.js` | Detectar datos rotos o incompletos | Corregir datos automaticamente |
 | Historial | `historyModel.js` | Crear y consultar memoria mecanica de la sesion | Resolver acciones o cambiar estado por si mismo |
 | Catalogo de roles | `roleCatalog.js` | Guardar roles mecanicos predefinidos | Vestir roles con nombres de skin |
-| Definicion de grupo | `groupDefinition.js` | Crear grupos y resolver sus roleIds iniciales | Ejecutar acciones |
+| Definicion de grupo | `groupDefinition.js` | Definir y crear groups y groupRules | Ejecutar acciones |
+| Groups runtime | `groupModel.js` | Resolver membresia y consecuencias declaradas por groupRules | Aplicar efectos |
 | Catalogo de grupos | `groupCatalog.js` | Guardar grupos mecanicos predefinidos | Confundir grupo con skin o alignment narrativa |
 | Cursor de pools | `poolCursorModel.js` | Mover el cursor entre stages activos dentro de los pools | Ejecutar acciones de roles |
 | Stages | `stageModel.js` | Elegir recetas del stage actual y cerrar el stage cuando proceda | Resolver reglas propias de cada receta |
@@ -100,7 +99,7 @@ skin/setup -> buildSession -> roles + groups + cycle.pools -> stage actual -> re
 | Recetas | `recipeModel.js` | Validar restricciones y convertir receta en accion pura | Aplicar efectos o avanzar stages |
 | Restricciones | `constraintModel.js` | Validar restricciones propias de una receta | Cambiar estado directamente |
 | Acciones | `actionModel.js` | Validar y resolver acciones puras | Evaluar restricciones de receta |
-| Resolver | `resolverModel.js` | Decidir que efectos propuestos sobreviven, se bloquean o generan efectos derivados | Escribir cambios en sesion |
+| Resolver | `resolverModel.js` | Procesar efectos, bloqueos, deduplicacion y consecuencias solicitadas por groupRules | Conocer tipos narrativos de group |
 | Efectos | `effectModel.js` | Escribir efectos finales sobre la sesion | Decidir si un efecto debe existir |
 | Eventos | `eventModel.js` | Convertir efectos finales en eventos y activar reacciones declaradas por roles | Ejecutar la receta del stage especial |
 | Objectives | `objectiveModel.js` | Evaluar objetivos y playOutcome | Cerrar administrativamente la session |
@@ -113,34 +112,35 @@ flowchart TD
   A[Roles seleccionados desde roleCatalog]
   B[Jugadores y asientos]
   C[Groups seleccionados desde groupCatalog]
-  D[Stages de sistema o por defecto]
   E[buildSession]
   F[buildRoles]
+  J[createSession base]
   G[buildGroups]
   H[buildPools]
   I[createPool]
-  J[createSession]
   K[validateSession]
   L[session.roles]
   M[session.groups]
   N[session.cycle.pools]
+  P[session.specialStages inicial]
   O[Session lista para ejecucion]
 
   A --> E
   B --> E
   C --> E
-  D --> E
   E --> F
-  E --> G
-  E --> H
+  F --> J
+  J --> G
+  G --> H
   H --> I
+  H --> P
   F --> L
   G --> M
   I --> N
-  L --> J
-  M --> J
-  N --> J
-  J --> K
+  L --> K
+  M --> K
+  N --> K
+  P --> K
   K --> O
 ```
 
@@ -151,8 +151,9 @@ createX construye un objeto concreto.
 buildX ensambla varias definiciones para preparar una sesion o parte de ella.
 ```
 
-`role` no tiene archivo `roleDefinition.js`. Es el estado de un
-role dentro de `session.roles`, construido desde `roleDefinition.js`.
+`roleDefinition.js` contiene `defineRole`, `createRole` y `buildRoles`.
+`defineRole` describe el tipo mecánico y `createRole` materializa el estado que
+vive en `session.roles`.
 
 `buildSession` valida por defecto la sesion ensamblada. Si la terna
 role/player/seat no esta completa, devuelve `ok: false` con errores y conserva
@@ -258,15 +259,17 @@ materializados aportan la misma definicion de stage.
 Ejemplo:
 
 ```js
-createPool({
+createCycle({
   poolOrder: ['poolConcealed', 'poolExposed'],
   pools: {
-    poolConcealed: [
-      { key: 'stage_03' }
-    ],
-    poolExposed: [
-      { key: 'stage_05' }
-    ]
+    poolConcealed: createPool({
+      key: 'poolConcealed',
+      stages: [{ key: 'stage_03' }]
+    }),
+    poolExposed: createPool({
+      key: 'poolExposed',
+      stages: [{ key: 'stage_05' }]
+    })
   }
 })
 
@@ -276,9 +279,8 @@ session.specialStages = [
 ]
 ```
 
-Una skin puede cambiar ese orden declarando otro array. No hay pesos ni
-prioridades implicitas por ahora; eso se anadira solo si aparece una regla real
-que necesite reordenar stages dinamicamente.
+El ruleSet y su configuration determinan ese orden. La skin solo presenta los
+elementos. No hay pesos ni prioridades implicitas.
 
 ## Cierre de stage
 
@@ -307,15 +309,9 @@ completeCurrentStage marca done y avanza.
 El cierre queda registrado en `session.stageHistory` con `requestedBy`
 para distinguir cierres pedidos por player, director o system.
 
-Nota de diseno:
-
-```text
-poolDefinition.js preparara en el futuro arrays ordenados desde
-definiciones de skin/flavor.
-```
-
-Ese modelo podra aceptar `order` en pools configurables como `poolExposed` y
-`poolConcealed`. `poolCursorModel.js` seguira ejecutando arrays ya ordenados.
+`poolDefinition.js` prepara arrays ordenados desde las definiciones
+seleccionadas. Los pools configurables aceptan `order`; `poolCursorModel.js`
+ejecuta los arrays ya materializados.
 
 `specialStages` conserva siempre el orden FIFO de insercion.
 

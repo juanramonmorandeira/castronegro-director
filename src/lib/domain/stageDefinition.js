@@ -29,8 +29,6 @@ export const AVAILABILITY_RULE_TYPES = Object.freeze({
 export const STAGE_SOURCE_TYPES = Object.freeze({
   ROLE: 'role',
   GROUP: 'group',
-  SYSTEM: 'system',
-  SKIN: 'skin',
   EVENT: 'event'
 });
 
@@ -42,9 +40,9 @@ function defineActorIds(actorIds = []) {
   return [...new Set((actorIds ?? []).filter(Boolean))];
 }
 
-function getStageIdBase({ key, poolKey = null, special = false, actorIds = [] } = {}) {
+function getStageIdBase({ key, poolKey = null, actorIds = [] } = {}) {
   const normalizedKey = normalizeId(key) || 'stage';
-  const locationPart = special === true ? 'special' : normalizeId(poolKey) || 'unassigned';
+  const locationPart = normalizeId(poolKey) || 'unassigned';
   const actorPart = defineActorIds(actorIds).map(String).join('-') || 'runtime';
   return `stage-${locationPart}-${normalizedKey}-${actorPart}`;
 }
@@ -166,7 +164,6 @@ function validateStageCompletion({
 export function defineStage({
   key,
   poolKey = null,
-  special = false,
   status = STAGE_STATUSES.DISABLED,
   completion = {},
   selectionRules = null,
@@ -188,7 +185,6 @@ export function defineStage({
   return {
     key: normalizeId(key),
     poolKey: poolKey ?? null,
-    special: special === true,
     status,
     completion: validateStageCompletion(completion),
     selectionRules: prepareSelectionRules(selectionRules),
@@ -219,7 +215,6 @@ export function createStage({
       : getStageIdBase({
           key: stageDefinition.key,
           poolKey: stageDefinition.poolKey,
-          special: stageDefinition.special,
           actorIds: normalizedActorIds
         }),
     status: status ?? stageDefinition.status,

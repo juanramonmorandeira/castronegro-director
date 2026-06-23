@@ -54,11 +54,15 @@ export const STAGE_STATUSES = Object.freeze({
   FINISHED: 'finished'
 });
 
+export const CURRENT_STAGE_SOURCES = Object.freeze({
+  POOL: 'pool',
+  SPECIAL_STAGES: 'specialStages'
+});
+
 // Pools mecanicos del flujo.
 //
 // CONCEALED: acciones de informacion privada u oculta.
 // EXPOSED: acciones publicas o visibles para el grupo.
-// SPECIAL: interrupciones, resoluciones excepcionales y stages iniciales.
 export const POOL_KEYS = Object.freeze({
   POOL_CONCEALED: 'poolConcealed',
   POOL_EXPOSED: 'poolExposed'

@@ -6,7 +6,8 @@ concreta.
 ## Principio
 
 El motor no sabe que es una vidente, una bruja o un cazador. El motor sabe
-trabajar con acciones, recetas, restricciones, efectos y relaciones.
+trabajar con roles, groups, stages, selecciones, recetas, restricciones,
+acciones y efectos.
 
 Una skin puede vestir esos elementos con nombres, textos, imagenes y traducciones.
 
@@ -20,13 +21,15 @@ Definicion mecanica de un tipo de rol.
 defineRole({
   key: 'role_01',
   alignmentId: 'alignment_a',
-  stageDefinitions: []
+  stageDefinitions: [],
+  specialStageDefinitions: []
 })
 ```
 
 Un `Role` no es una carta en partida. Es una plantilla mecanica. Puede definir
 alignment por defecto y los `stageDefinitions` que ese tipo de rol aporta al
-flujo.
+flujo. `specialStageDefinitions` contiene los stages iniciales que aporta a la
+cola `specialStages`.
 
 ### Session role
 
@@ -41,7 +44,7 @@ createRole({
 })
 ```
 
-Un `Role` es la unidad jugable. Las acciones, relaciones, filtros,
+Un `Role` es la unidad jugable. Las acciones, groups, filtros,
 selecciones y efectos apuntan a roles, no a roles abstractos.
 
 Regla practica:
@@ -64,9 +67,8 @@ Ejemplos:
 - todos los roles inPlay;
 - un grupo definido por flag.
 
-Un grupo puede empezar vacio y llenarse durante la sesion. Por ejemplo, un
-grupo basado en `linked` no tendra miembros hasta que una accion cree esa
-relacion.
+Un group puede empezar vacio y llenarse durante la session. Por ejemplo, un
+group de tipo `linked` no tendra miembros hasta que una action lo cree.
 
 ### Stage
 
@@ -99,6 +101,9 @@ El orden vive en arrays, no en nombres narrativos.
 
 `specialStages` no es un pool. Es una cola FIFO independiente de stages
 dinamicos administrada por `specialStagesModel.js`.
+
+Un stage no lleva una propiedad de clasificacion especial. Su ubicacion depende
+de si fue materializado en `cycle.pools` o en `session.specialStages`.
 
 Identidad:
 
@@ -156,18 +161,20 @@ Ejemplos actuales:
 - `set_group`
 - `block_property_change`
 
-### Group
+### GroupRule
 
-Coleccion mecanica de roles. Vive en `session.groups`.
-
-Ejemplo:
+Regla declarativa asociada a un group.
 
 ```js
-createGroup({
-  type: 'linked',
-  roleIds: ['role_a-0', 'role_b-0']
-})
+{
+  type: 'propagate_property_change',
+  when: { property: 'inPlay', value: false },
+  apply: { property: 'inPlay', value: false },
+  targets: 'other_members'
+}
 ```
+
+El `group.type` clasifica el group, pero no activa comportamiento por si solo.
 
 ## Nombres
 

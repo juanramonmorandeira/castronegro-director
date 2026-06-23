@@ -2,6 +2,14 @@
 
 Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
 
+## Mensajes y skin
+
+- Ampliar `MESSAGE_CATALOG` al incorporar nuevas mecanicas.
+- Definir requisitos de cobertura de mensajes por ruleSet.
+- Conectar `messagePresenter` con la UI cuando exista una primera skin real.
+- Definir persistencia externa de `applicationLog`.
+- Clasificar progresivamente los errores restantes como gameplay o diagnostic.
+
 ## Antes de anadir muchos mas roles
 
 - Revisar la jerarquia mecanica:
@@ -12,9 +20,10 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
 
 ## ruleSet
 
-- Definir `ruleSetDefinition` en codigo.
+- Consolidar la primera implementacion de `ruleSetDefinition` y
+  `classic_hidden_roles`.
 - Decidir estructura final de `catalogRefs`.
-- Definir `skinRequirements`.
+- Ampliar `skinRequirements` cuando exista la primera skin real.
 - Definir reglas de seleccion que una configuration debe respetar.
 - Convertir `alignmentDistributionRules` en estructura de codigo cuando este
   cerrado el modelo de validacion.
@@ -24,6 +33,25 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
   - roles duplicables;
   - exclusiones especiales como actor/thief;
   - reglas dependientes de objectiveRules.
+- Completar `role_links_targets`:
+  - objectiveRule dinamica cuando sus miembros tienen alignments distintos;
+  - restriccion de selection entre miembros del group.
+- Implementar `role_assumes_role`:
+  - `roleChoiceSet`;
+  - eleccion inicial;
+  - asuncion permanente de role;
+  - regla forzada cuando todas las opciones cumplen una condicion.
+- Implementar `role_observes_selection`:
+  - observar una stage ajena;
+  - detectar observacion;
+  - sustituir el candidate elegido.
+- Implementar `position_selection_authority`:
+  - posicion adicional a role;
+  - peso de selection;
+  - desempate;
+  - transferencia o perdida.
+- Materializar `instanceRule` y validar cantidades contra `playersExpected`.
+- Validar que una configuration no nace con un objective concluyente cumplido.
 - Definir validacion de ruleSet:
   - catalogIds existentes;
   - colisiones de stages;
@@ -92,14 +120,10 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
 
 ## Validaciones y errores
 
-- Crear catalogo de severidades:
-  - warning;
-  - error;
-  - fatal.
-- Definir formato comun de error.
-- Definir si necesitamos `errorLog` dentro de session o solo resultados de
-  validacion antes de crear session.
-- Definir textos de error para UI sin contaminar el motor.
+- Extender la conversion de errores existentes a `diagnosticMessages`.
+- Definir politicas de pausa por severidad cuando se implemente el control de
+  errores de session.
+- Conectar `errorLog` a una vista tecnica para director o desarrollo.
 
 ## Bloqueos temporales
 

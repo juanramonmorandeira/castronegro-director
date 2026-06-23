@@ -150,7 +150,7 @@ Puede guardarse si queremos reproducir exactamente una preparacion concreta,
 pero conceptualmente ya incluye jugadores/asientos/roles asignados. Por eso es
 mas concreta que `gameConfiguration`.
 
-## Grupo con session
+## Relacion con session
 
 La session deberia guardar:
 
@@ -160,7 +160,8 @@ La session deberia guardar:
 - `players`;
 - `roles`;
 - `groups`;
-- `stepPools`;
+- `cycle` y sus `pools`;
+- `specialStages`;
 - historiales.
 
 Decision pendiente:
@@ -177,7 +178,7 @@ materializar = convertir definiciones/referencias en estado vivo de session.
 
 Ejemplo: un role seleccionado en configuration se materializa como un role real
 de session con id propio, asiento, jugador asignado, estado `inPlay`, grupos
-y posibles steps.
+y posibles stages.
 
 ## Validacion pendiente
 

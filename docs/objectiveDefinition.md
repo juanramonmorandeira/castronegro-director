@@ -126,7 +126,7 @@ Ejemplo conceptual:
 
 ### check_objectives
 
-`check_objectives` es la etapa automatica que comprueba objetivos al final de
+`check_objectives` es la lifecycle operation que comprueba objetivos al final de
 un pool. No es un stage ejecutable por player, group o director.
 
 Responsabilidades:

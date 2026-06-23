@@ -11,6 +11,7 @@ export {
   SESSION_STATUSES,
   PLAYER_TYPES,
   STAGE_STATUSES,
+  CURRENT_STAGE_SOURCES,
   POOL_KEYS,
   DEFAULT_POOL_ORDER,
   normalizeId
@@ -56,6 +57,20 @@ export {
   getCatalogRole,
   getCoreRoleCatalog
 } from './roleCatalog.js';
+export {
+  ALIGNMENT_IDS,
+  RULE_SET_SUPPORT_STATUSES,
+  buildRuleSet,
+  defineRuleSet,
+  validateRuleSetSelection
+} from './ruleSetDefinition.js';
+export {
+  BASIC_ROLE_OPTION_KEYS,
+  RULE_SET_CATALOG_IDS,
+  RULE_SET_CATALOG,
+  getBasicAlignmentDistribution,
+  getCatalogRuleSet
+} from './ruleSetCatalog.js';
 export {
   GROUP_TYPES,
   GROUP_MEMBERSHIP_RULE_TYPES,
@@ -104,7 +119,6 @@ export {
   hasRunnableStage,
   findNextRunnableIndex,
   markStageStatus,
-  hydrateStagePool,
   advanceStageCursor
 } from './poolCursorModel.js';
 export {
@@ -131,7 +145,6 @@ export {
   STAGE_KEYS,
   STAGE_ACTION_KEYS,
   getCurrentStage,
-  getStageActions,
   getStageActionKey,
   selectStageAction,
   validateCurrentStage,
@@ -149,7 +162,7 @@ export {
   getCurrentSpecialStage,
   appendSpecialStagesHistory,
   appendSpecialStage,
-  activateSpecialStages,
+  startSpecialStages,
   completeSpecialStage
 } from './specialStagesModel.js';
 

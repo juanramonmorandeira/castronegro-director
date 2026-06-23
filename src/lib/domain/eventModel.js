@@ -123,7 +123,6 @@ function createStageFromReactionResponse({ session, triggeredReaction }) {
     ...(response.stage ?? {}),
     key: normalizeId(response.stage?.key || 'event_stage'),
     poolKey: null,
-    special: true,
     status: response.stage?.status ?? STAGE_STATUSES.ENABLED,
     actorIds: [triggeredReaction.role.id],
     metadata: {

@@ -1,4 +1,9 @@
-# Historial recuperado de Codex
+# Archivo historico: historial recuperado de Codex
+
+> Este documento registra decisiones y problemas de la aplicacion anterior.
+> No describe la arquitectura vigente. Los nombres `step`, `phase_pools`,
+> tokens, aliases y composites que aparecen debajo son material de migracion.
+> Para implementar el dominio actual consultar `docs/README.md`.
 
 Este documento resume las transcripciones locales de Codex encontradas para `village-storyteller`. Su objetivo no es copiar todo el historial, sino reconstruir la memoria tecnica del proyecto antes de continuar con la logica estructural del juego.
 

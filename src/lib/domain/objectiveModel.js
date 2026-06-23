@@ -39,12 +39,7 @@ export function getInPlayRoles(session = {}) {
 }
 
 export function getSessionObjectiveRules(session = {}) {
-  return (
-    session?.objectiveRules ??
-    session?.settings?.objectives?.rules ??
-    session?.settings?.objectiveRules ??
-    []
-  );
+  return session?.objectiveRules ?? [];
 }
 
 function uniqueIds(ids = []) {

@@ -11,7 +11,7 @@ import { assignUniqueStageIds, createStage } from './stageDefinition.js';
 import { getGroupRoleIds } from './groupModel.js';
 import { DEFAULT_POOL_ORDER, STAGE_STATUSES, POOL_KEYS, normalizeId } from './sessionModel.js';
 
-// Pools cuyo orden interno podria ser configurable por skin/flavor.
+// Pools cuyo orden interno puede ser configurable por ruleSet.
 export const CONFIGURABLE_STAGE_ORDER_POOLS = Object.freeze([
   POOL_KEYS.POOL_EXPOSED,
   POOL_KEYS.POOL_CONCEALED
@@ -70,62 +70,6 @@ function normalizeLifecycleOperations({ onEnter, onExit } = {}) {
   };
 }
 
-// Normaliza un stage antes de meterlo dentro del contenedor runtime de pools.
-//
-// createStage, en stageDefinition.js, es el unico constructor conceptual de
-// stages. Esta funcion no se exporta porque no queremos dos puertas publicas
-// para crear el mismo tipo de objeto. Solo conserva compatibilidad con datos
-// antiguos que todavia traen `action` en vez de `actions`.
-function normalizePoolStage({
-  key,
-  special = false,
-  status = STAGE_STATUSES.DISABLED,
-  actorIds = [],
-  action = null,
-  actions = null,
-  completion = null,
-  selectionRules = null,
-  order = null,
-  metadata = {}
-} = {}) {
-  const normalizedActions = Array.isArray(actions)
-    ? actions.map((entry) => ({ ...entry }))
-    : action
-      ? [{ ...action }]
-      : [];
-
-  return {
-    key: normalizeId(key),
-    special: special === true,
-    status,
-    actorIds: [...(actorIds ?? [])],
-    completion: completion
-      ? {
-          ...completion,
-          allowedRequesters: Array.isArray(completion.allowedRequesters)
-            ? [...completion.allowedRequesters]
-            : []
-        }
-      : null,
-    selectionRules: selectionRules
-      ? {
-          ...selectionRules,
-          groupRestrictions: (selectionRules.groupRestrictions ?? []).map((restriction) => ({
-            ...restriction
-          })),
-          candidateIds: Array.isArray(selectionRules.candidateIds)
-            ? [...selectionRules.candidateIds]
-            : null,
-          candidateRules: (selectionRules.candidateRules ?? []).map((rule) => ({ ...rule }))
-        }
-      : null,
-    actions: normalizedActions,
-    action: action ? { ...action } : null,
-    order: Number.isFinite(order) ? order : null,
-    metadata: { ...metadata }
-  };
-}
-
 export function createPool({
   key,
   stages = [],
@@ -160,6 +104,10 @@ function getStageDefinitionsFromSources(sources = []) {
   return sources.flatMap((source = {}) => source.stageDefinitions ?? []);
 }
 
+function getSpecialStageDefinitionsFromSources(sources = []) {
+  return sources.flatMap((source = {}) => source.specialStageDefinitions ?? []);
+}
+
 function createStageWithActors(stageDefinition = {}, actorIds = [], source = {}) {
   return createStage({
     ...stageDefinition,
@@ -189,6 +137,24 @@ function getRoleDefinitionStages(session = {}, roleDefinitions = []) {
   });
 }
 
+function getRoleDefinitionSpecialStages(session = {}, roleDefinitions = []) {
+  const roles = session.roles ?? [];
+
+  return getDefinitionList(roleDefinitions).flatMap((roleDefinition = {}) => {
+    const matchingRoles = roles.filter((role) => role.roleKey === roleDefinition.key);
+
+    return matchingRoles.flatMap((role) =>
+      (roleDefinition.specialStageDefinitions ?? []).map((stageDefinition) =>
+        createStageWithActors(stageDefinition, [role.id], {
+          type: 'role',
+          id: role.id,
+          key: roleDefinition.key
+        })
+      )
+    );
+  });
+}
+
 function getGroupDefinitionStages(session = {}, groupDefinitions = []) {
   return getDefinitionList(groupDefinitions).flatMap((groupDefinition = {}) => {
     const groupId = groupDefinition.id ?? groupDefinition.key;
@@ -204,27 +170,19 @@ function getGroupDefinitionStages(session = {}, groupDefinitions = []) {
   });
 }
 
-function getDirectStages(stages = [], sourceType = 'direct') {
-  return (stages ?? []).map((stageDefinition) =>
-    createStageWithActors(stageDefinition, stageDefinition.actorIds ?? [], {
-      type: sourceType
-    })
-  );
-}
-
 function getAbstractSourceStages(sources = []) {
   return getStageDefinitionsFromSources(getDefinitionList(sources)).map(createStage);
 }
 
-function isSystemStage(stage = {}) {
-  return stage.metadata?.source?.type === 'system';
+function getAbstractSourceSpecialStages(sources = []) {
+  return getSpecialStageDefinitionsFromSources(getDefinitionList(sources)).map(createStage);
 }
 
-function getStageDefinitionErrors(stages = []) {
+function getStageDefinitionErrors(stages = [], { requirePoolKey = true } = {}) {
   return (stages ?? []).flatMap((stage, index) => {
     const errors = [];
 
-    if (!stage.poolKey && stage.special !== true) {
+    if (requirePoolKey && !stage.poolKey) {
       errors.push({
         code: POOL_DEFINITION_ERRORS.MISSING_POOL_KEY,
         message: `stage "${stage.key ?? index}" has no poolKey`,
@@ -235,7 +193,6 @@ function getStageDefinitionErrors(stages = []) {
 
     if (
       stage.status === STAGE_STATUSES.ENABLED &&
-      !isSystemStage(stage) &&
       (stage.actorIds ?? []).length === 0
     ) {
       errors.push({
@@ -251,22 +208,18 @@ function getStageDefinitionErrors(stages = []) {
   });
 }
 
-// Ensambla el mapa de pools desde stages de sistema, roles y grupos.
+// Ensambla el mapa de pools y la cola inicial desde roles y grupos.
 //
 // La construccion de cada stage sigue perteneciendo a createStage. buildPools solo
 // junta contribuciones, exige poolKey y delega validacion/orden en
 // organizePoolStages.
 export function buildPools({
   poolOrder = DEFAULT_POOL_ORDER,
-  defaultStages = [],
-  systemStages = [],
   roleDefinitions = [],
   groupDefinitions = [],
   session = null
 } = {}) {
-  const allStages = [
-    ...getDirectStages(defaultStages, 'default'),
-    ...getDirectStages(systemStages, 'system'),
+  const poolStages = [
     ...(session
       ? getRoleDefinitionStages(session, roleDefinitions)
       : getAbstractSourceStages(roleDefinitions)),
@@ -274,7 +227,13 @@ export function buildPools({
       ? getGroupDefinitionStages(session, groupDefinitions)
       : getAbstractSourceStages(groupDefinitions))
   ];
-  const errors = getStageDefinitionErrors(allStages);
+  const specialStages = session
+    ? getRoleDefinitionSpecialStages(session, roleDefinitions)
+    : getAbstractSourceSpecialStages(roleDefinitions);
+  const errors = [
+    ...getStageDefinitionErrors(poolStages),
+    ...getStageDefinitionErrors(specialStages, { requirePoolKey: false })
+  ];
 
   if (errors.length > 0) {
     return {
@@ -284,9 +243,8 @@ export function buildPools({
     };
   }
 
-  const specialStages = allStages.filter((stage) => stage.special === true);
   const pools = poolOrder.reduce((acc, poolKey) => {
-    acc[poolKey] = allStages.filter((stage) => stage.poolKey === poolKey);
+    acc[poolKey] = poolStages.filter((stage) => stage.poolKey === poolKey);
     return acc;
   }, {});
 

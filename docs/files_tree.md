@@ -4,6 +4,10 @@
 .
 ├── docs/
 │   ├── arquitectura.md        # Decisiones de sistema y flujos de sesión
+│   ├── README.md              # Índice y fuentes de verdad del dominio
+│   ├── domain_glossary.md     # Diccionario del nuevo motor
+│   ├── engine_flow_map.md     # Flujo runtime del dominio
+│   ├── messageKeyInventory.md # Keys y audiencias de mensajes
 │   └── files_tree.md          # (Este documento) referencia rápida de carpetas
 ├── reference-data/
 │   ├── metadata/
@@ -28,7 +32,10 @@
 │   │   ├── config/            # Modales del configurador (Properties, Selection…)
 │   │   ├── storytellers/      # CurrentSessionCard, HistoryCard
 │   │   └── ui/                # Kit compartido (Card, Button, InputField, Modal…)
-│   ├── lib/                   # Firebase, i18n, utilidades de dominio y helpers DB
+│   ├── lib/
+│   │   ├── domain/            # Núcleo, catálogos y ruleSets mecánicos
+│   │   ├── messages/          # Mensajes estructurados, logs y presentación por skin
+│   │   └── ...                # Firebase, i18n y servicios de aplicación
 │   ├── pages/                 # Pantallas enrutable (Login, Registration, Choose, Configure…)
 │   └── styles/                # Sistema de diseño en capas (tokens → foundations → utilities → components)
 ├── dist/                      # Salida de `npm run build` (Vite)

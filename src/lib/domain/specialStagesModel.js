@@ -11,6 +11,7 @@
 
 import { appendEntry } from './historyModel.js';
 import { assignUniqueStageIds, createStage } from './stageDefinition.js';
+import { CURRENT_STAGE_SOURCES } from './sessionModel.js';
 
 export const SPECIAL_STAGE_HISTORY_OPERATIONS = Object.freeze({
   QUEUED: 'queued',
@@ -69,12 +70,12 @@ export function appendSpecialStage(session, stage, metadata = {}) {
   });
 }
 
-export function activateSpecialStages(session) {
+export function startSpecialStages(session) {
   if (!hasPendingSpecialStages(session)) return session;
-  if (session?.specialStagesActive) return session;
+  if (session?.currentStageSource === CURRENT_STAGE_SOURCES.SPECIAL_STAGES) return session;
   const nextSession = {
     ...session,
-    specialStagesActive: true
+    currentStageSource: CURRENT_STAGE_SOURCES.SPECIAL_STAGES
   };
   const stage = getCurrentSpecialStage(nextSession);
   return appendSpecialStagesHistory(nextSession, {
@@ -91,7 +92,10 @@ export function completeSpecialStage(session, metadata = {}) {
   const nextSession = {
     ...session,
     specialStages: getSpecialStages(session).slice(1),
-    specialStagesActive: getSpecialStages(session).length > 1
+    currentStageSource:
+      getSpecialStages(session).length > 1
+        ? CURRENT_STAGE_SOURCES.SPECIAL_STAGES
+        : CURRENT_STAGE_SOURCES.POOL
   };
 
   const completedSession = appendSpecialStagesHistory(nextSession, {

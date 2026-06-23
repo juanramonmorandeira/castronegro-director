@@ -88,7 +88,7 @@ Ejemplos:
 ## Flujo principal
 
 ```text
-ruleSet + configuration + skin + jugadores/asientos
+ruleSet + runMode + match
 -> Role/Group/Stage catalog
 -> buildSession
 -> buildPools
@@ -115,6 +115,9 @@ specialStages inicial si hay stages pendientes
 comprueba después de terminar completamente el pool actual y antes de entrar en
 el siguiente pool normal.
 
+`session.currentStageSource` indica si el cursor esta ejecutando un stage de
+pool o de `specialStages`. Una cola pendiente no interrumpe el pool actual.
+
 `startCycle` pertenece a `cycleModel` y se ejecuta antes de preparar
 `poolConcealed`. `check_objectives` forma parte de `pool.onExit`.
 
@@ -137,12 +140,12 @@ Role o Group
 Un rol no ejecuta recetas directamente. Un rol define que stages puede aportar
 al flujo. Las recetas ejecutables viven dentro de `stage.actions`.
 
-Esto evita duplicar la misma receta en dos sitios. Si una skin quiere mover una
-receta a otro momento, modifica el stage o el pool; no modifica la accion pura.
+Los stages iniciales que no pertenecen a pools se declaran por separado en
+`specialStageDefinitions` y se materializan en `session.specialStages`.
 
 Los stages de catalogo son abstractos. Los stages de sesion deben tener actores
-reales en `actorIds`, salvo stages de sistema. Si un grupo esta vacio, no puede
-crear un stage enabled jugable.
+reales en `actorIds`. Si un grupo esta vacio, no puede crear un stage enabled
+jugable.
 
 Un rol tambien puede declarar `reactions`. Una reaccion no se ejecuta por si
 misma: `eventModel.js` la evalua cuando un efecto final produce un evento. El
@@ -152,8 +155,8 @@ una respuesta.
 
 El motor debe ejecutar `check_objectives` al final de cada pool. Si se emite un
 `playOutcome` concluyente, primero se comprueba que no haya stages pendientes en
-`specialStages` capaces de modificarlo. Solo entonces se ejecuta la etapa
-automatica `conclude_play`.
+`specialStages` capaces de modificarlo. Solo entonces se ejecuta
+`conclude_play`.
 `conclude_play` concluye la parte jugable, pero no cierra administrativamente la
 session.
 
@@ -172,8 +175,12 @@ La sesion guarda:
 - `groups`
 - `session.cycle.pools` contiene el mapa de pools runtime.
 - `actionHistory`
-- `stageHistory` en el modelo conceptual. En codigo aparece todavia como
-  `stageHistory`.
+- `cycleHistory`
+- `poolHistory`
+- `stageHistory`
+- `specialStagesHistory`
+- `sessionMessageLog`
+- `errorLog`
 - `settings`
 - `status`
 

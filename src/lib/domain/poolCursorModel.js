@@ -14,7 +14,7 @@ import { STAGE_STATUSES } from './sessionModel.js';
 // - poolOrder: orden de pools;
 // - orden del array de stages dentro de cada pool.
 //
-// Esto permite que una skin/flavor cambie el orden declarando otra lista, sin
+// Esto permite que un ruleSet cambie el orden declarando otra lista, sin
 // que el motor tenga que entender nombres tematicos como vidente, defensor o
 // sheriff.
 //
@@ -95,30 +95,6 @@ export function markStageStatus(pool = {}, stageId, status) {
   const stages = getPoolStages(pool).map((stage) =>
     stage.id === stageId ? { ...stage, status } : stage
   );
-
-  return {
-    ...pool,
-    stages
-  };
-}
-
-// Hidratar significa recalcular que stages estan activos segun el estado actual.
-//
-// Ejemplo:
-// - si hay observer en juego, observer_inspects pasa a enabled;
-// - si no hay observer en juego, observer_inspects pasa a disabled.
-//
-// Esta funcion hidrata UN pool.
-export function hydrateStagePool(pool = {}, ruleMap = {}, sessionState = {}) {
-  const stages = getPoolStages(pool).map((stage) => {
-    const rule = ruleMap[stage.key];
-    if (typeof rule !== 'function') return stage;
-    const enabled = !!rule(sessionState, stage);
-    return {
-      ...stage,
-      status: enabled ? STAGE_STATUSES.ENABLED : STAGE_STATUSES.DISABLED
-    };
-  });
 
   return {
     ...pool,

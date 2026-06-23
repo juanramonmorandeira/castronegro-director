@@ -35,9 +35,12 @@ flowchart TD
   ENTER["pool.onEnter"]
   STAGES["stages normales"]
   EXIT["pool.onExit"]
-  PIPELINE["recipe -> constraint -> action -> resolver -> effect"]
+  SPECIAL_RUN["procesar FIFO"]
+  NORMAL_PIPELINE["recipe -> constraint -> action -> resolver -> effect"]
+  SPECIAL_PIPELINE["recipe -> constraint -> action -> resolver -> effect"]
   EVENTS["eventModel"]
   OBJECTIVES["objectiveModel"]
+  MESSAGES["messageModel -> logs -> messagePresenter -> UI"]
 
   CATALOGS --> RULESET
   RULESET --> CONFIG
@@ -45,31 +48,39 @@ flowchart TD
   MATCH --> BUILD
   BUILD --> SESSION
   SESSION --> CYCLE
-  CYCLE --> SPECIAL
+  SESSION --> SPECIAL
   CYCLE --> CONCEALED
   CYCLE --> EXPOSED
-  SPECIAL --> PREPARE
   CONCEALED --> PREPARE
   EXPOSED --> PREPARE
   PREPARE --> VALIDATE
   VALIDATE --> RUN
   RUN --> ENTER
   ENTER --> STAGES
-  STAGES --> PIPELINE
-  PIPELINE --> EVENTS
+  STAGES --> NORMAL_PIPELINE
+  NORMAL_PIPELINE --> EVENTS
   EVENTS --> SPECIAL
-  PIPELINE --> EXIT
+  EVENTS --> MESSAGES
+  SPECIAL --> SPECIAL_RUN
+  SPECIAL_RUN --> SPECIAL_PIPELINE
+  SPECIAL_PIPELINE --> EVENTS
+  SPECIAL_RUN --> CYCLE
+  NORMAL_PIPELINE --> EXIT
   EXIT --> OBJECTIVES
   OBJECTIVES --> CYCLE
+  SESSION --> MESSAGES
 ```
 
 ## Jerarquia aceptada
 
 ```text
 session
+├── specialStages
 └── cycle
-    ├── coordina specialStages entre pools
     ├── poolConcealed
+    │   ├── pool.onEnter
+    │   ├── stages
+    │   └── pool.onExit
     └── poolExposed
         ├── pool.onEnter
         ├── stages
@@ -83,7 +94,10 @@ otros pools.
 ## Estado materializado
 
 - `session.cycle` administra la navegacion entre pools.
-- `session.specialStages` es una cola FIFO independiente.
-- `preparePool` y `validatePool` preparan cada entrada.
+- `session.specialStages` es una cola FIFO independiente que `cycleModel`
+  consulta entre pools; no pasa por `preparePool` ni `validatePool`.
+- `session.currentStageSource` distingue si el cursor ejecuta un stage de pool
+  o de la cola sin usar una bandera dentro del stage.
+- `preparePool` y `validatePool` preparan exclusivamente pools normales.
 - `startCycle` pertenece a `cycleModel`.
 - `role.blockedPropertyChanges` sustituye los bloqueos booleanos antiguos.
