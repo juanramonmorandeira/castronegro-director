@@ -113,7 +113,7 @@ El dominio ya contiene:
 
 - `ruleSetDefinition.js`: normaliza un ruleSet y construye la seleccion
   mecanica para una session;
-- `ruleSetCatalog.js`: contiene el ruleSet anonimo `classic_hidden_roles`;
+- `ruleSetCatalog.js`: contiene el ruleSet anonimo `basic_ruleset`;
 - `buildSession({ ruleSet, ... })`: consume directamente el ruleSet ya
   construido.
 
@@ -134,7 +134,7 @@ Cobertura inicial:
 | `role_reactive` | ready | Crea una specialStage al cambiar a `inPlay=false`. |
 | `role_in_play_control` | ready | Dos acciones limitadas durante la session. |
 | `role_plain` | ready | Sin stage personal. |
-| `role_links_targets` | partial | Falta objectiveRule dinamica y restriccion completa entre miembros. |
+| `role_links_targets` | ready | Crea un group, aporta selectionRules y objectiveRules propias. |
 | `role_assumes_role` | pending | Falta `roleChoiceSet` y asuncion de role. |
 | `role_observes_selection` | pending | Falta observacion y sustitucion del candidate elegido. |
 | `position_selection_authority` | pending | Falta cargo adicional, voto ponderado, desempate y sucesion. |
@@ -146,7 +146,7 @@ de una skin.
 
 ```js
 {
-  id: 'classic_hidden_roles',
+  id: 'basic_ruleset',
   version: 1,
   catalogRefs: {
     roles: [],
@@ -270,7 +270,7 @@ El ruleSet debe declarar si esta distribucion admite override:
   distributionRules: {
     allowOverride: true,
     formula: {
-      type: 'classic_hidden_roles_distribution',
+      type: 'basic_ruleset_distribution',
       minPlayers: 5,
       maxPlayers: 15
     }

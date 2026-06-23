@@ -14,18 +14,18 @@ El analisis original establecio decisiones que siguen vigentes:
 - los eventos excepcionales deben resolverse antes de continuar el flujo normal;
 - el historial debe permitir reconstruir decisiones y cambios.
 
-## Sustituciones definitivas
+## Equivalencias cerradas
 
-| Modelo intermedio | Modelo actual |
+| Concepto actual | Ubicacion vigente |
 |---|---|
-| `phase_pools` | `session.cycle.pools` |
-| step/paso | `stage` |
-| `poolCurrentStepIndex` | `pool.currentStageIndex` |
-| `poolSpecialEvents` | `session.specialStages` |
-| `hydrateStepPool` | `preparePool` |
-| avance entre pools desde el pool | navegación en `cycleModel` |
-| estado `blocked` del paso | restricciones, input pendiente o error explícito |
-| victoria/final automático | `objectiveRules`, `playOutcome`, `conclude_play` |
+| pools de ciclo | `session.cycle.pools` |
+| stage runtime | `stage` |
+| cursor de stage | `pool.currentStageIndex` |
+| cola FIFO excepcional | `session.specialStages` |
+| preparacion de pool | `preparePool` |
+| navegacion entre pools | `cycleModel` |
+| bloqueo mecanico | `blockedPropertyChanges` |
+| objetivos y cierre jugable | `objectiveRules`, `playOutcome`, `conclude_play` |
 
 ## Flujo vigente
 

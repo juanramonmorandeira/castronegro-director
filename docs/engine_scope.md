@@ -49,7 +49,7 @@ Una restriccion decide si una receta puede usarse en un contexto concreto.
 
 Ejemplos actuales:
 
-- `limited_uses`
+- `limited_uses` derivada desde `recipe.usage`
 - `no_repeat_target`
 - `require_recent_set_property`
 

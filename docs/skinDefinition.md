@@ -95,7 +95,7 @@ No pertenece a skin:
 {
   id: 'castronegro_like',
   version: 1,
-  supportedRuleSetIds: ['classic_hidden_roles'],
+  supportedRuleSetIds: ['basic_ruleset'],
   labels: {
     roles: {},
     groups: {},

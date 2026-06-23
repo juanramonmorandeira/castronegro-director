@@ -44,13 +44,13 @@ Catalog
 
 Conceptos actuales:
 
-- `stage`, no `step`.
-- `selectionModel`, no `voteModel`.
-- `group`, no `relation`.
-- `objectiveRules`, no `victoryRules`.
+- `stage`.
+- `selectionModel`.
+- `group`.
+- `objectiveRules`.
 - `specialStages` es una cola FIFO, no un pool.
-- `pool.onEnter/onExit`, no `automaticStages`.
-- `blockedPropertyChanges`, no bloqueos de actions por nombre.
+- `pool.onEnter/onExit`.
+- `blockedPropertyChanges`.
 - las propagaciones viven en `groupRules`.
 
 ## Archivo historico

@@ -16,7 +16,8 @@ import {
   createGroup,
   GROUP_MEMBERSHIP_RULE_TYPES,
   GROUP_RULE_TARGETS,
-  GROUP_RULE_TYPES
+  GROUP_RULE_TYPES,
+  GROUP_SELECTION_RULE_TYPES
 } from './groupDefinition.js';
 import { normalizeId } from './sessionModel.js';
 
@@ -78,6 +79,8 @@ function createSessionGroup(groupDefinition = {}, roleIds = []) {
     sourceActionId: group.sourceActionId,
     roleIds: group.roleIds,
     groupRules: group.groupRules,
+    selectionRules: group.selectionRules,
+    objectiveRules: group.objectiveRules,
     metadata: { ...group.metadata }
   };
 }
@@ -121,12 +124,18 @@ export function getGroupRoleIds(session = {}, groupId = null) {
   return [...(group.roleIds ?? [])];
 }
 
+export function isGroupActive(session = {}, group = {}) {
+  const roleIds = group.roleIds ?? [];
+  if (roleIds.length === 0) return false;
+  return roleIds.some((roleId) => findRole(session, roleId)?.inPlay === true);
+}
+
 export function findGroupsForRole(session = {}, roleId = null, type = null) {
   const normalizedType = type ? normalizeId(type) : null;
   if (!roleId) return [];
 
   return (session.groups ?? []).filter((group) => {
-    if (group?.active === false) return false;
+    if (!isGroupActive(session, group)) return false;
     if (normalizedType && group.type !== normalizedType) return false;
     return (group.roleIds ?? []).includes(roleId);
   });
@@ -171,25 +180,62 @@ export function getGroupRuleEffects({ session = {}, effect = {} } = {}) {
       if (rule.type !== GROUP_RULE_TYPES.PROPAGATE_PROPERTY_CHANGE) return [];
       if (!groupRuleMatchesEffect(rule, effect)) return [];
 
-      return getGroupRuleTargetIds(group, effect.targetId, rule).map((targetId) => ({
-        type: 'set_property',
-        targetType: 'role',
-        targetId,
-        property: rule.apply.property,
-        value: rule.apply.value,
-        causedBy: {
-          type: 'group',
-          id: group.id
-        },
-        derivedFrom: {
-          type: 'group_rule',
-          groupId: group.id,
-          groupRuleType: rule.type,
-          sourceTargetId: effect.targetId
-        }
-      }));
+      return getGroupRuleTargetIds(group, effect.targetId, rule)
+        .filter((targetId) => rule.includeOutOfPlay || findRole(session, targetId)?.inPlay === true)
+        .map((targetId) => ({
+          type: 'set_property',
+          targetType: 'role',
+          targetId,
+          property: rule.apply.property,
+          value: rule.apply.value,
+          causedBy: {
+            type: 'group',
+            id: group.id
+          },
+          derivedFrom: {
+            type: 'group_rule',
+            groupId: group.id,
+            groupRuleType: rule.type,
+            sourceTargetId: effect.targetId
+          }
+        }));
     })
   );
+}
+
+function selectionRuleMatchesContext(rule = {}, context = {}) {
+  const methods = rule.scope?.methods ?? [];
+  const actionKeys = rule.scope?.actionKeys ?? [];
+  if (methods.length > 0 && !methods.includes(normalizeId(context.method))) return false;
+  if (actionKeys.length > 0 && !actionKeys.includes(normalizeId(context.actionKey))) return false;
+  return true;
+}
+
+export function collectSelectionRules(session = {}, {
+  selectorIds = [],
+  selectionContext = {}
+} = {}) {
+  const selectorIdSet = new Set(selectorIds ?? []);
+  const groupRestrictions = [];
+
+  (session.groups ?? []).forEach((group) => {
+    if (!isGroupActive(session, group)) return;
+    if (!(group.roleIds ?? []).some((roleId) => selectorIdSet.has(roleId))) return;
+
+    (group.selectionRules ?? []).forEach((rule) => {
+      if (!selectionRuleMatchesContext(rule, selectionContext)) return;
+      if (rule.type !== GROUP_SELECTION_RULE_TYPES.EXCLUDE_OTHER_GROUP_MEMBERS) return;
+
+      groupRestrictions.push({
+        type: 'exclude_group_member_candidate',
+        groupId: group.id
+      });
+    });
+  });
+
+  return {
+    groupRestrictions
+  };
 }
 
 export function addRoleToGroup(session = {}, groupId = null, roleId = null) {

@@ -120,7 +120,7 @@ aceptada es `presentationKey`.
 Ejemplo conceptual:
 
 ```text
-ruleSet.classic_hidden_roles
+ruleSet.basic_ruleset
   roles:
     role_inspects
     role_links_targets
@@ -172,7 +172,7 @@ sessionConfiguration = gameConfiguration + matchConfiguration.
 Ejemplo conceptual:
 
 ```text
-ruleSet.classic_hidden_roles permite:
+ruleSet.basic_ruleset permite:
   role_inspects
   role_links_targets
   role_blocks_out_of_play
@@ -225,8 +225,8 @@ Ejemplo conceptual:
 
 ```text
 session
-  ruleSetId: classic_hidden_roles
-  configurationId: classic_8_players
+  ruleSetId: basic_ruleset
+  configurationId: basic_8_players
   skinId: castronegro_like
   players: [...]
   roles: [...]

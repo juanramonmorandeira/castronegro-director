@@ -7,6 +7,7 @@
 
 import { POOL_KEYS } from './sessionModel.js';
 import { getCatalogStage, STAGE_CATALOG_IDS } from './stageCatalog.js';
+import { AVAILABILITY_RULE_TYPES } from './stageDefinition.js';
 import { defineRole, ROLE_DEFINITION_TYPES } from './roleDefinition.js';
 import {
   EVENT_RESPONSE_TYPES,
@@ -40,13 +41,22 @@ export const ROLE_CATALOG = Object.freeze({
     key: ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS,
     type: ROLE_DEFINITION_TYPES.ROLE,
     alignmentId: 'alignment_a',
-    specialStageDefinitions: [
+    stageDefinitions: [
       getCatalogStage(STAGE_CATALOG_IDS.ROLE_LINKS_TARGETS, {
-        poolKey: null,
-        order: null,
+        poolKey: POOL_KEYS.POOL_CONCEALED,
+        order: 5,
+        availabilityRules: [
+          { type: AVAILABILITY_RULE_TYPES.ACTOR_IN_PLAY },
+          {
+            type: AVAILABILITY_RULE_TYPES.WITHIN_EXECUTION_WINDOW,
+            firstCycle: 1,
+            lastCycle: 1,
+            poolKey: POOL_KEYS.POOL_CONCEALED
+          }
+        ],
         metadata: {
           orderReason:
-            'Runs as an initial special stage so shared-destiny groups exist before recurrent actions can change inPlay or alignment state.'
+            'Runs once during the first concealed pool so shared-destiny groups exist before recurrent actions can change inPlay or alignment state.'
         }
       })
     ]

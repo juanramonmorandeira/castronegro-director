@@ -36,6 +36,7 @@ import {
   preparePool,
   validatePool
 } from './poolModel.js';
+import { collectSelectionRules } from './groupModel.js';
 import { POOL_LIFECYCLE_OPERATION_TYPES } from './poolDefinition.js';
 import {
   OBJECTIVE_EVALUATION_STATUSES,
@@ -316,15 +317,44 @@ function hasStageSelectionRules(stage = {}) {
   return !!getStageSelectionRules(stage);
 }
 
-function getSelectionInputForStage(stage = {}, input = {}) {
+function getSelectionSelectorIds(stage = {}, input = {}) {
+  if ((input.selectorIds ?? []).length > 0) return input.selectorIds;
+  if ((input.actorIds ?? []).length > 0) return input.actorIds;
+  if ((stage.actorIds ?? []).length > 0) return stage.actorIds;
+
+  return [];
+}
+
+function getSelectionRuleSelectorIds(stage = {}, input = {}) {
+  const selectorIds = getSelectionSelectorIds(stage, input);
+  if (selectorIds.length > 0) return selectorIds;
+
+  return [
+    ...new Set((input.selections ?? []).map((selection) => selection.selectorId).filter(Boolean))
+  ];
+}
+
+function getSelectionInputForStage(session = {}, stage = {}, recipe = {}, input = {}) {
   const selectionRules = getStageSelectionRules(stage) ?? {};
+  const selectorIds = getSelectionSelectorIds(stage, input);
+  const collectedRules = collectSelectionRules(session, {
+    selectorIds: getSelectionRuleSelectorIds(stage, input),
+    selectionContext: {
+      method: 'vote',
+      actionKey: getStageActionKey(recipe)
+    }
+  });
 
   return {
-    selectorIds: input.selectorIds ?? input.actorIds ?? stage.actorIds ?? [],
+    selectorIds,
     selections: input.selections ?? [],
     selectionRules: {
       ...selectionRules,
-      candidateIds: input.candidateIds ?? selectionRules.candidateIds ?? null
+      candidateIds: input.candidateIds ?? selectionRules.candidateIds ?? null,
+      groupRestrictions: [
+        ...(selectionRules.groupRestrictions ?? []),
+        ...(collectedRules.groupRestrictions ?? [])
+      ]
     },
     roundType: input.roundType,
     roundIndex: input.roundIndex ?? 0
@@ -358,7 +388,7 @@ function resolveSelectionStageRecipe(session, stage, recipe, input = {}, context
       id: ACTION_IDS.SELECT,
       visibility: recipe?.visibility ?? VISIBILITY.ALL
     },
-    getSelectionInputForStage(stage, input),
+    getSelectionInputForStage(session, stage, recipe, input),
     context
   );
 

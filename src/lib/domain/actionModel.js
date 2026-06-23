@@ -523,7 +523,7 @@ export function applyPropertyBlock({ session, action, actor, targets, context = 
 // - link_targets es la accion: alguien intenta enlazar objetivos.
 // - set_group es el efecto final: se escribe un grupo en la sesion.
 // - las groupRules materializadas deciden despues si un cambio se propaga.
-export function applyLinkTargets({ session, action, actor, targets }) {
+export function applyLinkTargets({ session, action, actor, targets, context = {} }) {
   const visibility = action?.visibility ?? VISIBILITY.STORYTELLER_ONLY;
   const currentCycleId = getCurrentCycleId(session);
   const proposedEffects = [
@@ -535,7 +535,27 @@ export function applyLinkTargets({ session, action, actor, targets }) {
     }
   ];
   const effectResolution = resolveProposedEffects({ session, proposedEffects });
-  const nextSession = applyFinalEffects({ session, finalEffects: effectResolution.finalEffects });
+  const nextSession = appendActionHistory(
+    applyFinalEffects({ session, finalEffects: effectResolution.finalEffects }),
+    {
+      cycleId: currentCycleId,
+      poolKey: context.poolKey ?? null,
+      stageId: context.stageId ?? null,
+      stageKey: context.stageKey ?? null,
+      actionKey: context.actionKey ?? action.key ?? action.id,
+      actionId: action.id,
+      actionSignature: getActionHistorySignature(action),
+      actorIds: actor ? [actor.id] : [],
+      targetIds: targets.map((target) => target.id),
+      proposedEffects: effectResolution.proposedEffects,
+      finalEffects: effectResolution.finalEffects,
+      blockedEffects: effectResolution.blockedEffects,
+      result: getHistoryResultFromResolution({
+        finalEffects: effectResolution.finalEffects,
+        preventedPropertyChanges: []
+      })
+    }
+  );
 
   return {
     session: nextSession,
@@ -782,7 +802,7 @@ export function resolveLinkTargets(session, action, input = {}) {
     };
   }
 
-  const applied = applyLinkTargets({ session, action, actor, targets });
+  const applied = applyLinkTargets({ session, action, actor, targets, context: input.context ?? {} });
 
   return {
     ok: true,
@@ -867,7 +887,7 @@ export function resolveAction(session, action, input = {}, context = {}) {
     return resolveBlockPropertyChange(session, action, input, context);
   }
   if (action?.id === ACTION_IDS.LINK_TARGETS) {
-    return resolveLinkTargets(session, action, input);
+    return resolveLinkTargets(session, action, { ...input, context });
   }
   if (action?.id === ACTION_IDS.SELECT) {
     return resolveSelection(session, action, input);

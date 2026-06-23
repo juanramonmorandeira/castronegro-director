@@ -17,7 +17,7 @@ import {
 } from './ruleSetDefinition.js';
 
 export const RULE_SET_CATALOG_IDS = Object.freeze({
-  CLASSIC_HIDDEN_ROLES: 'classic_hidden_roles'
+  BASIC_RULE_SET: 'basic_ruleset'
 });
 
 export const BASIC_ROLE_OPTION_KEYS = Object.freeze({
@@ -85,8 +85,8 @@ const BASIC_OBJECTIVE_RULES = [
 ];
 
 export const RULE_SET_CATALOG = Object.freeze({
-  [RULE_SET_CATALOG_IDS.CLASSIC_HIDDEN_ROLES]: defineRuleSet({
-    id: RULE_SET_CATALOG_IDS.CLASSIC_HIDDEN_ROLES,
+  [RULE_SET_CATALOG_IDS.BASIC_RULE_SET]: defineRuleSet({
+    id: RULE_SET_CATALOG_IDS.BASIC_RULE_SET,
     version: 1,
     availableRoles: [
       {
@@ -110,12 +110,11 @@ export const RULE_SET_CATALOG = Object.freeze({
       },
       {
         roleKey: BASIC_ROLE_OPTION_KEYS.LINKS_TARGETS,
-        support: RULE_SET_SUPPORT_STATUSES.PARTIAL,
-        selectable: false,
-        missingMechanics: [
-          'dynamic_objective_rule',
-          'linked_group_selection_restriction'
-        ]
+        instanceRule: {
+          min: 0,
+          max: 1,
+          step: 1
+        }
       },
       {
         roleKey: BASIC_ROLE_OPTION_KEYS.ASSUMES_ROLE,
@@ -177,7 +176,7 @@ export const RULE_SET_CATALOG = Object.freeze({
       allowOverride: true,
       overrideEnabledByDefault: false,
       formula: {
-        type: 'classic_hidden_roles_distribution',
+        type: 'basic_ruleset_distribution',
         minPlayers: 8,
         maxPlayers: 18,
         alignmentB: 'floor(players_expected / 6) + 1',
@@ -199,6 +198,7 @@ export const RULE_SET_CATALOG = Object.freeze({
       requiredEntities: {
         role: [
           BASIC_ROLE_OPTION_KEYS.COLLECTIVE_SET_OUT_OF_PLAY,
+          BASIC_ROLE_OPTION_KEYS.LINKS_TARGETS,
           BASIC_ROLE_OPTION_KEYS.INSPECTS,
           BASIC_ROLE_OPTION_KEYS.REACTIVE,
           BASIC_ROLE_OPTION_KEYS.IN_PLAY_CONTROL,

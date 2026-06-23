@@ -228,8 +228,9 @@ Lectura:
 restriccion = condicion de uso de una receta
 ```
 
-Por eso `no_repeat_target`, `require_recent_set_property` y `limited_uses`
-viven en `constraintModel.js`.
+Por eso `no_repeat_target`, `require_recent_set_property` y la constraint
+interna `limited_uses` viven en `constraintModel.js`. En recipes nuevas, el
+contrato preferente es `usage`; `recipeModel` lo convierte en `limited_uses`.
 
 ## Orden de ejecucion
 

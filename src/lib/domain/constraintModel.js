@@ -29,6 +29,9 @@ export const CONSTRAINT_TYPES = Object.freeze({
 });
 
 export const CONSTRAINT_WINDOWS = Object.freeze({
+  STAGE: 'stage',
+  POOL: 'pool',
+  CYCLE: 'cycle',
   CURRENT_CYCLE: 'current_cycle',
   NEXT_CYCLE: 'next_cycle',
   CURRENT_OR_NEXT_CYCLE: 'current_or_next_cycle',
@@ -178,8 +181,22 @@ export function evaluateRequireRecentSetPropertyConstraint({ session, targets, c
 // En esta funcion, next_cycle tiene la misma lectura que en no_repeat_target:
 // una entrada del ciclo anterior bloquea un uso en el ciclo actual porque este
 // es el ciclo siguiente al uso registrado.
-export function isEntryInsideLimitedUseWindow(entry, currentCycleId, window) {
+export function isEntryInsideLimitedUseWindow(entry, currentCycleId, window, context = {}) {
   if (window === CONSTRAINT_WINDOWS.SESSION) return true;
+  if (window === CONSTRAINT_WINDOWS.STAGE) {
+    return (
+      entry.cycleId === currentCycleId &&
+      entry.poolKey === (context.poolKey ?? null) &&
+      entry.stageId === (context.stageId ?? null)
+    );
+  }
+  if (window === CONSTRAINT_WINDOWS.POOL) {
+    return (
+      entry.cycleId === currentCycleId &&
+      entry.poolKey === (context.poolKey ?? null)
+    );
+  }
+  if (window === CONSTRAINT_WINDOWS.CYCLE) return entry.cycleId === currentCycleId;
   if (window === CONSTRAINT_WINDOWS.NEXT_CYCLE) return entry.cycleId === currentCycleId - 1;
   if (window === CONSTRAINT_WINDOWS.CURRENT_OR_NEXT_CYCLE) {
     return entry.cycleId === currentCycleId || entry.cycleId === currentCycleId - 1;
@@ -213,12 +230,23 @@ export function isEntryInsideLimitedUseCounter(entry, { actor, recipe }) {
 // Regla:
 // una receta no puede ejecutarse si el historial ya contiene tantos usos como
 // el limite configurado para ese actor + receta dentro de la ventana indicada.
-export function evaluateLimitedUsesConstraint({ session, recipe, actor, constraint }) {
+export function evaluateLimitedUsesConstraint({ session, recipe, actor, constraint, context = {} }) {
   const currentCycleId = getCurrentCycleId(session);
   const limit = Number.isInteger(constraint.limit) && constraint.limit > 0 ? constraint.limit : 1;
   const window = constraint.window ?? CONSTRAINT_WINDOWS.SESSION;
+  if (window === CONSTRAINT_WINDOWS.POOL && !context.poolKey) {
+    return [
+      {
+        code: 'constraint/invalid-limited-uses-window',
+        message: 'pool usage window requires a pool context',
+        constraint: constraint.type,
+        window,
+        actionKey: recipe?.key ?? recipe?.actionKey ?? recipe?.id ?? null
+      }
+    ];
+  }
   const uses = getActionHistory(session).filter((entry) => {
-    if (!isEntryInsideLimitedUseWindow(entry, currentCycleId, window)) return false;
+    if (!isEntryInsideLimitedUseWindow(entry, currentCycleId, window, context)) return false;
     return isEntryInsideLimitedUseCounter(entry, { actor, recipe });
   });
 
@@ -243,7 +271,7 @@ export function evaluateLimitedUsesConstraint({ session, recipe, actor, constrai
 // Restricciones desconocidas se ignoran por ahora para permitir que una definicion
 // futura viaje por el sistema sin romperlo. Cuando una restriccion tenga reglas
 // reales, se conecta aqui y se cubre con tests.
-export function evaluateRecipeConstraints({ session, recipe, actor, targets }) {
+export function evaluateRecipeConstraints({ session, recipe, actor, targets, context = {} }) {
   const constraints = Array.isArray(recipe?.constraints) ? recipe.constraints : [];
 
   return constraints.flatMap((constraint) => {
@@ -268,7 +296,8 @@ export function evaluateRecipeConstraints({ session, recipe, actor, targets }) {
         session,
         recipe,
         actor,
-        constraint
+        constraint,
+        context
       });
     }
 

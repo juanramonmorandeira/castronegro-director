@@ -227,6 +227,7 @@ export {
   INFLUENCE_SUBJECTS,
   INFLUENCE_OPERATIONS,
   getSessionObjectiveRules,
+  collectObjectiveRules,
   getObjectiveRuleDependencies,
   getActionInfluences,
   getStageInfluences,

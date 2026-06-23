@@ -105,12 +105,23 @@ Campos principales:
 }
 ```
 
-### `limited_uses`
+### `usage` y `limited_uses`
 
-Limita cuantas veces puede usar un actor una receta concreta dentro de una
-ventana.
+`usage` es el contrato publico de una recipe para declarar cuantas veces puede
+usarla un actor dentro de una ventana. El motor lo traduce internamente a una
+constraint `limited_uses` antes de validar la recipe.
 
-Campos principales:
+Forma recomendada en recipe:
+
+```js
+usage: {
+  limit: 1,
+  window: 'session'
+}
+```
+
+Forma interna generada:
+
 
 ```js
 {
@@ -124,10 +135,22 @@ Valores iniciales:
 
 ```text
 window:
+- stage
+- pool
+- cycle
 - current_cycle
 - next_cycle
 - current_or_next_cycle
 - session
+```
+
+Lectura:
+
+```text
+usage.limit = null significa uso ilimitado.
+Una recipe opcional que se omite no consume uso.
+Una recipe valida consume uso aunque su efecto quede bloqueado.
+Una recipe invalida antes de ejecutarse no consume uso.
 ```
 
 Cuenta cualquier intento registrado con el mismo role actor y el mismo
@@ -232,7 +255,8 @@ Restricciones base:
 ninguna
 ```
 
-Nota: una skin puede anadir restricciones propias, por ejemplo `limited_uses`.
+Nota: una skin no anade restricciones mecanicas. Las restricciones mecanicas
+viven en ruleSet/role/group/recipe; la skin solo presenta el resultado.
 
 ### `one_shot_set_out_of_play`
 
@@ -249,23 +273,20 @@ effect: set_property inPlay=false
 target: 1 role
 ```
 
-Restricciones:
+Uso:
 
 ```js
-[
-  {
-    type: 'limited_uses',
-    limit: 1,
-    window: 'session'
-  }
-]
+usage: {
+  limit: 1,
+  window: 'session'
+}
 ```
 
 Lectura:
 
 ```text
 Es una receta distinta de set_out_of_play aunque use la misma accion pura.
-Su actionKey propio permite contar limited_uses sin mezclarla con otros
+Su actionKey propio permite contar usos sin mezclarla con otros
 set_in_play(false) de la partida.
 ```
 
@@ -284,23 +305,22 @@ effect: set_property inPlay=true
 target: 1 role
 ```
 
-Restricciones:
+Restricciones y uso:
 
 ```js
-[
+constraints: [
   {
     type: 'require_recent_set_property',
     window: 'current_cycle',
     property: 'inPlay',
     value: false,
     actionKey: 'set_out_of_play'
-  },
-  {
-    type: 'limited_uses',
-    limit: 1,
-    window: 'session'
   }
-]
+],
+usage: {
+  limit: 1,
+  window: 'session'
+}
 ```
 
 Lectura:

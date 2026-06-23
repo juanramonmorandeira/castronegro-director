@@ -13,7 +13,7 @@
 // -----------------------------------------------------------------------------
 
 import { resolveAction, findRole } from './actionModel.js';
-import { evaluateRecipeConstraints } from './constraintModel.js';
+import { CONSTRAINT_TYPES, evaluateRecipeConstraints } from './constraintModel.js';
 import { normalizeId } from './sessionModel.js';
 import { materializePropertyBlockExpiration } from './roleModel.js';
 import { createMessagesFromEngineErrors } from '../messages/messageModel.js';
@@ -32,7 +32,19 @@ export function createRecipe(recipe = {}) {
     ...recipe,
     key: getRecipeKey(recipe),
     optional: recipe.optional !== false,
+    usage: normalizeUsage(recipe.usage),
     constraints: [...(recipe.constraints ?? [])]
+  };
+}
+
+function normalizeUsage(usage = {}) {
+  return {
+    limit: usage.limit === null
+      ? null
+      : Number.isInteger(usage.limit) && usage.limit > 0
+        ? usage.limit
+        : null,
+    window: usage.window ?? 'session'
   };
 }
 
@@ -54,8 +66,23 @@ export function getRecipeActorAndTargets(session, input = {}) {
 }
 
 export function getRecipeConstraints(recipe = {}) {
-  if (Array.isArray(recipe?.constraints)) return recipe.constraints;
-  return [];
+  const explicitConstraints = recipe?.constraints ?? [];
+  const hasExplicitLimitedUses = explicitConstraints.some(
+    (constraint) => constraint?.type === CONSTRAINT_TYPES.LIMITED_USES
+  );
+  const usageConstraint =
+    !hasExplicitLimitedUses &&
+    Number.isInteger(recipe?.usage?.limit) && recipe.usage.limit > 0
+      ? [
+          {
+            type: CONSTRAINT_TYPES.LIMITED_USES,
+            limit: recipe.usage.limit,
+            window: recipe.usage.window
+          }
+        ]
+      : [];
+
+  return [...usageConstraint, ...explicitConstraints];
 }
 
 function resolveBlockedForActorIds(session = {}, blockedFor = {}) {
@@ -103,7 +130,7 @@ function materializeRecipeForSession(session = {}, recipe = {}, context = {}) {
   };
 }
 
-export function validateRecipeConstraints({ session, recipe, input = {} }) {
+export function validateRecipeConstraints({ session, recipe, input = {}, context = {} }) {
   const constraints = getRecipeConstraints(recipe);
   if (constraints.length === 0) {
     return {
@@ -115,9 +142,13 @@ export function validateRecipeConstraints({ session, recipe, input = {} }) {
   const { actor, targets } = getRecipeActorAndTargets(session, input);
   const errors = evaluateRecipeConstraints({
     session,
-    recipe,
+    recipe: {
+      ...recipe,
+      constraints
+    },
     actor,
-    targets
+    targets,
+    context
   });
 
   return {
@@ -145,7 +176,7 @@ function appendEngineErrorMessages(session, errors, context = {}) {
 // 3. Llama a actionModel.
 export function resolveRecipe(session, recipe, input = {}, context = {}) {
   const actionKey = context.actionKey ?? getRecipeKey(recipe);
-  const constraintValidation = validateRecipeConstraints({ session, recipe, input });
+  const constraintValidation = validateRecipeConstraints({ session, recipe, input, context });
 
   if (!constraintValidation.ok) {
     const messageState = appendEngineErrorMessages(session, constraintValidation.errors, {

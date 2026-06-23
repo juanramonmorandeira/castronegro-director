@@ -87,9 +87,9 @@ Ejemplo conceptual:
 
 ```js
 {
-  id: 'classic_8_human',
+  id: 'basic_8_human',
   basicConfiguration: {
-    ruleSetId: 'classic_hidden_roles',
+    ruleSetId: 'basic_ruleset',
     skinId: 'castronegro_like',
     playersExpected: 8,
     sessionLanguage: 'es'

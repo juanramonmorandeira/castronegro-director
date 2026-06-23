@@ -423,14 +423,22 @@ export function getGroupRestrictionErrors({
   return (groupRestrictions ?? []).flatMap((restriction) => {
     if (restriction?.type !== SELECTION_RESTRICTION_TYPES.EXCLUDE_GROUP_MEMBER_CANDIDATE) return [];
 
-    const groupType = normalizeId(restriction.groupType);
-    if (!groupType) return [];
+    const groupType = restriction.groupType ? normalizeId(restriction.groupType) : null;
+    const groupId = restriction.groupId ? normalizeId(restriction.groupId) : null;
+    if (!groupType && !groupId) return [];
 
-    const groupMemberRoleIds = getGroupMemberRoleIds(
-      session,
-      selection.selectorId,
-      groupType
-    );
+    const group = groupId
+      ? (session.groups ?? []).find((entry) => entry.id === groupId || entry.key === groupId)
+      : null;
+    if (groupId && !(group?.roleIds ?? []).includes(selection.selectorId)) return [];
+
+    const groupMemberRoleIds = groupId
+      ? (group?.roleIds ?? []).filter((roleId) => roleId !== selection.selectorId)
+      : getGroupMemberRoleIds(
+          session,
+          selection.selectorId,
+          groupType
+        );
 
     if (!groupMemberRoleIds.includes(selection.candidateId)) return [];
 
@@ -441,7 +449,8 @@ export function getGroupRestrictionErrors({
         index,
         selectorId: selection.selectorId,
         candidateId: selection.candidateId,
-        groupType
+        groupType,
+        groupId
       }
     ];
   });

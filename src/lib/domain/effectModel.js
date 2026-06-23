@@ -72,6 +72,8 @@ export function applySetGroupEffect({ session, effect }) {
     createdCycleId: getCurrentCycleId(session),
     sourceActionId: effect.sourceActionId ?? null,
     groupRules: effect.groupRules ?? [],
+    selectionRules: effect.selectionRules ?? [],
+    objectiveRules: effect.objectiveRules ?? [],
     metadata: effect.metadata ?? {}
   });
   const groupKey = getGroupKey(group);

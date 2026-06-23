@@ -21,7 +21,7 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
 ## ruleSet
 
 - Consolidar la primera implementacion de `ruleSetDefinition` y
-  `classic_hidden_roles`.
+  `basic_ruleset`.
 - Decidir estructura final de `catalogRefs`.
 - Ampliar `skinRequirements` cuando exista la primera skin real.
 - Definir reglas de seleccion que una configuration debe respetar.
@@ -33,9 +33,10 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
   - roles duplicables;
   - exclusiones especiales como actor/thief;
   - reglas dependientes de objectiveRules.
-- Completar `role_links_targets`:
-  - objectiveRule dinamica cuando sus miembros tienen alignments distintos;
-  - restriccion de selection entre miembros del group.
+- Endurecer validaciones de reglas aportadas por roles y groups:
+  - claves duplicadas dentro de `selectionRules`, `objectiveRules` y `groupRules`;
+  - reglas con `holder: self` fuera de role/group;
+  - reglas que referencian actions o conditions inexistentes.
 - Implementar `role_assumes_role`:
   - `roleChoiceSet`;
   - eleccion inicial;

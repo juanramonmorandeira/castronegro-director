@@ -7,7 +7,7 @@
 // Aqui solo se responde una pregunta: que reglas de esa lista se cumplen ahora?
 // -----------------------------------------------------------------------------
 
-import { getGroupRoles } from './groupModel.js';
+import { getGroupRoles, isGroupActive } from './groupModel.js';
 import { STAGE_STATUSES, normalizeId } from './sessionModel.js';
 import { getSpecialStages } from './specialStagesModel.js';
 
@@ -19,6 +19,8 @@ export const OBJECTIVE_EVALUATION_STATUSES = Object.freeze({
 export const OBJECTIVE_CONDITIONS = Object.freeze({
   HOLDER_REACHES_IN_PLAY_PARITY: 'holder_reaches_in_play_parity',
   ONLY_HOLDER_GROUP_REMAINS_IN_PLAY: 'only_holder_group_remains_in_play',
+  ALL_HOLDER_MEMBERS_ARE_ONLY_ROLES_IN_PLAY: 'all_holder_members_are_only_roles_in_play',
+  MEMBERS_SPAN_MULTIPLE_EFFECTIVE_ALIGNMENTS: 'members_span_multiple_effective_alignments',
   NO_ROLES_IN_PLAY: 'no_roles_in_play'
 });
 
@@ -40,6 +42,63 @@ export function getInPlayRoles(session = {}) {
 
 export function getSessionObjectiveRules(session = {}) {
   return session?.objectiveRules ?? [];
+}
+
+function getEffectiveAlignmentId(role = {}, rule = {}) {
+  if (!role) return null;
+  if (role.alignmentId && role.alignmentId !== 'alignment_undefined') return role.alignmentId;
+  return rule.alignmentResolution?.fallbackAlignmentId ?? null;
+}
+
+function groupMembersSpanMultipleEffectiveAlignments(session = {}, group = {}, rule = {}) {
+  const roles = getGroupRoles(session, group.id);
+  if (roles.length < 2) return false;
+
+  const effectiveAlignmentIds = roles.map((role) => getEffectiveAlignmentId(role, rule));
+  if (effectiveAlignmentIds.some((alignmentId) => !alignmentId)) return false;
+  return new Set(effectiveAlignmentIds).size > 1;
+}
+
+function groupRuleApplies(session = {}, group = {}, rule = {}) {
+  const sourceState = normalizeId(rule.appliesWhen?.sourceState ?? 'active');
+  if (sourceState !== 'any' && !isGroupActive(session, group)) return false;
+
+  return (rule.appliesWhen?.conditions ?? []).every((condition) => {
+    if (condition.type === OBJECTIVE_CONDITIONS.MEMBERS_SPAN_MULTIPLE_EFFECTIVE_ALIGNMENTS) {
+      return groupMembersSpanMultipleEffectiveAlignments(session, group, rule);
+    }
+    return true;
+  });
+}
+
+function materializeGroupObjectiveRule(group = {}, rule = {}) {
+  return {
+    ...rule,
+    holder:
+      rule.holder?.type === 'self'
+        ? { type: 'group', id: group.id }
+        : rule.holder,
+    metadata: {
+      ...(rule.metadata ?? {}),
+      source: {
+        type: 'group',
+        id: group.id
+      }
+    }
+  };
+}
+
+export function collectObjectiveRules(session = {}) {
+  const groupObjectiveRules = (session.groups ?? []).flatMap((group) =>
+    (group.objectiveRules ?? [])
+      .filter((rule) => groupRuleApplies(session, group, rule))
+      .map((rule) => materializeGroupObjectiveRule(group, rule))
+  );
+
+  return [
+    ...getSessionObjectiveRules(session),
+    ...groupObjectiveRules
+  ];
 }
 
 function uniqueIds(ids = []) {
@@ -160,6 +219,7 @@ function getDefaultObjectiveDependencies(rule = {}) {
   if (
     conditionType === OBJECTIVE_CONDITIONS.HOLDER_REACHES_IN_PLAY_PARITY ||
     conditionType === OBJECTIVE_CONDITIONS.ONLY_HOLDER_GROUP_REMAINS_IN_PLAY ||
+    conditionType === OBJECTIVE_CONDITIONS.ALL_HOLDER_MEMBERS_ARE_ONLY_ROLES_IN_PLAY ||
     conditionType === OBJECTIVE_CONDITIONS.NO_ROLES_IN_PLAY
   ) {
     return [roleInPlayDependency()];
@@ -379,6 +439,30 @@ function evaluateOnlyHolderGroupRemainsInPlay(session = {}, rule = {}) {
   });
 }
 
+function evaluateAllHolderMembersAreOnlyRolesInPlay(session = {}, rule = {}) {
+  const inPlayRoles = getInPlayRoles(session);
+  const inPlayRoleIds = inPlayRoles.map((role) => role.id);
+  const holderRoleIds = getHolderRoleIds(session, rule.holder);
+  if (!holderRoleIds.length) return null;
+
+  const allHolderMembersInPlay = holderRoleIds.every((roleId) => inPlayRoleIds.includes(roleId));
+  const onlyHolderRolesInPlay =
+    inPlayRoleIds.length === holderRoleIds.length &&
+    inPlayRoleIds.every((roleId) => holderRoleIds.includes(roleId));
+
+  if (!allHolderMembersInPlay || !onlyHolderRolesInPlay) return null;
+
+  return createFulfilledRuleResult({
+    rule,
+    condition: OBJECTIVE_CONDITIONS.ALL_HOLDER_MEMBERS_ARE_ONLY_ROLES_IN_PLAY,
+    holderRoleIds,
+    details: {
+      holderInPlayRoleIds: holderRoleIds,
+      totalInPlayCount: inPlayRoles.length
+    }
+  });
+}
+
 function evaluateNoRolesInPlay(session = {}, rule = {}) {
   const inPlayRoles = getInPlayRoles(session);
   if (inPlayRoles.length > 0) return null;
@@ -402,6 +486,10 @@ export function evaluateObjectiveRule(session = {}, rule = {}) {
 
   if (conditionType === OBJECTIVE_CONDITIONS.ONLY_HOLDER_GROUP_REMAINS_IN_PLAY) {
     return evaluateOnlyHolderGroupRemainsInPlay(session, rule);
+  }
+
+  if (conditionType === OBJECTIVE_CONDITIONS.ALL_HOLDER_MEMBERS_ARE_ONLY_ROLES_IN_PLAY) {
+    return evaluateAllHolderMembersAreOnlyRolesInPlay(session, rule);
   }
 
   if (conditionType === OBJECTIVE_CONDITIONS.NO_ROLES_IN_PLAY) {
@@ -449,7 +537,7 @@ function createFulfilledObjectiveEvaluation(fulfilledRules = []) {
 }
 
 export function evaluateSessionObjectiveRules(session = {}) {
-  return getSessionObjectiveRules(session)
+  return collectObjectiveRules(session)
     .map((rule) => evaluateObjectiveRule(session, rule))
     .filter(Boolean);
 }

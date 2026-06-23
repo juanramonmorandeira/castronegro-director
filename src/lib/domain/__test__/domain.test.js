@@ -902,19 +902,32 @@ test('roleCatalog declara roles mecanicos y razones de orden', () => {
 
   assert.deepEqual(
     [
-      byKey[ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS].specialStageDefinitions.length,
+      byKey[ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS].stageDefinitions[0].poolKey,
       byKey[ROLE_CATALOG_IDS.ROLE_INSPECTS].stageDefinitions[0].poolKey,
       byKey[ROLE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY].stageDefinitions[0].poolKey,
       byKey[ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL].stageDefinitions[0].poolKey
     ],
     [
-      1,
+      POOL_KEYS.POOL_CONCEALED,
       POOL_KEYS.POOL_CONCEALED,
       POOL_KEYS.POOL_CONCEALED,
       POOL_KEYS.POOL_CONCEALED
     ]
   );
-  assert.equal(byKey[ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS].specialStageDefinitions[0].order, null);
+  assert.equal(byKey[ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS].stageDefinitions[0].order, 5);
+  assert.deepEqual(
+    byKey[ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS].stageDefinitions[0].availabilityRules.all,
+    [
+      { type: AVAILABILITY_RULE_TYPES.ACTOR_IN_PLAY, metadata: {} },
+      {
+        type: AVAILABILITY_RULE_TYPES.WITHIN_EXECUTION_WINDOW,
+        firstCycle: 1,
+        lastCycle: 1,
+        poolKey: POOL_KEYS.POOL_CONCEALED,
+        metadata: {}
+      }
+    ]
+  );
   assert.equal(byKey[ROLE_CATALOG_IDS.ROLE_INSPECTS].stageDefinitions[0].order, 10);
   assert.equal(byKey[ROLE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY].stageDefinitions[0].order, 20);
   assert.equal(byKey[ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL].stageDefinitions[0].order, 40);
@@ -990,16 +1003,16 @@ test('buildPools ensambla stages desde roles y grupos', () => {
   });
 
   assert.equal(built.ok, true);
-  assert.equal(built.specialStages.length, 1);
-  assert.equal(built.pools.poolConcealed.stages.length, 4);
-  assert.deepEqual(built.specialStages[0].actorIds, [
-    `${ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS}-0`
-  ]);
+  assert.equal(built.specialStages.length, 0);
+  assert.equal(built.pools.poolConcealed.stages.length, 5);
   assert.deepEqual(
     built.pools.poolConcealed.stages.map((stage) => stage.order),
-    [10, 20, 30, 40]
+    [5, 10, 20, 30, 40]
   );
-  assert.deepEqual(built.pools.poolConcealed.stages[2].actorIds, [
+  assert.deepEqual(built.pools.poolConcealed.stages[0].actorIds, [
+    `${ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS}-0`
+  ]);
+  assert.deepEqual(built.pools.poolConcealed.stages[3].actorIds, [
     `${ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL}-0`
   ]);
 });
@@ -2102,14 +2115,10 @@ test('limited_uses con ventana current_cycle permite reutilizar en otro ciclo', 
   const restorePerCycleRecipe = actionRecipe(
     {
       ...restoreRecentOutOfPlayAction,
-      constraints: restoreRecentOutOfPlayAction.constraints.map((constraint) =>
-        constraint.type === CONSTRAINT_TYPES.LIMITED_USES
-          ? {
-              ...constraint,
-              window: CONSTRAINT_WINDOWS.CURRENT_CYCLE
-            }
-          : constraint
-      )
+      usage: {
+        ...restoreRecentOutOfPlayAction.usage,
+        window: CONSTRAINT_WINDOWS.CURRENT_CYCLE
+      }
     },
     STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY
   );
@@ -2141,14 +2150,10 @@ test('limited_uses con ventana next_cycle cuenta usos del ciclo anterior', () =>
   const restoreNextCycleRecipe = actionRecipe(
     {
       ...restoreRecentOutOfPlayAction,
-      constraints: restoreRecentOutOfPlayAction.constraints.map((constraint) =>
-        constraint.type === CONSTRAINT_TYPES.LIMITED_USES
-          ? {
-              ...constraint,
-              window: CONSTRAINT_WINDOWS.NEXT_CYCLE
-            }
-          : constraint
-      )
+      usage: {
+        ...restoreRecentOutOfPlayAction.usage,
+        window: CONSTRAINT_WINDOWS.NEXT_CYCLE
+      }
     },
     STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY
   );
@@ -2182,14 +2187,10 @@ test('limited_uses con ventana current_or_next_cycle cuenta el ciclo actual y el
   const restoreCurrentOrNextRecipe = actionRecipe(
     {
       ...restoreRecentOutOfPlayAction,
-      constraints: restoreRecentOutOfPlayAction.constraints.map((constraint) =>
-        constraint.type === CONSTRAINT_TYPES.LIMITED_USES
-          ? {
-              ...constraint,
-              window: CONSTRAINT_WINDOWS.CURRENT_OR_NEXT_CYCLE
-            }
-          : constraint
-      )
+      usage: {
+        ...restoreRecentOutOfPlayAction.usage,
+        window: CONSTRAINT_WINDOWS.CURRENT_OR_NEXT_CYCLE
+      }
     },
     STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY
   );
@@ -2553,32 +2554,40 @@ test('link_targets crea un grupo linked en la sesion', () => {
 
   assert.equal(linked.ok, true);
   assert.equal(linked.session.groups.length, 1);
-  assert.deepEqual(linked.session.groups[0], {
-    id: 'linked_alignment_a_plain_0_alignment_a_target_0',
-    key: 'linked_alignment_a_plain_0_alignment_a_target_0',
-    type: GROUP_TYPES.LINKED,
-    active: true,
-    createdCycleId: 0,
-    sourceActionId: ACTION_IDS.LINK_TARGETS,
-    roleIds: ['alignment_a_plain-0', 'alignment_a_target-0'],
-    groupRules: [
-      {
-        type: 'propagate_property_change',
-        when: {
-          property: 'inPlay',
-          value: false
-        },
-        apply: {
-          property: 'inPlay',
-          value: false
-        },
-        targets: 'other_members',
-        metadata: {}
-      }
-    ],
-    metadata: {}
-  });
+  assert.equal(linked.session.groups[0].id, 'linked_alignment_a_plain_0_alignment_a_target_0');
+  assert.equal(linked.session.groups[0].type, GROUP_TYPES.LINKED);
+  assert.deepEqual(linked.session.groups[0].roleIds, [
+    'alignment_a_plain-0',
+    'alignment_a_target-0'
+  ]);
+  assert.equal(linked.session.groups[0].groupRules[0].key, 'propagate_out_of_play');
+  assert.equal(linked.session.groups[0].groupRules[0].includeOutOfPlay, false);
+  assert.equal(
+    linked.session.groups[0].selectionRules[0].key,
+    'members_cannot_vote_other_members_out_of_play'
+  );
+  assert.equal(
+    linked.session.groups[0].objectiveRules[0].condition.type,
+    OBJECTIVE_CONDITIONS.ALL_HOLDER_MEMBERS_ARE_ONLY_ROLES_IN_PLAY
+  );
   assert.equal(linked.result.finalEffects[0].type, EFFECT_TYPES.SET_GROUP);
+});
+
+test('link_targets consume uso de session aunque la stage solo exista en el primer ciclo', () => {
+  const session = createBaseSession();
+  const firstLink = resolveRecipe(session, linkTargetsAction, {
+    actorIds: ['role_inspector-0'],
+    targetIds: ['alignment_a_target-0', 'alignment_a_plain-0']
+  });
+  const secondLink = resolveRecipe(firstLink.session, linkTargetsAction, {
+    actorIds: ['role_inspector-0'],
+    targetIds: ['alignment_b_target-0', 'alignment_a_blocker-0']
+  });
+
+  assert.equal(firstLink.ok, true);
+  assert.equal(secondLink.ok, false);
+  assert.equal(secondLink.errors[0].code, 'constraint/limited_uses');
+  assert.equal(secondLink.errors[0].window, CONSTRAINT_WINDOWS.SESSION);
 });
 
 test('linked deriva inPlay=false hacia los roles enlazados', () => {
@@ -2605,6 +2614,31 @@ test('linked deriva inPlay=false hacia los roles enlazados', () => {
     groupId: 'linked_alignment_a_plain_0_alignment_a_target_0',
     groupRuleType: 'propagate_property_change',
     sourceTargetId: 'alignment_a_target-0'
+  });
+});
+
+test('group linked aporta objectiveRule distribuida si sus miembros abarcan varios alignments efectivos', () => {
+  const linked = resolveAction(createBaseSession(), linkTargetsAction, {
+    actorIds: ['role_inspector-0'],
+    targetIds: ['alignment_a_target-0', 'alignment_b_target-0']
+  });
+  const session = withInPlayState(linked.session, {
+    'alignment_b_attacker-0': false,
+    'alignment_a_blocker-0': false,
+    'alignment_a_plain-0': false,
+    'role_inspector-0': false,
+    'hidden_enemy-0': false
+  });
+  const objectiveEvaluation = checkObjectives(session);
+
+  assert.equal(objectiveEvaluation.status, OBJECTIVE_EVALUATION_STATUSES.FULFILLED);
+  assert.equal(
+    objectiveEvaluation.fulfilledRules[0].condition,
+    OBJECTIVE_CONDITIONS.ALL_HOLDER_MEMBERS_ARE_ONLY_ROLES_IN_PLAY
+  );
+  assert.deepEqual(objectiveEvaluation.fulfilledRules[0].holder, {
+    type: 'group',
+    id: 'linked_alignment_a_target_0_alignment_b_target_0'
   });
 });
 
@@ -4062,6 +4096,39 @@ test('stage con seleccion y set_out_of_play rechaza elegir a un role linked', ()
   assert.equal(resolved.errors[0].candidateId, 'alignment_a_target-0');
 });
 
+test('stage con seleccion recoge restricciones aportadas por groups activos', () => {
+  const linked = resolveAction(createBaseSession(), linkTargetsAction, {
+    actorIds: ['role_inspector-0'],
+    targetIds: ['alignment_a_target-0', 'alignment_a_plain-0']
+  });
+  const resolved = resolveSelectionOutOfPlayStage(
+    linked.session,
+    collectiveSelectionInput({
+      selections: createSelections({
+        'alignment_b_attacker-0': 'alignment_a_target-0',
+        'alignment_a_blocker-0': 'alignment_a_target-0',
+        'alignment_a_target-0': 'alignment_a_plain-0',
+        'alignment_a_plain-0': 'alignment_a_target-0',
+        'alignment_b_target-0': 'alignment_a_target-0',
+        'role_inspector-0': 'alignment_a_target-0',
+        'hidden_enemy-0': 'alignment_a_target-0'
+      })
+    }),
+    {
+      selectionRules: {
+        ...selectionOutOfPlayRules,
+        groupRestrictions: []
+      }
+    }
+  );
+
+  assert.equal(resolved.ok, false);
+  assert.equal(resolved.errors[0].code, 'selection/restricted-group-member-candidate');
+  assert.equal(resolved.errors[0].selectorId, 'alignment_a_target-0');
+  assert.equal(resolved.errors[0].candidateId, 'alignment_a_plain-0');
+  assert.equal(resolved.errors[0].groupId, 'linked_alignment_a_plain_0_alignment_a_target_0');
+});
+
 test('stage con seleccion y set_out_of_play no permite desactivar restricciones estructurales desde input', () => {
   const session = createBaseSession({
     groups: [
@@ -4110,25 +4177,31 @@ test('catalogo basico usa formula mecanica anonima para distribuir alignments', 
   assert.equal(getBasicAlignmentDistribution(7), null);
 });
 
-test('ruleSet basico declara cinco roles listos y bloquea mecanicas incompletas', () => {
-  const selectedRuleSet = getCatalogRuleSet(RULE_SET_CATALOG_IDS.CLASSIC_HIDDEN_ROLES);
+test('ruleSet basico declara roles listos y bloquea mecanicas incompletas', () => {
+  const selectedRuleSet = getCatalogRuleSet(RULE_SET_CATALOG_IDS.BASIC_RULE_SET);
   const options = Object.fromEntries(
     selectedRuleSet.availableRoles.map((option) => [option.roleKey, option])
   );
 
   assert.equal(options[BASIC_ROLE_OPTION_KEYS.PLAIN].support, RULE_SET_SUPPORT_STATUSES.READY);
-  assert.equal(options[BASIC_ROLE_OPTION_KEYS.LINKS_TARGETS].support, RULE_SET_SUPPORT_STATUSES.PARTIAL);
+  assert.equal(options[BASIC_ROLE_OPTION_KEYS.LINKS_TARGETS].support, RULE_SET_SUPPORT_STATUSES.READY);
+  assert.deepEqual(options[BASIC_ROLE_OPTION_KEYS.LINKS_TARGETS].instanceRule, {
+    min: 0,
+    max: 1,
+    step: 1
+  });
   assert.equal(options[BASIC_ROLE_OPTION_KEYS.ASSUMES_ROLE].support, RULE_SET_SUPPORT_STATUSES.PENDING);
   assert.equal(options[BASIC_ROLE_OPTION_KEYS.OBSERVES_SELECTION].selectable, false);
   assert.equal(options[BASIC_ROLE_OPTION_KEYS.SELECTION_AUTHORITY].selectable, false);
 });
 
 test('buildRuleSet ensambla solo roles mecanicamente listos', () => {
-  const selectedRuleSet = getCatalogRuleSet(RULE_SET_CATALOG_IDS.CLASSIC_HIDDEN_ROLES);
+  const selectedRuleSet = getCatalogRuleSet(RULE_SET_CATALOG_IDS.BASIC_RULE_SET);
   const built = buildRuleSet({
     selectedRuleSet,
     selectedRoleKeys: [
       BASIC_ROLE_OPTION_KEYS.COLLECTIVE_SET_OUT_OF_PLAY,
+      BASIC_ROLE_OPTION_KEYS.LINKS_TARGETS,
       BASIC_ROLE_OPTION_KEYS.INSPECTS,
       BASIC_ROLE_OPTION_KEYS.REACTIVE,
       BASIC_ROLE_OPTION_KEYS.IN_PLAY_CONTROL,
@@ -4138,12 +4211,12 @@ test('buildRuleSet ensambla solo roles mecanicamente listos', () => {
   });
 
   assert.equal(built.ok, true);
-  assert.equal(built.ruleSet.roles.baseRoles.length, 5);
+  assert.equal(built.ruleSet.roles.baseRoles.length, 6);
   assert.equal(built.ruleSet.groups.length, 2);
   assert.equal(built.ruleSet.rules.objectiveRules.length, 3);
   assert.deepEqual(
     built.ruleSet.roles.baseRoles.map((role) => role.alignmentId),
-    ['alignment_b', 'alignment_a', 'alignment_a', 'alignment_a', 'alignment_a']
+    ['alignment_b', 'alignment_a', 'alignment_a', 'alignment_a', 'alignment_a', 'alignment_a']
   );
   assert.deepEqual(
     built.ruleSet.roles.baseRoles.find(
@@ -4156,24 +4229,24 @@ test('buildRuleSet ensambla solo roles mecanicamente listos', () => {
   );
 });
 
-test('buildRuleSet rechaza un role parcial con sus requisitos pendientes', () => {
-  const selectedRuleSet = getCatalogRuleSet(RULE_SET_CATALOG_IDS.CLASSIC_HIDDEN_ROLES);
+test('buildRuleSet rechaza un role pendiente con sus requisitos pendientes', () => {
+  const selectedRuleSet = getCatalogRuleSet(RULE_SET_CATALOG_IDS.BASIC_RULE_SET);
   const built = buildRuleSet({
     selectedRuleSet,
-    selectedRoleKeys: [BASIC_ROLE_OPTION_KEYS.LINKS_TARGETS],
+    selectedRoleKeys: [BASIC_ROLE_OPTION_KEYS.ASSUMES_ROLE],
     roleCatalog: ROLE_CATALOG
   });
 
   assert.equal(built.ok, false);
   assert.equal(built.errors[0].code, 'ruleset/role-not-ready');
   assert.deepEqual(built.errors[0].missingMechanics, [
-    'dynamic_objective_rule',
-    'linked_group_selection_restriction'
+    'role_choice_set',
+    'assume_role'
   ]);
 });
 
 test('buildSession consume directamente un ruleSet ya construido', () => {
-  const selectedRuleSet = getCatalogRuleSet(RULE_SET_CATALOG_IDS.CLASSIC_HIDDEN_ROLES);
+  const selectedRuleSet = getCatalogRuleSet(RULE_SET_CATALOG_IDS.BASIC_RULE_SET);
   const builtRuleSet = buildRuleSet({
     selectedRuleSet,
     selectedRoleKeys: [
@@ -4209,7 +4282,7 @@ test('buildSession consume directamente un ruleSet ya construido', () => {
   assert.equal(builtSession.ok, true);
   assert.equal(
     builtSession.session.settings.ruleSetId,
-    RULE_SET_CATALOG_IDS.CLASSIC_HIDDEN_ROLES
+    RULE_SET_CATALOG_IDS.BASIC_RULE_SET
   );
   assert.equal(builtSession.session.groups.length, 2);
   assert.equal(builtSession.session.objectiveRules.length, 3);

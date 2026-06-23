@@ -34,11 +34,17 @@ export const GROUP_RULE_TARGETS = Object.freeze({
   OTHER_MEMBERS: 'other_members'
 });
 
+export const GROUP_SELECTION_RULE_TYPES = Object.freeze({
+  EXCLUDE_OTHER_GROUP_MEMBERS: 'exclude_other_group_members'
+});
+
 export function defineGroupRule({
+  key = null,
   type,
   when = {},
   apply = {},
   targets = GROUP_RULE_TARGETS.OTHER_MEMBERS,
+  includeOutOfPlay = false,
   metadata = {}
 } = {}) {
   return {
@@ -52,7 +58,49 @@ export function defineGroupRule({
       value: Object.hasOwn(apply, 'value') ? apply.value : when.value
     },
     targets: normalizeId(targets),
+    includeOutOfPlay: includeOutOfPlay === true,
+    key: normalizeId(key ?? type),
     metadata: { ...metadata }
+  };
+}
+
+export function defineGroupSelectionRule({
+  key,
+  type,
+  scope = {},
+  appliesWhen = {},
+  metadata = {}
+} = {}) {
+  return {
+    key: normalizeId(key ?? type),
+    type: normalizeId(type),
+    scope: {
+      methods: [...(scope.methods ?? [])].map(normalizeId),
+      actionKeys: [...(scope.actionKeys ?? [])].map(normalizeId)
+    },
+    appliesWhen: {
+      sourceState: normalizeId(appliesWhen.sourceState ?? 'active')
+    },
+    metadata: { ...metadata }
+  };
+}
+
+export function defineGroupObjectiveRule(rule = {}) {
+  return {
+    ...rule,
+    key: normalizeId(rule.key),
+    holder: rule.holder ? { ...rule.holder } : null,
+    condition: rule.condition ? { ...rule.condition } : null,
+    appliesWhen: rule.appliesWhen
+      ? {
+          ...rule.appliesWhen,
+          sourceState: normalizeId(rule.appliesWhen.sourceState ?? 'active'),
+          conditions: (rule.appliesWhen.conditions ?? []).map((condition) => ({ ...condition }))
+        }
+      : { sourceState: 'active', conditions: [] },
+    onFulfilled: (rule.onFulfilled ?? []).map((proposal) => ({ ...proposal })),
+    conflictRules: (rule.conflictRules ?? []).map((conflictRule) => ({ ...conflictRule })),
+    metadata: { ...(rule.metadata ?? {}) }
   };
 }
 
@@ -61,6 +109,8 @@ export function defineGroup({
   type = null,
   membershipRule = null,
   groupRules = [],
+  selectionRules = [],
+  objectiveRules = [],
   stageDefinitions = [],
   metadata = {}
 } = {}) {
@@ -80,6 +130,8 @@ export function defineGroup({
     ...(normalizedType ? { type: normalizedType } : {}),
     ...(normalizedMembershipRule ? { membershipRule: normalizedMembershipRule } : {}),
     groupRules: (groupRules ?? []).map(defineGroupRule),
+    selectionRules: (selectionRules ?? []).map(defineGroupSelectionRule),
+    objectiveRules: (objectiveRules ?? []).map(defineGroupObjectiveRule),
     stageDefinitions: (stageDefinitions ?? []).map(defineStage),
     metadata: { ...metadata }
   };
@@ -94,6 +146,8 @@ export function createGroup({
   sourceActionId = null,
   roleIds = [],
   groupRules = [],
+  selectionRules = [],
+  objectiveRules = [],
   metadata = {}
 } = {}) {
   const normalizedType = type ? normalizeId(type) : null;
@@ -108,6 +162,8 @@ export function createGroup({
     sourceActionId,
     roleIds: [...new Set((roleIds ?? []).filter(Boolean))],
     groupRules: (groupRules ?? []).map(defineGroupRule),
+    selectionRules: (selectionRules ?? []).map(defineGroupSelectionRule),
+    objectiveRules: (objectiveRules ?? []).map(defineGroupObjectiveRule),
     metadata: { ...metadata }
   };
 }

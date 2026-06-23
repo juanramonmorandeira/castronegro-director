@@ -21,10 +21,10 @@ como referencia humana.
 | `block_out_of_play` | Protector | implementada | Receta que bloquea `inPlay=false` frente a los roles materializados de `alignment_b`. |
 | `no_repeat_target` | Protector no repite objetivo | implementada | Restriccion basada en `session.actionHistory`. |
 | `startCycle` | inicio de ciclo normal | implementada | Incrementa `cycle.id`; no limpia estado de roles. |
-| `link_targets` | Cupido | implementada | Crea un group con miembros y `groupRules`. |
+| `link_targets` | Cupido | implementada | Crea un group con miembros, `groupRules`, `selectionRules` y `objectiveRules`. |
 | `propagate_property_change` | Enamorados comparten destino | implementada | Propaga cambios por regla declarativa; no depende del `group.type`. |
-| `linked_objective` | Enamorados de bandos distintos | parcial | Implementado en `objectiveModel.js`. |
-| `group_objective_rule` | condicion propia de un group | parcial | `holder_reaches_in_play_parity` y `only_holder_group_remains_in_play` configurables por sesion. |
+| `linked_objective` | Enamorados de bandos distintos | implementada | El group aporta objectiveRule y `objectiveModel` la recopila si aplica. |
+| `group_objective_rule` | condicion propia de un group | implementada | `holder_reaches_in_play_parity`, `only_holder_group_remains_in_play` y `all_holder_members_are_only_roles_in_play`. |
 | `selection_count` | recuento de seleccion | implementada | `selectionModel.js` valida selecciones, suma unidades y resuelve chosen/empate. |
 | `group_selection` | seleccion de grupo | implementada | El stage vota para elegir `chosenId`; despues aplica la receta configurada. |
 
@@ -34,7 +34,7 @@ como referencia humana.
 |---|---|---|---|
 | `check_objectives` | objetivos de alignments y condiciones especiales | parcial | Ya se evalua al cierre de pool; faltan achievedObjectives persistidos y conflictos. |
 | `configurable_selection_effect` | eleccion de cargo, otras selecciones | parcial | El protocolo `stage.selectionRules` + receta aplicada al `chosenId` ya existe; faltan acciones genericas como marcar o conceder recursos. |
-| `block_group_member_selection_candidate` | linked no puede elegir contra linked | implementada | El stage con seleccion rechaza selecciones contra target del mismo grupo `linked`. |
+| `block_group_member_selection_candidate` | linked no puede elegir contra linked | implementada | El group aporta una selectionRule que filtra candidates para sus propios miembros en votes con `set_out_of_play`. |
 | `set_flag` | hechizado, infectado, revelado, acusado | pendiente | Necesita normalizar flags de estado. |
 | `change_alignment` | infeccion, conversion | pendiente | Necesita reglas de alignment y objective. |
 | `change_role` | ladron, actor, sirvienta | pendiente | Necesita reglas de reemplazo de rol. |
