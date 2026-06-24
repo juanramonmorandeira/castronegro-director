@@ -65,6 +65,7 @@ export {
   validateRuleSetSelection
 } from './ruleSetDefinition.js';
 export {
+  BASIC_AVAILABLE_RULE_KEYS,
   BASIC_ROLE_OPTION_KEYS,
   RULE_SET_CATALOG_IDS,
   RULE_SET_CATALOG,
@@ -162,6 +163,7 @@ export {
   getCurrentSpecialStage,
   appendSpecialStagesHistory,
   appendSpecialStage,
+  removeSpecialStages,
   startSpecialStages,
   completeSpecialStage
 } from './specialStagesModel.js';
@@ -212,6 +214,16 @@ export {
 } from './eventModel.js';
 export { resolveProposedEffects } from './resolverModel.js';
 export {
+  DOUBLE_SELECTOR_ERRORS,
+  DOUBLE_SELECTOR_RULE_KEY,
+  DOUBLE_SELECTOR_STAGE_KEYS,
+  cancelPendingPickNextDoubleSelectorStage,
+  createPickNextDoubleSelectorStage,
+  createSelectDoubleSelectorStage,
+  queuePickNextDoubleSelectorStage,
+  requestSelectDoubleSelectorStage
+} from './doubleSelectorModel.js';
+export {
   ACTION_IDS,
   VISIBILITY,
   findRole,
@@ -248,6 +260,8 @@ export {
   SELECTION_SUPPORT_BASES,
   SELECTION_SUPPORT_THRESHOLD_TYPES,
   SELECTION_TIE_RULES,
+  SELECTION_TIE_BREAKER_TYPES,
+  SELECTION_VALUE_RULE_TYPES,
   SELECTION_ROUND_TYPES,
   SELECTION_REQUIRED_RULES,
   SELECTION_RESTRICTION_TYPES,

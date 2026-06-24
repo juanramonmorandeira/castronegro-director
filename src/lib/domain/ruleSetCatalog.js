@@ -9,6 +9,14 @@
 import { getCatalogGroup, GROUP_CATALOG_IDS } from './groupCatalog.js';
 import { OBJECTIVE_CONDITIONS } from './objectiveModel.js';
 import { ROLE_CATALOG_IDS } from './roleCatalog.js';
+import { RECIPE_KEYS } from './recipeCatalog.js';
+import {
+  SELECTION_RUNOFF_RULES,
+  SELECTION_TIE_BREAKER_TYPES,
+  SELECTION_TIE_RULES,
+  SELECTION_VALUE_RULE_TYPES
+} from './selectionModel.js';
+import { POOL_KEYS } from './sessionModel.js';
 import { MESSAGE_KEYS } from '../messages/messageCatalog.js';
 import {
   ALIGNMENT_IDS,
@@ -28,8 +36,11 @@ export const BASIC_ROLE_OPTION_KEYS = Object.freeze({
   PLAIN: ROLE_CATALOG_IDS.ROLE_PLAIN,
   LINKS_TARGETS: ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS,
   ASSUMES_ROLE: 'role_assumes_role',
-  OBSERVES_SELECTION: 'role_observes_selection',
-  SELECTION_AUTHORITY: 'position_selection_authority'
+  OBSERVES_SELECTION: 'role_observes_selection'
+});
+
+export const BASIC_AVAILABLE_RULE_KEYS = Object.freeze({
+  SELECTION_COUNTS_DOUBLE: 'selection_counts_double'
 });
 
 export function getBasicAlignmentDistribution(playersExpected) {
@@ -131,17 +142,55 @@ export const RULE_SET_CATALOG = Object.freeze({
           'observation_detection',
           'replace_selected_candidate'
         ]
-      },
+      }
+    ],
+    availableRules: [
       {
-        roleKey: BASIC_ROLE_OPTION_KEYS.SELECTION_AUTHORITY,
-        support: RULE_SET_SUPPORT_STATUSES.PENDING,
-        selectable: false,
-        missingMechanics: [
-          'honorary_position',
-          'weighted_selection',
-          'tie_break_authority',
-          'position_succession'
-        ]
+        key: BASIC_AVAILABLE_RULE_KEYS.SELECTION_COUNTS_DOUBLE,
+        type: 'selectionRule',
+        selectable: true,
+        defaultEnabled: false,
+        configuration: {
+          exposedVoteAbstainDefault: 'not_allowed',
+          initialSelectionTieDefault: 'runoff_on_tie',
+          initialSelectionRunoffDefault: 'tied_candidates',
+          unresolvedRunoffDefault: 'director_selects_from_tied_candidates_or_null'
+        },
+        rules: {
+          selectionRules: [
+            {
+              key: 'double_selector_counts_double_in_exposed_vote',
+              scope: {
+                methods: ['vote'],
+                poolKeys: [POOL_KEYS.POOL_EXPOSED],
+                actionKeys: [RECIPE_KEYS.SET_OUT_OF_PLAY]
+              },
+              rules: {
+                tie: SELECTION_TIE_RULES.RUNOFF_ON_TIE,
+                runoff: SELECTION_RUNOFF_RULES.SAME_CANDIDATES,
+                repeatLimit: 1,
+                selectionValueRules: [
+                  {
+                    type: SELECTION_VALUE_RULE_TYPES.SELECTOR_PROPERTY,
+                    property: 'doubleSelector',
+                    value: true,
+                    selectionValue: 2
+                  }
+                ],
+                tieBreakers: [
+                  {
+                    type: SELECTION_TIE_BREAKER_TYPES.SELECTOR_PROPERTY,
+                    property: 'doubleSelector',
+                    value: true
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        metadata: {
+          mechanicalFamily: 'optional_selection_rule'
+        }
       }
     ],
     groups: [

@@ -574,7 +574,7 @@ Cuando aparezca una mecanica nueva, seguir este orden:
 | Si un miembro sale de juego, el otro tambien | `propagate_property_change` | `groupModel.js` + `resolverModel.js` |
 | Si solo quedan linked de alignments distintos, cumplen objective especial | objectiveRule sobre group linked | `session.objectiveRules` |
 | Un group de alignment alcanza al resto | `holder_reaches_in_play_parity` | `session.objectiveRules` |
-| Un jugador no puede elegir contra su linked | restriccion de seleccion | `stage.selectionRules.groupRestrictions` |
+| Un jugador no puede elegir contra su linked | selectionRule del group `linked` | `group.selectionRules` |
 
 ## Modelo de seleccion
 
@@ -670,8 +670,9 @@ Ejemplos futuros con la misma estructura:
 - `set_group`
 - cualquier otro efecto permitido por el motor
 
-La restriccion de `linked` no aplica a cualquier seleccion. Aplica a los stages que
-la declaren en `selectionRules.groupRestrictions`. En el caso actual:
+La restriccion de `linked` no aplica a cualquier seleccion ni vive en
+`group_selection`. La aporta el propio group `linked` mediante `selectionRules`
+cuando su scope coincide con la seleccion actual. En el caso actual:
 
 ```text
 group_selection + set_out_of_play
@@ -717,8 +718,11 @@ selectionRules.repeatLimit: 1
 selectionRules.abstainResolution: ignore
 selectionRules.supportThreshold: none
 selectionRules.candidateIds: null -> todos los roles inPlay
-groupRestrictions: exclude_group_member_target linked
 ```
+
+Si el selector pertenece a un group `linked` activo creado por `link_targets`,
+`stageModel` recopila su regla y anade una restriccion efectiva de grupo para esa
+resolucion.
 
 La deuda tecnica anterior era mezclar recuento de seleccion y consecuencia en una
 receta compuesta. Eso ya queda separado:

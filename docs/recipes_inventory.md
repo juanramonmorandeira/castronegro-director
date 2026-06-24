@@ -357,7 +357,6 @@ group_selection
     abstainResolution: ignore
     supportThreshold: none
     candidateIds: null -> todos los roles inPlay
-    groupRestrictions: exclude_group_member_target linked
   actions:
     set_out_of_play
 ```
@@ -365,6 +364,10 @@ group_selection
 Lectura: el seleccion elige un target; la receta `set_out_of_play` aplica
 `set_in_play(inPlay=false)` sobre ese target. La misma estructura podra elegir
 para aplicar otra receta distinta sin crear una receta compuesta nueva.
+
+Si existe un group `linked` activo, su propia `selectionRules` puede aportar
+`groupRestrictions` a esta seleccion. `group_selection` no conoce `linked` por si
+mismo.
 
 ### `start_cycle`
 

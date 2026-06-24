@@ -28,6 +28,8 @@ function createSessionGroup(groupInput = {}) {
     sourceActionId: group.sourceActionId,
     roleIds: group.roleIds,
     groupRules: group.groupRules,
+    selectionRules: group.selectionRules,
+    objectiveRules: group.objectiveRules,
     metadata: { ...group.metadata }
   };
 }
@@ -46,6 +48,7 @@ export function createSession({
     ? CURRENT_STAGE_SOURCES.SPECIAL_STAGES
     : CURRENT_STAGE_SOURCES.POOL,
   objectiveRules = [],
+  selectionRules = [],
   achievedObjectives = [],
   playOutcome = null,
   actionHistory = [],
@@ -99,6 +102,7 @@ export function createSession({
     specialStages: normalizedSpecialStages,
     currentStageSource,
     objectiveRules: [...objectiveRules],
+    selectionRules: [...selectionRules],
     achievedObjectives: [...achievedObjectives],
     playOutcome,
     actionHistory: [...actionHistory],
@@ -152,12 +156,15 @@ export function buildSession({
     groupDefinitions ?? ruleSet?.groups ?? [];
   const effectiveObjectiveRules =
     sessionInput.objectiveRules ?? ruleSet?.rules?.objectiveRules ?? [];
+  const effectiveSelectionRules =
+    sessionInput.selectionRules ?? ruleSet?.rules?.selectionRules ?? [];
   const effectiveSettings = {
     ...(sessionInput.settings ?? {}),
     ...(ruleSet
       ? {
           ruleSetId: ruleSet.id,
-          ruleSetVersion: ruleSet.version
+          ruleSetVersion: ruleSet.version,
+          selectedRuleKeys: [...(ruleSet.metadata?.selectedRuleKeys ?? [])]
         }
       : {})
   };
@@ -170,6 +177,7 @@ export function buildSession({
     ...sessionInput,
     settings: effectiveSettings,
     objectiveRules: effectiveObjectiveRules,
+    selectionRules: effectiveSelectionRules,
     roles: builtRoles,
     groups: []
   });

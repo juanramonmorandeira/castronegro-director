@@ -28,6 +28,11 @@ export const SELECTION_TIE_RULES = Object.freeze({
   RUNOFF_ON_TIE: 'runoff_on_tie'
 });
 
+export const SELECTION_TIE_BREAKER_TYPES = Object.freeze({
+  SELECTOR_AUTHORITY: 'selector_authority',
+  SELECTOR_PROPERTY: 'selector_property'
+});
+
 export const SELECTION_RUNOFF_RULES = Object.freeze({
   TIED_CANDIDATES: 'tied_candidates',
   SELECTED_CANDIDATES: 'selected_candidates',
@@ -79,6 +84,10 @@ export const SELECTION_RESTRICTION_TYPES = Object.freeze({
   EXCLUDE_GROUP_MEMBER_CANDIDATE: 'exclude_group_member_candidate'
 });
 
+export const SELECTION_VALUE_RULE_TYPES = Object.freeze({
+  SELECTOR_PROPERTY: 'selector_property'
+});
+
 export const CANDIDATE_RULE_TYPES = Object.freeze({
   HAS_PROPERTY: 'has_property',
   NOT_HAS_PROPERTY: 'not_has_property',
@@ -101,7 +110,11 @@ export function createSelectionRules({
   abstainResolution = {},
   groupRestrictions = [],
   candidateIds = null,
-  candidateRules = []
+  candidateRules = [],
+  selectionWeights = [],
+  selectionValueRules = [],
+  tieBreakers = [],
+  selectorEligibility = {}
 } = {}) {
   return {
     required,
@@ -115,7 +128,11 @@ export function createSelectionRules({
     abstainResolution: normalizeAbstainResolution(abstainResolution),
     groupRestrictions: (groupRestrictions ?? []).map((restriction) => ({ ...restriction })),
     candidateIds: Array.isArray(candidateIds) ? [...candidateIds] : null,
-    candidateRules: (candidateRules ?? []).map((rule) => ({ ...rule }))
+    candidateRules: (candidateRules ?? []).map((rule) => ({ ...rule })),
+    selectionWeights: normalizeSelectionWeights(selectionWeights),
+    selectionValueRules: normalizeSelectionValueRules(selectionValueRules),
+    tieBreakers: normalizeTieBreakers(tieBreakers),
+    selectorEligibility: normalizeSelectorEligibility(selectorEligibility)
   };
 }
 
@@ -150,6 +167,56 @@ function normalizeAbstainResolution({
   };
 }
 
+function normalizeSelectionWeights(selectionWeights = []) {
+  return (selectionWeights ?? [])
+    .map((rule) => ({
+      selectorId: rule?.selectorId ?? null,
+      value: Number.isFinite(rule?.value) && rule.value > 0 ? rule.value : 1,
+      metadata: { ...(rule?.metadata ?? {}) }
+    }))
+    .filter((rule) => rule.selectorId);
+}
+
+function normalizeSelectionValueRules(selectionValueRules = []) {
+  return (selectionValueRules ?? [])
+    .map((rule) => ({
+      type: Object.values(SELECTION_VALUE_RULE_TYPES).includes(rule?.type)
+        ? rule.type
+        : null,
+      property: rule?.property ?? null,
+      value: Object.hasOwn(rule ?? {}, 'value') ? rule.value : true,
+      selectionValue: Number.isFinite(rule?.selectionValue) && rule.selectionValue > 0
+        ? rule.selectionValue
+        : 1,
+      metadata: { ...(rule?.metadata ?? {}) }
+    }))
+    .filter((rule) => rule.type && rule.property);
+}
+
+function normalizeTieBreakers(tieBreakers = []) {
+  return (tieBreakers ?? [])
+    .map((rule) => ({
+      type: Object.values(SELECTION_TIE_BREAKER_TYPES).includes(rule?.type)
+        ? rule.type
+        : null,
+      selectorIds: [...(rule?.selectorIds ?? [])].filter(Boolean),
+      property: rule?.property ?? null,
+      value: Object.hasOwn(rule ?? {}, 'value') ? rule.value : true,
+      metadata: { ...(rule?.metadata ?? {}) }
+    }))
+    .filter((rule) =>
+      rule.type === SELECTION_TIE_BREAKER_TYPES.SELECTOR_PROPERTY
+        ? !!rule.property
+        : rule.type && rule.selectorIds.length > 0
+    );
+}
+
+function normalizeSelectorEligibility({ requireInPlay = true } = {}) {
+  return {
+    requireInPlay: requireInPlay !== false
+  };
+}
+
 // Crea una seleccion normalizada.
 //
 // Guardamos selectorId y candidateId porque el motor trabaja
@@ -172,6 +239,60 @@ export function createSelection({
     roundId,
     metadata: { ...metadata }
   };
+}
+
+function getSelectionWeightForSelector(selectorId = null, selectionWeights = []) {
+  return (
+    (selectionWeights ?? []).find((rule) => rule.selectorId === selectorId)?.value ??
+    null
+  );
+}
+
+function selectorMatchesValueRule(selector = null, rule = {}) {
+  if (rule.type !== SELECTION_VALUE_RULE_TYPES.SELECTOR_PROPERTY) return false;
+  return hasPropertyValue(selector, rule.property, rule.value);
+}
+
+function getSelectionValueRuleForSelector(session = {}, selectorId = null, selectionValueRules = []) {
+  const selector = findRole(session, selectorId);
+  return (selectionValueRules ?? []).find((rule) => selectorMatchesValueRule(selector, rule)) ?? null;
+}
+
+function getSelectionValueForSelector({
+  session = {},
+  selectorId = null,
+  selectionWeights = [],
+  selectionValueRules = []
+} = {}) {
+  return (
+    getSelectionValueRuleForSelector(session, selectorId, selectionValueRules)?.selectionValue ??
+    getSelectionWeightForSelector(selectorId, selectionWeights) ??
+    1
+  );
+}
+
+function applySelectionRuleWeights(session = {}, selections = [], rules = {}) {
+  return (selections ?? []).map((rawSelection) => {
+    const selection = createSelection(rawSelection);
+    const ruleWeight = getSelectionValueForSelector({
+      session,
+      selectorId: selection.selectorId,
+      selectionWeights: rules.selectionWeights,
+      selectionValueRules: rules.selectionValueRules
+    });
+
+    if (ruleWeight === selection.value) return selection;
+
+    return {
+      ...selection,
+      value: ruleWeight,
+      metadata: {
+        ...selection.metadata,
+        effectiveSelectionValue: ruleWeight,
+        valueSource: 'selection_rule'
+      }
+    };
+  });
 }
 
 // Busca un rol de sesion por id.
@@ -326,7 +447,7 @@ export function validateSelections({
         index,
         selectorId: selection.selectorId
       });
-    } else if (selector.inPlay !== true) {
+    } else if (rules.selectorEligibility.requireInPlay && selector.inPlay !== true) {
       errors.push({
         code: 'selection/selector-not-in-play',
         message: `selector "${selector.id}" is not inPlay`,
@@ -531,14 +652,21 @@ function createNullSelectionResult({
   };
 }
 
-function createChosenSelectionResult({ reason, selectionTally, abstainedSelections, chosenId }) {
+function createChosenSelectionResult({
+  reason,
+  selectionTally,
+  abstainedSelections,
+  chosenId,
+  metadata = {}
+}) {
   return {
     type: SELECTION_OUTCOME_TYPES.CHOSEN,
     reason,
     selectionTally,
     abstainedSelections,
     chosenId,
-    tiedCandidateIds: []
+    tiedCandidateIds: [],
+    ...metadata
   };
 }
 
@@ -577,11 +705,30 @@ function getRepeatOnNullNextRound({ session, rules, roundType, roundIndex }) {
   });
 }
 
-function getSupportBaseCount({ session, selectorIds = [], selections = [], supportThreshold }) {
+function getSupportBaseCount({
+  session,
+  selectorIds = [],
+  selections = [],
+  supportThreshold,
+  selectionWeights = [],
+  selectionValueRules = []
+}) {
   if (supportThreshold.base === SELECTION_SUPPORT_BASES.SELECTOR_COUNT) {
-    return getRequiredSelectorIds(session, selectorIds).length;
+    return getRequiredSelectorIds(session, selectorIds).reduce(
+      (total, selectorId) =>
+        total + getSelectionValueForSelector({
+          session,
+          selectorId,
+          selectionWeights,
+          selectionValueRules
+        }),
+      0
+    );
   }
-  return (selections ?? []).map(createSelection).filter((selection) => !selection.abstain).length;
+  return (selections ?? [])
+    .map(createSelection)
+    .filter((selection) => !selection.abstain)
+    .reduce((total, selection) => total + selection.value, 0);
 }
 
 function getRequiredSupportCount({ baseCount, supportThreshold }) {
@@ -599,7 +746,9 @@ function evaluateSupportThreshold({
   selectorIds = [],
   selections = [],
   selectionCount = 0,
-  supportThreshold
+  supportThreshold,
+  selectionWeights = [],
+  selectionValueRules = []
 }) {
   if (supportThreshold.type === SELECTION_SUPPORT_THRESHOLD_TYPES.NONE) {
     return {
@@ -609,7 +758,14 @@ function evaluateSupportThreshold({
     };
   }
 
-  const supportBaseCount = getSupportBaseCount({ session, selectorIds, selections, supportThreshold });
+  const supportBaseCount = getSupportBaseCount({
+    session,
+    selectorIds,
+    selections,
+    supportThreshold,
+    selectionWeights,
+    selectionValueRules
+  });
   const requiredSupportCount = getRequiredSupportCount({ baseCount: supportBaseCount, supportThreshold });
 
   return {
@@ -617,6 +773,68 @@ function evaluateSupportThreshold({
     requiredSupportCount,
     supportBaseCount
   };
+}
+
+function resolveTieByAuthority({ decisions = [], tiedCandidates = [], tieBreakers = [] }) {
+  const tiedCandidateIds = new Set(tiedCandidates);
+
+  for (const rule of tieBreakers ?? []) {
+    if (rule.type !== SELECTION_TIE_BREAKER_TYPES.SELECTOR_AUTHORITY) continue;
+
+    for (const selectorId of rule.selectorIds ?? []) {
+      const selection = decisions.find(
+        (decision) =>
+          decision.selectorId === selectorId &&
+          !decision.abstain &&
+          tiedCandidateIds.has(decision.candidateId)
+      );
+
+      if (selection) {
+        return {
+          chosenId: selection.candidateId,
+          tieBreaker: {
+            type: rule.type,
+            selectorId,
+            candidateId: selection.candidateId
+          }
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+function resolveTieBySelectorProperty({ session = {}, decisions = [], tiedCandidates = [], tieBreakers = [] }) {
+  const tiedCandidateIds = new Set(tiedCandidates);
+
+  for (const rule of tieBreakers ?? []) {
+    if (rule.type !== SELECTION_TIE_BREAKER_TYPES.SELECTOR_PROPERTY) continue;
+
+    const selection = decisions.find((decision) => {
+      const selector = findRole(session, decision.selectorId);
+      return (
+        !decision.abstain &&
+        tiedCandidateIds.has(decision.candidateId) &&
+        hasPropertyValue(selector, rule.property, rule.value)
+      );
+    });
+
+    if (selection) {
+      return {
+        chosenId: selection.candidateId,
+        tieBreaker: {
+          type: rule.type,
+          selectorId: selection.selectorId,
+          candidateId: selection.candidateId,
+          property: rule.property,
+          value: rule.value
+        }
+      };
+    }
+  }
+
+  return null;
 }
 
 function getAbstainSelectionCount(abstainedSelections = []) {
@@ -681,9 +899,9 @@ export function resolveSelectionRound({
     };
   }
 
-  const decisions = (selections ?? []).map(createSelection);
+  const decisions = applySelectionRuleWeights(session, selections, rules);
   const abstainedSelections = decisions.filter((selection) => selection.abstain);
-  const selectionTally = tallySelections(selections);
+  const selectionTally = tallySelections(decisions);
   const highestSelectionCount = selectionTally[0]?.selectionCount ?? 0;
   const tiedCandidates = selectionTally
     .filter((entry) => entry.selectionCount === highestSelectionCount)
@@ -757,9 +975,11 @@ export function resolveSelectionRound({
     const support = evaluateSupportThreshold({
       session,
       selectorIds,
-      selections,
+      selections: decisions,
       selectionCount: chosenEntry?.selectionCount ?? 0,
-      supportThreshold: rules.supportThreshold
+      supportThreshold: rules.supportThreshold,
+      selectionWeights: rules.selectionWeights,
+      selectionValueRules: rules.selectionValueRules
     });
 
     if (!support.ok) {
@@ -786,7 +1006,53 @@ export function resolveSelectionRound({
         reason: 'single_highest_selection_count',
         selectionTally,
         abstainedSelections,
-        chosenId: tiedCandidates[0]
+        chosenId: tiedCandidates[0],
+        metadata: {
+          support
+        }
+      })
+    );
+  }
+
+  const authorityTieBreak = resolveTieByAuthority({
+    decisions,
+    tiedCandidates,
+    tieBreakers: rules.tieBreakers
+  });
+
+  if (authorityTieBreak) {
+    return createSelectionResolution(
+      createChosenSelectionResult({
+        reason: 'tie_break_authority',
+        selectionTally,
+        abstainedSelections,
+        chosenId: authorityTieBreak.chosenId,
+        metadata: {
+          tieBreaker: authorityTieBreak.tieBreaker,
+          tiedCandidateIds: tiedCandidates
+        }
+      })
+    );
+  }
+
+  const selectorPropertyTieBreak = resolveTieBySelectorProperty({
+    session,
+    decisions,
+    tiedCandidates,
+    tieBreakers: rules.tieBreakers
+  });
+
+  if (selectorPropertyTieBreak) {
+    return createSelectionResolution(
+      createChosenSelectionResult({
+        reason: 'tie_break_selector_property',
+        selectionTally,
+        abstainedSelections,
+        chosenId: selectorPropertyTieBreak.chosenId,
+        metadata: {
+          tieBreaker: selectorPropertyTieBreak.tieBreaker,
+          tiedCandidateIds: tiedCandidates
+        }
       })
     );
   }

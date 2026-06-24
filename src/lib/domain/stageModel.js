@@ -334,25 +334,89 @@ function getSelectionRuleSelectorIds(stage = {}, input = {}) {
   ];
 }
 
+function ruleScopeMatchesContext(scope = {}, context = {}) {
+  const poolKeys = (scope.poolKeys ?? []).map(normalizeId);
+  const stageKeys = (scope.stageKeys ?? []).map(normalizeId);
+  const actionKeys = (scope.actionKeys ?? []).map(normalizeId);
+  const methods = (scope.methods ?? []).map(normalizeId);
+
+  if (poolKeys.length > 0 && !poolKeys.includes(normalizeId(context.poolKey))) return false;
+  if (stageKeys.length > 0 && !stageKeys.includes(normalizeId(context.stageKey))) return false;
+  if (actionKeys.length > 0 && !actionKeys.includes(normalizeId(context.actionKey))) return false;
+  if (methods.length > 0 && !methods.includes(normalizeId(context.method))) return false;
+
+  return true;
+}
+
+function collectSessionSelectionRules(session = {}, selectionContext = {}) {
+  return (session.selectionRules ?? [])
+    .filter((rule) => ruleScopeMatchesContext(rule.scope ?? {}, selectionContext))
+    .map((rule) => rule.rules ?? rule);
+}
+
+function mergeSelectionRules(baseRules = {}, additionalRules = []) {
+  return (additionalRules ?? []).reduce((merged, rule) => ({
+    ...merged,
+    ...rule,
+    groupRestrictions: [
+      ...(merged.groupRestrictions ?? []),
+      ...(rule.groupRestrictions ?? [])
+    ],
+    candidateRules: [
+      ...(merged.candidateRules ?? []),
+      ...(rule.candidateRules ?? [])
+    ],
+    selectionWeights: [
+      ...(merged.selectionWeights ?? []),
+      ...(rule.selectionWeights ?? [])
+    ],
+    selectionValueRules: [
+      ...(merged.selectionValueRules ?? []),
+      ...(rule.selectionValueRules ?? [])
+    ],
+    tieBreakers: [
+      ...(merged.tieBreakers ?? []),
+      ...(rule.tieBreakers ?? [])
+    ],
+    selectorEligibility: {
+      ...(merged.selectorEligibility ?? {}),
+      ...(rule.selectorEligibility ?? {})
+    },
+    supportThreshold: {
+      ...(merged.supportThreshold ?? {}),
+      ...(rule.supportThreshold ?? {})
+    },
+    abstainResolution: {
+      ...(merged.abstainResolution ?? {}),
+      ...(rule.abstainResolution ?? {})
+    }
+  }), { ...baseRules });
+}
+
 function getSelectionInputForStage(session = {}, stage = {}, recipe = {}, input = {}) {
   const selectionRules = getStageSelectionRules(stage) ?? {};
   const selectorIds = getSelectionSelectorIds(stage, input);
+  const selectionContext = {
+    method: 'vote',
+    poolKey: stage.poolKey ?? null,
+    stageKey: stage.key ?? null,
+    actionKey: getStageActionKey(recipe)
+  };
   const collectedRules = collectSelectionRules(session, {
     selectorIds: getSelectionRuleSelectorIds(stage, input),
-    selectionContext: {
-      method: 'vote',
-      actionKey: getStageActionKey(recipe)
-    }
+    selectionContext
   });
+  const sessionSelectionRules = collectSessionSelectionRules(session, selectionContext);
+  const mergedSelectionRules = mergeSelectionRules(selectionRules, sessionSelectionRules);
 
   return {
     selectorIds,
     selections: input.selections ?? [],
     selectionRules: {
-      ...selectionRules,
-      candidateIds: input.candidateIds ?? selectionRules.candidateIds ?? null,
+      ...mergedSelectionRules,
+      candidateIds: input.candidateIds ?? mergedSelectionRules.candidateIds ?? null,
       groupRestrictions: [
-        ...(selectionRules.groupRestrictions ?? []),
+        ...(mergedSelectionRules.groupRestrictions ?? []),
         ...(collectedRules.groupRestrictions ?? [])
       ]
     },

@@ -54,10 +54,37 @@ function defineRoleOption({
   };
 }
 
+function defineAvailableRuleOption({
+  key,
+  type = 'generalRule',
+  support = RULE_SET_SUPPORT_STATUSES.READY,
+  selectable = support === RULE_SET_SUPPORT_STATUSES.READY,
+  defaultEnabled = false,
+  configuration = {},
+  rules = {},
+  missingMechanics = [],
+  metadata = {}
+} = {}) {
+  return {
+    key: normalizeId(key),
+    type: normalizeId(type),
+    support: Object.values(RULE_SET_SUPPORT_STATUSES).includes(support)
+      ? support
+      : RULE_SET_SUPPORT_STATUSES.PENDING,
+    selectable: selectable === true,
+    defaultEnabled: defaultEnabled === true,
+    configuration: cloneValue(configuration),
+    rules: cloneValue(rules),
+    missingMechanics: [...new Set((missingMechanics ?? []).filter(Boolean))],
+    metadata: { ...metadata }
+  };
+}
+
 export function defineRuleSet({
   id,
   version = 1,
   availableRoles = [],
+  availableRules = [],
   groups = [],
   rules = {},
   poolOrder = DEFAULT_POOL_ORDER,
@@ -69,6 +96,7 @@ export function defineRuleSet({
     id: normalizeId(id),
     version,
     availableRoles: (availableRoles ?? []).map(defineRoleOption),
+    availableRules: (availableRules ?? []).map(defineAvailableRuleOption),
     groups: cloneValue(groups),
     rules: {
       baseRules: cloneValue(rules.baseRules ?? []),
@@ -85,7 +113,8 @@ export function defineRuleSet({
 
 export function validateRuleSetSelection({
   selectedRuleSet = {},
-  selectedRoleKeys = []
+  selectedRoleKeys = [],
+  selectedRuleKeys = []
 } = {}) {
   const roleOptions = new Map(
     (selectedRuleSet.availableRoles ?? []).map((option) => [option.roleKey, option])
@@ -111,6 +140,29 @@ export function validateRuleSetSelection({
     }
   });
 
+  const availableRuleOptions = new Map(
+    (selectedRuleSet.availableRules ?? []).map((option) => [option.key, option])
+  );
+
+  (selectedRuleKeys ?? []).forEach((ruleKeyInput) => {
+    const ruleKey = normalizeId(ruleKeyInput);
+    const option = availableRuleOptions.get(ruleKey);
+
+    if (!option) {
+      errors.push({ code: 'ruleset/unknown-rule', ruleKey });
+      return;
+    }
+
+    if (!option.selectable || option.support !== RULE_SET_SUPPORT_STATUSES.READY) {
+      errors.push({
+        code: 'ruleset/rule-not-ready',
+        ruleKey,
+        support: option.support,
+        missingMechanics: [...option.missingMechanics]
+      });
+    }
+  });
+
   return { ok: errors.length === 0, errors };
 }
 
@@ -118,9 +170,10 @@ export function buildRuleSet({
   selectedRuleSet,
   selectedRoleKeys = [],
   roleCatalog = {},
-  selectedOptionalRuleKeys = []
+  selectedOptionalRuleKeys = [],
+  selectedRuleKeys = selectedOptionalRuleKeys
 } = {}) {
-  const selection = validateRuleSetSelection({ selectedRuleSet, selectedRoleKeys });
+  const selection = validateRuleSetSelection({ selectedRuleSet, selectedRoleKeys, selectedRuleKeys });
 
   if (!selection.ok) {
     return { ok: false, errors: selection.errors, ruleSet: null };
@@ -156,6 +209,13 @@ export function buildRuleSet({
   const selectedOptionalRules = (selectedRuleSet.rules?.optionalRules ?? []).filter((rule) =>
     optionalRuleKeySet.has(normalizeId(rule.key ?? rule.id))
   );
+  const selectedAvailableRuleKeySet = new Set((selectedRuleKeys ?? []).map(normalizeId));
+  const selectedAvailableRules = (selectedRuleSet.availableRules ?? []).filter((rule) =>
+    selectedAvailableRuleKeySet.has(rule.key)
+  );
+  const selectedRuleSelectionRules = selectedAvailableRules.flatMap((rule) =>
+    cloneValue(rule.rules?.selectionRules ?? [])
+  );
 
   return {
     ok: true,
@@ -170,16 +230,23 @@ export function buildRuleSet({
       groups: cloneValue(selectedRuleSet.groups ?? []),
       rules: {
         baseRules: cloneValue(selectedRuleSet.rules?.baseRules ?? []),
-        optionalRules: cloneValue(selectedOptionalRules),
+        optionalRules: [
+          ...cloneValue(selectedOptionalRules),
+          ...cloneValue(selectedAvailableRules)
+        ],
         objectiveRules: cloneValue(selectedRuleSet.rules?.objectiveRules ?? []),
-        selectionRules: cloneValue(selectedRuleSet.rules?.selectionRules ?? [])
+        selectionRules: [
+          ...cloneValue(selectedRuleSet.rules?.selectionRules ?? []),
+          ...selectedRuleSelectionRules
+        ]
       },
       poolOrder: [...(selectedRuleSet.poolOrder ?? DEFAULT_POOL_ORDER)],
       distributionRules: cloneValue(selectedRuleSet.distributionRules),
       skinRequirements: cloneValue(selectedRuleSet.skinRequirements),
       metadata: {
         ...selectedRuleSet.metadata,
-        selectedRoleKeys: selectedRoleKeys.map(normalizeId)
+        selectedRoleKeys: selectedRoleKeys.map(normalizeId),
+        selectedRuleKeys: selectedRuleKeys.map(normalizeId)
       }
     }
   };

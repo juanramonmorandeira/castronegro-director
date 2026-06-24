@@ -46,11 +46,10 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
   - observar una stage ajena;
   - detectar observacion;
   - sustituir el candidate elegido.
-- Implementar `position_selection_authority`:
-  - posicion adicional a role;
-  - peso de selection;
-  - desempate;
-  - transferencia o perdida.
+- Revisar configuracion avanzada de `selection_counts_double`:
+  - abstencion configurable para vote expuesta;
+  - parametros configurables de eleccion inicial;
+  - resolucion UI del director si el runoff inicial sigue empatado.
 - Materializar `instanceRule` y validar cantidades contra `playersExpected`.
 - Validar que una configuration no nace con un objective concluyente cumplido.
 - Definir validacion de ruleSet:

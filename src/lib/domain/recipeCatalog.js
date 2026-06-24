@@ -28,6 +28,7 @@ export const RECIPE_KEYS = Object.freeze({
   LINK_TARGETS: 'link_targets',
   BLOCK_OUT_OF_PLAY: 'block_out_of_play',
   SET_OUT_OF_PLAY: 'set_out_of_play',
+  SET_DOUBLE_SELECTOR: 'set_double_selector',
   ONE_SHOT_SET_OUT_OF_PLAY: 'one_shot_set_out_of_play',
   RESTORE_RECENT_OUT_OF_PLAY: 'restore_recent_out_of_play',
   CONCLUDE_PLAY: 'conclude_play'
@@ -43,6 +44,13 @@ const ROLE_IN_PLAY_FALSE_INFLUENCE = Object.freeze({
 const ROLE_IN_PLAY_TRUE_INFLUENCE = Object.freeze({
   subject: 'role',
   property: 'inPlay',
+  operation: 'set',
+  values: [true]
+});
+
+const ROLE_DOUBLE_SELECTOR_TRUE_INFLUENCE = Object.freeze({
+  subject: 'role',
+  property: 'doubleSelector',
   operation: 'set',
   values: [true]
 });
@@ -155,6 +163,27 @@ export const RECIPE_CATALOG = Object.freeze({
       value: true
     },
     influences: [ROLE_IN_PLAY_TRUE_INFLUENCE],
+    visibility: VISIBILITY.STORYTELLER_ONLY
+  },
+
+  [RECIPE_KEYS.SET_DOUBLE_SELECTOR]: {
+    key: RECIPE_KEYS.SET_DOUBLE_SELECTOR,
+    optional: false,
+    usage: { limit: null, window: CONSTRAINT_WINDOWS.SESSION },
+    id: ACTION_IDS.SET_PROPERTY,
+    actor: { type: 'system' },
+    target: {
+      type: 'role',
+      count: 1,
+      filters: ['in_play']
+    },
+    effect: {
+      type: EFFECT_TYPES.SET_PROPERTY,
+      targetType: 'role',
+      property: 'doubleSelector',
+      value: true
+    },
+    influences: [ROLE_DOUBLE_SELECTOR_TRUE_INFLUENCE],
     visibility: VISIBILITY.STORYTELLER_ONLY
   },
 

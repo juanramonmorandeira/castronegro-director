@@ -14,7 +14,18 @@
 import { createStage } from './stageDefinition.js';
 import { EFFECT_TYPES } from './effectModel.js';
 import { STAGE_STATUSES, normalizeId } from './sessionModel.js';
-import { appendSpecialStage } from './specialStagesModel.js';
+import { getCatalogRecipe, RECIPE_KEYS } from './recipeCatalog.js';
+import {
+  SELECTION_ABSTAIN_RULES,
+  SELECTION_REQUIRED_RULES,
+  SELECTION_TIE_RULES,
+  SELECTION_UNANIMOUS_RULES,
+  createSelectionRules
+} from './selectionModel.js';
+import { appendSpecialStage, removeSpecialStages } from './specialStagesModel.js';
+
+const DOUBLE_SELECTOR_RULE_KEY = 'selection_counts_double';
+const PICK_NEXT_DOUBLE_SELECTOR_STAGE_KEY = 'pick_next_double_selector';
 
 export const EVENT_TYPES = Object.freeze({
   PROPERTY_CHANGED: 'property_changed'
@@ -30,6 +41,54 @@ export const EVENT_RESPONSE_TYPES = Object.freeze({
 
 function findRole(session = {}, roleId = null) {
   return (session?.roles ?? []).find((role) => role.id === roleId) ?? null;
+}
+
+function isSelectionCountsDoubleEnabled(session = {}) {
+  return (session.settings?.selectedRuleKeys ?? []).includes(DOUBLE_SELECTOR_RULE_KEY);
+}
+
+function getInPlayCandidateIds(session = {}, excludedRoleIds = []) {
+  const excluded = new Set(excludedRoleIds);
+  return (session.roles ?? [])
+    .filter((role) => role.inPlay === true && !excluded.has(role.id))
+    .map((role) => role.id);
+}
+
+function hasPendingPickNextDoubleSelectorStage(session = {}, holderRoleId = null) {
+  return (session.specialStages ?? []).some(
+    (stage) =>
+      stage.metadata?.ruleKey === DOUBLE_SELECTOR_RULE_KEY &&
+      stage.metadata?.requestKey === PICK_NEXT_DOUBLE_SELECTOR_STAGE_KEY &&
+      stage.metadata?.holderRoleId === holderRoleId
+  );
+}
+
+function createPickNextDoubleSelectorStage({ holderRoleId, candidateIds }) {
+  return createStage({
+    key: PICK_NEXT_DOUBLE_SELECTOR_STAGE_KEY,
+    status: STAGE_STATUSES.ENABLED,
+    actorIds: holderRoleId ? [holderRoleId] : [],
+    completion: {
+      mode: 'manual',
+      allowedRequesters: ['director', 'system']
+    },
+    selectionRules: createSelectionRules({
+      required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
+      abstain: SELECTION_ABSTAIN_RULES.NOT_ALLOWED,
+      unanimous: SELECTION_UNANIMOUS_RULES.NOT_REQUIRED,
+      tie: SELECTION_TIE_RULES.NULL_ON_TIE,
+      candidateIds,
+      selectorEligibility: {
+        requireInPlay: false
+      }
+    }),
+    actions: [getCatalogRecipe(RECIPE_KEYS.SET_DOUBLE_SELECTOR)],
+    metadata: {
+      ruleKey: DOUBLE_SELECTOR_RULE_KEY,
+      requestKey: PICK_NEXT_DOUBLE_SELECTOR_STAGE_KEY,
+      holderRoleId
+    }
+  });
 }
 
 function getPropertyChangeEvent({ previousSession, effect, source = {} }) {
@@ -168,6 +227,94 @@ export function applyEventResponses({ session = {}, responses = [] } = {}) {
   }, session);
 }
 
+function getDoubleSelectorEventResponses({ session = {}, events = [] } = {}) {
+  if (!isSelectionCountsDoubleEnabled(session)) return [];
+
+  return (events ?? []).flatMap((event) => {
+    if (
+      event.type !== EVENT_TYPES.PROPERTY_CHANGED ||
+      event.targetType !== 'role' ||
+      event.property !== 'inPlay'
+    ) {
+      return [];
+    }
+
+    const role = findRole(session, event.roleId);
+    if (role?.doubleSelector !== true) return [];
+
+    if (event.to === false) {
+      if (hasPendingPickNextDoubleSelectorStage(session, event.roleId)) return [];
+
+      const candidateIds = getInPlayCandidateIds(session, [event.roleId]);
+      if (candidateIds.length === 0) return [];
+
+      return [
+        {
+          type: EVENT_RESPONSE_TYPES.CREATE_STAGE,
+          stage: createPickNextDoubleSelectorStage({
+            holderRoleId: event.roleId,
+            candidateIds
+          }),
+          metadata: {
+            ruleKey: DOUBLE_SELECTOR_RULE_KEY,
+            requestKey: PICK_NEXT_DOUBLE_SELECTOR_STAGE_KEY,
+            holderRoleId: event.roleId
+          }
+        }
+      ];
+    }
+
+    if (event.to === true) {
+      return [
+        {
+          type: 'cancel_stage',
+          metadata: {
+            ruleKey: DOUBLE_SELECTOR_RULE_KEY,
+            requestKey: PICK_NEXT_DOUBLE_SELECTOR_STAGE_KEY,
+            holderRoleId: event.roleId,
+            reason: 'holder_returned_in_play'
+          }
+        }
+      ];
+    }
+
+    return [];
+  });
+}
+
+function applyDoubleSelectorEventResponses({ session = {}, responses = [] } = {}) {
+  return (responses ?? []).reduce((currentSession, response) => {
+    if (
+      response.type === EVENT_RESPONSE_TYPES.CREATE_STAGE &&
+      response.metadata?.ruleKey === DOUBLE_SELECTOR_RULE_KEY
+    ) {
+      return appendSpecialStage(currentSession, response.stage, {
+        source: 'event_response',
+        ...response.metadata
+      });
+    }
+
+    if (
+      response.type === 'cancel_stage' &&
+      response.metadata?.ruleKey === DOUBLE_SELECTOR_RULE_KEY
+    ) {
+      return removeSpecialStages(
+        currentSession,
+        (stage) =>
+          stage.metadata?.ruleKey === DOUBLE_SELECTOR_RULE_KEY &&
+          stage.metadata?.requestKey === response.metadata.requestKey &&
+          stage.metadata?.holderRoleId === response.metadata.holderRoleId,
+        {
+          source: 'event_response',
+          ...response.metadata
+        }
+      ).session;
+    }
+
+    return currentSession;
+  }, session);
+}
+
 // Punto de entrada para stageModel.
 //
 // Recibe el resultado de una accion/receta ya resuelta, crea eventos desde sus
@@ -186,11 +333,19 @@ export function processActionResultEvents({
   });
   const triggeredReactions = getTriggeredReactions({ session, events });
   const responses = resolveEventResponses({ session, triggeredReactions });
+  const sessionWithRoleResponses = applyEventResponses({ session, responses });
+  const doubleSelectorResponses = getDoubleSelectorEventResponses({
+    session: sessionWithRoleResponses,
+    events
+  });
 
   return {
-    session: applyEventResponses({ session, responses }),
+    session: applyDoubleSelectorEventResponses({
+      session: sessionWithRoleResponses,
+      responses: doubleSelectorResponses
+    }),
     events,
     triggeredReactions,
-    responses
+    responses: [...responses, ...doubleSelectorResponses]
   };
 }

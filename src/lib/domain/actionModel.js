@@ -44,6 +44,7 @@ import {
 
 export const ACTION_IDS = Object.freeze({
   INSPECT_ROLE: 'inspect_role',
+  SET_PROPERTY: 'set_property',
   SET_IN_PLAY: 'set_in_play',
   BLOCK_PROPERTY_CHANGE: 'block_property_change',
   LINK_TARGETS: 'link_targets',
@@ -194,27 +195,27 @@ export function validateActionDefinition(action) {
     });
   }
 
-  if (action?.id === ACTION_IDS.SET_IN_PLAY) {
+  if (action?.id === ACTION_IDS.SET_PROPERTY || action?.id === ACTION_IDS.SET_IN_PLAY) {
     const effect = action?.effect ?? {};
     if (effect.type !== EFFECT_TYPES.SET_PROPERTY) {
       errors.push({
         code: 'action/invalid-effect-type',
-        message: 'set_in_play requires a set_property effect'
+        message: `${action.id} requires a set_property effect`
       });
     }
     if (effect.targetType !== 'role') {
       errors.push({
         code: 'action/invalid-effect-target-type',
-        message: 'set_in_play currently requires targetType "role"'
+        message: `${action.id} currently requires targetType "role"`
       });
     }
-    if (effect.property !== 'inPlay') {
+    if (action?.id === ACTION_IDS.SET_IN_PLAY && effect.property !== 'inPlay') {
       errors.push({
         code: 'action/invalid-effect-property',
         message: 'set_in_play requires effect.property "inPlay"'
       });
     }
-    if (typeof effect.value !== 'boolean') {
+    if (action?.id === ACTION_IDS.SET_IN_PLAY && typeof effect.value !== 'boolean') {
       errors.push({
         code: 'action/invalid-effect-value',
         message: 'set_in_play requires a boolean effect.value'
@@ -587,7 +588,8 @@ export function applySelection({ session, action, input = {} }) {
     selectorIds: input.selectorIds ?? input.actorIds ?? [],
     selections: input.selections ?? [],
     selectionRules: input.selectionRules ?? action?.selectionRules ?? {},
-    roundType: input.roundType ?? SELECTION_ROUND_TYPES.INITIAL
+    roundType: input.roundType ?? SELECTION_ROUND_TYPES.INITIAL,
+    roundIndex: input.roundIndex ?? 0
   });
 
   if (!selectionResolution.ok) {
@@ -717,6 +719,44 @@ export function resolveSetInPlay(session, action, input = {}, context = {}) {
     return {
       ok: false,
       actionId: action?.id ?? ACTION_IDS.SET_IN_PLAY,
+      errors: validation.errors,
+      session,
+      result: null
+    };
+  }
+
+  const applied = resolveSetInPlayEffect({
+    session,
+    action,
+    actor,
+    targets,
+    context
+  });
+
+  return {
+    ok: true,
+    actionId: action.id,
+    errors: [],
+    session: applied.session,
+    result: applied.result
+  };
+}
+
+export function resolveSetProperty(session, action, input = {}, context = {}) {
+  const actors = getActionActors(session, input.actorIds ?? []);
+  const actor = actors[0] ?? null;
+  const targets = (input.targetIds ?? []).map((id) => findRole(session, id));
+  const validation = validateActionResolution({
+    session,
+    action,
+    actor,
+    targets
+  });
+
+  if (!validation.ok) {
+    return {
+      ok: false,
+      actionId: action?.id ?? ACTION_IDS.SET_PROPERTY,
       errors: validation.errors,
       session,
       result: null
@@ -879,6 +919,9 @@ export function resolveConcludePlay(session, action, input = {}) {
 export function resolveAction(session, action, input = {}, context = {}) {
   if (action?.id === ACTION_IDS.INSPECT_ROLE) {
     return resolveInspectRole(session, action, input);
+  }
+  if (action?.id === ACTION_IDS.SET_PROPERTY) {
+    return resolveSetProperty(session, action, input, context);
   }
   if (action?.id === ACTION_IDS.SET_IN_PLAY) {
     return resolveSetInPlay(session, action, input, context);

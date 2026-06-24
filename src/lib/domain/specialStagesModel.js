@@ -17,6 +17,7 @@ export const SPECIAL_STAGE_HISTORY_OPERATIONS = Object.freeze({
   QUEUED: 'queued',
   STARTED: 'started',
   COMPLETED: 'completed',
+  CANCELED: 'canceled',
   FAILED: 'failed'
 });
 
@@ -113,4 +114,38 @@ export function completeSpecialStage(session, metadata = {}) {
         operation: SPECIAL_STAGE_HISTORY_OPERATIONS.STARTED
       })
     : completedSession;
+}
+
+export function removeSpecialStages(session = {}, predicate = () => false, metadata = {}) {
+  const removedStages = getSpecialStages(session).filter(predicate);
+  if (removedStages.length === 0) {
+    return {
+      session,
+      removedStages
+    };
+  }
+
+  const remainingStages = getSpecialStages(session).filter((stage) => !predicate(stage));
+  const nextSession = {
+    ...session,
+    specialStages: remainingStages,
+    currentStageSource:
+      session.currentStageSource === CURRENT_STAGE_SOURCES.SPECIAL_STAGES && remainingStages.length === 0
+        ? CURRENT_STAGE_SOURCES.POOL
+        : session.currentStageSource
+  };
+
+  return {
+    session: removedStages.reduce(
+      (currentSession, stage) =>
+        appendSpecialStagesHistory(currentSession, {
+          stageId: stage.id,
+          stageKey: stage.key,
+          operation: SPECIAL_STAGE_HISTORY_OPERATIONS.CANCELED,
+          metadata
+        }),
+      nextSession
+    ),
+    removedStages
+  };
 }

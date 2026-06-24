@@ -137,7 +137,12 @@ Cobertura inicial:
 | `role_links_targets` | ready | Crea un group, aporta selectionRules y objectiveRules propias. |
 | `role_assumes_role` | pending | Falta `roleChoiceSet` y asuncion de role. |
 | `role_observes_selection` | pending | Falta observacion y sustitucion del candidate elegido. |
-| `position_selection_authority` | pending | Falta cargo adicional, voto ponderado, desempate y sucesion. |
+
+Reglas disponibles iniciales:
+
+| Regla mecanica | Tipo | Estado | Observacion |
+| --- | --- | --- | --- |
+| `selection_counts_double` | `selectionRule` | ready | Regla opcional: setea `role.doubleSelector=true`, hace que ese selector cuente doble en vote expuesta de `set_out_of_play`, puede desempatar si eligio un candidate empatado, y encola sucesion por specialStage si el holder queda `inPlay=false`. |
 
 Los nombres anteriores son exclusivamente mecanicos. Ninguno es texto visible
 de una skin.

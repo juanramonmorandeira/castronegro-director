@@ -4,11 +4,14 @@ import {
   ACTION_IDS,
   ALIGNMENT_IDS,
   AVAILABILITY_RULE_TYPES,
+  BASIC_AVAILABLE_RULE_KEYS,
   BASIC_ROLE_OPTION_KEYS,
   EFFECT_TYPES,
   HISTORY_RESULTS,
   CONSTRAINT_TYPES,
   CONSTRAINT_WINDOWS,
+  DOUBLE_SELECTOR_ERRORS,
+  DOUBLE_SELECTOR_STAGE_KEYS,
   GROUP_TYPES,
   VISIBILITY,
   OBJECTIVE_CONDITIONS,
@@ -27,6 +30,8 @@ import {
   SELECTION_SUPPORT_BASES,
   SELECTION_SUPPORT_THRESHOLD_TYPES,
   SELECTION_TIE_RULES,
+  SELECTION_TIE_BREAKER_TYPES,
+  SELECTION_VALUE_RULE_TYPES,
   buildPools,
   buildGroups,
   buildRoles,
@@ -52,7 +57,9 @@ import {
   getCurrentStageCursor,
   getGroupRoles,
   getCoreRoleCatalog,
+  processActionResultEvents,
   removeRoleFromGroup,
+  requestSelectDoubleSelectorStage,
   createStage,
   canStageInfluenceObjectiveOutcome,
   checkObjectives,
@@ -152,18 +159,13 @@ const selectionOutOfPlayRules = createSelectionRules({
   required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
   abstain: SELECTION_ABSTAIN_RULES.NOT_ALLOWED,
   unanimous: SELECTION_UNANIMOUS_RULES.NOT_REQUIRED,
-  tie: SELECTION_TIE_RULES.NULL_ON_TIE,
-  groupRestrictions: [
-    {
-      type: SELECTION_RESTRICTION_TYPES.EXCLUDE_GROUP_MEMBER_CANDIDATE,
-      groupType: GROUP_TYPES.LINKED
-    }
-  ]
+  tie: SELECTION_TIE_RULES.NULL_ON_TIE
 });
 
 function createBaseSession({
   groups = [],
   objectiveRules = [],
+  selectionRules = [],
   settings = {}
 } = {}) {
   const roleDefinitions = {
@@ -214,6 +216,7 @@ function createBaseSession({
     roles,
     groups,
     objectiveRules,
+    selectionRules,
     settings
   });
 }
@@ -240,6 +243,16 @@ function createLinkedGroup({
       apply: { property: 'inPlay', value: false },
       targets: 'other_members'
     }
+  ],
+  selectionRules = [
+    {
+      key: 'members_cannot_vote_other_members_out_of_play',
+      type: 'exclude_other_group_members',
+      scope: {
+        methods: ['vote'],
+        actionKeys: [RECIPE_KEYS.SET_OUT_OF_PLAY]
+      }
+    }
   ]
 } = {}) {
   return createGroup({
@@ -249,7 +262,8 @@ function createLinkedGroup({
     roleIds,
     active,
     sourceActionId,
-    groupRules
+    groupRules,
+    selectionRules
   });
 }
 
@@ -813,6 +827,55 @@ test('specialStages pendientes no interrumpen el pool hasta cambiar currentStage
   assert.equal(getCurrentStage(started).stageKey, STAGE_KEYS.STAGE_07);
 });
 
+test('selection_counts_double permite al director encolar la specialStage inicial una sola vez', () => {
+  const disabledSession = createBaseSession();
+  const rejected = requestSelectDoubleSelectorStage(disabledSession);
+  const enabledSession = createBaseSession({
+    settings: {
+      selectedRuleKeys: [BASIC_AVAILABLE_RULE_KEYS.SELECTION_COUNTS_DOUBLE]
+    }
+  });
+  const requested = requestSelectDoubleSelectorStage(enabledSession);
+  const repeated = requestSelectDoubleSelectorStage(requested.session);
+
+  assert.equal(rejected.ok, false);
+  assert.equal(rejected.errors[0].code, DOUBLE_SELECTOR_ERRORS.RULE_NOT_ENABLED);
+  assert.equal(requested.ok, true);
+  assert.equal(requested.session.specialStages.length, 1);
+  assert.equal(
+    requested.session.specialStages[0].metadata.requestKey,
+    DOUBLE_SELECTOR_STAGE_KEYS.SELECT_DOUBLE_SELECTOR
+  );
+  assert.equal(repeated.ok, false);
+  assert.equal(repeated.errors[0].code, DOUBLE_SELECTOR_ERRORS.INITIAL_STAGE_ALREADY_REQUESTED);
+});
+
+test('select_double_selector setea doubleSelector=true en el chosen', () => {
+  const requested = requestSelectDoubleSelectorStage(
+    createBaseSession({
+      settings: {
+        selectedRuleKeys: [BASIC_AVAILABLE_RULE_KEYS.SELECTION_COUNTS_DOUBLE]
+      }
+    })
+  );
+  const started = startSpecialStages(requested.session);
+  const resolved = resolveCurrentStage(started, {
+    selections: createSelections({
+      'alignment_b_attacker-0': 'alignment_a_target-0',
+      'alignment_a_blocker-0': 'alignment_a_target-0',
+      'alignment_a_target-0': 'alignment_a_target-0',
+      'alignment_a_plain-0': 'alignment_a_target-0',
+      'alignment_b_target-0': 'alignment_a_target-0',
+      'role_inspector-0': 'alignment_a_target-0',
+      'hidden_enemy-0': 'alignment_a_target-0'
+    })
+  });
+
+  assert.equal(resolved.ok, true);
+  assert.equal(roleById(resolved.session, 'alignment_a_target-0').doubleSelector, true);
+  assert.equal(resolved.result.selection.chosenId, 'alignment_a_target-0');
+});
+
 test('stageDefinition define completion y recetas opcionales', () => {
   const stage = createStage({
     key: STAGE_KEYS.STAGE_03,
@@ -894,6 +957,12 @@ test('stageCatalog expone los stages mecanicos ya definidos', () => {
     ]
   );
   assert.equal(stages.every((stage) => stage.actorIds === undefined), true);
+});
+
+test('stageCatalog deja group_selection sin restricciones linked implicitas', () => {
+  const stage = getCatalogStage(STAGE_CATALOG_IDS.GROUP_SELECTION, { key: STAGE_KEYS.STAGE_05 });
+
+  assert.deepEqual(stage.selectionRules.groupRestrictions, []);
 });
 
 test('roleCatalog declara roles mecanicos y razones de orden', () => {
@@ -1075,6 +1144,97 @@ test('role reactive crea un stage especial al recibir inPlay=false final', () =>
   assert.equal(completed.stageAdvance.next.source, CURRENT_STAGE_SOURCES.SPECIAL_STAGES);
   assert.equal(specialResolution.ok, true);
   assert.equal(roleById(specialResolution.session, `${ROLE_CATALOG_IDS.ROLE_INSPECTS}-0`).inPlay, false);
+});
+
+test('selection_counts_double encola sucesion cuando el holder queda out_of_play', () => {
+  const baseSession = createBaseSession({
+    settings: {
+      selectedRuleKeys: [BASIC_AVAILABLE_RULE_KEYS.SELECTION_COUNTS_DOUBLE]
+    }
+  });
+  const session = {
+    ...baseSession,
+    roles: baseSession.roles.map((role) =>
+      role.id === 'alignment_a_target-0'
+        ? { ...role, doubleSelector: true }
+        : role
+    )
+  };
+  const resolved = resolveSelectionOutOfPlayStage(
+    session,
+    collectiveSelectionInput({
+      selections: createSelections({
+        'alignment_b_attacker-0': 'alignment_a_target-0',
+        'alignment_a_blocker-0': 'alignment_a_target-0',
+        'alignment_a_target-0': 'alignment_a_target-0',
+        'alignment_a_plain-0': 'alignment_a_target-0',
+        'alignment_b_target-0': 'alignment_a_target-0',
+        'role_inspector-0': 'alignment_a_target-0',
+        'hidden_enemy-0': 'alignment_a_target-0'
+      })
+    })
+  );
+
+  assert.equal(resolved.ok, true);
+  assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
+  assert.equal(resolved.session.specialStages.length, 1);
+  assert.equal(
+    resolved.session.specialStages[0].metadata.requestKey,
+    DOUBLE_SELECTOR_STAGE_KEYS.PICK_NEXT_DOUBLE_SELECTOR
+  );
+  assert.deepEqual(resolved.session.specialStages[0].actorIds, ['alignment_a_target-0']);
+  assert.equal(
+    resolved.session.specialStages[0].selectionRules.selectorEligibility.requireInPlay,
+    false
+  );
+});
+
+test('selection_counts_double cancela sucesion pendiente si el holder vuelve inPlay=true', () => {
+  const baseSession = createBaseSession({
+    settings: {
+      selectedRuleKeys: [BASIC_AVAILABLE_RULE_KEYS.SELECTION_COUNTS_DOUBLE]
+    }
+  });
+  const session = {
+    ...baseSession,
+    roles: baseSession.roles.map((role) =>
+      role.id === 'alignment_a_target-0'
+        ? { ...role, doubleSelector: true }
+        : role
+    )
+  };
+  const setOut = resolveSelectionOutOfPlayStage(
+    session,
+    collectiveSelectionInput({
+      selections: createSelections({
+        'alignment_b_attacker-0': 'alignment_a_target-0',
+        'alignment_a_blocker-0': 'alignment_a_target-0',
+        'alignment_a_target-0': 'alignment_a_target-0',
+        'alignment_a_plain-0': 'alignment_a_target-0',
+        'alignment_b_target-0': 'alignment_a_target-0',
+        'role_inspector-0': 'alignment_a_target-0',
+        'hidden_enemy-0': 'alignment_a_target-0'
+      })
+    })
+  );
+  const restored = resolveAction(setOut.session, restoreRecentOutOfPlayAction, {
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_a_target-0']
+  });
+  const eventState = processActionResultEvents({
+    previousSession: setOut.session,
+    session: restored.session,
+    actionResult: restored.result
+  });
+
+  assert.equal(setOut.session.specialStages.length, 1);
+  assert.equal(restored.ok, true);
+  assert.equal(roleById(restored.session, 'alignment_a_target-0').inPlay, true);
+  assert.equal(eventState.session.specialStages.length, 0);
+  assert.equal(
+    eventState.session.specialStagesHistory.at(-1).operation,
+    'canceled'
+  );
 });
 
 test('specialStages resuelve stages pendientes antes de conclude_play si pueden alterar outcome', () => {
@@ -3175,6 +3335,148 @@ test('resolveSelectionRound declara nula una seleccion empatada con null_on_tie'
   ]);
 });
 
+test('resolveSelectionRound aplica peso de selection derivado por selector', () => {
+  const session = createBaseSession();
+  const resolved = resolveSelectionRound({
+    session,
+    selectionRules: {
+      selectionWeights: [
+        {
+          selectorId: 'alignment_b_attacker-0',
+          value: 2
+        }
+      ]
+    },
+    selections: [
+      { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_blocker-0', candidateId: 'alignment_a_plain-0' }
+    ]
+  });
+
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.chosenId, 'alignment_a_target-0');
+  assert.deepEqual(resolved.result.selectionTally, [
+    { candidateId: 'alignment_a_target-0', selectionCount: 2 },
+    { candidateId: 'alignment_a_plain-0', selectionCount: 1 }
+  ]);
+});
+
+test('resolveSelectionRound calcula supportThreshold con peso efectivo', () => {
+  const session = createBaseSession();
+  const resolved = resolveSelectionRound({
+    session,
+    selectorIds: ['alignment_b_attacker-0', 'alignment_a_blocker-0', 'alignment_a_plain-0'],
+    selectionRules: {
+      selectionWeights: [
+        {
+          selectorId: 'alignment_b_attacker-0',
+          value: 2
+        }
+      ],
+      supportThreshold: {
+        type: SELECTION_SUPPORT_THRESHOLD_TYPES.MAJORITY,
+        base: SELECTION_SUPPORT_BASES.SELECTOR_COUNT
+      }
+    },
+    selections: [
+      { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_blocker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_plain-0', candidateId: 'alignment_a_plain-0' }
+    ]
+  });
+
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.chosenId, 'alignment_a_target-0');
+  assert.deepEqual(resolved.result.support, {
+    ok: true,
+    requiredSupportCount: 3,
+    supportBaseCount: 4
+  });
+});
+
+test('resolveSelectionRound desempata por propiedad del selector si eligio un candidate empatado', () => {
+  const baseSession = createBaseSession();
+  const session = {
+    ...baseSession,
+    roles: baseSession.roles.map((role) =>
+      role.id === 'alignment_a_blocker-0'
+        ? { ...role, doubleSelector: true }
+        : role
+    )
+  };
+  const resolved = resolveSelectionRound({
+    session,
+    selectionRules: {
+      tieBreakers: [
+        {
+          type: SELECTION_TIE_BREAKER_TYPES.SELECTOR_PROPERTY,
+          property: 'doubleSelector',
+          value: true
+        }
+      ]
+    },
+    selections: [
+      { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_blocker-0', candidateId: 'alignment_a_plain-0' }
+    ]
+  });
+
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.reason, 'tie_break_selector_property');
+  assert.equal(resolved.result.chosenId, 'alignment_a_plain-0');
+  assert.deepEqual(resolved.result.tieBreaker, {
+    type: SELECTION_TIE_BREAKER_TYPES.SELECTOR_PROPERTY,
+    selectorId: 'alignment_a_blocker-0',
+    candidateId: 'alignment_a_plain-0',
+    property: 'doubleSelector',
+    value: true
+  });
+  assert.deepEqual(resolved.result.tiedCandidateIds, [
+    'alignment_a_plain-0',
+    'alignment_a_target-0'
+  ]);
+});
+
+test('resolveSelectionRound aplica valor de selection derivado de propiedad del selector', () => {
+  const baseSession = createBaseSession();
+  const session = {
+    ...baseSession,
+    roles: baseSession.roles.map((role) =>
+      role.id === 'alignment_b_attacker-0'
+        ? { ...role, doubleSelector: true }
+        : role
+    )
+  };
+  const resolved = resolveSelectionRound({
+    session,
+    selectionRules: {
+      selectionValueRules: [
+        {
+          type: SELECTION_VALUE_RULE_TYPES.SELECTOR_PROPERTY,
+          property: 'doubleSelector',
+          value: true,
+          selectionValue: 2
+        }
+      ]
+    },
+    selections: [
+      { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
+      { selectorId: 'alignment_a_blocker-0', candidateId: 'alignment_a_plain-0' }
+    ]
+  });
+
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.chosenId, 'alignment_a_target-0');
+  assert.deepEqual(resolved.result.selectionTally, [
+    { candidateId: 'alignment_a_target-0', selectionCount: 2 },
+    { candidateId: 'alignment_a_plain-0', selectionCount: 1 }
+  ]);
+});
+
 test('resolveSelectionRound acepta chosen si alcanza mayoria sobre selecciones emitidas', () => {
   const session = createBaseSession();
   const resolved = resolveSelectionRound({
@@ -4096,6 +4398,35 @@ test('stage con seleccion y set_out_of_play rechaza elegir a un role linked', ()
   assert.equal(resolved.errors[0].candidateId, 'alignment_a_target-0');
 });
 
+test('stage con seleccion y set_out_of_play no restringe linked sin selectionRules de grupo', () => {
+  const session = createBaseSession({
+    groups: [
+      createLinkedGroup({
+        id: 'linked-selection-no-rules',
+        selectionRules: []
+      })
+    ]
+  });
+  const resolved = resolveSelectionOutOfPlayStage(
+    session,
+    collectiveSelectionInput({
+      selections: createSelections({
+        'alignment_b_attacker-0': 'alignment_a_target-0',
+        'alignment_a_blocker-0': 'alignment_a_target-0',
+        'alignment_a_target-0': 'alignment_a_target-0',
+        'alignment_a_plain-0': 'alignment_a_target-0',
+        'alignment_b_target-0': 'alignment_a_target-0',
+        'role_inspector-0': 'alignment_a_target-0',
+        'hidden_enemy-0': 'alignment_a_target-0'
+      })
+    })
+  );
+
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.selection.chosenId, 'alignment_a_target-0');
+});
+
 test('stage con seleccion recoge restricciones aportadas por groups activos', () => {
   const linked = resolveAction(createBaseSession(), linkTargetsAction, {
     actorIds: ['role_inspector-0'],
@@ -4155,6 +4486,49 @@ test('stage con seleccion y set_out_of_play no permite desactivar restricciones 
   assert.equal(resolved.errors[0].code, 'selection/restricted-group-member-candidate');
 });
 
+test('stage con seleccion recoge selection_counts_double desde las reglas de sesion', () => {
+  const selectedRuleSet = getCatalogRuleSet(RULE_SET_CATALOG_IDS.BASIC_RULE_SET);
+  const built = buildRuleSet({
+    selectedRuleSet,
+    selectedRoleKeys: [BASIC_ROLE_OPTION_KEYS.PLAIN],
+    selectedRuleKeys: [BASIC_AVAILABLE_RULE_KEYS.SELECTION_COUNTS_DOUBLE],
+    roleCatalog: ROLE_CATALOG
+  });
+  const baseSession = createBaseSession({
+    settings: {
+      selectedRuleKeys: [BASIC_AVAILABLE_RULE_KEYS.SELECTION_COUNTS_DOUBLE]
+    },
+    selectionRules: built.ruleSet.rules.selectionRules
+  });
+  const session = {
+    ...baseSession,
+    roles: baseSession.roles.map((role) =>
+      role.id === 'alignment_b_attacker-0'
+        ? { ...role, doubleSelector: true }
+        : role
+    )
+  };
+  const resolved = resolveSelectionOutOfPlayStage(
+    session,
+    collectiveSelectionInput({
+      selections: createSelections({
+        'alignment_b_attacker-0': 'alignment_a_target-0',
+        'alignment_a_blocker-0': 'alignment_a_plain-0',
+        'alignment_a_target-0': 'alignment_a_plain-0',
+        'alignment_a_plain-0': 'alignment_b_target-0',
+        'alignment_b_target-0': 'role_inspector-0',
+        'role_inspector-0': 'hidden_enemy-0',
+        'hidden_enemy-0': 'alignment_b_target-0'
+      })
+    })
+  );
+
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.result.selection.reason, 'tie_break_selector_property');
+  assert.equal(resolved.result.selection.chosenId, 'alignment_a_target-0');
+  assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
+});
+
 test('catalogo basico usa formula mecanica anonima para distribuir alignments', () => {
   assert.deepEqual(getBasicAlignmentDistribution(8), {
     [ALIGNMENT_IDS.ALIGNMENT_A]: 6,
@@ -4182,6 +4556,9 @@ test('ruleSet basico declara roles listos y bloquea mecanicas incompletas', () =
   const options = Object.fromEntries(
     selectedRuleSet.availableRoles.map((option) => [option.roleKey, option])
   );
+  const availableRules = Object.fromEntries(
+    selectedRuleSet.availableRules.map((option) => [option.key, option])
+  );
 
   assert.equal(options[BASIC_ROLE_OPTION_KEYS.PLAIN].support, RULE_SET_SUPPORT_STATUSES.READY);
   assert.equal(options[BASIC_ROLE_OPTION_KEYS.LINKS_TARGETS].support, RULE_SET_SUPPORT_STATUSES.READY);
@@ -4192,7 +4569,12 @@ test('ruleSet basico declara roles listos y bloquea mecanicas incompletas', () =
   });
   assert.equal(options[BASIC_ROLE_OPTION_KEYS.ASSUMES_ROLE].support, RULE_SET_SUPPORT_STATUSES.PENDING);
   assert.equal(options[BASIC_ROLE_OPTION_KEYS.OBSERVES_SELECTION].selectable, false);
-  assert.equal(options[BASIC_ROLE_OPTION_KEYS.SELECTION_AUTHORITY].selectable, false);
+  assert.equal(
+    availableRules[BASIC_AVAILABLE_RULE_KEYS.SELECTION_COUNTS_DOUBLE].support,
+    RULE_SET_SUPPORT_STATUSES.READY
+  );
+  assert.equal(availableRules[BASIC_AVAILABLE_RULE_KEYS.SELECTION_COUNTS_DOUBLE].selectable, true);
+  assert.equal(availableRules[BASIC_AVAILABLE_RULE_KEYS.SELECTION_COUNTS_DOUBLE].type, 'selectionrule');
 });
 
 test('buildRuleSet ensambla solo roles mecanicamente listos', () => {
@@ -4226,6 +4608,33 @@ test('buildRuleSet ensambla solo roles mecanicamente listos', () => {
       { key: 'restore_in_play', count: 1, metadata: {} },
       { key: 'set_out_of_play', count: 1, metadata: {} }
     ]
+  );
+});
+
+test('buildRuleSet materializa selection_counts_double solo si se selecciona la regla', () => {
+  const selectedRuleSet = getCatalogRuleSet(RULE_SET_CATALOG_IDS.BASIC_RULE_SET);
+  const withoutRule = buildRuleSet({
+    selectedRuleSet,
+    selectedRoleKeys: [BASIC_ROLE_OPTION_KEYS.PLAIN],
+    roleCatalog: ROLE_CATALOG
+  });
+  const withRule = buildRuleSet({
+    selectedRuleSet,
+    selectedRoleKeys: [BASIC_ROLE_OPTION_KEYS.PLAIN],
+    selectedRuleKeys: [BASIC_AVAILABLE_RULE_KEYS.SELECTION_COUNTS_DOUBLE],
+    roleCatalog: ROLE_CATALOG
+  });
+
+  assert.equal(withoutRule.ok, true);
+  assert.deepEqual(withoutRule.ruleSet.rules.selectionRules, []);
+  assert.equal(withRule.ok, true);
+  assert.deepEqual(withRule.ruleSet.metadata.selectedRuleKeys, [
+    BASIC_AVAILABLE_RULE_KEYS.SELECTION_COUNTS_DOUBLE
+  ]);
+  assert.equal(withRule.ruleSet.rules.selectionRules.length, 1);
+  assert.equal(
+    withRule.ruleSet.rules.selectionRules[0].key,
+    'double_selector_counts_double_in_exposed_vote'
   );
 });
 
