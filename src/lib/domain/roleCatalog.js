@@ -16,23 +16,24 @@ import {
 } from './eventModel.js';
 
 export const ROLE_CATALOG_IDS = Object.freeze({
-  ROLE_COLLECTIVE_SET_OUT_OF_PLAY: 'role_collective_set_out_of_play',
+  ROLE_SET_OUT_OF_PLAY: 'role_set_out_of_play',
   ROLE_INSPECTS: 'role_inspects',
   ROLE_LINKS_TARGETS: 'role_links_targets',
   ROLE_BLOCKS_OUT_OF_PLAY: 'role_blocks_out_of_play',
   ROLE_IN_PLAY_CONTROL: 'role_in_play_control',
   ROLE_REACTIVE: 'role_reactive',
+  ROLE_ASSUMES_ROLE: 'role_assumes_role',
   ROLE_PLAIN: 'role_plain'
 });
 
 export const ROLE_CATALOG = Object.freeze({
-  [ROLE_CATALOG_IDS.ROLE_COLLECTIVE_SET_OUT_OF_PLAY]: defineRole({
-    key: ROLE_CATALOG_IDS.ROLE_COLLECTIVE_SET_OUT_OF_PLAY,
+  [ROLE_CATALOG_IDS.ROLE_SET_OUT_OF_PLAY]: defineRole({
+    key: ROLE_CATALOG_IDS.ROLE_SET_OUT_OF_PLAY,
     type: ROLE_DEFINITION_TYPES.ROLE,
     alignmentId: 'alignment_b',
     stageDefinitions: [],
     metadata: {
-      mechanicalFamily: 'collective_actor',
+      mechanicalFamily: 'set_out_of_play',
       contributesThroughAlignment: 'alignment_b'
     }
   }),
@@ -70,6 +71,9 @@ export const ROLE_CATALOG = Object.freeze({
       getCatalogStage(STAGE_CATALOG_IDS.ROLE_INSPECTS, {
         poolKey: POOL_KEYS.POOL_CONCEALED,
         order: 10,
+        availabilityRules: [
+          { type: AVAILABILITY_RULE_TYPES.ACTOR_IN_PLAY }
+        ],
         metadata: {
           orderReason:
             'Runs before group set_out_of_play so private information is available before concealed removal attempts.'
@@ -86,6 +90,9 @@ export const ROLE_CATALOG = Object.freeze({
       getCatalogStage(STAGE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY, {
         poolKey: POOL_KEYS.POOL_CONCEALED,
         order: 20,
+        availabilityRules: [
+          { type: AVAILABILITY_RULE_TYPES.ACTOR_IN_PLAY }
+        ],
         metadata: {
           orderReason:
             'Runs before set_out_of_play because it blocks that effect for a chosen target in the current cycle.'
@@ -102,6 +109,9 @@ export const ROLE_CATALOG = Object.freeze({
       getCatalogStage(STAGE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL, {
         poolKey: POOL_KEYS.POOL_CONCEALED,
         order: 40,
+        availabilityRules: [
+          { type: AVAILABILITY_RULE_TYPES.ACTOR_IN_PLAY }
+        ],
         metadata: {
           orderReason:
             'Runs after set_out_of_play because restore_recent_out_of_play needs a same-cycle inPlay=false history entry.'
@@ -143,6 +153,41 @@ export const ROLE_CATALOG = Object.freeze({
     ],
     metadata: {
       mechanicalFamily: 'reactive'
+    }
+  }),
+
+  [ROLE_CATALOG_IDS.ROLE_ASSUMES_ROLE]: defineRole({
+    key: ROLE_CATALOG_IDS.ROLE_ASSUMES_ROLE,
+    type: ROLE_DEFINITION_TYPES.ROLE,
+    alignmentId: 'alignment_a',
+    stageDefinitions: [
+      getCatalogStage(STAGE_CATALOG_IDS.ROLE_ASSUMES_ROLE, {
+        poolKey: POOL_KEYS.POOL_CONCEALED,
+        order: 1,
+        availabilityRules: [
+          { type: AVAILABILITY_RULE_TYPES.ACTOR_IN_PLAY },
+          {
+            type: AVAILABILITY_RULE_TYPES.WITHIN_EXECUTION_WINDOW,
+            firstCycle: 1,
+            lastCycle: 1,
+            poolKey: POOL_KEYS.POOL_CONCEALED
+          }
+        ],
+        metadata: {
+          orderReason:
+            'Runs at the start of the first concealed pool so the role identity is replaced before recurrent concealed actions matter.'
+        }
+      })
+    ],
+    metadata: {
+      mechanicalFamily: 'assumes_role',
+      extraRoles: [
+        {
+          roleKey: ROLE_CATALOG_IDS.ROLE_PLAIN,
+          count: 2,
+          assumable: true
+        }
+      ]
     }
   }),
 
@@ -192,12 +237,13 @@ export function getCatalogRole(roleCatalogId, overrides = {}) {
 
 export function getCoreRoleCatalog() {
   return [
-    getCatalogRole(ROLE_CATALOG_IDS.ROLE_COLLECTIVE_SET_OUT_OF_PLAY),
+    getCatalogRole(ROLE_CATALOG_IDS.ROLE_SET_OUT_OF_PLAY),
     getCatalogRole(ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS),
     getCatalogRole(ROLE_CATALOG_IDS.ROLE_INSPECTS),
     getCatalogRole(ROLE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY),
     getCatalogRole(ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL),
     getCatalogRole(ROLE_CATALOG_IDS.ROLE_REACTIVE),
+    getCatalogRole(ROLE_CATALOG_IDS.ROLE_ASSUMES_ROLE),
     getCatalogRole(ROLE_CATALOG_IDS.ROLE_PLAIN)
   ];
 }

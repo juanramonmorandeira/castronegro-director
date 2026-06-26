@@ -6,7 +6,7 @@
 // -----------------------------------------------------------------------------
 
 import { STAGE_STATUSES } from './sessionModel.js';
-import { defineStage } from './stageDefinition.js';
+import { AVAILABILITY_RULE_TYPES, defineStage } from './stageDefinition.js';
 import {
   STAGE_COMPLETION_MODES,
   STAGE_COMPLETION_REQUESTED_BY,
@@ -28,6 +28,7 @@ export const STAGE_CATALOG_IDS = Object.freeze({
   ROLE_BLOCKS_OUT_OF_PLAY: 'role_blocks_out_of_play',
   ROLE_IN_PLAY_CONTROL: 'role_in_play_control',
   ROLE_REACTIVE_RESPONSE: 'role_reactive_response',
+  ROLE_ASSUMES_ROLE: 'role_assumes_role',
   SELECT_DOUBLE_SELECTOR: 'select_double_selector',
   PICK_NEXT_DOUBLE_SELECTOR: 'pick_next_double_selector',
   GROUP_SET_OUT_OF_PLAY: 'group_set_out_of_play',
@@ -106,6 +107,25 @@ export const STAGE_CATALOG = Object.freeze({
     ],
     metadata: {
       catalogId: STAGE_CATALOG_IDS.ROLE_REACTIVE_RESPONSE
+    }
+  }),
+
+  [STAGE_CATALOG_IDS.ROLE_ASSUMES_ROLE]: defineStage({
+    key: STAGE_KEYS.STAGE_09,
+    status: STAGE_STATUSES.ENABLED,
+    actorIds: [],
+    completion: getManualCompletion(),
+    availabilityRules: [
+      { type: AVAILABILITY_RULE_TYPES.ACTOR_IN_PLAY },
+      {
+        type: AVAILABILITY_RULE_TYPES.WITHIN_EXECUTION_WINDOW,
+        firstCycle: 1,
+        lastCycle: 1
+      }
+    ],
+    actions: [getCatalogRecipe(RECIPE_KEYS.ASSUME_ROLE)],
+    metadata: {
+      catalogId: STAGE_CATALOG_IDS.ROLE_ASSUMES_ROLE
     }
   }),
 

@@ -36,6 +36,7 @@ import {
   buildGroups,
   buildRoles,
   buildSession,
+  defineRole,
   advanceStageCursor,
   completeCurrentStage,
   createCycle,
@@ -54,7 +55,6 @@ import {
   appendSpecialStage,
   getCoreGroupCatalog,
   getCurrentStage,
-  getCurrentStageCursor,
   getGroupRoles,
   getCoreRoleCatalog,
   processActionResultEvents,
@@ -4530,6 +4530,12 @@ test('stage con seleccion recoge selection_counts_double desde las reglas de ses
 });
 
 test('catalogo basico usa formula mecanica anonima para distribuir alignments', () => {
+  assert.deepEqual(getBasicAlignmentDistribution(5), {
+    [ALIGNMENT_IDS.ALIGNMENT_A]: 4,
+    [ALIGNMENT_IDS.ALIGNMENT_B]: 1,
+    [ALIGNMENT_IDS.ALIGNMENT_UNDEFINED]: 0,
+    [ALIGNMENT_IDS.ALIGNMENT_INDEPENDENT]: 0
+  });
   assert.deepEqual(getBasicAlignmentDistribution(8), {
     [ALIGNMENT_IDS.ALIGNMENT_A]: 6,
     [ALIGNMENT_IDS.ALIGNMENT_B]: 2,
@@ -4542,13 +4548,14 @@ test('catalogo basico usa formula mecanica anonima para distribuir alignments', 
     [ALIGNMENT_IDS.ALIGNMENT_UNDEFINED]: 0,
     [ALIGNMENT_IDS.ALIGNMENT_INDEPENDENT]: 0
   });
-  assert.deepEqual(getBasicAlignmentDistribution(18), {
-    [ALIGNMENT_IDS.ALIGNMENT_A]: 14,
+  assert.deepEqual(getBasicAlignmentDistribution(20), {
+    [ALIGNMENT_IDS.ALIGNMENT_A]: 16,
     [ALIGNMENT_IDS.ALIGNMENT_B]: 4,
     [ALIGNMENT_IDS.ALIGNMENT_UNDEFINED]: 0,
     [ALIGNMENT_IDS.ALIGNMENT_INDEPENDENT]: 0
   });
-  assert.equal(getBasicAlignmentDistribution(7), null);
+  assert.equal(getBasicAlignmentDistribution(4), null);
+  assert.equal(getBasicAlignmentDistribution(21), null);
 });
 
 test('ruleSet basico declara roles listos y bloquea mecanicas incompletas', () => {
@@ -4567,7 +4574,8 @@ test('ruleSet basico declara roles listos y bloquea mecanicas incompletas', () =
     max: 1,
     step: 1
   });
-  assert.equal(options[BASIC_ROLE_OPTION_KEYS.ASSUMES_ROLE].support, RULE_SET_SUPPORT_STATUSES.PENDING);
+  assert.equal(options[BASIC_ROLE_OPTION_KEYS.ASSUMES_ROLE].support, RULE_SET_SUPPORT_STATUSES.READY);
+  assert.equal(options[BASIC_ROLE_OPTION_KEYS.ASSUMES_ROLE].selectable, true);
   assert.equal(options[BASIC_ROLE_OPTION_KEYS.OBSERVES_SELECTION].selectable, false);
   assert.equal(
     availableRules[BASIC_AVAILABLE_RULE_KEYS.SELECTION_COUNTS_DOUBLE].support,
@@ -4582,7 +4590,7 @@ test('buildRuleSet ensambla solo roles mecanicamente listos', () => {
   const built = buildRuleSet({
     selectedRuleSet,
     selectedRoleKeys: [
-      BASIC_ROLE_OPTION_KEYS.COLLECTIVE_SET_OUT_OF_PLAY,
+      BASIC_ROLE_OPTION_KEYS.SET_OUT_OF_PLAY,
       BASIC_ROLE_OPTION_KEYS.LINKS_TARGETS,
       BASIC_ROLE_OPTION_KEYS.INSPECTS,
       BASIC_ROLE_OPTION_KEYS.REACTIVE,
@@ -4638,7 +4646,7 @@ test('buildRuleSet materializa selection_counts_double solo si se selecciona la 
   );
 });
 
-test('buildRuleSet rechaza un role pendiente con sus requisitos pendientes', () => {
+test('buildRuleSet materializa role_assumes_role como mecanica lista', () => {
   const selectedRuleSet = getCatalogRuleSet(RULE_SET_CATALOG_IDS.BASIC_RULE_SET);
   const built = buildRuleSet({
     selectedRuleSet,
@@ -4646,12 +4654,10 @@ test('buildRuleSet rechaza un role pendiente con sus requisitos pendientes', () 
     roleCatalog: ROLE_CATALOG
   });
 
-  assert.equal(built.ok, false);
-  assert.equal(built.errors[0].code, 'ruleset/role-not-ready');
-  assert.deepEqual(built.errors[0].missingMechanics, [
-    'role_choice_set',
-    'assume_role'
-  ]);
+  assert.equal(built.ok, true);
+  assert.equal(built.ruleSet.roles.baseRoles[0].key, BASIC_ROLE_OPTION_KEYS.ASSUMES_ROLE);
+  assert.equal(built.ruleSet.roles.baseRoles[0].metadata.extraRoles[0].roleKey, BASIC_ROLE_OPTION_KEYS.PLAIN);
+  assert.equal(built.ruleSet.roles.baseRoles[0].metadata.extraRoles[0].count, 2);
 });
 
 test('buildSession consume directamente un ruleSet ya construido', () => {
@@ -4659,7 +4665,7 @@ test('buildSession consume directamente un ruleSet ya construido', () => {
   const builtRuleSet = buildRuleSet({
     selectedRuleSet,
     selectedRoleKeys: [
-      BASIC_ROLE_OPTION_KEYS.COLLECTIVE_SET_OUT_OF_PLAY,
+      BASIC_ROLE_OPTION_KEYS.SET_OUT_OF_PLAY,
       BASIC_ROLE_OPTION_KEYS.INSPECTS,
       BASIC_ROLE_OPTION_KEYS.PLAIN
     ],
@@ -4672,7 +4678,7 @@ test('buildSession consume directamente un ruleSet ya construido', () => {
       {
         seat: 0,
         playerId: 'player-1',
-        role: BASIC_ROLE_OPTION_KEYS.COLLECTIVE_SET_OUT_OF_PLAY
+        role: BASIC_ROLE_OPTION_KEYS.SET_OUT_OF_PLAY
       },
       {
         seat: 1,
@@ -4699,6 +4705,157 @@ test('buildSession consume directamente un ruleSet ya construido', () => {
     POOL_KEYS.POOL_CONCEALED,
     POOL_KEYS.POOL_EXPOSED
   ]);
+});
+
+test('buildSession anade dos role_plain assumable cuando juega role_assumes_role', () => {
+  const selectedRuleSet = getCatalogRuleSet(RULE_SET_CATALOG_IDS.BASIC_RULE_SET);
+  const builtRuleSet = buildRuleSet({
+    selectedRuleSet,
+    selectedRoleKeys: [BASIC_ROLE_OPTION_KEYS.ASSUMES_ROLE],
+    roleCatalog: ROLE_CATALOG
+  });
+  const builtSession = buildSession({
+    id: 'assumable-roles-session',
+    ruleSet: builtRuleSet.ruleSet,
+    players: [{ id: 'player-1', displayName: 'Player 1' }],
+    seats: [
+      {
+        seat: 0,
+        playerId: 'player-1',
+        role: BASIC_ROLE_OPTION_KEYS.ASSUMES_ROLE
+      }
+    ],
+    groupDefinitions: []
+  });
+
+  assert.equal(builtSession.ok, true);
+  assert.equal(builtSession.session.roles.length, 3);
+  assert.equal(builtSession.session.assumableRoles.length, 2);
+  assert.deepEqual(
+    builtSession.session.assumableRoles.map((roleId) => roleById(builtSession.session, roleId).roleKey),
+    [BASIC_ROLE_OPTION_KEYS.PLAIN, BASIC_ROLE_OPTION_KEYS.PLAIN]
+  );
+  assert.equal(roleById(builtSession.session, builtSession.session.assumableRoles[0]).inPlay, false);
+});
+
+test('buildSession crea ids unicos para assumableRoles declarados por varios roles', () => {
+  const roleDefinitions = [
+    defineRole({
+      key: 'assumer_a',
+      alignmentId: ALIGNMENT_IDS.ALIGNMENT_A,
+      metadata: {
+        extraRoles: [
+          { roleKey: BASIC_ROLE_OPTION_KEYS.PLAIN, count: 1, assumable: true }
+        ]
+      }
+    }),
+    defineRole({
+      key: 'assumer_b',
+      alignmentId: ALIGNMENT_IDS.ALIGNMENT_A,
+      metadata: {
+        extraRoles: [
+          { roleKey: BASIC_ROLE_OPTION_KEYS.PLAIN, count: 1, assumable: true }
+        ]
+      }
+    }),
+    ROLE_CATALOG[BASIC_ROLE_OPTION_KEYS.PLAIN]
+  ];
+  const builtSession = buildSession({
+    id: 'multi-assumable-session',
+    players: [
+      { id: 'player-1', displayName: 'Player 1' },
+      { id: 'player-2', displayName: 'Player 2' }
+    ],
+    seats: [
+      { seat: 0, playerId: 'player-1', role: 'assumer_a' },
+      { seat: 1, playerId: 'player-2', role: 'assumer_b' }
+    ],
+    roleDefinitions,
+    groupDefinitions: []
+  });
+
+  assert.equal(builtSession.ok, true);
+  assert.deepEqual(builtSession.session.assumableRoles, ['role_plain-0', 'role_plain-1']);
+});
+
+test('assume_role reemplaza totalmente la identidad por un role assumable elegido', () => {
+  const selectedRuleSet = getCatalogRuleSet(RULE_SET_CATALOG_IDS.BASIC_RULE_SET);
+  const builtRuleSet = buildRuleSet({
+    selectedRuleSet,
+    selectedRoleKeys: [BASIC_ROLE_OPTION_KEYS.ASSUMES_ROLE],
+    roleCatalog: ROLE_CATALOG
+  });
+  const builtSession = buildSession({
+    id: 'assume-role-session',
+    ruleSet: builtRuleSet.ruleSet,
+    players: [{ id: 'player-1', displayName: 'Player 1' }],
+    seats: [
+      {
+        seat: 0,
+        playerId: 'player-1',
+        role: BASIC_ROLE_OPTION_KEYS.ASSUMES_ROLE
+      }
+    ],
+    cycle: { id: 1 },
+    groupDefinitions: []
+  });
+  const targetId = builtSession.session.assumableRoles[1];
+  const resolved = resolveCurrentStage(builtSession.session, {
+    targetIds: [targetId]
+  });
+
+  assert.equal(resolved.ok, true);
+  assert.equal(roleById(resolved.session, targetId).roleKey, BASIC_ROLE_OPTION_KEYS.PLAIN);
+  assert.equal(roleById(resolved.session, targetId).playerId, 'player-1');
+  assert.equal(roleById(resolved.session, targetId).seat, 0);
+  assert.equal(roleById(resolved.session, targetId).inPlay, true);
+  assert.equal(roleById(resolved.session, `${BASIC_ROLE_OPTION_KEYS.ASSUMES_ROLE}-0`).playerId, null);
+  assert.equal(roleById(resolved.session, `${BASIC_ROLE_OPTION_KEYS.ASSUMES_ROLE}-0`).inPlay, false);
+  assert.deepEqual(resolved.session.assumableRoles, [builtSession.session.assumableRoles[0]]);
+  assert.equal(resolved.result.finalEffects[0].type, EFFECT_TYPES.REPLACE_ROLE_IDENTITY);
+});
+
+test('assume_role fuerza role_set_out_of_play si las dos sobrantes son set_out_of_play', () => {
+  const selectedRuleSet = getCatalogRuleSet(RULE_SET_CATALOG_IDS.BASIC_RULE_SET);
+  const builtRuleSet = buildRuleSet({
+    selectedRuleSet,
+    selectedRoleKeys: [
+      BASIC_ROLE_OPTION_KEYS.ASSUMES_ROLE,
+      BASIC_ROLE_OPTION_KEYS.SET_OUT_OF_PLAY
+    ],
+    roleCatalog: ROLE_CATALOG
+  });
+  const builtSession = buildSession({
+    id: 'forced-assume-role-session',
+    ruleSet: builtRuleSet.ruleSet,
+    players: [{ id: 'player-1', displayName: 'Player 1' }],
+    seats: [
+      {
+        seat: 0,
+        playerId: 'player-1',
+        role: BASIC_ROLE_OPTION_KEYS.ASSUMES_ROLE
+      }
+    ],
+    unassignedRoles: [
+      { role: BASIC_ROLE_OPTION_KEYS.SET_OUT_OF_PLAY },
+      { role: BASIC_ROLE_OPTION_KEYS.SET_OUT_OF_PLAY }
+    ],
+    cycle: { id: 1 }
+  });
+  const resolved = resolveCurrentStage(builtSession.session, {
+    acknowledged: true
+  });
+
+  assert.equal(builtSession.ok, true);
+  assert.deepEqual(
+    builtSession.session.assumableRoles.map((roleId) => roleById(builtSession.session, roleId).roleKey),
+    [BASIC_ROLE_OPTION_KEYS.SET_OUT_OF_PLAY, BASIC_ROLE_OPTION_KEYS.SET_OUT_OF_PLAY]
+  );
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.result.forced, true);
+  assert.equal(roleById(resolved.session, builtSession.session.assumableRoles[0]).playerId, 'player-1');
+  assert.equal(roleById(resolved.session, builtSession.session.assumableRoles[0]).roleKey, BASIC_ROLE_OPTION_KEYS.SET_OUT_OF_PLAY);
+  assert.deepEqual(resolved.session.assumableRoles, [builtSession.session.assumableRoles[1]]);
 });
 
 test('catalogo de mensajes distingue keys implementadas y planificadas con audiencia', () => {

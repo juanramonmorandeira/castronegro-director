@@ -176,7 +176,7 @@ export function getTriggeredReactions({ session = {}, events = [] } = {}) {
   );
 }
 
-function createStageFromReactionResponse({ session, triggeredReaction }) {
+function createStageFromReactionResponse({ triggeredReaction }) {
   const response = triggeredReaction.reaction.response ?? {};
   const stage = createStage({
     ...(response.stage ?? {}),
@@ -204,12 +204,11 @@ function createStageFromReactionResponse({ session, triggeredReaction }) {
   };
 }
 
-export function resolveEventResponses({ session = {}, triggeredReactions = [] } = {}) {
+export function resolveEventResponses({ triggeredReactions = [] } = {}) {
   return triggeredReactions
     .filter((entry) => entry.reaction?.response?.type === EVENT_RESPONSE_TYPES.CREATE_STAGE)
     .map((triggeredReaction) =>
       createStageFromReactionResponse({
-        session,
         triggeredReaction
       })
     );

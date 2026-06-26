@@ -11,7 +11,7 @@
 // -----------------------------------------------------------------------------
 
 import { ACTION_IDS, VISIBILITY } from './actionModel.js';
-import { CONSTRAINT_TYPES, CONSTRAINT_WINDOWS, createConstraint } from './constraintModel.js';
+import { CONSTRAINT_TYPES, CONSTRAINT_WINDOWS } from './constraintModel.js';
 import { EFFECT_TYPES } from './effectModel.js';
 import {
   GROUP_RULE_TARGETS,
@@ -29,6 +29,7 @@ export const RECIPE_KEYS = Object.freeze({
   BLOCK_OUT_OF_PLAY: 'block_out_of_play',
   SET_OUT_OF_PLAY: 'set_out_of_play',
   SET_DOUBLE_SELECTOR: 'set_double_selector',
+  ASSUME_ROLE: 'assume_role',
   ONE_SHOT_SET_OUT_OF_PLAY: 'one_shot_set_out_of_play',
   RESTORE_RECENT_OUT_OF_PLAY: 'restore_recent_out_of_play',
   CONCLUDE_PLAY: 'conclude_play'
@@ -53,6 +54,12 @@ const ROLE_DOUBLE_SELECTOR_TRUE_INFLUENCE = Object.freeze({
   property: 'doubleSelector',
   operation: 'set',
   values: [true]
+});
+
+const ROLE_IDENTITY_INFLUENCE = Object.freeze({
+  subject: 'role',
+  property: 'identity',
+  operation: 'replace'
 });
 
 const GROUP_MEMBERSHIP_INFLUENCE = Object.freeze({
@@ -184,6 +191,28 @@ export const RECIPE_CATALOG = Object.freeze({
       value: true
     },
     influences: [ROLE_DOUBLE_SELECTOR_TRUE_INFLUENCE],
+    visibility: VISIBILITY.STORYTELLER_ONLY
+  },
+
+  [RECIPE_KEYS.ASSUME_ROLE]: {
+    key: RECIPE_KEYS.ASSUME_ROLE,
+    optional: false,
+    usage: { limit: 1, window: CONSTRAINT_WINDOWS.SESSION },
+    id: ACTION_IDS.REPLACE_ROLE_IDENTITY,
+    actor: { type: 'role_holder' },
+    target: {
+      type: 'role',
+      count: 1,
+      filters: ['assumable']
+    },
+    effect: {
+      type: EFFECT_TYPES.REPLACE_ROLE_IDENTITY,
+      targetType: 'role',
+      forcedWhen: {
+        allAssumableRolesHaveRoleKey: 'role_set_out_of_play'
+      }
+    },
+    influences: [ROLE_IDENTITY_INFLUENCE],
     visibility: VISIBILITY.STORYTELLER_ONLY
   },
 

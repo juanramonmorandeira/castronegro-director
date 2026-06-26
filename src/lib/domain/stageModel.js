@@ -101,7 +101,8 @@ export const STAGE_KEYS = Object.freeze({
   STAGE_05: 'stage_05',
   STAGE_06: 'stage_06',
   STAGE_07: 'stage_07',
-  STAGE_08: 'stage_08'
+  STAGE_08: 'stage_08',
+  STAGE_09: 'stage_09'
 });
 
 // Claves de receta dentro de un stage.
@@ -113,6 +114,7 @@ export const STAGE_ACTION_KEYS = Object.freeze({
   LINK_TARGETS: 'link_targets',
   BLOCK_OUT_OF_PLAY: 'block_out_of_play',
   SET_OUT_OF_PLAY: 'set_out_of_play',
+  ASSUME_ROLE: 'assume_role',
   ONE_SHOT_SET_OUT_OF_PLAY: 'one_shot_set_out_of_play',
   RESTORE_RECENT_OUT_OF_PLAY: 'restore_recent_out_of_play',
   CHECK_OBJECTIVES: 'check_objectives',

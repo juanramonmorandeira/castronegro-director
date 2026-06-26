@@ -37,11 +37,6 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
   - claves duplicadas dentro de `selectionRules`, `objectiveRules` y `groupRules`;
   - reglas con `holder: self` fuera de role/group;
   - reglas que referencian actions o conditions inexistentes.
-- Implementar `role_assumes_role`:
-  - `roleChoiceSet`;
-  - eleccion inicial;
-  - asuncion permanente de role;
-  - regla forzada cuando todas las opciones cumplen una condicion.
 - Implementar `role_observes_selection`:
   - observar una stage ajena;
   - detectar observacion;
@@ -50,6 +45,9 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
   - abstencion configurable para vote expuesta;
   - parametros configurables de eleccion inicial;
   - resolucion UI del director si el runoff inicial sigue empatado.
+- Definir politicas de relleno de roles alternativas a `plain`:
+  - `random`;
+  - `random_excluding_alignment_b`.
 - Materializar `instanceRule` y validar cantidades contra `playersExpected`.
 - Validar que una configuration no nace con un objective concluyente cumplido.
 - Definir validacion de ruleSet:
@@ -115,8 +113,7 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
 - Implementar `instanceRule` cuando pasemos estas reglas a codigo.
 - Migrar los viejos tokens consumibles a `resources` mecanicos.
 - Definir como recipeModel consume resources.
-- Definir `roleChoiceSet` para roles que asumen o intercambian otros roles.
-- Mantener `role_assumes_role` como familia mecanica preferida para ese caso.
+- Extender `assumableRoles` para futuros roles que intercambian o cambian identidades de forma temporal.
 
 ## Validaciones y errores
 

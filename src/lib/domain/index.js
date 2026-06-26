@@ -190,6 +190,7 @@ export {
   getCurrentCycleId,
   applySetPropertyEffect,
   applySetGroupEffect,
+  applyReplaceRoleIdentityEffect,
   applyConcludePlay
 } from './effectModel.js';
 export {

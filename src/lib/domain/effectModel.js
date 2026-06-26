@@ -18,6 +18,7 @@ export const EFFECT_TYPES = Object.freeze({
   SET_PROPERTY: 'set_property',
   BLOCK_PROPERTY_CHANGE: 'block_property_change',
   SET_GROUP: 'set_group',
+  REPLACE_ROLE_IDENTITY: 'replace_role_identity',
   CONCLUDE_PLAY: 'conclude_play'
 });
 
@@ -100,6 +101,55 @@ export function applySetGroupEffect({ session, effect }) {
           }
         : currentGroup
     )
+  };
+}
+
+export function applyReplaceRoleIdentityEffect({ session, effect }) {
+  if (effect?.targetType !== 'role') return session;
+
+  const actorRoleId = effect.actorRoleId ?? null;
+  const targetId = effect.targetId ?? null;
+  if (!actorRoleId || !targetId || actorRoleId === targetId) return session;
+
+  const actor = (session.roles ?? []).find((role) => role.id === actorRoleId) ?? null;
+  const target = (session.roles ?? []).find((role) => role.id === targetId) ?? null;
+  if (!actor || !target) return session;
+
+  return {
+    ...session,
+    roles: (session.roles ?? []).map((role) => {
+      if (role.id === actorRoleId) {
+        return {
+          ...role,
+          playerId: null,
+          seat: null,
+          inPlay: false,
+          metadata: {
+            ...(role.metadata ?? {}),
+            replacedByRoleId: targetId,
+            replacedByActionKey: effect.actionKey ?? null
+          }
+        };
+      }
+
+      if (role.id === targetId) {
+        return {
+          ...role,
+          playerId: actor.playerId,
+          seat: actor.seat,
+          inPlay: actor.inPlay === true,
+          metadata: {
+            ...(role.metadata ?? {}),
+            assumable: false,
+            assumedFromRoleId: actorRoleId,
+            assumedByActionKey: effect.actionKey ?? null
+          }
+        };
+      }
+
+      return role;
+    }),
+    assumableRoles: (session.assumableRoles ?? []).filter((roleId) => roleId !== targetId)
   };
 }
 

@@ -28,10 +28,12 @@ import { CURRENT_STAGE_SOURCES } from './sessionModel.js';
 // Esto equivale a decir: cada carta/rol en juego esta asignada a un jugador y a
 // una posicion de mesa.
 export function isMatchComplete(roles = []) {
+  const assignedRoles = (roles ?? []).filter((role) => role?.metadata?.assumable !== true);
+
   return (
     Array.isArray(roles) &&
-    roles.length > 0 &&
-    roles.every(
+    assignedRoles.length > 0 &&
+    assignedRoles.every(
       (role) =>
         role?.id &&
         role?.roleKey &&
@@ -97,6 +99,10 @@ export function validateRoles(roles = [], options = {}) {
   const usedSeats = new Map();
 
   (roles ?? []).forEach((role, index) => {
+    const allowUnassigned =
+      role?.metadata?.assumable === true ||
+      !!role?.metadata?.replacedByRoleId;
+
     if (!role?.roleKey) {
       errors.push({
         code: 'role/missing-role',
@@ -106,7 +112,7 @@ export function validateRoles(roles = [], options = {}) {
       });
     }
 
-    if (requireAssigned && !role?.playerId) {
+    if (requireAssigned && !allowUnassigned && !role?.playerId) {
       errors.push({
         code: 'role/missing-player',
         message: `role "${role?.id ?? index}" has no playerId`,
@@ -115,7 +121,7 @@ export function validateRoles(roles = [], options = {}) {
       });
     }
 
-    if (requireAssigned && (role?.seat === null || role?.seat === undefined)) {
+    if (requireAssigned && !allowUnassigned && (role?.seat === null || role?.seat === undefined)) {
       errors.push({
         code: 'role/missing-seat',
         message: `role "${role?.id ?? index}" has no seat`,

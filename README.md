@@ -27,8 +27,15 @@ session -> cycle -> pools -> stages -> recipes -> actions -> effects
 npm install
 npm run dev
 npm test
+npm run lint
+npm run lint:all
 npm run build
 ```
+
+`npm run lint` valida el nucleo de dominio y mensajes, que son el alcance
+protegido actualmente. `npm run lint:all` revisa toda la aplicacion y se
+mantiene como auditoria para abordar de forma incremental los avisos heredados
+de la interfaz Svelte.
 
 ## Estructura
 

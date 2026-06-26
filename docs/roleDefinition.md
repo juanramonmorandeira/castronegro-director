@@ -16,7 +16,7 @@ Un roleDefinition puede definir:
 - `specialStageDefinitions` iniciales que aporta a `specialStages`;
 - `resources` que materializa en session;
 - `reactions`;
-- `roleChoiceSet` si necesita elegir/asumir otros roles;
+- `assumableRoles` si necesita asumir roles no asignados;
 - metadatos mecanicos.
 
 ## instanceRule
@@ -108,10 +108,10 @@ consume.
 Por eso el consumo pertenece a recipeModel/constraintModel, no al stage como
 concepto general.
 
-## roleChoiceSet
+## assumableRoles
 
-`roleChoiceSet` queda como concepto pendiente para roles que necesitan una lista
-de roles elegibles.
+`assumableRoles` es una lista simple de roleIds no asignados que una recipe como
+`assume_role` puede consumir como candidates validos.
 
 Casos humanos equivalentes:
 

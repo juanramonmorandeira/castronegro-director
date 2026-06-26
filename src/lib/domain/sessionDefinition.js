@@ -16,6 +16,16 @@ import { assignUniqueStageIds, createStage } from './stageDefinition.js';
 import { CURRENT_STAGE_SOURCES, SESSION_STATUSES, normalizeId } from './sessionModel.js';
 import { validateSession } from './sessionValidation.js';
 
+function getAssumableRoleIds(roles = []) {
+  return (roles ?? [])
+    .filter((role) =>
+      role?.metadata?.assumable === true &&
+      !role?.playerId &&
+      role?.seat === null
+    )
+    .map((role) => role.id);
+}
+
 function createSessionGroup(groupInput = {}) {
   const group = createGroup(groupInput);
 
@@ -49,6 +59,7 @@ export function createSession({
     : CURRENT_STAGE_SOURCES.POOL,
   objectiveRules = [],
   selectionRules = [],
+  assumableRoles = null,
   achievedObjectives = [],
   playOutcome = null,
   actionHistory = [],
@@ -90,19 +101,22 @@ export function createSession({
             : [])
         ]);
 
+  const normalizedRoles = roles.map(createRole);
+
   return {
     id: id || `session-${Date.now()}`,
     definitionId: definitionId ? normalizeId(definitionId) : null,
     status,
     settings: { ...settings },
     players: players.map(createPlayer),
-    roles: roles.map(createRole),
+    roles: normalizedRoles,
     groups: groups.map(createSessionGroup),
     cycle: createCycle(cycle),
     specialStages: normalizedSpecialStages,
     currentStageSource,
     objectiveRules: [...objectiveRules],
     selectionRules: [...selectionRules],
+    assumableRoles: assumableRoles ? [...assumableRoles] : getAssumableRoleIds(normalizedRoles),
     achievedObjectives: [...achievedObjectives],
     playOutcome,
     actionHistory: [...actionHistory],
@@ -135,6 +149,104 @@ function getDefinitionList(definitions = []) {
   return Object.values(definitions ?? {});
 }
 
+function getNextRoleCount(roles = [], roleKey = null) {
+  const normalizedRoleKey = normalizeId(roleKey);
+  return (roles ?? []).filter((role) => role.roleKey === normalizedRoleKey).length;
+}
+
+function getCounterValue(counters, key) {
+  return counters.get(key) ?? 0;
+}
+
+function consumeRoleCount(counters, roleKey, baseCount = 0) {
+  const normalizedRoleKey = normalizeId(roleKey);
+  const count = baseCount + getCounterValue(counters, normalizedRoleKey);
+  counters.set(normalizedRoleKey, getCounterValue(counters, normalizedRoleKey) + 1);
+  return count;
+}
+
+function buildAssumableRole({
+  ownerRole,
+  roleKey,
+  roleDefinition,
+  count
+}) {
+  const normalizedRoleKey = normalizeId(roleKey);
+
+  return createRole({
+    id: `${normalizedRoleKey}-${count}`,
+    roleKey: normalizedRoleKey,
+    alignmentId: roleDefinition?.alignmentId ?? null,
+    playerId: null,
+    seat: null,
+    inPlay: false,
+    reactions: roleDefinition?.reactions ?? [],
+    resources: roleDefinition?.resources ?? [],
+    flags: roleDefinition?.defaultFlags ?? {},
+    counters: roleDefinition?.defaultCounters ?? {},
+    metadata: {
+      source: 'assumable_role',
+      assumable: true,
+      ownerRoleId: ownerRole.id,
+      ownerRoleKey: ownerRole.roleKey
+    }
+  });
+}
+
+function buildDeclaredAssumableRoles(assignedRoles = [], roleDefinitionMap = {}) {
+  const counters = new Map();
+
+  return assignedRoles.flatMap((ownerRole) => {
+    const ownerDefinition = roleDefinitionMap[ownerRole.roleKey] ?? {};
+    const extraRoles = ownerDefinition.metadata?.extraRoles ?? [];
+
+    return extraRoles.flatMap((extraRole) => {
+      const count = Number.isInteger(extraRole.count) && extraRole.count > 0
+        ? extraRole.count
+        : 0;
+      const roleKey = normalizeId(extraRole.roleKey);
+      const roleDefinition = roleDefinitionMap[roleKey] ?? {};
+
+      return Array.from({ length: count }, () =>
+        buildAssumableRole({
+          ownerRole,
+          roleKey,
+          roleDefinition,
+          count: consumeRoleCount(counters, roleKey, getNextRoleCount(assignedRoles, roleKey))
+        })
+      );
+    });
+  });
+}
+
+function buildInputAssumableRoles(unassignedRoles = [], roleDefinitionMap = {}, assignedRoles = []) {
+  const counters = new Map();
+
+  return (unassignedRoles ?? []).map((roleInput = {}) => {
+    const roleKey = normalizeId(roleInput.roleKey ?? roleInput.role ?? roleInput.name);
+    const roleDefinition = roleDefinitionMap[roleKey] ?? {};
+    const count = consumeRoleCount(counters, roleKey, getNextRoleCount(assignedRoles, roleKey));
+
+    return createRole({
+      id: roleInput.id ?? `${roleKey}-${count}`,
+      roleKey,
+      alignmentId: roleInput.alignmentId ?? roleDefinition.alignmentId ?? null,
+      playerId: null,
+      seat: null,
+      inPlay: false,
+      reactions: roleDefinition.reactions ?? [],
+      resources: roleDefinition.resources ?? [],
+      flags: roleDefinition.defaultFlags ?? {},
+      counters: roleDefinition.defaultCounters ?? {},
+      metadata: {
+        source: 'assumable_role',
+        ...(roleInput.metadata ?? {}),
+        assumable: true
+      }
+    });
+  });
+}
+
 // Ensambla una sesion desde definiciones ya escogidas.
 //
 // createSession solo normaliza un estado de sesion. buildSession hace el paso
@@ -146,6 +258,7 @@ export function buildSession({
   groupDefinitions = null,
   cycle = null,
   roles = [],
+  unassignedRoles = [],
   validate = true,
   validationOptions = { requireAssigned: true },
   ...sessionInput
@@ -173,12 +286,21 @@ export function buildSession({
     roles.length > 0
       ? roles.map(createRole)
       : buildRoles(seats, roleDefinitionMap);
+  const inputAssumableRoles = buildInputAssumableRoles(unassignedRoles, roleDefinitionMap, builtRoles);
+  const declaredAssumableRoles = inputAssumableRoles.length > 0
+    ? []
+    : buildDeclaredAssumableRoles(builtRoles, roleDefinitionMap);
+  const sessionRoles = [
+    ...builtRoles,
+    ...inputAssumableRoles,
+    ...declaredAssumableRoles
+  ];
   const sessionBeforePools = createSession({
     ...sessionInput,
     settings: effectiveSettings,
     objectiveRules: effectiveObjectiveRules,
     selectionRules: effectiveSelectionRules,
-    roles: builtRoles,
+    roles: sessionRoles,
     groups: []
   });
   const groups = buildGroups(

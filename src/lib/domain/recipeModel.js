@@ -50,7 +50,10 @@ function normalizeUsage(usage = {}) {
 
 // Elimina metadatos propios de receta antes de llamar a actionModel.
 export function getActionFromRecipe(recipe = {}) {
-  const { key, actionKey, constraints, ...action } = recipe;
+  const action = { ...recipe };
+  delete action.key;
+  delete action.actionKey;
+  delete action.constraints;
   return action;
 }
 

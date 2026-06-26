@@ -129,13 +129,13 @@ Cobertura inicial:
 
 | Opcion mecanica | Estado | Observacion |
 | --- | --- | --- |
-| `role_collective_set_out_of_play` | ready | Actua mediante `group_alignment_b`. |
+| `role_set_out_of_play` | ready | Actua mediante `group_alignment_b`. |
 | `role_inspects` | ready | Inspeccion privada. |
 | `role_reactive` | ready | Crea una specialStage al cambiar a `inPlay=false`. |
 | `role_in_play_control` | ready | Dos acciones limitadas durante la session. |
 | `role_plain` | ready | Sin stage personal. |
 | `role_links_targets` | ready | Crea un group, aporta selectionRules y objectiveRules propias. |
-| `role_assumes_role` | pending | Falta `roleChoiceSet` y asuncion de role. |
+| `role_assumes_role` | ready | Usa `assumableRoles` y `assume_role` para reemplazar identidad en el primer `poolConcealed` del ciclo 1. |
 | `role_observes_selection` | pending | Falta observacion y sustitucion del candidate elegido. |
 
 Reglas disponibles iniciales:
@@ -277,7 +277,8 @@ El ruleSet debe declarar si esta distribucion admite override:
     formula: {
       type: 'basic_ruleset_distribution',
       minPlayers: 5,
-      maxPlayers: 15
+      maxPlayers: 20,
+      roleFillPolicyDefault: 'plain'
     }
   }
 }
@@ -291,6 +292,8 @@ Reglas aceptadas:
 - override debe estar desactivado por defecto aunque el ruleSet lo permita;
 - aunque haya override, la configuration no puede superar `playersExpected`;
 - la suma total de roles seleccionados no puede superar `playersExpected`;
+- en `basic_ruleset`, los huecos no seleccionados se rellenan por defecto con
+  `role_plain`;
 - una configuration no puede iniciar una session con un `playOutcome`
   concluyente ya cumplido;
 - un role que fuerce N instancias debe quedar deshabilitado si no quedan asientos

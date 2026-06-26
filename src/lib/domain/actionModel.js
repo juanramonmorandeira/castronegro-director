@@ -22,6 +22,7 @@
 import {
   EFFECT_TYPES,
   applyConcludePlay as applyConcludePlayFromModel,
+  applyReplaceRoleIdentityEffect,
   applySetGroupEffect,
   applySetPropertyEffect,
   getCurrentCycleId
@@ -49,6 +50,7 @@ export const ACTION_IDS = Object.freeze({
   BLOCK_PROPERTY_CHANGE: 'block_property_change',
   LINK_TARGETS: 'link_targets',
   SELECT: 'select',
+  REPLACE_ROLE_IDENTITY: 'replace_role_identity',
   CONCLUDE_PLAY: 'conclude_play'
 });
 
@@ -94,8 +96,15 @@ export function canResolveWithoutActor(action) {
 //   lista de objetivos, no un objetivo aislado.
 //
 // Iremos anadiendo filtros cuando haya reglas reales que los necesiten.
-export function targetMatchesFilter({ filter, actor, target, session, action }) {
+export function targetMatchesFilter({ filter, actor, target, session }) {
   if (filter === 'in_play') return target?.inPlay === true;
+  if (filter === 'assumable') {
+    return (
+      (session?.assumableRoles ?? []).includes(target?.id) &&
+      !target?.playerId &&
+      target?.seat === null
+    );
+  }
   if (filter === 'not_self') return actor?.id !== target?.id;
   if (filter === 'not_same_alignment') {
     return actor?.alignmentId !== target?.alignmentId;
@@ -161,7 +170,7 @@ export function validateActionTargets({
     }
 
     filters.forEach((filter) => {
-      if (!targetMatchesFilter({ filter, actor, target, session, action })) {
+      if (!targetMatchesFilter({ filter, actor, target, session })) {
         errors.push({
           code: `target/filter-${filter}`,
           message: `target "${target.id}" does not match filter "${filter}"`,
@@ -276,6 +285,22 @@ export function validateActionDefinition(action) {
     }
   }
 
+  if (action?.id === ACTION_IDS.REPLACE_ROLE_IDENTITY) {
+    const effect = action?.effect ?? {};
+    if (effect.type !== EFFECT_TYPES.REPLACE_ROLE_IDENTITY) {
+      errors.push({
+        code: 'action/invalid-effect-type',
+        message: 'replace_role_identity requires a replace_role_identity effect'
+      });
+    }
+    if (effect.targetType !== 'role') {
+      errors.push({
+        code: 'action/invalid-effect-target-type',
+        message: 'replace_role_identity requires targetType "role"'
+      });
+    }
+  }
+
   return {
     ok: errors.length === 0,
     errors
@@ -365,6 +390,9 @@ export function applyFinalEffects({ session, finalEffects = [] }) {
     }
     if (effect?.type === EFFECT_TYPES.SET_GROUP) {
       return applySetGroupEffect({ session: currentSession, effect });
+    }
+    if (effect?.type === EFFECT_TYPES.REPLACE_ROLE_IDENTITY) {
+      return applyReplaceRoleIdentityEffect({ session: currentSession, effect });
     }
     return currentSession;
   }, session);
@@ -572,6 +600,87 @@ export function applyLinkTargets({ session, action, actor, targets, context = {}
       proposedEffects: effectResolution.proposedEffects,
       finalEffects: effectResolution.finalEffects,
       blockedEffects: effectResolution.blockedEffects
+    }
+  };
+}
+
+function getForcedAssumableRoleTarget(session = {}, forcedWhen = {}) {
+  const assumableRoleIds = session.assumableRoles ?? [];
+  if (assumableRoleIds.length !== 2) return null;
+
+  const assumableRoles = assumableRoleIds
+    .map((roleId) => findRole(session, roleId))
+    .filter(Boolean);
+  if (assumableRoles.length !== 2) return null;
+
+  if (forcedWhen.allAssumableRolesHaveRoleKey) {
+    const roleKey = forcedWhen.allAssumableRolesHaveRoleKey;
+    if (!assumableRoles.every((role) => role.roleKey === roleKey)) return null;
+    return assumableRoles[0];
+  }
+
+  return null;
+}
+
+function getReplaceRoleIdentityTargetIds(session = {}, action = {}, input = {}) {
+  const explicitTargetIds = input.targetIds ?? [];
+  if (explicitTargetIds.length > 0) return { targetIds: explicitTargetIds, forced: false };
+
+  // Las reglas forzadas siguen requiriendo feedback humano minimo: la UI debe
+  // mostrar las opciones y enviar acknowledged=true antes de que el motor asigne.
+  if (input.acknowledged !== true) return { targetIds: [], forced: false };
+
+  const forcedTarget = getForcedAssumableRoleTarget(session, action.effect?.forcedWhen ?? {});
+  return {
+    targetIds: forcedTarget ? [forcedTarget.id] : [],
+    forced: !!forcedTarget
+  };
+}
+
+export function applyReplaceRoleIdentity({ session, action, actor, targets, context = {} }) {
+  const visibility = action?.visibility ?? VISIBILITY.STORYTELLER_ONLY;
+  const currentCycleId = getCurrentCycleId(session);
+  const target = targets[0] ?? null;
+  const proposedEffects = [
+    {
+      ...action.effect,
+      actorRoleId: actor.id,
+      targetId: target.id,
+      actionKey: context.actionKey ?? action.key ?? action.id,
+      causedBy: actor?.id ? { type: 'role', id: actor.id } : null
+    }
+  ];
+  const finalEffects = proposedEffects;
+  const nextSession = appendActionHistory(
+    applyFinalEffects({ session, finalEffects }),
+    {
+      cycleId: currentCycleId,
+      poolKey: context.poolKey ?? null,
+      stageId: context.stageId ?? null,
+      stageKey: context.stageKey ?? null,
+      actionKey: context.actionKey ?? action.key ?? action.id,
+      actionId: action.id,
+      actionSignature: getActionHistorySignature(action),
+      actorIds: [actor.id],
+      targetIds: [target.id],
+      proposedEffects,
+      finalEffects,
+      blockedEffects: [],
+      result: HISTORY_RESULTS.APPLIED
+    }
+  );
+
+  return {
+    session: nextSession,
+    result: {
+      type: 'action_resolution',
+      visibility,
+      actionId: action.id,
+      actorIds: [actor.id],
+      targetIds: [target.id],
+      proposedEffects,
+      finalEffects,
+      blockedEffects: []
     }
   };
 }
@@ -853,6 +962,38 @@ export function resolveLinkTargets(session, action, input = {}) {
   };
 }
 
+export function resolveReplaceRoleIdentity(session, action, input = {}, context = {}) {
+  const actors = getActionActors(session, input.actorIds ?? []);
+  const actor = actors[0] ?? null;
+  const targetSelection = getReplaceRoleIdentityTargetIds(session, action, input);
+  const targetIds = targetSelection.targetIds;
+  const targets = targetIds.map((id) => findRole(session, id));
+  const validation = validateActionResolution({ session, action, actor, targets });
+
+  if (!validation.ok) {
+    return {
+      ok: false,
+      actionId: action?.id ?? ACTION_IDS.REPLACE_ROLE_IDENTITY,
+      errors: validation.errors,
+      session,
+      result: null
+    };
+  }
+
+  const applied = applyReplaceRoleIdentity({ session, action, actor, targets, context });
+
+  return {
+    ok: true,
+    actionId: action.id,
+    errors: [],
+    session: applied.session,
+    result: {
+      ...applied.result,
+      forced: targetSelection.forced
+    }
+  };
+}
+
 // Ejecuta select.
 //
 // La accion no recibe un actor unico porque representa una ronda de seleccion.
@@ -931,6 +1072,9 @@ export function resolveAction(session, action, input = {}, context = {}) {
   }
   if (action?.id === ACTION_IDS.LINK_TARGETS) {
     return resolveLinkTargets(session, action, { ...input, context });
+  }
+  if (action?.id === ACTION_IDS.REPLACE_ROLE_IDENTITY) {
+    return resolveReplaceRoleIdentity(session, action, input, context);
   }
   if (action?.id === ACTION_IDS.SELECT) {
     return resolveSelection(session, action, input);

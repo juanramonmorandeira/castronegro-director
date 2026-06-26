@@ -8,11 +8,17 @@
     "dev": "vite",
     "build": "vite build",
     "test": "node src/lib/domain/__test__/domain.test.js",
+    "lint": "eslint src/lib/domain src/lib/messages",
+    "lint:all": "eslint .",
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@sveltejs/vite-plugin-svelte": "^6.2.1",
     "autoprefixer": "^10.4.21",
+    "eslint": "^10.5.0",
+    "eslint-plugin-svelte": "^3.19.0",
+    "globals": "^17.7.0",
     "postcss": "^8.5.6",
     "svelte": "^5.39.6",
     "tailwindcss": "^4.1.14",

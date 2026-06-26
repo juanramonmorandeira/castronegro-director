@@ -257,11 +257,11 @@ cadena de propagaciones.
 `preventedPropertyChanges` = cambios de propiedad que una action intento
 producir pero fueron impedidos por `blockedPropertyChanges`.
 
-`roleChoiceSet` = concepto pendiente para roles que necesitan una lista de roles
-elegibles sobre los que asumir, copiar, intercambiar o activar comportamiento.
+`assumableRoles` = lista simple de roleIds no asignados que pueden ser asumidos
+por una receta como `assume_role`.
 
-`role_assumes_role` = familia mecanica pendiente para roles que asumen temporal o
-permanentemente otro role elegido desde un `roleChoiceSet`.
+`role_assumes_role` = familia mecanica para roles que reemplazan su identidad por
+otro role elegido desde `assumableRoles`.
 
 `select` = mecanismo general para obtener una decision humana o grupal.
 

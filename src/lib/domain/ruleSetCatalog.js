@@ -29,13 +29,13 @@ export const RULE_SET_CATALOG_IDS = Object.freeze({
 });
 
 export const BASIC_ROLE_OPTION_KEYS = Object.freeze({
-  COLLECTIVE_SET_OUT_OF_PLAY: ROLE_CATALOG_IDS.ROLE_COLLECTIVE_SET_OUT_OF_PLAY,
+  SET_OUT_OF_PLAY: ROLE_CATALOG_IDS.ROLE_SET_OUT_OF_PLAY,
   INSPECTS: ROLE_CATALOG_IDS.ROLE_INSPECTS,
   REACTIVE: ROLE_CATALOG_IDS.ROLE_REACTIVE,
   IN_PLAY_CONTROL: ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL,
   PLAIN: ROLE_CATALOG_IDS.ROLE_PLAIN,
   LINKS_TARGETS: ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS,
-  ASSUMES_ROLE: 'role_assumes_role',
+  ASSUMES_ROLE: ROLE_CATALOG_IDS.ROLE_ASSUMES_ROLE,
   OBSERVES_SELECTION: 'role_observes_selection'
 });
 
@@ -45,7 +45,7 @@ export const BASIC_AVAILABLE_RULE_KEYS = Object.freeze({
 
 export function getBasicAlignmentDistribution(playersExpected) {
   const players = Number(playersExpected);
-  if (!Number.isInteger(players) || players < 8 || players > 18) return null;
+  if (!Number.isInteger(players) || players < 5 || players > 20) return null;
 
   const alignmentB = Math.floor(players / 6) + 1;
   return {
@@ -101,7 +101,7 @@ export const RULE_SET_CATALOG = Object.freeze({
     version: 1,
     availableRoles: [
       {
-        roleKey: BASIC_ROLE_OPTION_KEYS.COLLECTIVE_SET_OUT_OF_PLAY,
+        roleKey: BASIC_ROLE_OPTION_KEYS.SET_OUT_OF_PLAY,
         instanceRule: {
           min: 0,
           max: 'players_expected_minus_one',
@@ -129,9 +129,11 @@ export const RULE_SET_CATALOG = Object.freeze({
       },
       {
         roleKey: BASIC_ROLE_OPTION_KEYS.ASSUMES_ROLE,
-        support: RULE_SET_SUPPORT_STATUSES.PENDING,
-        selectable: false,
-        missingMechanics: ['role_choice_set', 'assume_role']
+        instanceRule: {
+          min: 0,
+          max: 1,
+          step: 1
+        }
       },
       {
         roleKey: BASIC_ROLE_OPTION_KEYS.OBSERVES_SELECTION,
@@ -226,10 +228,11 @@ export const RULE_SET_CATALOG = Object.freeze({
       overrideEnabledByDefault: false,
       formula: {
         type: 'basic_ruleset_distribution',
-        minPlayers: 8,
-        maxPlayers: 18,
+        minPlayers: 5,
+        maxPlayers: 20,
         alignmentB: 'floor(players_expected / 6) + 1',
-        alignmentA: 'players_expected - alignment_b'
+        alignmentA: 'players_expected - alignment_b',
+        roleFillPolicyDefault: 'plain'
       }
     },
     skinRequirements: {
@@ -246,11 +249,12 @@ export const RULE_SET_CATALOG = Object.freeze({
       ],
       requiredEntities: {
         role: [
-          BASIC_ROLE_OPTION_KEYS.COLLECTIVE_SET_OUT_OF_PLAY,
+          BASIC_ROLE_OPTION_KEYS.SET_OUT_OF_PLAY,
           BASIC_ROLE_OPTION_KEYS.LINKS_TARGETS,
           BASIC_ROLE_OPTION_KEYS.INSPECTS,
           BASIC_ROLE_OPTION_KEYS.REACTIVE,
           BASIC_ROLE_OPTION_KEYS.IN_PLAY_CONTROL,
+          BASIC_ROLE_OPTION_KEYS.ASSUMES_ROLE,
           BASIC_ROLE_OPTION_KEYS.PLAIN
         ],
         group: ['group_alignment_a', 'group_alignment_b'],
