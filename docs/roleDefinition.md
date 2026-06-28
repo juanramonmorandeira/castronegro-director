@@ -14,7 +14,7 @@ Un roleDefinition puede definir:
 - `instanceRule`;
 - `stageDefinitions` que aporta a pools;
 - `specialStageDefinitions` iniciales que aporta a `specialStages`;
-- `resources` que materializa en session;
+- `stageRules` contextuales que aporta a otras stages;
 - `reactions`;
 - `assumableRoles` si necesita asumir roles no asignados;
 - metadatos mecanicos.
@@ -78,36 +78,6 @@ roleIds runtime:
   role_group_of_three-2
 ```
 
-## resources
-
-`resources` sustituye a los viejos tokens consumibles cuando el token no necesita
-existir como elemento visual de tablero.
-
-Ejemplo conceptual:
-
-```js
-{
-  resources: [
-    { key: 'restore_inPlay', count: 1 },
-    { key: 'set_out_of_play', count: 1 }
-  ]
-}
-```
-
-Un resource es estado mecanico de session. Sirve para saber si un role conserva
-usos disponibles, cargas, permisos o contadores.
-
-Regla aceptada:
-
-```text
-Si una recipe se usa, consume el resource aunque su efecto falle o sea bloqueado.
-Si una restriccion impide usar la recipe antes de ejecutarla, el resource no se
-consume.
-```
-
-Por eso el consumo pertenece a recipeModel/constraintModel, no al stage como
-concepto general.
-
 ## assumableRoles
 
 `assumableRoles` es una lista simple de roleIds no asignados que una recipe como
@@ -153,7 +123,7 @@ Ejemplos de validacion:
 Al crear session:
 
 - cada role seleccionado se materializa en uno o varios `roleId`;
-- cada resource se copia como estado vivo de ese sessionRole;
 - cada reaction queda disponible para `eventModel`;
 - cada `stageDefinition` aplicable puede aportar stages a los pools;
+- cada `stageRule` queda disponible para `stageModel`;
 - cada `specialStageDefinition` aplicable se añade a la cola inicial.

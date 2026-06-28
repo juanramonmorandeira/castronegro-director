@@ -1,6 +1,6 @@
 {
-  "name": "village-storyteller",
-  "description": "Director’s dashboard for El Narrador de la Aldea",
+  "name": "cyclic-social-engine",
+  "description": "Rules engine and session dashboard for cyclic social games",
   "private": true,
   "version": "0.0.0",
   "type": "module",

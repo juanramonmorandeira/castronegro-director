@@ -6,12 +6,14 @@
 // -----------------------------------------------------------------------------
 
 import { STAGE_STATUSES } from './sessionModel.js';
-import { AVAILABILITY_RULE_TYPES, defineStage } from './stageDefinition.js';
+import { CONSTRAINT_TYPES, CONSTRAINT_WINDOWS } from './constraintModel.js';
+import { defineStage } from './stageDefinition.js';
 import {
   STAGE_COMPLETION_MODES,
   STAGE_COMPLETION_REQUESTED_BY,
   STAGE_KEYS
 } from './stageModel.js';
+import { LINKED_PROPAGATED_EFFECT_STAGE } from './stageTypes.js';
 import { getCatalogRecipe, RECIPE_KEYS } from './recipeCatalog.js';
 import {
   SELECTION_ABSTAIN_RULES,
@@ -21,18 +23,24 @@ import {
   SELECTION_UNANIMOUS_RULES,
   createSelectionRules
 } from './selectionModel.js';
+import {
+  MECHANICAL_ENTITY_TYPES,
+  RECIPE_ACTOR_TYPES,
+  TARGET_FILTER_TYPES
+} from './domainTypes.js';
 
 export const STAGE_CATALOG_IDS = Object.freeze({
   ROLE_INSPECTS: 'role_inspects',
   ROLE_LINKS_TARGETS: 'role_links_targets',
   ROLE_BLOCKS_OUT_OF_PLAY: 'role_blocks_out_of_play',
-  ROLE_IN_PLAY_CONTROL: 'role_in_play_control',
+  ROLE_IN_OUT_OF_PLAY: 'role_in_out_of_play',
   ROLE_REACTIVE_RESPONSE: 'role_reactive_response',
   ROLE_ASSUMES_ROLE: 'role_assumes_role',
   SELECT_DOUBLE_SELECTOR: 'select_double_selector',
   PICK_NEXT_DOUBLE_SELECTOR: 'pick_next_double_selector',
-  GROUP_SET_OUT_OF_PLAY: 'group_set_out_of_play',
-  GROUP_SELECTION: 'group_selection'
+  LINKED_PROPAGATED_EFFECT: LINKED_PROPAGATED_EFFECT_STAGE.CATALOG_ID,
+  CONCEALED_SET_OUT_OF_PLAY: 'concealed_set_out_of_play',
+  EXPOSED_SET_OUT_OF_PLAY: 'exposed_set_out_of_play'
 });
 
 export function getManualCompletion(allowedRequesters = Object.values(STAGE_COMPLETION_REQUESTED_BY)) {
@@ -76,17 +84,47 @@ export const STAGE_CATALOG = Object.freeze({
     }
   }),
 
-  [STAGE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL]: defineStage({
+  [STAGE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY]: defineStage({
     key: STAGE_KEYS.STAGE_03,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
     actions: [
-      getCatalogRecipe(RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY),
-      getCatalogRecipe(RECIPE_KEYS.ONE_SHOT_SET_OUT_OF_PLAY)
+      getCatalogRecipe(RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY, {
+        constraints: [
+          {
+            type: CONSTRAINT_TYPES.REQUIRE_SELF_TARGET_WHEN_ACTOR_OUT
+          },
+          {
+            type: CONSTRAINT_TYPES.REQUIRE_RECENT_SET_PROPERTY,
+            window: CONSTRAINT_WINDOWS.CURRENT_CYCLE,
+            property: 'inPlay',
+            value: false,
+            actionKey: RECIPE_KEYS.SET_OUT_OF_PLAY,
+            stageCatalogId: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY
+          }
+        ]
+      }),
+      getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY, {
+        actor: { type: RECIPE_ACTOR_TYPES.ROLE },
+        target: {
+          type: MECHANICAL_ENTITY_TYPES.ROLE,
+          count: 1,
+          filters: [TARGET_FILTER_TYPES.IN_PLAY, TARGET_FILTER_TYPES.NOT_SELF]
+        },
+        constraints: [
+          {
+            type: CONSTRAINT_TYPES.REQUIRE_ACTOR_IN_PLAY
+          }
+        ],
+        usage: {
+          limit: 1,
+          window: CONSTRAINT_WINDOWS.SESSION
+        }
+      })
     ],
     metadata: {
-      catalogId: STAGE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL
+      catalogId: STAGE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY
     }
   }),
 
@@ -97,11 +135,11 @@ export const STAGE_CATALOG = Object.freeze({
     completion: getManualCompletion(),
     actions: [
       getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY, {
-        actor: { type: 'role_holder' },
+        actor: { type: RECIPE_ACTOR_TYPES.ROLE },
         target: {
-          type: 'role',
+          type: MECHANICAL_ENTITY_TYPES.ROLE,
           count: 1,
-          filters: ['in_play', 'not_self']
+          filters: [TARGET_FILTER_TYPES.IN_PLAY, TARGET_FILTER_TYPES.NOT_SELF]
         }
       })
     ],
@@ -115,14 +153,6 @@ export const STAGE_CATALOG = Object.freeze({
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
-    availabilityRules: [
-      { type: AVAILABILITY_RULE_TYPES.ACTOR_IN_PLAY },
-      {
-        type: AVAILABILITY_RULE_TYPES.WITHIN_EXECUTION_WINDOW,
-        firstCycle: 1,
-        lastCycle: 1
-      }
-    ],
     actions: [getCatalogRecipe(RECIPE_KEYS.ASSUME_ROLE)],
     metadata: {
       catalogId: STAGE_CATALOG_IDS.ROLE_ASSUMES_ROLE
@@ -168,18 +198,29 @@ export const STAGE_CATALOG = Object.freeze({
     }
   }),
 
-  [STAGE_CATALOG_IDS.GROUP_SET_OUT_OF_PLAY]: defineStage({
+  [STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT]: defineStage({
+    key: STAGE_KEYS.LINKED_PROPAGATED_EFFECT,
+    status: STAGE_STATUSES.ENABLED,
+    actorIds: [],
+    completion: getManualCompletion([STAGE_COMPLETION_REQUESTED_BY.DIRECTOR]),
+    actions: [],
+    metadata: {
+      catalogId: STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT
+    }
+  }),
+
+  [STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY]: defineStage({
     key: STAGE_KEYS.STAGE_04,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
     actions: [getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY)],
     metadata: {
-      catalogId: STAGE_CATALOG_IDS.GROUP_SET_OUT_OF_PLAY
+      catalogId: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY
     }
   }),
 
-  [STAGE_CATALOG_IDS.GROUP_SELECTION]: defineStage({
+  [STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY]: defineStage({
     key: STAGE_KEYS.STAGE_05,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
@@ -193,14 +234,14 @@ export const STAGE_CATALOG = Object.freeze({
     actions: [
       getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY, {
         target: {
-          type: 'role',
+          type: MECHANICAL_ENTITY_TYPES.ROLE,
           count: 1,
-          filters: ['in_play']
+          filters: [TARGET_FILTER_TYPES.IN_PLAY]
         }
       })
     ],
     metadata: {
-      catalogId: STAGE_CATALOG_IDS.GROUP_SELECTION
+      catalogId: STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY
     }
   })
 });

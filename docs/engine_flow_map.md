@@ -367,7 +367,7 @@ aplicador:
 | La receta puede usarse ahora? | `recipeModel.js` + `constraintModel.js` | `restore_recent_out_of_play` exige historial previo |
 | La accion esta bien definida? | `actionModel.js` | `set_in_play` debe traer `property: inPlay` |
 | El actor existe? | `actionModel.js` | `missing actor` |
-| Los objetivos existen y cumplen filtros? | `actionModel.js` | `in_play`, `not_self`, `not_same_alignment`, `distinct` |
+| Los objetivos existen y cumplen filtros? | `actionModel.js` | `in_play`, `not_in_play`, `not_self`, `same_alignment`, `not_same_alignment`, `recently_out_of_play`, `assumable`, `distinct` |
 | Esta receta tiene una restriccion propia? | `constraintModel.js` | no repetir mismo objetivo en ciclos consecutivos |
 | Un cambio de propiedad queda bloqueado? | `roleModel.js` | `block_property_change` bloquea `inPlay=false` frente a actores concretos |
 | Un efecto genera consecuencias de group? | `groupModel.js` + `resolverModel.js` | `propagate_property_change` genera efectos derivados |
@@ -567,10 +567,10 @@ Cuando aparezca una mecanica nueva, seguir este orden:
 
 | Regla humana | Clasificacion abstracta | Lugar probable |
 |---|---|---|
-| La Vidente mira una carta | accion `inspect_role` | `actionModel.js` |
-| El Protector protege antes del ataque | accion `block_property_change` | `actionModel.js` + `roleModel.js` |
+| Un role inspecciona a otro role | accion `inspect_role` | `actionModel.js` |
+| Un role bloquea un cambio de estado antes de otra accion | accion `block_property_change` | `actionModel.js` + `roleModel.js` |
 | No puede bloquear al mismo objetivo dos ciclos seguidos | restriccion `no_repeat_target` | `constraintModel.js` |
-| Cupido enlaza dos jugadores | accion `link_targets` + group con reglas | `groupModel.js` |
+| Un role enlaza dos targets | accion `link_targets` + group con reglas | `groupModel.js` |
 | Si un miembro sale de juego, el otro tambien | `propagate_property_change` | `groupModel.js` + `resolverModel.js` |
 | Si solo quedan linked de alignments distintos, cumplen objective especial | objectiveRule sobre group linked | `session.objectiveRules` |
 | Un group de alignment alcanza al resto | `holder_reaches_in_play_parity` | `session.objectiveRules` |
@@ -671,11 +671,11 @@ Ejemplos futuros con la misma estructura:
 - cualquier otro efecto permitido por el motor
 
 La restriccion de `linked` no aplica a cualquier seleccion ni vive en
-`group_selection`. La aporta el propio group `linked` mediante `selectionRules`
+`exposed_set_out_of_play`. La aporta el propio group `linked` mediante `selectionRules`
 cuando su scope coincide con la seleccion actual. En el caso actual:
 
 ```text
-group_selection + set_out_of_play
+exposed_set_out_of_play + set_out_of_play
 ```
 
 Si una regla permite repetir la seleccion del ciclo con el mismo proposito, la
@@ -704,7 +704,7 @@ flowchart TD
 Implementacion actual:
 
 ```text
-group_selection = selectionRules + set_out_of_play
+exposed_set_out_of_play = selectionRules + set_out_of_play
 ```
 
 Reglas actuales de esa seleccion:
@@ -733,7 +733,7 @@ stageModel aplica la receta declarada si hay chosen.
 actionModel resuelve la accion pura configurada.
 ```
 
-Flujo actual de `group_selection + set_out_of_play`:
+Flujo actual de `exposed_set_out_of_play + set_out_of_play`:
 
 ```mermaid
 flowchart TD

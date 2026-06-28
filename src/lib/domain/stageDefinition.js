@@ -21,6 +21,7 @@ import { createSelectionRules } from './selectionModel.js';
 
 export const AVAILABILITY_RULE_TYPES = Object.freeze({
   ACTOR_IN_PLAY: 'actor_in_play',
+  ACTOR_RECENTLY_OUT_OF_PLAY: 'actor_recently_out_of_play',
   HAS_EXECUTABLE_ACTION: 'has_executable_action',
   WITHIN_EXECUTION_WINDOW: 'within_execution_window',
   ALWAYS_AVAILABLE: 'always_available'

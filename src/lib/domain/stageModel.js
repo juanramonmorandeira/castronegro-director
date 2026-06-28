@@ -24,7 +24,7 @@ import {
   startCycle,
   updateCyclePool
 } from './cycleModel.js';
-import { appendEntry } from './historyModel.js';
+import { HISTORY_RESULTS, appendActionHistory, appendEntry } from './historyModel.js';
 import { resolveRecipe } from './recipeModel.js';
 import { ACTION_IDS, VISIBILITY, resolveAction } from './actionModel.js';
 import { processActionResultEvents } from './eventModel.js';
@@ -51,6 +51,11 @@ import {
   hasPendingSpecialStages
 } from './specialStagesModel.js';
 import { reviewPropertyBlocks } from './roleModel.js';
+import {
+  LINKED_PROPAGATED_EFFECT_STAGE,
+  STAGE_COMPLETION_MODES,
+  STAGE_COMPLETION_REQUESTED_BY
+} from './stageTypes.js';
 import { createMessagesFromEngineErrors } from '../messages/messageModel.js';
 import { routeMessages } from '../messages/messageLogModel.js';
 
@@ -65,16 +70,23 @@ export const STAGE_ERRORS = Object.freeze({
   COMPLETION_NOT_ALLOWED: 'stage/completion-not-allowed'
 });
 
-export const STAGE_COMPLETION_MODES = Object.freeze({
-  MANUAL: 'manual',
-  AUTOMATIC: 'automatic'
+export const PEEK_ACTION_KEYS = Object.freeze({
+  PEEK_ATTEMPT: 'peekAttempt',
+  PEEK_ACCUSATION: 'peekAccusation',
+  OVERRIDE_SELECTED_CANDIDATE: 'override_selected_candidate'
 });
 
-export const STAGE_COMPLETION_REQUESTED_BY = Object.freeze({
-  PLAYER: 'player',
-  DIRECTOR: 'director',
-  SYSTEM: 'system'
+export const PEEK_ACCUSATION_TIMINGS = Object.freeze({
+  BEFORE_SELECTION: 'before_selection',
+  AFTER_SELECTION: 'after_selection',
+  SELECTION_NULL: 'selection_null'
 });
+
+export const STAGE_RULE_TYPES = Object.freeze({
+  PEEK_ACCUSATION_OVERRIDE: 'peek_accusation_override'
+});
+
+export { STAGE_COMPLETION_MODES, STAGE_COMPLETION_REQUESTED_BY };
 
 function appendEngineErrors(session, errors, context = {}) {
   const messages = createMessagesFromEngineErrors({
@@ -99,7 +111,7 @@ export const STAGE_KEYS = Object.freeze({
   STAGE_03: 'stage_03',
   STAGE_04: 'stage_04',
   STAGE_05: 'stage_05',
-  STAGE_06: 'stage_06',
+  LINKED_PROPAGATED_EFFECT: LINKED_PROPAGATED_EFFECT_STAGE.KEY,
   STAGE_07: 'stage_07',
   STAGE_08: 'stage_08',
   STAGE_09: 'stage_09'
@@ -115,7 +127,6 @@ export const STAGE_ACTION_KEYS = Object.freeze({
   BLOCK_OUT_OF_PLAY: 'block_out_of_play',
   SET_OUT_OF_PLAY: 'set_out_of_play',
   ASSUME_ROLE: 'assume_role',
-  ONE_SHOT_SET_OUT_OF_PLAY: 'one_shot_set_out_of_play',
   RESTORE_RECENT_OUT_OF_PLAY: 'restore_recent_out_of_play',
   CHECK_OBJECTIVES: 'check_objectives',
   CONCLUDE_PLAY: 'conclude_play'
@@ -435,10 +446,122 @@ function getRecipeInputFromSelection({ stage = {}, input = {}, chosenId = null }
   };
 }
 
+function getStageMatchKeys(stage = {}) {
+  return [
+    stage.key,
+    stage.metadata?.catalogId
+  ].map(normalizeId).filter(Boolean);
+}
+
+function stageRuleMatchesStage(rule = {}, stage = {}, actionKey = null) {
+  const observedStageKey = normalizeId(rule.observedStageKey);
+  const stageKeys = getStageMatchKeys(stage);
+  const poolKeys = (rule.poolKeys ?? []).map(normalizeId);
+  const actionKeys = (rule.actionKeys ?? []).map(normalizeId);
+
+  if (!observedStageKey || !stageKeys.includes(observedStageKey)) return false;
+  if (poolKeys.length > 0 && !poolKeys.includes(normalizeId(stage.poolKey))) return false;
+  if (actionKeys.length > 0 && !actionKeys.includes(normalizeId(actionKey))) return false;
+
+  return true;
+}
+
+function collectActiveStageRules(session = {}, stage = {}, actionKey = null, type = null) {
+  const normalizedType = normalizeId(type);
+
+  return (session.roles ?? []).flatMap((role) =>
+    (role.stageRules ?? [])
+      .filter((rule) => {
+        if (normalizedType && normalizeId(rule.type) !== normalizedType) return false;
+        if (rule.requireInPlay !== false && role.inPlay !== true) return false;
+        return stageRuleMatchesStage(rule, stage, actionKey);
+      })
+      .map((rule) => ({ role, rule }))
+  );
+}
+
+function appendPeekAttemptHistoryIfNeeded({ session, input = {}, stage = {}, context = {}, stageRules = [] }) {
+  if (!input.peekAttempt || stageRules.length === 0) return session;
+
+  const requestedRoleId = typeof input.peekAttempt === 'object'
+    ? input.peekAttempt.roleId ?? input.peekAttempt.actorId ?? null
+    : null;
+  const activeRule = requestedRoleId
+    ? stageRules.find((entry) => entry.role.id === requestedRoleId)
+    : stageRules[0];
+
+  if (!activeRule) return session;
+
+  return appendActionHistory(session, {
+    cycleId: session?.cycle?.id ?? 0,
+    poolKey: context.poolKey ?? stage.poolKey ?? null,
+    stageId: context.stageId ?? stage.id ?? null,
+    stageKey: context.stageKey ?? stage.key ?? null,
+    stageCatalogId: context.stageCatalogId ?? stage.metadata?.catalogId ?? null,
+    actionKey: PEEK_ACTION_KEYS.PEEK_ATTEMPT,
+    actionId: PEEK_ACTION_KEYS.PEEK_ATTEMPT,
+    actionSignature: PEEK_ACTION_KEYS.PEEK_ATTEMPT,
+    actorIds: [activeRule.role.id],
+    targetIds: [],
+    result: HISTORY_RESULTS.NO_EFFECT,
+    metadata: {
+      visibility: 'private',
+      stageRuleKey: activeRule.rule.key ?? null,
+      stageRuleType: activeRule.rule.type ?? null,
+      observedStageKey: activeRule.rule.observedStageKey ?? null
+    }
+  });
+}
+
+function getValidatedPeekOverride({
+  session = {},
+  input = {},
+  stage = {},
+  actionKey = null,
+  normalChosenId = null,
+  selectionType = null
+} = {}) {
+  const accusation = input.peekAccusation ?? null;
+  if (!accusation || accusation.directorValidated !== true) return null;
+
+  const timing = accusation.timing ?? (normalChosenId
+    ? PEEK_ACCUSATION_TIMINGS.AFTER_SELECTION
+    : PEEK_ACCUSATION_TIMINGS.SELECTION_NULL);
+  if (timing === PEEK_ACCUSATION_TIMINGS.BEFORE_SELECTION) return null;
+
+  const matchingRule = collectActiveStageRules(
+    session,
+    stage,
+    actionKey,
+    STAGE_RULE_TYPES.PEEK_ACCUSATION_OVERRIDE
+  )
+    .find(({ role }) => role.id === accusation.accusedRoleId);
+  if (!matchingRule) return null;
+
+  return {
+    candidateRoleId: matchingRule.role.id,
+    previousCandidateRoleId: normalChosenId,
+    timing,
+    selectionType,
+    causedBy: {
+      type: PEEK_ACTION_KEYS.PEEK_ACCUSATION,
+      id: accusation.id ?? `${PEEK_ACTION_KEYS.PEEK_ACCUSATION}-${session?.cycle?.id ?? 0}`
+    },
+    metadata: {
+      accusedRoleId: accusation.accusedRoleId,
+      stageRuleKey: matchingRule.rule.key ?? null,
+      stageRuleType: matchingRule.rule.type ?? null,
+      overrideActionKey:
+        matchingRule.rule.overrideActionKey ?? PEEK_ACTION_KEYS.OVERRIDE_SELECTED_CANDIDATE
+    }
+  };
+}
+
 function mergeSelectionAndRecipeResult({ selectionResult = null, recipeResult = null } = {}) {
   return {
     ...(recipeResult ?? {}),
     selection: selectionResult?.selection ?? null,
+    selectedCandidateOverride: recipeResult?.selectedCandidateOverride ?? null,
     selectionActionId: selectionResult?.actionId ?? null,
     proposedEffects: recipeResult?.proposedEffects ?? [],
     finalEffects: recipeResult?.finalEffects ?? [],
@@ -448,8 +571,21 @@ function mergeSelectionAndRecipeResult({ selectionResult = null, recipeResult = 
 }
 
 function resolveSelectionStageRecipe(session, stage, recipe, input = {}, context = {}) {
-  const selectionResolution = resolveAction(
+  const activePeekStageRules = collectActiveStageRules(
     session,
+    stage,
+    context.actionKey ?? getStageActionKey(recipe),
+    STAGE_RULE_TYPES.PEEK_ACCUSATION_OVERRIDE
+  );
+  const sessionWithPeekAttempt = appendPeekAttemptHistoryIfNeeded({
+    session,
+    input,
+    stage,
+    context,
+    stageRules: activePeekStageRules
+  });
+  const selectionResolution = resolveAction(
+    sessionWithPeekAttempt,
     {
       id: ACTION_IDS.SELECT,
       visibility: recipe?.visibility ?? VISIBILITY.ALL
@@ -461,15 +597,30 @@ function resolveSelectionStageRecipe(session, stage, recipe, input = {}, context
   if (!selectionResolution.ok) return selectionResolution;
 
   const chosenId = selectionResolution.result?.selection?.chosenId ?? null;
+  const peekOverride = getValidatedPeekOverride({
+    session: selectionResolution.session,
+    input,
+    stage,
+    actionKey: context.actionKey ?? getStageActionKey(recipe),
+    normalChosenId: chosenId,
+    selectionType: selectionResolution.result?.selection?.type ?? null
+  });
+  const targetId = peekOverride?.candidateRoleId ?? chosenId;
+
   if (selectionResolution.result?.selection?.type !== SELECTION_OUTCOME_TYPES.CHOSEN || !chosenId) {
-    return selectionResolution;
+    if (!peekOverride?.candidateRoleId) return selectionResolution;
   }
 
   const recipeResolution = resolveRecipe(
     selectionResolution.session,
     recipe,
-    getRecipeInputFromSelection({ stage, input, chosenId }),
-    context
+    getRecipeInputFromSelection({ stage, input, chosenId: targetId }),
+    peekOverride
+      ? {
+          ...context,
+          causedBy: peekOverride.causedBy
+        }
+      : context
   );
 
   if (!recipeResolution.ok) {
@@ -477,7 +628,8 @@ function resolveSelectionStageRecipe(session, stage, recipe, input = {}, context
       ...recipeResolution,
       result: {
         ...(recipeResolution.result ?? {}),
-        selection: selectionResolution.result?.selection ?? null
+        selection: selectionResolution.result?.selection ?? null,
+        selectedCandidateOverride: peekOverride
       }
     };
   }
@@ -486,7 +638,10 @@ function resolveSelectionStageRecipe(session, stage, recipe, input = {}, context
     ...recipeResolution,
     result: mergeSelectionAndRecipeResult({
       selectionResult: selectionResolution.result,
-      recipeResult: recipeResolution.result
+      recipeResult: {
+        ...recipeResolution.result,
+        selectedCandidateOverride: peekOverride
+      }
     })
   };
 }
@@ -737,7 +892,8 @@ function prepareAndValidatePoolEntry(session = {}, poolKey = null) {
   const context = {
     cycleId: sessionAfterBoundaryReview.cycle?.id ?? 0,
     poolKey,
-    roleStates: sessionAfterBoundaryReview.roles ?? []
+    roleStates: sessionAfterBoundaryReview.roles ?? [],
+    session: sessionAfterBoundaryReview
   };
   const prepared = preparePool(pool, context);
 
@@ -937,8 +1093,85 @@ function shouldRunLifecycleOperationsAfterStageCompletion(stageAdvance) {
   return ['pool-completed', 'no-runnable-stage'].includes(stageAdvance?.reason);
 }
 
+function getRoleProperty(session = {}, roleId = null, property = null) {
+  return (session.roles ?? []).find((role) => role.id === roleId)?.[property];
+}
+
+function causalConditionIsMet(session = {}, condition = {}) {
+  if (!condition?.targetId || !condition?.property) return false;
+  return getRoleProperty(session, condition.targetId, condition.property) === condition.value;
+}
+
+function resolveLinkedPropagatedEffectSpecialStage(session = {}, currentStage = {}) {
+  const stage = currentStage.stage ?? {};
+  if (stage.metadata?.catalogId !== LINKED_PROPAGATED_EFFECT_STAGE.CATALOG_ID) return session;
+
+  const effect = stage.metadata?.propagatedEffect ?? null;
+  const condition = effect?.causalCondition ?? null;
+  const actionId = effect?.property === 'inPlay' ? ACTION_IDS.SET_IN_PLAY : ACTION_IDS.SET_PROPERTY;
+  const cycleId = session.cycle?.id ?? 0;
+  const context = {
+    poolKey: null,
+    stageId: currentStage.stageId,
+    stageKey: currentStage.stageKey,
+    stageCatalogId: stage.metadata.catalogId,
+    actionKey: LINKED_PROPAGATED_EFFECT_STAGE.ACTION_KEY,
+    causedBy: effect?.causedBy ?? null
+  };
+
+  if (!effect || !causalConditionIsMet(session, condition)) {
+    return appendActionHistory(session, {
+      cycleId,
+      poolKey: null,
+      stageId: currentStage.stageId,
+      stageKey: currentStage.stageKey,
+      stageCatalogId: stage.metadata?.catalogId ?? null,
+      actionKey: LINKED_PROPAGATED_EFFECT_STAGE.ACTION_KEY,
+      actionId,
+      actionSignature: actionId,
+      actorIds: [],
+      targetIds: effect?.targetId ? [effect.targetId] : [],
+      proposedEffects: effect ? [effect] : [],
+      finalEffects: [],
+      blockedEffects: [],
+      result: HISTORY_RESULTS.NO_EFFECT,
+      metadata: {
+        reason: 'causal_condition_not_met',
+        causalCondition: condition ?? null
+      }
+    });
+  }
+
+  return resolveAction(
+    session,
+    {
+      id: actionId,
+      target: {
+        type: effect.targetType,
+        count: 1,
+        filters: []
+      },
+      effect: {
+        type: effect.type,
+        targetType: effect.targetType,
+        property: effect.property,
+        value: effect.value,
+        derivedFrom: effect.derivedFrom ?? null
+      }
+    },
+    {
+      targetIds: [effect.targetId]
+    },
+    context
+  ).session;
+}
+
 function completeCurrentSpecialStage(session, currentStage, input, requestedBy) {
-  const sessionWithoutStage = completeSpecialStage(session, {
+  const sessionAfterSpecialStageEffect = resolveLinkedPropagatedEffectSpecialStage(
+    session,
+    currentStage
+  );
+  const sessionWithoutStage = completeSpecialStage(sessionAfterSpecialStageEffect, {
     requestedBy,
     reason: input.reason ?? 'manual_completion'
   });
@@ -1308,6 +1541,7 @@ export function resolveCurrentStage(session, input = {}) {
     poolKey: stageValidation.currentStage.poolKey,
     stageId: stageValidation.currentStage.stageId,
     stageKey: stageValidation.currentStage.stageKey,
+    stageCatalogId: stageValidation.currentStage.stage?.metadata?.catalogId ?? null,
     causedBy: stageValidation.currentStage.stage?.metadata?.source?.id
       ? {
           type: stageValidation.currentStage.stage.metadata.source.type ?? 'role',

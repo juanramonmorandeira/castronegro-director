@@ -1,4 +1,4 @@
-# Village Storyteller
+# Cyclic Social Engine
 
 Aplicacion Svelte/Vite para configurar, dirigir y registrar partidas construidas
 sobre un motor mecanico anonimo.

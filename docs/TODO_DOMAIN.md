@@ -37,14 +37,30 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
   - claves duplicadas dentro de `selectionRules`, `objectiveRules` y `groupRules`;
   - reglas con `holder: self` fuera de role/group;
   - reglas que referencian actions o conditions inexistentes.
-- Implementar `role_observes_selection`:
-  - observar una stage ajena;
-  - detectar observacion;
-  - sustituir el candidate elegido.
+- Consolidar `role_peek` tras la primera implementacion:
+  - definir la experiencia visual de `peekAttempt` para partidas no presenciales;
+  - definir UI/director para resolver `peekAccusation`;
+  - documentar reglas de conducta humana durante `stage_concealed_set_out_of_play`.
+  - Nota: la mecanica de dominio de `role_peek` esta cerrada para
+    `basic_ruleset`; estos pendientes pertenecen a UI/skin/director.
+- Consolidar cierre de stages:
+  - el director cierra manualmente las stages;
+  - los players ejecutan accion o acknowledgement durante su stage;
+  - documentar excepciones de cierre automatico si alguna mecanica futura lo exige.
+- Redisenar efectos propagados:
+  - todo efecto derivado de otro efecto debe pasar por una specialStage;
+  - la specialStage debe estar condicionada al estado que la causo;
+  - si el estado causal cambia antes de resolverla, no produce efecto.
 - Revisar configuracion avanzada de `selection_counts_double`:
   - abstencion configurable para vote expuesta;
   - parametros configurables de eleccion inicial;
   - resolucion UI del director si el runoff inicial sigue empatado.
+- Anadir configuracion opcional de `role_in_out_of_play`:
+  - el creador decide si puede usar ambas recipes durante la session;
+  - o si debe elegir una sola entre `restore_recent_out_of_play` y su
+    `set_out_of_play` privado.
+  - Nota: el dominio mecanico actual de `role_in_out_of_play` esta cerrado; esta
+    configuracion futura no bloquea el cierre de roles de `basic_ruleset`.
 - Definir politicas de relleno de roles alternativas a `plain`:
   - `random`;
   - `random_excluding_alignment_b`.
@@ -111,8 +127,7 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
 ## roleDefinition
 
 - Implementar `instanceRule` cuando pasemos estas reglas a codigo.
-- Migrar los viejos tokens consumibles a `resources` mecanicos.
-- Definir como recipeModel consume resources.
+- Revisar si `metadata.extraRoles` debe moverse a `setupRules`.
 - Extender `assumableRoles` para futuros roles que intercambian o cambian identidades de forma temporal.
 
 ## Validaciones y errores

@@ -51,12 +51,12 @@ Un parametro puede referenciar una entidad mecanica:
 ```js
 {
   entityType: 'role',
-  id: 'role_in_play_control-0'
+  id: 'role_in_out_of_play-0'
 }
 ```
 
 El presentador obtiene el `roleKey` runtime y busca su `displayName` en skin.
-La misma regla se aplica a groups, resources, stages, objectives, actions y
+La misma regla se aplica a groups, stages, objectives, actions y
 recipes.
 
 ## Skin
@@ -68,14 +68,14 @@ recipes.
   languages: ['es', 'en'],
   entities: {
     roles: {
-      role_in_play_control: {
+      role_in_out_of_play: {
         displayName: {
-          es: 'Bruja',
-          en: 'Witch'
+          es: 'Control de estado',
+          en: 'State control'
         }
       }
     },
-    resources: {
+    recipes: {
       restore_recent_out_of_play: {
         displayName: {
           es: 'pocion de restauracion',
@@ -86,9 +86,9 @@ recipes.
   },
   messages: {
     es: {
-      resource_already_consumed: {
-        role: '{actor}, la {resource} ya ha sido usada.',
-        director: '{actor} ya consumio {resource}.'
+      action_usage_limit_reached: {
+        role: '{actor}, la {recipe} ya ha sido usada.',
+        director: '{actor} ya uso {recipe} hasta su limite.'
       }
     }
   }
@@ -150,7 +150,7 @@ aplicacion
 
 ## Casos implementados
 
-`constraint/limited_uses` produce `resource_already_consumed`. El error tecnico
+`constraint/limited_uses` produce `action_usage_limit_reached`. El error tecnico
 original sigue disponible en `result.errors` y el gameplayMessage se guarda en
 `sessionMessageLog`.
 

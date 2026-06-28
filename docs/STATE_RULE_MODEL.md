@@ -48,7 +48,6 @@ de encapsularlas:
   roleKey: 'role_01',
   alignmentId: 'alignment_a',
   inPlay: true,
-  resources: [],
   blockedPropertyChanges: []
 }
 ```

@@ -5,6 +5,7 @@
 // defineRole describe un tipo mecanico de rol:
 // - a que alignment mecanico pertenece por defecto;
 // - que stages de pool y stages iniciales especiales puede proponer;
+// - que reglas contextuales y reactions aporta;
 //
 // createRole materializa su estado dentro de una sesion concreta.
 // buildRoles ensambla roles runtime desde definiciones y asientos.
@@ -35,22 +36,14 @@ function defineRoleReaction(reaction = {}) {
   };
 }
 
-function normalizeResource({ key, count = 0, metadata = {} } = {}) {
-  return {
-    key: normalizeId(key),
-    count: Number.isInteger(count) && count >= 0 ? count : 0,
-    metadata: { ...metadata }
-  };
-}
-
 export function defineRole({
   key,
   type = ROLE_DEFINITION_TYPES.ROLE,
   alignmentId = null,
   stageDefinitions = [],
   specialStageDefinitions = [],
+  stageRules = [],
   reactions = [],
-  resources = [],
   metadata = {}
 } = {}) {
   const normalizedKey = normalizeId(key);
@@ -61,10 +54,21 @@ export function defineRole({
     alignmentId: alignmentId ? normalizeId(alignmentId) : null,
     stageDefinitions: (stageDefinitions ?? []).map(defineStage),
     specialStageDefinitions: (specialStageDefinitions ?? []).map(defineStage),
+    // stageRules no crean stages propias: declaran oportunidades contextuales
+    // dentro de una stage ajena ya existente.
+    stageRules: (stageRules ?? []).map((rule) => ({
+      ...rule,
+      key: normalizeId(rule.key),
+      type: normalizeId(rule.type),
+      observedStageKey: normalizeId(rule.observedStageKey),
+      poolKeys: (rule.poolKeys ?? []).map(normalizeId),
+      actionKeys: (rule.actionKeys ?? []).map(normalizeId),
+      requireInPlay: rule.requireInPlay !== false,
+      metadata: { ...(rule.metadata ?? {}) }
+    })),
     // Las reacciones son definicion mecanica del rol: "si ocurre X, puedo
     // responder con Y". eventModel sera quien las evalue durante la sesion.
     reactions: (reactions ?? []).map(defineRoleReaction),
-    resources: (resources ?? []).map(normalizeResource),
     metadata: { ...metadata }
   };
 }
@@ -78,7 +82,7 @@ export function createRole({
   inPlay = true,
   revealed = false,
   reactions = [],
-  resources = [],
+  stageRules = [],
   blockedPropertyChanges = [],
   flags = {},
   counters = {},
@@ -95,7 +99,16 @@ export function createRole({
     inPlay: !!inPlay,
     revealed: !!revealed,
     reactions: (reactions ?? []).map(defineRoleReaction),
-    resources: (resources ?? []).map(normalizeResource),
+    stageRules: (stageRules ?? []).map((rule) => ({
+      ...rule,
+      key: normalizeId(rule.key),
+      type: normalizeId(rule.type),
+      observedStageKey: normalizeId(rule.observedStageKey),
+      poolKeys: (rule.poolKeys ?? []).map(normalizeId),
+      actionKeys: (rule.actionKeys ?? []).map(normalizeId),
+      requireInPlay: rule.requireInPlay !== false,
+      metadata: { ...(rule.metadata ?? {}) }
+    })),
     blockedPropertyChanges: (blockedPropertyChanges ?? []).map((block) => ({
       ...block,
       blockedFor: {
@@ -132,7 +145,7 @@ export function buildRoles(seats = [], roleDefinitions = {}) {
       playerId: seatEntry.playerId ?? seatEntry.player_id ?? null,
       seat: Number.isFinite(seatEntry.seat) ? seatEntry.seat : index,
       reactions: definition.reactions ?? [],
-      resources: definition.resources ?? [],
+      stageRules: definition.stageRules ?? [],
       flags: definition.defaultFlags ?? {},
       counters: definition.defaultCounters ?? {},
       metadata: {

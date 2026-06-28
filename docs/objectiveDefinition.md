@@ -63,7 +63,7 @@ Lectura:
 
 - `key`: id mecanico estable de la regla.
 - `holder`: sujeto mecanico al que se asocia el objective. Por ahora puede ser
-  `role` o `group`.
+  `role`, `group` o `self`.
 - `condition`: condicion que se evalua.
 - `dependencies`: propiedades o estructuras de estado que sostienen esa
   condicion.
@@ -71,6 +71,28 @@ Lectura:
 - `conflictRules`: reglas para resolver conflictos con otros objetivos
   cumplidos.
 - `metadata.origin`: trazabilidad opcional. No participa en la evaluacion.
+
+Tipos aceptados de holder:
+
+```js
+OBJECTIVE_HOLDER_TYPES = {
+  ROLE: 'role',
+  GROUP: 'group',
+  SELF: 'self'
+}
+```
+
+`self` es una referencia relativa de definicion. Solo debe aparecer en
+objectiveRules declaradas dentro de un objeto que se materializa despues, como
+un group creado por una recipe. Al materializarse, debe convertirse a un holder
+runtime concreto, por ejemplo:
+
+```js
+{ type: 'group', id: '<group-id-materializado>' }
+```
+
+Una objectiveRule ya viva en `session.objectiveRules` no deberia conservar
+`holder: { type: 'self' }`.
 
 ### onFulfilled
 
@@ -95,6 +117,19 @@ jugable de la session.
 `beneficiaries` indica que roles, groups, alignments u otros sujetos mecanicos
 se benefician del objetivo cumplido. No define por si mismo el significado
 narrativo.
+
+Tipo relativo actualmente soportado:
+
+```js
+OBJECTIVE_BENEFICIARY_TYPES = {
+  HOLDER: 'holder'
+}
+```
+
+`beneficiaries: { type: 'holder' }` significa que el beneficiario es el holder
+ya resuelto de esa misma objectiveRule. Beneficiarios explicitos como `role`,
+`group` o `alignment` quedan como contrato futuro; por ahora no se anade
+resolucion especial nueva.
 
 ### achievedObjectives
 

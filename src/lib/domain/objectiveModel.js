@@ -10,6 +10,7 @@
 import { getGroupRoles, isGroupActive } from './groupModel.js';
 import { STAGE_STATUSES, normalizeId } from './sessionModel.js';
 import { getSpecialStages } from './specialStagesModel.js';
+import { MECHANICAL_ENTITY_TYPES } from './domainTypes.js';
 
 export const OBJECTIVE_EVALUATION_STATUSES = Object.freeze({
   ONGOING: 'ongoing',
@@ -22,6 +23,16 @@ export const OBJECTIVE_CONDITIONS = Object.freeze({
   ALL_HOLDER_MEMBERS_ARE_ONLY_ROLES_IN_PLAY: 'all_holder_members_are_only_roles_in_play',
   MEMBERS_SPAN_MULTIPLE_EFFECTIVE_ALIGNMENTS: 'members_span_multiple_effective_alignments',
   NO_ROLES_IN_PLAY: 'no_roles_in_play'
+});
+
+export const OBJECTIVE_HOLDER_TYPES = Object.freeze({
+  ROLE: MECHANICAL_ENTITY_TYPES.ROLE,
+  GROUP: MECHANICAL_ENTITY_TYPES.GROUP,
+  SELF: 'self'
+});
+
+export const OBJECTIVE_BENEFICIARY_TYPES = Object.freeze({
+  HOLDER: 'holder'
 });
 
 export const INFLUENCE_SUBJECTS = Object.freeze({
@@ -75,13 +86,13 @@ function materializeGroupObjectiveRule(group = {}, rule = {}) {
   return {
     ...rule,
     holder:
-      rule.holder?.type === 'self'
-        ? { type: 'group', id: group.id }
+      rule.holder?.type === OBJECTIVE_HOLDER_TYPES.SELF
+        ? { type: MECHANICAL_ENTITY_TYPES.GROUP, id: group.id }
         : rule.holder,
     metadata: {
       ...(rule.metadata ?? {}),
       source: {
-        type: 'group',
+        type: MECHANICAL_ENTITY_TYPES.GROUP,
         id: group.id
       }
     }
@@ -113,11 +124,11 @@ function getHolderRoles(session = {}, holder = {}) {
   const holderType = normalizeId(holder?.type);
   const holderId = normalizeId(holder?.id);
 
-  if (holderType === 'role') {
+  if (holderType === OBJECTIVE_HOLDER_TYPES.ROLE) {
     return holderId ? [getRoleById(session, holderId)].filter(Boolean) : [];
   }
 
-  if (holderType === 'group') {
+  if (holderType === OBJECTIVE_HOLDER_TYPES.GROUP) {
     return getGroupRoles(session, holderId);
   }
 
@@ -140,7 +151,7 @@ function getRuleBeneficiaries({ rule = {}, holderRoleIds = [] } = {}) {
   const onFulfilled = rule.onFulfilled?.[0] ?? {};
   const beneficiaries = onFulfilled.beneficiaries;
 
-  if (beneficiaries?.type === 'holder') {
+  if (beneficiaries?.type === OBJECTIVE_BENEFICIARY_TYPES.HOLDER) {
     return [
       {
         type: rule.holder?.type ?? null,

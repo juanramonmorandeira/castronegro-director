@@ -6,6 +6,7 @@ import {
   AVAILABILITY_RULE_TYPES,
   BASIC_AVAILABLE_RULE_KEYS,
   BASIC_ROLE_OPTION_KEYS,
+  MECHANICAL_ENTITY_TYPES,
   EFFECT_TYPES,
   HISTORY_RESULTS,
   CONSTRAINT_TYPES,
@@ -14,8 +15,10 @@ import {
   DOUBLE_SELECTOR_STAGE_KEYS,
   GROUP_TYPES,
   VISIBILITY,
+  OBJECTIVE_BENEFICIARY_TYPES,
   OBJECTIVE_CONDITIONS,
   OBJECTIVE_EVALUATION_STATUSES,
+  OBJECTIVE_HOLDER_TYPES,
   INFLUENCE_OPERATIONS,
   INFLUENCE_SUBJECTS,
   SELECTION_ABSTAIN_RESOLUTION_TYPES,
@@ -48,10 +51,12 @@ import {
   organizePoolStages,
   createSelectionRules,
   createSession,
+  createRole,
   createGroup,
   defineGroup,
   addRoleToGroup,
   addBlockedPropertyChange,
+  appendActionHistory,
   appendSpecialStage,
   getCoreGroupCatalog,
   getCurrentStage,
@@ -75,6 +80,9 @@ import {
   RULE_SET_CATALOG_IDS,
   RULE_SET_SUPPORT_STATUSES,
   RECIPE_KEYS,
+  RECIPE_ACTOR_TYPES,
+  TARGET_FILTER_TYPES,
+  validateActionTargets,
   resolveSelectionRound,
   resolveAction,
   resolveCurrentStage,
@@ -82,6 +90,8 @@ import {
   buildRuleSet,
   getBasicAlignmentDistribution,
   getCatalogRuleSet,
+  PEEK_ACCUSATION_TIMINGS,
+  PEEK_ACTION_KEYS,
   STAGE_ACTION_KEYS,
   STAGE_CATALOG_IDS,
   STAGE_COMPLETION_MODES,
@@ -94,7 +104,9 @@ import {
   SESSION_STATUSES,
   materializePropertyBlockExpiration,
   getCatalogRecipe,
+  validateCatalogRecipeOverrides,
   getCatalogStage,
+  validateRecipeContract,
   validateSession
 } from '../index.js';
 import {
@@ -149,9 +161,9 @@ const blockOutOfPlayRecipe = getCatalogRecipe(RECIPE_KEYS.BLOCK_OUT_OF_PLAY);
 const linkTargetsAction = getCatalogRecipe(RECIPE_KEYS.LINK_TARGETS);
 const setOutOfPlayAfterSelectionRecipe = getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY, {
   target: {
-    type: 'role',
+    type: MECHANICAL_ENTITY_TYPES.ROLE,
     count: 1,
-    filters: ['in_play']
+    filters: [TARGET_FILTER_TYPES.IN_PLAY]
   },
   visibility: VISIBILITY.ALL
 });
@@ -276,7 +288,7 @@ function createConclusiveObjectiveRule({ key, holder, condition }) {
       {
         conclusive: true,
         beneficiaries: {
-          type: 'holder'
+          type: OBJECTIVE_BENEFICIARY_TYPES.HOLDER
         }
       }
     ],
@@ -316,14 +328,15 @@ function createSelectionOutOfPlayStage(overrides = {}) {
 }
 
 function resolveSelectionOutOfPlayStage(session, input = {}, stageOverrides = {}) {
+  const poolKey = stageOverrides.poolKey ?? 'poolExposed';
   const sessionWithSelectionStage = withCycle(
     session,
     createCycle({
-      poolOrder: ['poolExposed'],
-      poolCurrent: 'poolExposed',
-      poolNext: 'poolExposed',
+      poolOrder: [poolKey],
+      poolCurrent: poolKey,
+      poolNext: poolKey,
       pools: {
-        poolExposed: [createSelectionOutOfPlayStage(stageOverrides)]
+        [poolKey]: [createSelectionOutOfPlayStage(stageOverrides)]
       }
     })
   );
@@ -338,6 +351,31 @@ function withInPlayState(session, inPlayByRoleId = {}) {
       ...role,
       inPlay: inPlayByRoleId[role.id] ?? role.inPlay
     }))
+  };
+}
+
+function withPeekRole(session, { inPlay = true } = {}) {
+  return {
+    ...session,
+    roles: [
+      ...session.roles,
+      createRole({
+        id: 'role_peek-0',
+        roleKey: ROLE_CATALOG_IDS.ROLE_PEEK,
+        alignmentId: ALIGNMENT_IDS.ALIGNMENT_A,
+        playerId: 'player-peek',
+        seat: 7,
+        inPlay,
+        stageRules: ROLE_CATALOG[ROLE_CATALOG_IDS.ROLE_PEEK].stageRules
+      })
+    ]
+  };
+}
+
+function createGroupHolder(id) {
+  return {
+    type: OBJECTIVE_HOLDER_TYPES.GROUP,
+    id
   };
 }
 
@@ -362,6 +400,86 @@ function collectiveSelectionInput(input = {}) {
     ...input
   };
 }
+
+test('validateActionTargets rechaza filtros desconocidos', () => {
+  const session = createBaseSession();
+  const actor = roleById(session, 'alignment_a_blocker-0');
+  const target = roleById(session, 'alignment_a_target-0');
+  const validation = validateActionTargets({
+    session,
+    actor,
+    targets: [target],
+    action: {
+      target: {
+        count: 1,
+        filters: ['not_a_filter']
+      }
+    }
+  });
+
+  assert.equal(validation.ok, false);
+  assert.equal(validation.errors[0].code, 'target/unknown-filter');
+  assert.equal(validation.errors[0].filter, 'not_a_filter');
+});
+
+test('validateActionTargets aplica filtros not_in_play y same_alignment', () => {
+  const session = withInPlayState(createBaseSession(), {
+    'alignment_a_target-0': false
+  });
+  const actor = roleById(session, 'alignment_a_blocker-0');
+  const target = roleById(session, 'alignment_a_target-0');
+  const validation = validateActionTargets({
+    session,
+    actor,
+    targets: [target],
+    action: {
+      target: {
+        count: 1,
+        filters: [TARGET_FILTER_TYPES.NOT_IN_PLAY, TARGET_FILTER_TYPES.SAME_ALIGNMENT]
+      }
+    }
+  });
+
+  assert.equal(validation.ok, true);
+});
+
+test('validateActionTargets aplica filtro recently_out_of_play en el ciclo actual', () => {
+  const session = appendActionHistory(
+    withInPlayState(createBaseSession(), {
+      'alignment_a_target-0': false
+    }),
+    {
+      cycleId: 0,
+      actionKey: STAGE_ACTION_KEYS.SET_OUT_OF_PLAY,
+      actionId: ACTION_IDS.SET_IN_PLAY,
+      actorIds: ['alignment_b_attacker-0'],
+      targetIds: ['alignment_a_target-0'],
+      finalEffects: [
+        {
+          type: EFFECT_TYPES.SET_PROPERTY,
+          targetType: MECHANICAL_ENTITY_TYPES.ROLE,
+          targetId: 'alignment_a_target-0',
+          property: 'inPlay',
+          value: false
+        }
+      ],
+      result: HISTORY_RESULTS.APPLIED
+    }
+  );
+  const validation = validateActionTargets({
+    session,
+    actor: roleById(session, 'alignment_a_blocker-0'),
+    targets: [roleById(session, 'alignment_a_target-0')],
+    action: {
+      target: {
+        count: 1,
+        filters: [TARGET_FILTER_TYPES.RECENTLY_OUT_OF_PLAY]
+      }
+    }
+  });
+
+  assert.equal(validation.ok, true);
+});
 
 test('inspect_role revela roleKey sin modificar la sesion', () => {
   const session = createBaseSession();
@@ -909,9 +1027,152 @@ test('stageDefinition define completion y recetas opcionales', () => {
   assert.equal(stage.actions[1].optional, true);
 });
 
-test('stageCatalog define y createStage materializa un stage de control inPlay', () => {
+test('getCatalogRecipe permite adaptar contexto pero bloquea id y effect', () => {
+  const recipe = getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY, {
+    id: ACTION_IDS.INSPECT_ROLE,
+    actor: { type: RECIPE_ACTOR_TYPES.ROLE },
+    target: {
+      type: MECHANICAL_ENTITY_TYPES.ROLE,
+      count: 1,
+      filters: [TARGET_FILTER_TYPES.IN_PLAY]
+    },
+    usage: {
+      limit: 1,
+      window: CONSTRAINT_WINDOWS.SESSION
+    },
+    effect: {
+      type: EFFECT_TYPES.SET_PROPERTY,
+      targetType: MECHANICAL_ENTITY_TYPES.ROLE,
+      property: 'inPlay',
+      value: true
+    }
+  });
+
+  assert.equal(recipe.id, ACTION_IDS.SET_IN_PLAY);
+  assert.deepEqual(recipe.actor, { type: RECIPE_ACTOR_TYPES.ROLE });
+  assert.deepEqual(recipe.target.filters, [TARGET_FILTER_TYPES.IN_PLAY]);
+  assert.equal(recipe.usage.limit, 1);
+  assert.deepEqual(recipe.effect, {
+    type: EFFECT_TYPES.SET_PROPERTY,
+    targetType: MECHANICAL_ENTITY_TYPES.ROLE,
+    property: 'inPlay',
+    value: false
+  });
+  assert.deepEqual(
+    recipe.diagnostics.map((error) => error.code),
+    ['recipe/blocked-override', 'recipe/blocked-override']
+  );
+});
+
+test('validateRecipeContract acepta una recipe valida', () => {
+  const validation = validateRecipeContract({
+    recipe: getCatalogRecipe(RECIPE_KEYS.INSPECT_ROLE),
+    input: {
+      actorIds: ['role_inspector-0'],
+      targetIds: ['hidden_enemy-0']
+    }
+  });
+
+  assert.equal(validation.ok, true);
+});
+
+test('validateRecipeContract rechaza actor role multiple e invalid actor type', () => {
+  const multipleRoleActors = validateRecipeContract({
+    recipe: getCatalogRecipe(RECIPE_KEYS.INSPECT_ROLE),
+    input: {
+      actorIds: ['role_inspector-0', 'alignment_a_blocker-0'],
+      targetIds: ['hidden_enemy-0']
+    }
+  });
+  const invalidActor = validateRecipeContract({
+    recipe: {
+      ...getCatalogRecipe(RECIPE_KEYS.INSPECT_ROLE),
+      actor: { type: 'not_actor' }
+    },
+    input: {
+      actorIds: ['role_inspector-0'],
+      targetIds: ['hidden_enemy-0']
+    }
+  });
+
+  assert.equal(multipleRoleActors.ok, false);
+  assert.equal(multipleRoleActors.errors[0].code, 'recipe/invalid-role-actor-count');
+  assert.equal(invalidActor.ok, false);
+  assert.equal(invalidActor.errors[0].code, 'recipe/invalid-actor-type');
+});
+
+test('validateRecipeContract rechaza target invalido y filtro desconocido', () => {
+  const invalidTarget = validateRecipeContract({
+    recipe: {
+      ...getCatalogRecipe(RECIPE_KEYS.INSPECT_ROLE),
+      target: {
+        type: 'not_target',
+        count: 1,
+        filters: [TARGET_FILTER_TYPES.IN_PLAY]
+      }
+    }
+  });
+  const invalidFilter = validateRecipeContract({
+    recipe: {
+      ...getCatalogRecipe(RECIPE_KEYS.INSPECT_ROLE),
+      target: {
+        type: MECHANICAL_ENTITY_TYPES.ROLE,
+        count: 1,
+        filters: ['not_a_filter']
+      }
+    }
+  });
+
+  assert.equal(invalidTarget.ok, false);
+  assert.equal(invalidTarget.errors[0].code, 'recipe/invalid-target-type');
+  assert.equal(invalidFilter.ok, false);
+  assert.equal(invalidFilter.errors[0].code, 'recipe/unknown-target-filter');
+});
+
+test('validateRecipeContract exige count 0 para target session', () => {
+  const validation = validateRecipeContract({
+    recipe: {
+      ...getCatalogRecipe(RECIPE_KEYS.CONCLUDE_PLAY),
+      target: {
+        type: MECHANICAL_ENTITY_TYPES.SESSION,
+        count: 1
+      }
+    }
+  });
+
+  assert.equal(validation.ok, false);
+  assert.equal(validation.errors[0].code, 'recipe/invalid-session-target-count');
+});
+
+test('getCatalogRecipe expone diagnosticos para overrides bloqueados o desconocidos', () => {
+  const validation = validateCatalogRecipeOverrides(RECIPE_KEYS.SET_OUT_OF_PLAY, {
+    id: ACTION_IDS.INSPECT_ROLE,
+    effect: { type: EFFECT_TYPES.REVEAL_PROPERTY },
+    unexpected: true
+  });
+  const recipe = getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY, {
+    id: ACTION_IDS.INSPECT_ROLE
+  });
+  const resolved = resolveRecipe(createBaseSession(), recipe, {
+    actorIds: ['alignment_b_attacker-0'],
+    targetIds: ['alignment_a_target-0']
+  });
+
+  assert.equal(validation.ok, false);
+  assert.deepEqual(
+    validation.errors.map((error) => error.code),
+    ['recipe/blocked-override', 'recipe/blocked-override', 'recipe/unknown-override']
+  );
+  assert.equal(resolved.ok, false);
+  assert.equal(resolved.errors[0].code, 'recipe/blocked-override');
+  assert.equal(resolved.messages[0].type, MESSAGE_TYPES.DIAGNOSTIC);
+  assert.equal(resolved.messages[0].key, MESSAGE_KEYS.DOMAIN_OPERATION_FAILED);
+  assert.equal(resolved.session.errorLog.length, 1);
+});
+
+test('stageCatalog define y createStage materializa un stage de in-out-of-play', () => {
   const stage = createStage({
-    ...getCatalogStage(STAGE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL, {
+    ...getCatalogStage(STAGE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY, {
       key: STAGE_KEYS.STAGE_03
     }),
     actorIds: ['alignment_a_blocker-0']
@@ -927,10 +1188,44 @@ test('stageCatalog define y createStage materializa un stage de control inPlay',
   ]);
   assert.deepEqual(
     stage.actions.map((action) => action.key),
-    [STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY, STAGE_ACTION_KEYS.ONE_SHOT_SET_OUT_OF_PLAY]
+    [STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY]
   );
   assert.equal(stage.actions.every((action) => action.optional === true), true);
-  assert.equal(stage.metadata.catalogId, 'role_in_play_control');
+  assert.deepEqual(stage.actions[0].actor, { type: RECIPE_ACTOR_TYPES.ROLE });
+  assert.deepEqual(stage.actions[0].target, {
+    type: MECHANICAL_ENTITY_TYPES.ROLE,
+    count: 1,
+    filters: []
+  });
+  assert.deepEqual(stage.actions[0].usage, {
+    limit: 1,
+    window: CONSTRAINT_WINDOWS.SESSION
+  });
+  assert.deepEqual(stage.actions[0].constraints[0], {
+    type: CONSTRAINT_TYPES.REQUIRE_SELF_TARGET_WHEN_ACTOR_OUT
+  });
+  assert.deepEqual(stage.actions[0].constraints[1], {
+    type: CONSTRAINT_TYPES.REQUIRE_RECENT_SET_PROPERTY,
+    window: CONSTRAINT_WINDOWS.CURRENT_CYCLE,
+    property: 'inPlay',
+    value: false,
+    actionKey: STAGE_ACTION_KEYS.SET_OUT_OF_PLAY,
+    stageCatalogId: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY
+  });
+  assert.deepEqual(stage.actions[1].actor, { type: RECIPE_ACTOR_TYPES.ROLE });
+  assert.deepEqual(stage.actions[1].target, {
+    type: MECHANICAL_ENTITY_TYPES.ROLE,
+    count: 1,
+    filters: [TARGET_FILTER_TYPES.IN_PLAY, TARGET_FILTER_TYPES.NOT_SELF]
+  });
+  assert.deepEqual(stage.actions[1].constraints[0], {
+    type: CONSTRAINT_TYPES.REQUIRE_ACTOR_IN_PLAY
+  });
+  assert.deepEqual(stage.actions[1].usage, {
+    limit: 1,
+    window: CONSTRAINT_WINDOWS.SESSION
+  });
+  assert.equal(stage.metadata.catalogId, 'role_in_out_of_play');
 });
 
 test('stageCatalog expone los stages mecanicos ya definidos', () => {
@@ -938,10 +1233,10 @@ test('stageCatalog expone los stages mecanicos ya definidos', () => {
     getCatalogStage(STAGE_CATALOG_IDS.ROLE_INSPECTS, { key: STAGE_KEYS.STAGE_01 }),
     getCatalogStage(STAGE_CATALOG_IDS.ROLE_LINKS_TARGETS, { key: STAGE_KEYS.STAGE_02 }),
     getCatalogStage(STAGE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY, { key: STAGE_KEYS.STAGE_02 }),
-    getCatalogStage(STAGE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL, { key: STAGE_KEYS.STAGE_03 }),
+    getCatalogStage(STAGE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY, { key: STAGE_KEYS.STAGE_03 }),
     getCatalogStage(STAGE_CATALOG_IDS.ROLE_REACTIVE_RESPONSE, { key: STAGE_KEYS.STAGE_07 }),
-    getCatalogStage(STAGE_CATALOG_IDS.GROUP_SET_OUT_OF_PLAY, { key: STAGE_KEYS.STAGE_04 }),
-    getCatalogStage(STAGE_CATALOG_IDS.GROUP_SELECTION, { key: STAGE_KEYS.STAGE_05 })
+    getCatalogStage(STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY, { key: STAGE_KEYS.STAGE_04 }),
+    getCatalogStage(STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY, { key: STAGE_KEYS.STAGE_05 })
   ];
 
   assert.deepEqual(
@@ -950,7 +1245,7 @@ test('stageCatalog expone los stages mecanicos ya definidos', () => {
       [STAGE_ACTION_KEYS.INSPECT_ROLE],
       [STAGE_ACTION_KEYS.LINK_TARGETS],
       [STAGE_ACTION_KEYS.BLOCK_OUT_OF_PLAY],
-      [STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY, STAGE_ACTION_KEYS.ONE_SHOT_SET_OUT_OF_PLAY],
+      [STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY],
       [STAGE_ACTION_KEYS.SET_OUT_OF_PLAY],
       [STAGE_ACTION_KEYS.SET_OUT_OF_PLAY],
       [STAGE_ACTION_KEYS.SET_OUT_OF_PLAY]
@@ -959,8 +1254,8 @@ test('stageCatalog expone los stages mecanicos ya definidos', () => {
   assert.equal(stages.every((stage) => stage.actorIds === undefined), true);
 });
 
-test('stageCatalog deja group_selection sin restricciones linked implicitas', () => {
-  const stage = getCatalogStage(STAGE_CATALOG_IDS.GROUP_SELECTION, { key: STAGE_KEYS.STAGE_05 });
+test('stageCatalog deja exposed_set_out_of_play sin restricciones linked implicitas', () => {
+  const stage = getCatalogStage(STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY, { key: STAGE_KEYS.STAGE_05 });
 
   assert.deepEqual(stage.selectionRules.groupRestrictions, []);
 });
@@ -974,7 +1269,7 @@ test('roleCatalog declara roles mecanicos y razones de orden', () => {
       byKey[ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS].stageDefinitions[0].poolKey,
       byKey[ROLE_CATALOG_IDS.ROLE_INSPECTS].stageDefinitions[0].poolKey,
       byKey[ROLE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY].stageDefinitions[0].poolKey,
-      byKey[ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL].stageDefinitions[0].poolKey
+      byKey[ROLE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY].stageDefinitions[0].poolKey
     ],
     [
       POOL_KEYS.POOL_CONCEALED,
@@ -999,9 +1294,9 @@ test('roleCatalog declara roles mecanicos y razones de orden', () => {
   );
   assert.equal(byKey[ROLE_CATALOG_IDS.ROLE_INSPECTS].stageDefinitions[0].order, 10);
   assert.equal(byKey[ROLE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY].stageDefinitions[0].order, 20);
-  assert.equal(byKey[ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL].stageDefinitions[0].order, 40);
+  assert.equal(byKey[ROLE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY].stageDefinitions[0].order, 40);
   assert.equal(
-    byKey[ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL].stageDefinitions[0].metadata.orderReason.includes(
+    byKey[ROLE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY].stageDefinitions[0].metadata.orderReason.includes(
       'same-cycle inPlay=false'
     ),
     true
@@ -1013,19 +1308,30 @@ test('roleCatalog declara roles mecanicos y razones de orden', () => {
 
 test('groupCatalog declara grupos mecanicos y razones de orden', () => {
   const catalog = getCoreGroupCatalog();
-  const group = catalog[0];
-  const stageDefinition = group.stageDefinitions[0];
+  const concealedGroup = catalog.find(
+    (groupDefinition) => groupDefinition.key === GROUP_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY
+  );
+  const exposedGroup = catalog.find(
+    (groupDefinition) => groupDefinition.key === GROUP_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY
+  );
+  const concealedStageDefinition = concealedGroup.stageDefinitions[0];
+  const exposedStageDefinition = exposedGroup.stageDefinitions[0];
 
-  assert.equal(group.key, GROUP_CATALOG_IDS.ALIGNMENT_SET_OUT_OF_PLAY);
-  assert.equal(group.membershipRule.type, 'alignment');
-  assert.equal(group.membershipRule.alignmentId, 'alignment_b');
-  assert.equal(stageDefinition.poolKey, POOL_KEYS.POOL_CONCEALED);
-  assert.equal(stageDefinition.order, 30);
+  assert.equal(concealedGroup.membershipRule.type, 'alignment');
+  assert.equal(concealedGroup.membershipRule.alignmentId, 'alignment_b');
+  assert.equal(concealedStageDefinition.poolKey, POOL_KEYS.POOL_CONCEALED);
+  assert.equal(concealedStageDefinition.order, 30);
   assert.deepEqual(
-    stageDefinition.actions.map((action) => action.key),
+    concealedStageDefinition.actions.map((action) => action.key),
     [STAGE_ACTION_KEYS.SET_OUT_OF_PLAY]
   );
-  assert.equal(stageDefinition.metadata.orderReason.includes('after blockers'), true);
+  assert.equal(
+    concealedStageDefinition.metadata.orderReason.includes('same-cycle restore'),
+    true
+  );
+  assert.equal(exposedGroup.membershipRule.type, 'all_roles');
+  assert.equal(exposedStageDefinition.poolKey, POOL_KEYS.POOL_EXPOSED);
+  assert.equal(exposedStageDefinition.order, 10);
 });
 
 test('createPool materializa los stages de un pool concreto', () => {
@@ -1056,7 +1362,7 @@ test('buildPools ensambla stages desde roles y grupos', () => {
         { seat: 0, role: ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS, alignmentId: 'alignment_a' },
         { seat: 1, role: ROLE_CATALOG_IDS.ROLE_INSPECTS, alignmentId: 'alignment_a' },
         { seat: 2, role: ROLE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY, alignmentId: 'alignment_a' },
-        { seat: 3, role: ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL, alignmentId: 'alignment_b' }
+        { seat: 3, role: ROLE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY, alignmentId: 'alignment_b' }
       ],
       roleDefinitionMap
     )
@@ -1082,7 +1388,7 @@ test('buildPools ensambla stages desde roles y grupos', () => {
     `${ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS}-0`
   ]);
   assert.deepEqual(built.pools.poolConcealed.stages[3].actorIds, [
-    `${ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL}-0`
+    `${ROLE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY}-0`
   ]);
 });
 
@@ -1099,7 +1405,7 @@ test('role reactive crea un stage especial al recibir inPlay=false final', () =>
       ],
       roles: buildRoles(
         [
-          { seat: 0, playerId: 'player-1', role: ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL, alignmentId: 'alignment_b' },
+          { seat: 0, playerId: 'player-1', role: ROLE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY, alignmentId: 'alignment_b' },
           { seat: 1, playerId: 'player-2', role: ROLE_CATALOG_IDS.ROLE_REACTIVE, alignmentId: 'alignment_a' },
           { seat: 2, playerId: 'player-3', role: ROLE_CATALOG_IDS.ROLE_INSPECTS, alignmentId: 'alignment_a' }
         ],
@@ -1121,7 +1427,7 @@ test('role reactive crea un stage especial al recibir inPlay=false final', () =>
     })
   );
   const firstResolution = resolveCurrentStage(session, {
-    actorIds: [`${ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL}-0`],
+    actorIds: [`${ROLE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY}-0`],
     targetIds: [`${ROLE_CATALOG_IDS.ROLE_REACTIVE}-0`]
   });
   const completed = completeCurrentStage(firstResolution.session, {
@@ -1249,21 +1555,18 @@ test('specialStages resuelve stages pendientes antes de conclude_play si pueden 
       ],
       roles: buildRoles(
         [
-          { seat: 0, playerId: 'player-1', role: ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL, alignmentId: 'alignment_b' },
+          { seat: 0, playerId: 'player-1', role: ROLE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY, alignmentId: 'alignment_b' },
           { seat: 1, playerId: 'player-2', role: ROLE_CATALOG_IDS.ROLE_REACTIVE, alignmentId: 'alignment_a' }
         ],
         roleDefinitionMap
       ),
       groups: [
-        createAlignmentGroup('alignment_b', [`${ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL}-0`])
+        createAlignmentGroup('alignment_b', [`${ROLE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY}-0`])
       ],
       objectiveRules: [
         createConclusiveObjectiveRule({
           key: 'alignment_b_only_group_remains',
-          holder: {
-            type: 'group',
-            id: 'group_alignment_b'
-          },
+          holder: createGroupHolder('group_alignment_b'),
           condition: {
             type: OBJECTIVE_CONDITIONS.ONLY_HOLDER_GROUP_REMAINS_IN_PLAY
           }
@@ -1285,7 +1588,7 @@ test('specialStages resuelve stages pendientes antes de conclude_play si pueden 
     })
   );
   const resolved = resolveCurrentStage(session, {
-    actorIds: [`${ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL}-0`],
+    actorIds: [`${ROLE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY}-0`],
     targetIds: [`${ROLE_CATALOG_IDS.ROLE_REACTIVE}-0`]
   });
   const completed = completeCurrentStage(resolved.session, {
@@ -1327,21 +1630,18 @@ test('conclude_play se aplica como lifecycleOperation cuando el outcome es estab
       ],
       roles: buildRoles(
         [
-          { seat: 0, playerId: 'player-1', role: ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL, alignmentId: 'alignment_b' },
+          { seat: 0, playerId: 'player-1', role: ROLE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY, alignmentId: 'alignment_b' },
           { seat: 1, playerId: 'player-2', role: ROLE_CATALOG_IDS.ROLE_INSPECTS, alignmentId: 'alignment_a' }
         ],
         roleDefinitionMap
       ),
       groups: [
-        createAlignmentGroup('alignment_b', [`${ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL}-0`])
+        createAlignmentGroup('alignment_b', [`${ROLE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY}-0`])
       ],
       objectiveRules: [
         createConclusiveObjectiveRule({
           key: 'alignment_b_only_group_remains',
-          holder: {
-            type: 'group',
-            id: 'group_alignment_b'
-          },
+          holder: createGroupHolder('group_alignment_b'),
           condition: {
             type: OBJECTIVE_CONDITIONS.ONLY_HOLDER_GROUP_REMAINS_IN_PLAY
           }
@@ -1363,7 +1663,7 @@ test('conclude_play se aplica como lifecycleOperation cuando el outcome es estab
     })
   );
   const resolved = resolveCurrentStage(session, {
-    actorIds: [`${ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL}-0`],
+    actorIds: [`${ROLE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY}-0`],
     targetIds: [`${ROLE_CATALOG_IDS.ROLE_INSPECTS}-0`]
   });
   const completed = completeCurrentStage(resolved.session, {
@@ -1797,11 +2097,11 @@ test('actionHistory registra stage, efectos finales y cambios impedidos', () => 
       poolNext: 'poolConcealed',
       pools: {
         poolConcealed: [
-          {
+          getCatalogStage(STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY, {
             key: STAGE_KEYS.STAGE_04,
             status: STAGE_STATUSES.ENABLED,
             actions: [actionRecipe(setInPlayFalseAction, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY)]
-          }
+          })
         ]
       }
     })
@@ -1816,16 +2116,23 @@ test('actionHistory registra stage, efectos finales y cambios impedidos', () => 
     property: 'inPlay',
     value: false,
     targetId: 'alignment_a_target-0',
-    stageKey: STAGE_KEYS.STAGE_04,
+    stageCatalogId: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY,
     actionKey: STAGE_ACTION_KEYS.SET_OUT_OF_PLAY
   });
 
   assert.equal(resolved.ok, true);
   assert.equal(historyEntry.stageId, resolved.stage.stageId);
   assert.equal(historyEntry.stageKey, STAGE_KEYS.STAGE_04);
+  assert.equal(historyEntry.stageCatalogId, STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY);
   assert.equal(historyEntry.actionKey, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY);
   assert.equal(historyEntry.actionId, ACTION_IDS.SET_IN_PLAY);
   assert.equal(historyEntry.result, HISTORY_RESULTS.APPLIED);
+  assert.deepEqual(historyEntry.actorContract, { type: RECIPE_ACTOR_TYPES.GROUP });
+  assert.deepEqual(historyEntry.targetContract, {
+    type: MECHANICAL_ENTITY_TYPES.ROLE,
+    count: 1,
+    filters: [TARGET_FILTER_TYPES.IN_PLAY, TARGET_FILTER_TYPES.NOT_SAME_ALIGNMENT]
+  });
   assert.equal(historyEntry.finalEffects[0].property, 'inPlay');
   assert.equal(historyEntry.finalEffects[0].value, false);
   assert.equal(appliedEntries.length, 1);
@@ -2140,7 +2447,7 @@ test('limited_uses bloquea una segunda ejecucion de la misma receta por el mismo
   assert.equal(secondRestore.ok, false);
   assert.equal(secondRestore.errors[0].code, 'constraint/limited_uses');
   assert.equal(secondRestore.errors[0].window, CONSTRAINT_WINDOWS.SESSION);
-  assert.equal(secondRestore.messages[0].key, MESSAGE_KEYS.RESOURCE_ALREADY_CONSUMED);
+  assert.equal(secondRestore.messages[0].key, MESSAGE_KEYS.ACTION_USAGE_LIMIT_REACHED);
   assert.equal(secondRestore.session.sessionMessageLog.length, 1);
   assert.equal(
     secondRestore.session.sessionMessageLog[0].message.audience.type,
@@ -2154,16 +2461,16 @@ test('skin presenta gameplayMessage y conserva estructura junto al texto mostrad
     defaultLanguage: 'es',
     entities: {
       roles: {
-        alignment_a_blocker: { displayName: 'Bruja' }
+        alignment_a_blocker: { displayName: 'Role in out of play' }
       },
-      resources: {
+      recipes: {
         restore_recent_out_of_play: { displayName: 'pocion de restauracion' }
       }
     },
     messages: {
       es: {
-        [MESSAGE_KEYS.RESOURCE_ALREADY_CONSUMED]: {
-          role: '{actor}, la {resource} ya ha sido usada.'
+        [MESSAGE_KEYS.ACTION_USAGE_LIMIT_REACHED]: {
+          role: '{actor}, la {recipe} ya ha sido usada.'
         }
       }
     }
@@ -2172,7 +2479,7 @@ test('skin presenta gameplayMessage y conserva estructura junto al texto mostrad
   const message = createMessage({
     id: 'message-1',
     type: MESSAGE_TYPES.GAMEPLAY,
-    key: MESSAGE_KEYS.RESOURCE_ALREADY_CONSUMED,
+    key: MESSAGE_KEYS.ACTION_USAGE_LIMIT_REACHED,
     severity: MESSAGE_SEVERITIES.WARNING,
     audience: {
       type: MESSAGE_AUDIENCE_TYPES.ROLE,
@@ -2183,8 +2490,8 @@ test('skin presenta gameplayMessage y conserva estructura junto al texto mostrad
         entityType: 'role',
         id: 'alignment_a_blocker-0'
       },
-      resource: {
-        entityType: 'resource',
+      recipe: {
+        entityType: 'recipe',
         id: 'restore_recent_out_of_play'
       },
       limit: 1,
@@ -2196,10 +2503,10 @@ test('skin presenta gameplayMessage y conserva estructura junto al texto mostrad
   assert.equal(presented.ok, true);
   assert.equal(
     presented.presentation.text,
-    'Bruja, la pocion de restauracion ya ha sido usada.'
+    'Role in out of play, la pocion de restauracion ya ha sido usada.'
   );
   assert.deepEqual(toToastInput(presented.presentation), {
-    message: 'Bruja, la pocion de restauracion ya ha sido usada.',
+    message: 'Role in out of play, la pocion de restauracion ya ha sido usada.',
     variant: 'info'
   });
 
@@ -2223,8 +2530,8 @@ test('skinValidation distingue cobertura obligatoria y opcional', () => {
     defaultLanguage: 'es',
     messages: {
       es: {
-        [MESSAGE_KEYS.RESOURCE_ALREADY_CONSUMED]: {
-          default: 'Recurso consumido.'
+        [MESSAGE_KEYS.ACTION_USAGE_LIMIT_REACHED]: {
+          default: 'Uso de accion agotado.'
         }
       }
     },
@@ -2238,7 +2545,7 @@ test('skinValidation distingue cobertura obligatoria y opcional', () => {
     skin,
     language: 'es',
     requiredMessageKeys: [
-      MESSAGE_KEYS.RESOURCE_ALREADY_CONSUMED,
+      MESSAGE_KEYS.ACTION_USAGE_LIMIT_REACHED,
       MESSAGE_KEYS.OBJECTIVE_ACHIEVED
     ],
     requiredEntities: {
@@ -2750,7 +3057,7 @@ test('link_targets consume uso de session aunque la stage solo exista en el prim
   assert.equal(secondLink.errors[0].window, CONSTRAINT_WINDOWS.SESSION);
 });
 
-test('linked deriva inPlay=false hacia los roles enlazados', () => {
+test('linked encola specialStage para propagar inPlay=false hacia roles enlazados', () => {
   const session = createBaseSession();
   const linked = resolveAction(session, linkTargetsAction, {
     actorIds: ['role_inspector-0'],
@@ -2760,21 +3067,124 @@ test('linked deriva inPlay=false hacia los roles enlazados', () => {
     actorIds: ['alignment_b_attacker-0'],
     targetIds: ['alignment_a_target-0']
   });
+  const specialStarted = startSpecialStages(resolved.session);
+  const propagated = completeCurrentStage(specialStarted, {
+    requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
+  });
+  const propagatedHistory = propagated.session.actionHistory.at(-1);
 
   assert.equal(resolved.ok, true);
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
-  assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, false);
-  assert.equal(resolved.result.finalEffects.length, 2);
-  assert.deepEqual(resolved.result.finalEffects[1].causedBy, {
-    type: 'group',
+  assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, true);
+  assert.equal(resolved.result.finalEffects.length, 1);
+  assert.equal(resolved.session.specialStages.length, 1);
+  assert.equal(
+    resolved.session.specialStages[0].metadata.catalogId,
+    STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT
+  );
+  assert.equal(propagated.errors[0].code, 'cycle/no-runnable-stages');
+  assert.equal(roleById(propagated.session, 'alignment_a_plain-0').inPlay, false);
+  assert.equal(propagatedHistory.actionKey, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
+  assert.equal(propagatedHistory.result, HISTORY_RESULTS.APPLIED);
+  assert.deepEqual(propagatedHistory.finalEffects[0].causedBy, {
+    type: MECHANICAL_ENTITY_TYPES.GROUP,
     id: 'linked_alignment_a_plain_0_alignment_a_target_0'
   });
-  assert.deepEqual(resolved.result.finalEffects[1].derivedFrom, {
+  assert.deepEqual(propagatedHistory.finalEffects[0].derivedFrom, {
     type: 'group_rule',
     groupId: 'linked_alignment_a_plain_0_alignment_a_target_0',
     groupRuleType: 'propagate_property_change',
     sourceTargetId: 'alignment_a_target-0'
   });
+});
+
+test('linked no propaga si el role causal fue restaurado antes de la specialStage', () => {
+  const session = createBaseSession();
+  const linked = resolveAction(session, linkTargetsAction, {
+    actorIds: ['role_inspector-0'],
+    targetIds: ['alignment_a_target-0', 'alignment_a_plain-0']
+  });
+  const setOut = resolveAction(linked.session, setInPlayFalseAction, {
+    actorIds: ['alignment_b_attacker-0'],
+    targetIds: ['alignment_a_target-0']
+  });
+  const restored = resolveAction(setOut.session, restoreRecentOutOfPlayAction, {
+    actorIds: ['alignment_a_blocker-0'],
+    targetIds: ['alignment_a_target-0']
+  });
+  const propagated = completeCurrentStage(startSpecialStages(restored.session), {
+    requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
+  });
+  const propagatedHistory = propagated.session.actionHistory.at(-1);
+
+  assert.equal(setOut.session.specialStages.length, 1);
+  assert.equal(restored.ok, true);
+  assert.equal(roleById(restored.session, 'alignment_a_target-0').inPlay, true);
+  assert.equal(roleById(propagated.session, 'alignment_a_plain-0').inPlay, true);
+  assert.equal(propagatedHistory.actionKey, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
+  assert.equal(propagatedHistory.result, HISTORY_RESULTS.NO_EFFECT);
+  assert.equal(propagatedHistory.metadata.reason, 'causal_condition_not_met');
+});
+
+test('linked_propagated_effect transporta payload dinamico de set_property', () => {
+  const baseSession = createBaseSession();
+  const session = {
+    ...baseSession,
+    groups: [
+      ...baseSession.groups,
+      createLinkedGroup({
+        id: 'linked-dynamic-payload',
+        roleIds: ['alignment_a_target-0', 'alignment_a_plain-0'],
+        groupRules: [
+          {
+            type: 'propagate_property_change',
+            when: { property: 'doubleSelector', value: true },
+            apply: { property: 'doubleSelector', value: true },
+            targets: 'other_members'
+          }
+        ],
+        selectionRules: []
+      })
+    ]
+  };
+  const setDoubleSelector = resolveAction(
+    session,
+    {
+      id: ACTION_IDS.SET_PROPERTY,
+      target: {
+        type: MECHANICAL_ENTITY_TYPES.ROLE,
+        count: 1,
+        filters: []
+      },
+      effect: {
+        type: EFFECT_TYPES.SET_PROPERTY,
+        targetType: MECHANICAL_ENTITY_TYPES.ROLE,
+        property: 'doubleSelector',
+        value: true
+      }
+    },
+    {
+      actorIds: ['alignment_a_blocker-0'],
+      targetIds: ['alignment_a_target-0']
+    }
+  );
+  const specialStage = setDoubleSelector.session.specialStages[0];
+  const propagated = completeCurrentStage(startSpecialStages(setDoubleSelector.session), {
+    requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
+  });
+  const propagatedHistory = propagated.session.actionHistory.at(-1);
+
+  assert.equal(setDoubleSelector.ok, true);
+  assert.equal(roleById(setDoubleSelector.session, 'alignment_a_target-0').doubleSelector, true);
+  assert.notEqual(roleById(setDoubleSelector.session, 'alignment_a_plain-0').doubleSelector, true);
+  assert.equal(specialStage.metadata.catalogId, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
+  assert.equal(specialStage.metadata.propagatedEffect.property, 'doubleSelector');
+  assert.equal(propagated.ok, true);
+  assert.equal(roleById(propagated.session, 'alignment_a_plain-0').doubleSelector, true);
+  assert.equal(propagatedHistory.actionKey, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
+  assert.equal(propagatedHistory.actionId, ACTION_IDS.SET_PROPERTY);
+  assert.equal(propagatedHistory.finalEffects[0].property, 'doubleSelector');
+  assert.equal(propagatedHistory.result, HISTORY_RESULTS.APPLIED);
 });
 
 test('group linked aporta objectiveRule distribuida si sus miembros abarcan varios alignments efectivos', () => {
@@ -2797,7 +3207,7 @@ test('group linked aporta objectiveRule distribuida si sus miembros abarcan vari
     OBJECTIVE_CONDITIONS.ALL_HOLDER_MEMBERS_ARE_ONLY_ROLES_IN_PLAY
   );
   assert.deepEqual(objectiveEvaluation.fulfilledRules[0].holder, {
-    type: 'group',
+    type: MECHANICAL_ENTITY_TYPES.GROUP,
     id: 'linked_alignment_a_target_0_alignment_b_target_0'
   });
 });
@@ -2854,19 +3264,27 @@ test('groupRule usa causedBy del group al comprobar bloqueos derivados', () => {
     actorIds: ['alignment_b_attacker-0'],
     targetIds: ['alignment_a_target-0']
   });
+  const propagatedDespiteOriginalActorBlockSpecial = completeCurrentStage(
+    startSpecialStages(propagatedDespiteOriginalActorBlock.session),
+    { requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR }
+  );
+  const blockedPropagationSpecial = completeCurrentStage(
+    startSpecialStages(blockedPropagation.session),
+    { requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR }
+  );
 
   assert.equal(
     roleById(propagatedDespiteOriginalActorBlock.session, 'alignment_a_target-0').inPlay,
     false
   );
   assert.equal(
-    roleById(propagatedDespiteOriginalActorBlock.session, 'alignment_a_plain-0').inPlay,
+    roleById(propagatedDespiteOriginalActorBlockSpecial.session, 'alignment_a_plain-0').inPlay,
     false
   );
   assert.equal(roleById(blockedPropagation.session, 'alignment_a_target-0').inPlay, false);
-  assert.equal(roleById(blockedPropagation.session, 'alignment_a_plain-0').inPlay, true);
-  assert.deepEqual(blockedPropagation.result.blockedEffects[0].causedBy, {
-    type: 'group',
+  assert.equal(roleById(blockedPropagationSpecial.session, 'alignment_a_plain-0').inPlay, true);
+  assert.deepEqual(blockedPropagationSpecial.session.actionHistory.at(-1).blockedEffects[0].causedBy, {
+    type: MECHANICAL_ENTITY_TYPES.GROUP,
     id: linkedGroupId
   });
 });
@@ -2896,7 +3314,7 @@ test('propagate_property_change no depende del type linked', () => {
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
   assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, false);
   assert.deepEqual(resolved.result.finalEffects[1].causedBy, {
-    type: 'group',
+    type: MECHANICAL_ENTITY_TYPES.GROUP,
     id: 'generic_propagation_group'
   });
 });
@@ -2946,7 +3364,7 @@ test('resolver permite otra causa si la primera propagacion queda bloqueada', ()
   assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, false);
   assert.equal(resolved.result.blockedEffects.length, 1);
   assert.deepEqual(resolved.result.finalEffects[1].causedBy, {
-    type: 'group',
+    type: MECHANICAL_ENTITY_TYPES.GROUP,
     id: allowedGroup.id
   });
 });
@@ -2995,10 +3413,7 @@ test('checkObjectives aplica regla de group holder_reaches_in_play_parity', () =
       objectiveRules: [
         createConclusiveObjectiveRule({
           key: 'alignment_b_reaches_threshold',
-          holder: {
-            type: 'group',
-            id: 'group_alignment_b'
-          },
+          holder: createGroupHolder('group_alignment_b'),
           condition: {
             type: OBJECTIVE_CONDITIONS.HOLDER_REACHES_IN_PLAY_PARITY
           }
@@ -3018,7 +3433,7 @@ test('checkObjectives aplica regla de group holder_reaches_in_play_parity', () =
   assert.equal(objectiveEvaluation.fulfilledRules[0].key, 'alignment_b_reaches_threshold');
   assert.deepEqual(objectiveEvaluation.playOutcome.beneficiaries, [
     {
-      type: 'group',
+      type: MECHANICAL_ENTITY_TYPES.GROUP,
       ids: ['group_alignment_b'],
       roleIds: ['alignment_b_attacker-0', 'alignment_b_target-0', 'hidden_enemy-0']
     }
@@ -3033,10 +3448,7 @@ test('checkObjectives aplica regla de group holder_reaches_in_play_parity', () =
 test('canStageInfluenceObjectiveOutcome detecta stage pendiente que puede romper paridad cumplida', () => {
   const objectiveRule = createConclusiveObjectiveRule({
     key: 'alignment_b_reaches_threshold',
-    holder: {
-      type: 'group',
-      id: 'group_alignment_b'
-    },
+    holder: createGroupHolder('group_alignment_b'),
     condition: {
       type: OBJECTIVE_CONDITIONS.HOLDER_REACHES_IN_PLAY_PARITY
     }
@@ -3086,10 +3498,7 @@ test('canStageInfluenceObjectiveOutcome detecta stage pendiente que puede romper
 test('canStageInfluenceObjectiveOutcome ignora stage pendiente que solo refuerza paridad cumplida', () => {
   const objectiveRule = createConclusiveObjectiveRule({
     key: 'alignment_b_reaches_threshold',
-    holder: {
-      type: 'group',
-      id: 'group_alignment_b'
-    },
+    holder: createGroupHolder('group_alignment_b'),
     condition: {
       type: OBJECTIVE_CONDITIONS.HOLDER_REACHES_IN_PLAY_PARITY
     }
@@ -3148,10 +3557,7 @@ test('checkObjectives no aplica holder_reaches_in_play_parity si el group no alc
     objectiveRules: [
       createConclusiveObjectiveRule({
         key: 'alignment_b_reaches_threshold',
-        holder: {
-          type: 'group',
-          id: 'group_alignment_b'
-        },
+        holder: createGroupHolder('group_alignment_b'),
         condition: {
           type: OBJECTIVE_CONDITIONS.HOLDER_REACHES_IN_PLAY_PARITY
         }
@@ -3178,10 +3584,7 @@ test('checkObjectives detecta only_holder_group_remains_in_play con group de ali
       objectiveRules: [
         createConclusiveObjectiveRule({
           key: 'alignment_a_only_group_remains',
-          holder: {
-            type: 'group',
-            id: 'group_alignment_a'
-          },
+          holder: createGroupHolder('group_alignment_a'),
           condition: {
             type: OBJECTIVE_CONDITIONS.ONLY_HOLDER_GROUP_REMAINS_IN_PLAY
           }
@@ -3218,10 +3621,7 @@ test('checkObjectives detecta only_holder_group_remains_in_play con group linked
       objectiveRules: [
         createConclusiveObjectiveRule({
           key: 'linked_group_only_group_remains',
-          holder: {
-            type: 'group',
-            id: 'group_linked_finalists'
-          },
+          holder: createGroupHolder('group_linked_finalists'),
           condition: {
             type: OBJECTIVE_CONDITIONS.ONLY_HOLDER_GROUP_REMAINS_IN_PLAY
           }
@@ -3258,10 +3658,7 @@ test('checkObjectives no activa only_holder_group_remains_in_play si queda un te
       objectiveRules: [
         createConclusiveObjectiveRule({
           key: 'linked_group_only_group_remains',
-          holder: {
-            type: 'group',
-            id: 'group_linked_with_third'
-          },
+          holder: createGroupHolder('group_linked_with_third'),
           condition: {
             type: OBJECTIVE_CONDITIONS.ONLY_HOLDER_GROUP_REMAINS_IN_PLAY
           }
@@ -4318,7 +4715,7 @@ test('stage con seleccion y set_out_of_play ejecuta receta si el runoff produce 
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
 });
 
-test('stage con seleccion y set_out_of_play propaga inPlay=false por linked cuando el chosen esta enlazado', () => {
+test('stage con seleccion y set_out_of_play encola propagacion linked cuando el chosen esta enlazado', () => {
   const session = createBaseSession({
     groups: [
       createLinkedGroup({ id: 'linked-selection-target' })
@@ -4338,16 +4735,23 @@ test('stage con seleccion y set_out_of_play propaga inPlay=false por linked cuan
       })
     })
   );
+  const propagated = completeCurrentStage(startSpecialStages(resolved.session), {
+    requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
+  });
+  const propagatedHistory = propagated.session.actionHistory.at(-1);
 
   assert.equal(resolved.ok, true);
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
-  assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, false);
-  assert.equal(resolved.result.finalEffects.length, 2);
-  assert.deepEqual(resolved.result.finalEffects[1].causedBy, {
-    type: 'group',
+  assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, true);
+  assert.equal(resolved.result.finalEffects.length, 1);
+  assert.equal(resolved.session.specialStages.length, 1);
+  assert.equal(propagated.ok, true);
+  assert.equal(roleById(propagated.session, 'alignment_a_plain-0').inPlay, false);
+  assert.deepEqual(propagatedHistory.finalEffects[0].causedBy, {
+    type: MECHANICAL_ENTITY_TYPES.GROUP,
     id: 'linked_selection_target'
   });
-  assert.deepEqual(resolved.result.finalEffects[1].derivedFrom, {
+  assert.deepEqual(propagatedHistory.finalEffects[0].derivedFrom, {
     type: 'group_rule',
     groupId: 'linked_selection_target',
     groupRuleType: 'propagate_property_change',
@@ -4458,6 +4862,140 @@ test('stage con seleccion recoge restricciones aportadas por groups activos', ()
   assert.equal(resolved.errors[0].selectorId, 'alignment_a_target-0');
   assert.equal(resolved.errors[0].candidateId, 'alignment_a_plain-0');
   assert.equal(resolved.errors[0].groupId, 'linked_alignment_a_plain_0_alignment_a_target_0');
+});
+
+test('role_peek registra peekAttempt privado durante la stage observada', () => {
+  const session = withPeekRole(createBaseSession());
+  const resolved = resolveSelectionOutOfPlayStage(
+    session,
+    collectiveSelectionInput({
+      actorIds: ['alignment_b_attacker-0', 'alignment_b_target-0', 'hidden_enemy-0'],
+      peekAttempt: { roleId: 'role_peek-0' },
+      selections: createSelections({
+        'alignment_b_attacker-0': 'alignment_a_target-0',
+        'alignment_b_target-0': 'alignment_a_target-0',
+        'hidden_enemy-0': 'alignment_a_target-0'
+      })
+    }),
+    {
+      key: STAGE_KEYS.STAGE_04,
+      poolKey: POOL_KEYS.POOL_CONCEALED,
+      metadata: { catalogId: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY }
+    }
+  );
+
+  assert.equal(resolved.ok, true);
+  const peekAttempt = resolved.session.actionHistory.find(
+    (entry) => entry.actionKey === PEEK_ACTION_KEYS.PEEK_ATTEMPT
+  );
+  assert.equal(peekAttempt.actorIds[0], 'role_peek-0');
+  assert.equal(peekAttempt.result, HISTORY_RESULTS.NO_EFFECT);
+  assert.deepEqual(peekAttempt.finalEffects, []);
+  assert.equal(peekAttempt.metadata.visibility, 'private');
+  assert.equal(peekAttempt.metadata.stageRuleKey, 'peek_concealed_set_out_of_play');
+  assert.equal(peekAttempt.metadata.stageRuleType, 'peek_accusation_override');
+});
+
+test('role_peek validado por director sustituye el candidate final de set_out_of_play', () => {
+  const session = withPeekRole(createBaseSession());
+  const resolved = resolveSelectionOutOfPlayStage(
+    session,
+    collectiveSelectionInput({
+      actorIds: ['alignment_b_attacker-0', 'alignment_b_target-0', 'hidden_enemy-0'],
+      peekAccusation: {
+        id: 'peek-accusation-1',
+        accusedRoleId: 'role_peek-0',
+        timing: PEEK_ACCUSATION_TIMINGS.AFTER_SELECTION,
+        directorValidated: true
+      },
+      selections: createSelections({
+        'alignment_b_attacker-0': 'alignment_a_target-0',
+        'alignment_b_target-0': 'alignment_a_target-0',
+        'hidden_enemy-0': 'alignment_a_target-0'
+      })
+    }),
+    {
+      key: STAGE_KEYS.STAGE_04,
+      poolKey: POOL_KEYS.POOL_CONCEALED,
+      metadata: { catalogId: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY }
+    }
+  );
+
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.result.selection.chosenId, 'alignment_a_target-0');
+  assert.equal(resolved.result.selectedCandidateOverride.candidateRoleId, 'role_peek-0');
+  assert.equal(resolved.result.selectedCandidateOverride.previousCandidateRoleId, 'alignment_a_target-0');
+  assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, true);
+  assert.equal(roleById(resolved.session, 'role_peek-0').inPlay, false);
+  assert.deepEqual(resolved.result.finalEffects[0].causedBy, {
+    type: PEEK_ACTION_KEYS.PEEK_ACCUSATION,
+    id: 'peek-accusation-1'
+  });
+});
+
+test('role_peek validado por director fuerza candidate aunque la seleccion sea nula', () => {
+  const session = withPeekRole(createBaseSession());
+  const resolved = resolveSelectionOutOfPlayStage(
+    session,
+    collectiveSelectionInput({
+      actorIds: ['alignment_b_attacker-0', 'alignment_b_target-0'],
+      peekAccusation: {
+        id: 'peek-accusation-null',
+        accusedRoleId: 'role_peek-0',
+        timing: PEEK_ACCUSATION_TIMINGS.SELECTION_NULL,
+        directorValidated: true
+      },
+      selections: createSelections({
+        'alignment_b_attacker-0': 'alignment_a_target-0',
+        'alignment_b_target-0': 'alignment_a_plain-0'
+      })
+    }),
+    {
+      key: STAGE_KEYS.STAGE_04,
+      poolKey: POOL_KEYS.POOL_CONCEALED,
+      metadata: { catalogId: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY },
+      selectionRules: {
+        ...selectionOutOfPlayRules,
+        required: SELECTION_REQUIRED_RULES.OPTIONAL
+      }
+    }
+  );
+
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.selectedCandidateOverride.candidateRoleId, 'role_peek-0');
+  assert.equal(roleById(resolved.session, 'role_peek-0').inPlay, false);
+});
+
+test('role_peek no permite validar acusaciones contra un role incorrecto', () => {
+  const session = withPeekRole(createBaseSession());
+  const resolved = resolveSelectionOutOfPlayStage(
+    session,
+    collectiveSelectionInput({
+      actorIds: ['alignment_b_attacker-0', 'alignment_b_target-0', 'hidden_enemy-0'],
+      peekAccusation: {
+        id: 'peek-accusation-wrong-role',
+        accusedRoleId: 'alignment_a_plain-0',
+        timing: PEEK_ACCUSATION_TIMINGS.AFTER_SELECTION,
+        directorValidated: true
+      },
+      selections: createSelections({
+        'alignment_b_attacker-0': 'alignment_a_target-0',
+        'alignment_b_target-0': 'alignment_a_target-0',
+        'hidden_enemy-0': 'alignment_a_target-0'
+      })
+    }),
+    {
+      key: STAGE_KEYS.STAGE_04,
+      poolKey: POOL_KEYS.POOL_CONCEALED,
+      metadata: { catalogId: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY }
+    }
+  );
+
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.result.selectedCandidateOverride, null);
+  assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
+  assert.equal(roleById(resolved.session, 'role_peek-0').inPlay, true);
 });
 
 test('stage con seleccion y set_out_of_play no permite desactivar restricciones estructurales desde input', () => {
@@ -4576,7 +5114,8 @@ test('ruleSet basico declara roles listos y bloquea mecanicas incompletas', () =
   });
   assert.equal(options[BASIC_ROLE_OPTION_KEYS.ASSUMES_ROLE].support, RULE_SET_SUPPORT_STATUSES.READY);
   assert.equal(options[BASIC_ROLE_OPTION_KEYS.ASSUMES_ROLE].selectable, true);
-  assert.equal(options[BASIC_ROLE_OPTION_KEYS.OBSERVES_SELECTION].selectable, false);
+  assert.equal(options[BASIC_ROLE_OPTION_KEYS.PEEK].support, RULE_SET_SUPPORT_STATUSES.READY);
+  assert.equal(options[BASIC_ROLE_OPTION_KEYS.PEEK].selectable, true);
   assert.equal(
     availableRules[BASIC_AVAILABLE_RULE_KEYS.SELECTION_COUNTS_DOUBLE].support,
     RULE_SET_SUPPORT_STATUSES.READY
@@ -4594,7 +5133,7 @@ test('buildRuleSet ensambla solo roles mecanicamente listos', () => {
       BASIC_ROLE_OPTION_KEYS.LINKS_TARGETS,
       BASIC_ROLE_OPTION_KEYS.INSPECTS,
       BASIC_ROLE_OPTION_KEYS.REACTIVE,
-      BASIC_ROLE_OPTION_KEYS.IN_PLAY_CONTROL,
+      BASIC_ROLE_OPTION_KEYS.IN_OUT_OF_PLAY,
       BASIC_ROLE_OPTION_KEYS.PLAIN
     ],
     roleCatalog: ROLE_CATALOG
@@ -4602,21 +5141,354 @@ test('buildRuleSet ensambla solo roles mecanicamente listos', () => {
 
   assert.equal(built.ok, true);
   assert.equal(built.ruleSet.roles.baseRoles.length, 6);
-  assert.equal(built.ruleSet.groups.length, 2);
+  assert.equal(built.ruleSet.groups.length, 4);
   assert.equal(built.ruleSet.rules.objectiveRules.length, 3);
   assert.deepEqual(
     built.ruleSet.roles.baseRoles.map((role) => role.alignmentId),
     ['alignment_b', 'alignment_a', 'alignment_a', 'alignment_a', 'alignment_a', 'alignment_a']
   );
-  assert.deepEqual(
-    built.ruleSet.roles.baseRoles.find(
-      (role) => role.key === ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL
-    ).resources,
-    [
-      { key: 'restore_in_play', count: 1, metadata: {} },
-      { key: 'set_out_of_play', count: 1, metadata: {} }
-    ]
+  const inPlayControl = built.ruleSet.roles.baseRoles.find(
+    (role) => role.key === ROLE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY
   );
+  assert.equal(inPlayControl.stageDefinitions[0].actions[0].usage.limit, 1);
+  assert.equal(inPlayControl.stageDefinitions[0].actions[1].usage.limit, 1);
+});
+
+test('buildSession materializa role_in_out_of_play en poolConcealed despues de set_out_of_play colectivo', () => {
+  const selectedRuleSet = getCatalogRuleSet(RULE_SET_CATALOG_IDS.BASIC_RULE_SET);
+  const builtRuleSet = buildRuleSet({
+    selectedRuleSet,
+    selectedRoleKeys: [
+      BASIC_ROLE_OPTION_KEYS.SET_OUT_OF_PLAY,
+      BASIC_ROLE_OPTION_KEYS.IN_OUT_OF_PLAY,
+      BASIC_ROLE_OPTION_KEYS.PLAIN
+    ],
+    roleCatalog: ROLE_CATALOG
+  });
+  const builtSession = buildSession({
+    id: 'in-out-of-play-session',
+    ruleSet: builtRuleSet.ruleSet,
+    seats: [
+      { seat: 0, playerId: 'player-1', role: BASIC_ROLE_OPTION_KEYS.SET_OUT_OF_PLAY },
+      { seat: 1, playerId: 'player-2', role: BASIC_ROLE_OPTION_KEYS.IN_OUT_OF_PLAY },
+      { seat: 2, playerId: 'player-3', role: BASIC_ROLE_OPTION_KEYS.PLAIN }
+    ],
+    validate: false
+  });
+  const concealedStages = builtSession.session.cycle.pools[POOL_KEYS.POOL_CONCEALED].stages;
+  const collectiveSetOutStage = concealedStages.find(
+    (stage) => stage.metadata.catalogId === STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY
+  );
+  const inPlayControlStage = concealedStages.find(
+    (stage) => stage.metadata.catalogId === STAGE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY
+  );
+
+  assert.equal(builtRuleSet.ok, true);
+  assert.equal(builtSession.ok, true);
+  assert.deepEqual(
+    concealedStages.map((stage) => stage.metadata.catalogId),
+    [STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY, STAGE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY]
+  );
+  assert.deepEqual(collectiveSetOutStage.actorIds, ['role_set_out_of_play-0']);
+  assert.deepEqual(inPlayControlStage.actorIds, ['role_in_out_of_play-0']);
+  assert.equal(collectiveSetOutStage.poolKey, POOL_KEYS.POOL_CONCEALED);
+  assert.equal(inPlayControlStage.poolKey, POOL_KEYS.POOL_CONCEALED);
+  assert.equal(collectiveSetOutStage.order, 30);
+  assert.equal(inPlayControlStage.order, 40);
+  assert.deepEqual(
+    inPlayControlStage.actions.map((action) => action.key),
+    [STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY]
+  );
+});
+
+test('role_in_out_of_play conserva su stage si el concealed set_out_of_play lo acaba de sacar', () => {
+  const selectedRuleSet = getCatalogRuleSet(RULE_SET_CATALOG_IDS.BASIC_RULE_SET);
+  const builtRuleSet = buildRuleSet({
+    selectedRuleSet,
+    selectedRoleKeys: [
+      BASIC_ROLE_OPTION_KEYS.SET_OUT_OF_PLAY,
+      BASIC_ROLE_OPTION_KEYS.IN_OUT_OF_PLAY,
+      BASIC_ROLE_OPTION_KEYS.PLAIN
+    ],
+    roleCatalog: ROLE_CATALOG
+  });
+  const builtSession = buildSession({
+    id: 'in-out-self-restore-session',
+    ruleSet: builtRuleSet.ruleSet,
+    seats: [
+      { seat: 0, playerId: 'player-1', role: BASIC_ROLE_OPTION_KEYS.SET_OUT_OF_PLAY },
+      { seat: 1, playerId: 'player-2', role: BASIC_ROLE_OPTION_KEYS.IN_OUT_OF_PLAY },
+      { seat: 2, playerId: 'player-3', role: BASIC_ROLE_OPTION_KEYS.PLAIN }
+    ],
+    validate: false
+  });
+  const concealedSetOut = resolveCurrentStage(builtSession.session, {
+    targetIds: ['role_in_out_of_play-0']
+  });
+  const stageReady = completeCurrentStage(concealedSetOut.session, {
+    requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
+  });
+  const privateSetOutWhileOut = resolveCurrentStage(stageReady.session, {
+    actionKey: STAGE_ACTION_KEYS.SET_OUT_OF_PLAY,
+    targetIds: ['role_plain-0']
+  });
+  const restored = resolveCurrentStage(privateSetOutWhileOut.session, {
+    actionKey: STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
+    targetIds: ['role_in_out_of_play-0']
+  });
+  const privateSetOutAfterRestore = resolveCurrentStage(restored.session, {
+    actionKey: STAGE_ACTION_KEYS.SET_OUT_OF_PLAY,
+    targetIds: ['role_plain-0']
+  });
+
+  assert.equal(concealedSetOut.ok, true);
+  assert.equal(roleById(concealedSetOut.session, 'role_in_out_of_play-0').inPlay, false);
+  assert.equal(stageReady.ok, true);
+  assert.equal(
+    stageReady.stageAdvance.next.stage.metadata.catalogId,
+    STAGE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY
+  );
+  assert.equal(privateSetOutWhileOut.ok, false);
+  assert.equal(privateSetOutWhileOut.errors[0].code, 'constraint/require_actor_in_play');
+  assert.equal(restored.ok, true);
+  assert.equal(roleById(restored.session, 'role_in_out_of_play-0').inPlay, true);
+  assert.equal(privateSetOutAfterRestore.ok, true);
+  assert.equal(roleById(privateSetOutAfterRestore.session, 'role_plain-0').inPlay, false);
+});
+
+test('role_in_out_of_play fuera de juego solo puede restaurarse a si mismo', () => {
+  const selectedRuleSet = getCatalogRuleSet(RULE_SET_CATALOG_IDS.BASIC_RULE_SET);
+  const builtRuleSet = buildRuleSet({
+    selectedRuleSet,
+    selectedRoleKeys: [
+      BASIC_ROLE_OPTION_KEYS.SET_OUT_OF_PLAY,
+      BASIC_ROLE_OPTION_KEYS.IN_OUT_OF_PLAY,
+      BASIC_ROLE_OPTION_KEYS.PLAIN
+    ],
+    roleCatalog: ROLE_CATALOG
+  });
+  const builtSession = buildSession({
+    id: 'in-out-self-only-restore-session',
+    ruleSet: builtRuleSet.ruleSet,
+    seats: [
+      { seat: 0, playerId: 'player-1', role: BASIC_ROLE_OPTION_KEYS.SET_OUT_OF_PLAY },
+      { seat: 1, playerId: 'player-2', role: BASIC_ROLE_OPTION_KEYS.IN_OUT_OF_PLAY },
+      { seat: 2, playerId: 'player-3', role: BASIC_ROLE_OPTION_KEYS.PLAIN }
+    ],
+    validate: false
+  });
+  const concealedSetOut = resolveCurrentStage(builtSession.session, {
+    targetIds: ['role_in_out_of_play-0']
+  });
+  const sessionWithAnotherRecentOut = appendActionHistory(
+    withInPlayState(concealedSetOut.session, {
+      'role_plain-0': false
+    }),
+    {
+      cycleId: concealedSetOut.session.cycle.id,
+      poolKey: POOL_KEYS.POOL_CONCEALED,
+      stageKey: STAGE_KEYS.STAGE_04,
+      stageCatalogId: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY,
+      actionKey: STAGE_ACTION_KEYS.SET_OUT_OF_PLAY,
+      actionId: ACTION_IDS.SET_IN_PLAY,
+      actorIds: ['role_set_out_of_play-0'],
+      targetIds: ['role_plain-0'],
+      finalEffects: [
+        {
+          type: EFFECT_TYPES.SET_PROPERTY,
+          targetType: MECHANICAL_ENTITY_TYPES.ROLE,
+          targetId: 'role_plain-0',
+          property: 'inPlay',
+          value: false
+        }
+      ],
+      result: HISTORY_RESULTS.APPLIED
+    }
+  );
+  const stageReady = completeCurrentStage(sessionWithAnotherRecentOut, {
+    requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
+  });
+  const restoreOther = resolveCurrentStage(stageReady.session, {
+    actionKey: STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
+    targetIds: ['role_plain-0']
+  });
+
+  assert.equal(concealedSetOut.ok, true);
+  assert.equal(stageReady.stageAdvance.next.stage.metadata.catalogId, STAGE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY);
+  assert.equal(restoreOther.ok, false);
+  assert.equal(restoreOther.errors[0].code, 'constraint/require_self_target_when_actor_out');
+  assert.equal(roleById(restoreOther.session, 'role_plain-0').inPlay, false);
+});
+
+test('role_in_out_of_play no habilita su stage si esta out_of_play sin historial concealed propio', () => {
+  const selectedRuleSet = getCatalogRuleSet(RULE_SET_CATALOG_IDS.BASIC_RULE_SET);
+  const builtRuleSet = buildRuleSet({
+    selectedRuleSet,
+    selectedRoleKeys: [
+      BASIC_ROLE_OPTION_KEYS.SET_OUT_OF_PLAY,
+      BASIC_ROLE_OPTION_KEYS.IN_OUT_OF_PLAY,
+      BASIC_ROLE_OPTION_KEYS.PLAIN
+    ],
+    roleCatalog: ROLE_CATALOG
+  });
+  const builtSession = buildSession({
+    id: 'in-out-disabled-session',
+    ruleSet: builtRuleSet.ruleSet,
+    seats: [
+      { seat: 0, playerId: 'player-1', role: BASIC_ROLE_OPTION_KEYS.SET_OUT_OF_PLAY },
+      { seat: 1, playerId: 'player-2', role: BASIC_ROLE_OPTION_KEYS.IN_OUT_OF_PLAY },
+      { seat: 2, playerId: 'player-3', role: BASIC_ROLE_OPTION_KEYS.PLAIN }
+    ],
+    validate: false
+  });
+  const sessionWithActorOut = withInPlayState(builtSession.session, {
+    'role_in_out_of_play-0': false
+  });
+  const prepared = preparePool(
+    sessionWithActorOut.cycle.pools[POOL_KEYS.POOL_CONCEALED],
+    {
+      cycleId: sessionWithActorOut.cycle.id,
+      poolKey: POOL_KEYS.POOL_CONCEALED,
+      roleStates: sessionWithActorOut.roles,
+      session: sessionWithActorOut
+    }
+  );
+  const inOutStage = prepared.pool.stages.find(
+    (stage) => stage.metadata.catalogId === STAGE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY
+  );
+
+  assert.equal(prepared.ok, true);
+  assert.equal(inOutStage.status, STAGE_STATUSES.DISABLED);
+});
+
+test('role_in_out_of_play no habilita su stage por un set_out_of_play de otro stage catalog', () => {
+  const selectedRuleSet = getCatalogRuleSet(RULE_SET_CATALOG_IDS.BASIC_RULE_SET);
+  const builtRuleSet = buildRuleSet({
+    selectedRuleSet,
+    selectedRoleKeys: [
+      BASIC_ROLE_OPTION_KEYS.SET_OUT_OF_PLAY,
+      BASIC_ROLE_OPTION_KEYS.IN_OUT_OF_PLAY,
+      BASIC_ROLE_OPTION_KEYS.PLAIN
+    ],
+    roleCatalog: ROLE_CATALOG
+  });
+  const builtSession = buildSession({
+    id: 'in-out-wrong-stage-history-session',
+    ruleSet: builtRuleSet.ruleSet,
+    seats: [
+      { seat: 0, playerId: 'player-1', role: BASIC_ROLE_OPTION_KEYS.SET_OUT_OF_PLAY },
+      { seat: 1, playerId: 'player-2', role: BASIC_ROLE_OPTION_KEYS.IN_OUT_OF_PLAY },
+      { seat: 2, playerId: 'player-3', role: BASIC_ROLE_OPTION_KEYS.PLAIN }
+    ],
+    validate: false
+  });
+  const sessionWithActorOut = withInPlayState(builtSession.session, {
+    'role_in_out_of_play-0': false
+  });
+  const sessionWithExposedHistory = appendActionHistory(sessionWithActorOut, {
+    cycleId: sessionWithActorOut.cycle.id,
+    poolKey: POOL_KEYS.POOL_EXPOSED,
+    stageKey: STAGE_KEYS.STAGE_05,
+    stageCatalogId: STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY,
+    actionKey: STAGE_ACTION_KEYS.SET_OUT_OF_PLAY,
+    actionId: ACTION_IDS.SET_IN_PLAY,
+    actorIds: ['role_set_out_of_play-0'],
+    targetIds: ['role_in_out_of_play-0'],
+    finalEffects: [
+      {
+        type: EFFECT_TYPES.SET_PROPERTY,
+        targetType: MECHANICAL_ENTITY_TYPES.ROLE,
+        targetId: 'role_in_out_of_play-0',
+        property: 'inPlay',
+        value: false
+      }
+    ],
+    result: HISTORY_RESULTS.APPLIED
+  });
+  const prepared = preparePool(
+    sessionWithExposedHistory.cycle.pools[POOL_KEYS.POOL_CONCEALED],
+    {
+      cycleId: sessionWithExposedHistory.cycle.id,
+      poolKey: POOL_KEYS.POOL_CONCEALED,
+      roleStates: sessionWithExposedHistory.roles,
+      session: sessionWithExposedHistory
+    }
+  );
+  const inOutStage = prepared.pool.stages.find(
+    (stage) => stage.metadata.catalogId === STAGE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY
+  );
+
+  assert.equal(prepared.ok, true);
+  assert.equal(inOutStage.status, STAGE_STATUSES.DISABLED);
+});
+
+test('role_in_out_of_play restaura el target causal y cancela la propagacion linked pendiente', () => {
+  const selectedRuleSet = getCatalogRuleSet(RULE_SET_CATALOG_IDS.BASIC_RULE_SET);
+  const builtRuleSet = buildRuleSet({
+    selectedRuleSet,
+    selectedRoleKeys: [
+      BASIC_ROLE_OPTION_KEYS.SET_OUT_OF_PLAY,
+      BASIC_ROLE_OPTION_KEYS.IN_OUT_OF_PLAY,
+      BASIC_ROLE_OPTION_KEYS.PLAIN,
+      BASIC_ROLE_OPTION_KEYS.LINKS_TARGETS
+    ],
+    roleCatalog: ROLE_CATALOG
+  });
+  const builtSession = buildSession({
+    id: 'in-out-linked-cancel-session',
+    ruleSet: builtRuleSet.ruleSet,
+    seats: [
+      { seat: 0, playerId: 'player-1', role: BASIC_ROLE_OPTION_KEYS.SET_OUT_OF_PLAY },
+      { seat: 1, playerId: 'player-2', role: BASIC_ROLE_OPTION_KEYS.IN_OUT_OF_PLAY },
+      { seat: 2, playerId: 'player-3', role: BASIC_ROLE_OPTION_KEYS.PLAIN },
+      { seat: 3, playerId: 'player-4', role: BASIC_ROLE_OPTION_KEYS.LINKS_TARGETS }
+    ],
+    validate: false
+  });
+  const linkedSession = {
+    ...builtSession.session,
+    groups: [
+      ...builtSession.session.groups,
+      createLinkedGroup({
+        id: 'linked-in-out-cancel',
+        roleIds: ['role_in_out_of_play-0', 'role_plain-0'],
+        selectionRules: []
+      })
+    ]
+  };
+  const linkedSetupClosed = completeCurrentStage(linkedSession, {
+    requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
+  });
+  const concealedSetOut = resolveCurrentStage(linkedSetupClosed.session, {
+    targetIds: ['role_in_out_of_play-0']
+  });
+  const inOutStageReady = completeCurrentStage(concealedSetOut.session, {
+    requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
+  });
+  const restored = resolveCurrentStage(inOutStageReady.session, {
+    actionKey: STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
+    targetIds: ['role_in_out_of_play-0']
+  });
+  const completedInOutStage = completeCurrentStage(restored.session, {
+    requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
+  });
+  const propagated = completeCurrentStage(completedInOutStage.session, {
+    requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
+  });
+  const propagatedHistory = propagated.session.actionHistory.at(-1);
+
+  assert.equal(linkedSetupClosed.ok, true);
+  assert.equal(concealedSetOut.ok, true);
+  assert.equal(concealedSetOut.session.specialStages.length, 1);
+  assert.equal(roleById(concealedSetOut.session, 'role_in_out_of_play-0').inPlay, false);
+  assert.equal(inOutStageReady.stageAdvance.next.stage.metadata.catalogId, STAGE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY);
+  assert.equal(restored.ok, true);
+  assert.equal(roleById(restored.session, 'role_in_out_of_play-0').inPlay, true);
+  assert.equal(completedInOutStage.stageAdvance.next.stage.metadata.catalogId, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
+  assert.equal(roleById(propagated.session, 'role_plain-0').inPlay, true);
+  assert.equal(propagatedHistory.actionKey, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
+  assert.equal(propagatedHistory.result, HISTORY_RESULTS.NO_EFFECT);
+  assert.equal(propagatedHistory.metadata.reason, 'causal_condition_not_met');
 });
 
 test('buildRuleSet materializa selection_counts_double solo si se selecciona la regla', () => {
@@ -4699,7 +5571,7 @@ test('buildSession consume directamente un ruleSet ya construido', () => {
     builtSession.session.settings.ruleSetId,
     RULE_SET_CATALOG_IDS.BASIC_RULE_SET
   );
-  assert.equal(builtSession.session.groups.length, 2);
+  assert.equal(builtSession.session.groups.length, 4);
   assert.equal(builtSession.session.objectiveRules.length, 3);
   assert.deepEqual(builtSession.session.cycle.poolOrder, [
     POOL_KEYS.POOL_CONCEALED,
@@ -4860,7 +5732,7 @@ test('assume_role fuerza role_set_out_of_play si las dos sobrantes son set_out_o
 
 test('catalogo de mensajes distingue keys implementadas y planificadas con audiencia', () => {
   assert.equal(
-    MESSAGE_CATALOG[MESSAGE_KEYS.RESOURCE_ALREADY_CONSUMED].status,
+    MESSAGE_CATALOG[MESSAGE_KEYS.ACTION_USAGE_LIMIT_REACHED].status,
     MESSAGE_IMPLEMENTATION_STATUSES.IMPLEMENTED
   );
   assert.equal(

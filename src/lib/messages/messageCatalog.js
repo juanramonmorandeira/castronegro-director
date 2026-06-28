@@ -10,7 +10,7 @@ export const MESSAGE_IMPLEMENTATION_STATUSES = Object.freeze({
 });
 
 export const MESSAGE_KEYS = Object.freeze({
-  RESOURCE_ALREADY_CONSUMED: 'resource_already_consumed',
+  ACTION_USAGE_LIMIT_REACHED: 'action_usage_limit_reached',
   INVALID_CANDIDATE: 'invalid_candidate',
   PROPERTY_CHANGE_BLOCKED: 'property_change_blocked',
   SELECTION_TIED: 'selection_tied',
@@ -18,12 +18,12 @@ export const MESSAGE_KEYS = Object.freeze({
   COLLECTIVE_SELECTION_REQUESTED: 'collective_selection_requested',
   ROLE_STATE_REVEALED: 'role_state_revealed',
   REACTIVE_SELECTION_REQUESTED: 'reactive_selection_requested',
-  RESOURCE_ACTION_APPLIED: 'resource_action_applied',
+  LIMITED_ACTION_APPLIED: 'limited_action_applied',
   GROUP_CREATED: 'group_created',
   ROLE_ASSUMPTION_REQUESTED: 'role_assumption_requested',
   ROLE_ASSUMPTION_COMPLETED: 'role_assumption_completed',
-  OBSERVATION_AVAILABLE: 'observation_available',
-  OBSERVATION_DETECTED: 'observation_detected',
+  PEEK_AVAILABLE: 'peek_available',
+  PEEK_ACCUSATION_RECEIVED: 'peek_accusation_received',
   SELECTION_AUTHORITY_ASSIGNED: 'selection_authority_assigned',
   SELECTION_AUTHORITY_TRANSFERRED: 'selection_authority_transferred',
   OBJECTIVE_ACHIEVED: 'objective_achieved',
@@ -36,12 +36,12 @@ export const MESSAGE_KEYS = Object.freeze({
 });
 
 export const MESSAGE_CATALOG = Object.freeze({
-  [MESSAGE_KEYS.RESOURCE_ALREADY_CONSUMED]: {
+  [MESSAGE_KEYS.ACTION_USAGE_LIMIT_REACHED]: {
     type: MESSAGE_TYPES.GAMEPLAY,
     severity: MESSAGE_SEVERITIES.WARNING,
     defaultAudience: MESSAGE_AUDIENCE_TYPES.ROLE,
     status: MESSAGE_IMPLEMENTATION_STATUSES.IMPLEMENTED,
-    requiredParams: ['actor', 'resource', 'limit', 'used']
+    requiredParams: ['actor', 'recipe', 'limit', 'used']
   },
   [MESSAGE_KEYS.INVALID_CANDIDATE]: {
     type: MESSAGE_TYPES.GAMEPLAY,
@@ -92,12 +92,12 @@ export const MESSAGE_CATALOG = Object.freeze({
     status: MESSAGE_IMPLEMENTATION_STATUSES.PLANNED,
     requiredParams: ['actor']
   },
-  [MESSAGE_KEYS.RESOURCE_ACTION_APPLIED]: {
+  [MESSAGE_KEYS.LIMITED_ACTION_APPLIED]: {
     type: MESSAGE_TYPES.GAMEPLAY,
     severity: MESSAGE_SEVERITIES.INFO,
     defaultAudience: MESSAGE_AUDIENCE_TYPES.ROLE,
     status: MESSAGE_IMPLEMENTATION_STATUSES.PLANNED,
-    requiredParams: ['actor', 'resource']
+    requiredParams: ['actor', 'recipe']
   },
   [MESSAGE_KEYS.GROUP_CREATED]: {
     type: MESSAGE_TYPES.GAMEPLAY,
@@ -120,19 +120,19 @@ export const MESSAGE_CATALOG = Object.freeze({
     status: MESSAGE_IMPLEMENTATION_STATUSES.PLANNED,
     requiredParams: ['actor', 'assumedRole']
   },
-  [MESSAGE_KEYS.OBSERVATION_AVAILABLE]: {
+  [MESSAGE_KEYS.PEEK_AVAILABLE]: {
     type: MESSAGE_TYPES.GAMEPLAY,
     severity: MESSAGE_SEVERITIES.INFO,
     defaultAudience: MESSAGE_AUDIENCE_TYPES.ROLE,
     status: MESSAGE_IMPLEMENTATION_STATUSES.PLANNED,
     requiredParams: ['actor', 'observedStage']
   },
-  [MESSAGE_KEYS.OBSERVATION_DETECTED]: {
+  [MESSAGE_KEYS.PEEK_ACCUSATION_RECEIVED]: {
     type: MESSAGE_TYPES.GAMEPLAY,
     severity: MESSAGE_SEVERITIES.INFO,
-    defaultAudience: MESSAGE_AUDIENCE_TYPES.GROUP,
+    defaultAudience: MESSAGE_AUDIENCE_TYPES.DIRECTOR,
     status: MESSAGE_IMPLEMENTATION_STATUSES.PLANNED,
-    requiredParams: ['observer', 'group']
+    requiredParams: ['accusedRole', 'group']
   },
   [MESSAGE_KEYS.SELECTION_AUTHORITY_ASSIGNED]: {
     type: MESSAGE_TYPES.GAMEPLAY,

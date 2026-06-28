@@ -101,7 +101,7 @@ Ejemplo conceptual:
   ruleSetConfiguration: {
     selectedRoles: [
       { roleKey: 'role_inspects', count: 1 },
-      { roleKey: 'role_blocks_out_of_play', count: 1 },
+      { roleKey: 'role_in_out_of_play', count: 1 },
       { roleKey: 'role_reactive', count: 1 }
     ],
     enabledOptionalRules: [],

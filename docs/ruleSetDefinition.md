@@ -13,7 +13,7 @@ Los catalogos son la biblioteca mecanica del software:
 - `groupCatalog`
 - `stageCatalog`
 - `recipeCatalog`
-- futuros catalogos de objectives, resources, groups o buildings.
+- futuros catalogos de objectives, groups o buildings.
 
 Un `ruleSet` se construye con elementos existentes en esos catalogos.
 
@@ -129,14 +129,36 @@ Cobertura inicial:
 
 | Opcion mecanica | Estado | Observacion |
 | --- | --- | --- |
-| `role_set_out_of_play` | ready | Actua mediante `group_alignment_b`. |
+| `role_set_out_of_play` | ready | Actua mediante `group_concealed_set_out_of_play`. |
 | `role_inspects` | ready | Inspeccion privada. |
 | `role_reactive` | ready | Crea una specialStage al cambiar a `inPlay=false`. |
-| `role_in_play_control` | ready | Dos acciones limitadas durante la session. |
+| `role_in_out_of_play` | ready | Dos acciones limitadas durante la session. |
 | `role_plain` | ready | Sin stage personal. |
 | `role_links_targets` | ready | Crea un group, aporta selectionRules y objectiveRules propias. |
 | `role_assumes_role` | ready | Usa `assumableRoles` y `assume_role` para reemplazar identidad en el primer `poolConcealed` del ciclo 1. |
-| `role_observes_selection` | pending | Falta observacion y sustitucion del candidate elegido. |
+| `role_peek` | ready | Role avanzado: puede intentar espiar `stage_concealed_set_out_of_play`; una `peekAccusation` validada por director aplica `override_selected_candidate` sobre el verdadero `role_peek`. |
+
+Matriz de cierre de roles de `basic_ruleset` en dominio:
+
+| Role | Decidido | Implementado | Testeado | Pendiente |
+| --- | --- | --- | --- | --- |
+| `role_assumes_role` | Si | Si | Si | Ninguno en dominio. |
+| `role_inspects` | Si | Si | Si | Ninguno en dominio. |
+| `role_in_out_of_play` | Si | Si | Si | Dominio cerrado. Queda configuracion opcional futura para decidir si puede usar ambas recipes o si debe elegir una. Esa configuracion no bloquea el cierre del role en el dominio actual. |
+| `role_links_targets` | Si | Si | Si | Ninguno en dominio. |
+| `role_peek` | Si | Si | Si | Mecanica cerrada en dominio. Quedan pendientes de UX/director/conducta humana para fase UI/skin, no para el cierre mecanico del role. |
+| `role_plain` | Si | Si | Si | Ninguno en dominio. |
+| `role_reactive` | Si | Si | Si | Ninguno en dominio. |
+| `role_set_out_of_play` | Si | Si | Si | Ninguno en dominio. |
+
+Conclusion de cierre:
+
+- Los ocho roles disponibles de `basic_ruleset` quedan cerrados a nivel de
+  dominio mecanico.
+- Los pendientes de `role_in_out_of_play` y `role_peek` no bloquean el cierre
+  del dominio de roles: pertenecen a configuracion futura y a UI/skin/director.
+- Cualquier nueva regla general del juego debe evaluarse contra esta matriz
+  antes de reabrir un role.
 
 Reglas disponibles iniciales:
 
@@ -234,8 +256,8 @@ Ejemplos encontrados en la version vieja:
   por categorias/alignment segun numero de jugadores;
 - `src/components/config/Selection.svelte` contiene excepciones para roles
   multi-instancia como `brothers` y `sisters`;
-- `reference-data/rulesets/resources_table.json` agrupa roles disponibles por
-  ruleset viejo y categoria.
+- las formulas actuales sustituyen las tablas heredadas de balance cuando la
+  regla puede expresarse de forma estable.
 
 Estado actual:
 
@@ -355,8 +377,13 @@ Estructura de trabajo:
 }
 ```
 
-Las categorias `stageRules`, `candidateRules` y `configurationRules` siguen
-abiertas a revision. Solo deben mantenerse si tienen comportamiento propio.
+`stageRules` gobierna lo que puede ocurrir dentro o durante una stage concreta,
+aunque la regla la aporte un role, group o ruleSet. `role_peek` usa una
+`stageRule` de tipo `peek_accusation_override` sobre
+`stage_concealed_set_out_of_play`.
+
+Las categorias `candidateRules` y `configurationRules` siguen abiertas a
+revision. Solo deben mantenerse si tienen comportamiento propio.
 
 Preguntas pendientes:
 
@@ -420,7 +447,7 @@ Futura mejora del software:
 Permitir que creadores avanzados creen nuevos elementos de catalogo.
 ```
 
-Ese editor podria permitir construir roles, stages, recipes, groups, resources u
+Ese editor podria permitir construir roles, stages, recipes, groups u
 objectiveRules a partir de elementos mecanicos disponibles.
 
 No forma parte del objetivo actual. Primero necesitamos un flujo minimo

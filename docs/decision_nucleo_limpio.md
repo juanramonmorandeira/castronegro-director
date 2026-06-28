@@ -45,7 +45,6 @@ El primer paso solo define modelos y validaciones basicas:
 - `session`
 - `player`
 - `role`
-- `resource`
 - `cycle`
 - `pool`
 - `stage`

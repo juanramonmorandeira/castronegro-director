@@ -1,4 +1,4 @@
-## Village Storyteller – mapa de directorios
+## Cyclic Social Engine – mapa de directorios
 
 ```text
 .
@@ -13,8 +13,7 @@
 │   ├── metadata/
 │   │   └── games.json         # Estados, transiciones y defaults de las partidas
 │   ├── rulesets/
-│   │   ├── balance_table.json # Distribución sugerida de roles por número de jugadores
-│   │   └── resources_table.json
+│   │   └── balance_table.json # Distribución sugerida de roles por número de jugadores
 │   ├── datasets/              # Espacio reservado para estudios/ETL
 │   ├── images/                # Insumos para scripts o documentación
 │   └── users/                 # Plantillas o seeds externos

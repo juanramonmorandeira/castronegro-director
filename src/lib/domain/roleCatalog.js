@@ -7,6 +7,7 @@
 
 import { POOL_KEYS } from './sessionModel.js';
 import { getCatalogStage, STAGE_CATALOG_IDS } from './stageCatalog.js';
+import { RECIPE_KEYS } from './recipeCatalog.js';
 import { AVAILABILITY_RULE_TYPES } from './stageDefinition.js';
 import { defineRole, ROLE_DEFINITION_TYPES } from './roleDefinition.js';
 import {
@@ -14,15 +15,17 @@ import {
   EVENT_TRIGGER_TARGETS,
   EVENT_TYPES
 } from './eventModel.js';
+import { MECHANICAL_ENTITY_TYPES } from './domainTypes.js';
 
 export const ROLE_CATALOG_IDS = Object.freeze({
   ROLE_SET_OUT_OF_PLAY: 'role_set_out_of_play',
   ROLE_INSPECTS: 'role_inspects',
   ROLE_LINKS_TARGETS: 'role_links_targets',
   ROLE_BLOCKS_OUT_OF_PLAY: 'role_blocks_out_of_play',
-  ROLE_IN_PLAY_CONTROL: 'role_in_play_control',
+  ROLE_IN_OUT_OF_PLAY: 'role_in_out_of_play',
   ROLE_REACTIVE: 'role_reactive',
   ROLE_ASSUMES_ROLE: 'role_assumes_role',
+  ROLE_PEEK: 'role_peek',
   ROLE_PLAIN: 'role_plain'
 });
 
@@ -60,7 +63,10 @@ export const ROLE_CATALOG = Object.freeze({
             'Runs once during the first concealed pool so shared-destiny groups exist before recurrent actions can change inPlay or alignment state.'
         }
       })
-    ]
+    ],
+    metadata: {
+      mechanicalFamily: 'links_targets'
+    }
   }),
 
   [ROLE_CATALOG_IDS.ROLE_INSPECTS]: defineRole({
@@ -79,7 +85,10 @@ export const ROLE_CATALOG = Object.freeze({
             'Runs before group set_out_of_play so private information is available before concealed removal attempts.'
         }
       })
-    ]
+    ],
+    metadata: {
+      mechanicalFamily: 'inspects'
+    }
   }),
 
   [ROLE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY]: defineRole({
@@ -98,30 +107,40 @@ export const ROLE_CATALOG = Object.freeze({
             'Runs before set_out_of_play because it blocks that effect for a chosen target in the current cycle.'
         }
       })
-    ]
+    ],
+    metadata: {
+      mechanicalFamily: 'blocks_out_of_play'
+    }
   }),
 
-  [ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL]: defineRole({
-    key: ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL,
+  [ROLE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY]: defineRole({
+    key: ROLE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY,
     type: ROLE_DEFINITION_TYPES.ROLE,
     alignmentId: 'alignment_a',
     stageDefinitions: [
-      getCatalogStage(STAGE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL, {
+      getCatalogStage(STAGE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY, {
         poolKey: POOL_KEYS.POOL_CONCEALED,
         order: 40,
-        availabilityRules: [
-          { type: AVAILABILITY_RULE_TYPES.ACTOR_IN_PLAY }
-        ],
+        availabilityRules: {
+          all: [],
+          any: [
+            { type: AVAILABILITY_RULE_TYPES.ACTOR_IN_PLAY },
+            {
+              type: AVAILABILITY_RULE_TYPES.ACTOR_RECENTLY_OUT_OF_PLAY,
+              actionKey: RECIPE_KEYS.SET_OUT_OF_PLAY,
+              stageCatalogId: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY
+            }
+          ]
+        },
         metadata: {
           orderReason:
             'Runs after set_out_of_play because restore_recent_out_of_play needs a same-cycle inPlay=false history entry.'
         }
       })
     ],
-    resources: [
-      { key: 'restore_in_play', count: 1 },
-      { key: 'set_out_of_play', count: 1 }
-    ]
+    metadata: {
+      mechanicalFamily: 'in_out_of_play'
+    }
   }),
 
   [ROLE_CATALOG_IDS.ROLE_REACTIVE]: defineRole({
@@ -134,7 +153,7 @@ export const ROLE_CATALOG = Object.freeze({
         key: 'self_out_of_play_creates_special_stage',
         trigger: {
           eventType: EVENT_TYPES.PROPERTY_CHANGED,
-          targetType: 'role',
+          targetType: MECHANICAL_ENTITY_TYPES.ROLE,
           target: EVENT_TRIGGER_TARGETS.SELF,
           property: 'inPlay',
           to: false
@@ -191,6 +210,33 @@ export const ROLE_CATALOG = Object.freeze({
     }
   }),
 
+  [ROLE_CATALOG_IDS.ROLE_PEEK]: defineRole({
+    key: ROLE_CATALOG_IDS.ROLE_PEEK,
+    type: ROLE_DEFINITION_TYPES.ROLE,
+    alignmentId: 'alignment_a',
+    stageDefinitions: [],
+    stageRules: [
+      {
+        key: 'peek_concealed_set_out_of_play',
+        type: 'peek_accusation_override',
+        observedStageKey: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY,
+        poolKeys: [POOL_KEYS.POOL_CONCEALED],
+        actionKeys: ['set_out_of_play'],
+        requireInPlay: true,
+        resolution: 'director_validated',
+        overrideActionKey: 'override_selected_candidate'
+      }
+    ],
+    metadata: {
+      mechanicalFamily: 'peek',
+      advanced: true,
+      riskNotes: [
+        'Depends on human conduct during the observed stage.',
+        'Recommended for experienced tables because it can expose alignment_b information if mishandled.'
+      ]
+    }
+  }),
+
   [ROLE_CATALOG_IDS.ROLE_PLAIN]: defineRole({
     key: ROLE_CATALOG_IDS.ROLE_PLAIN,
     type: ROLE_DEFINITION_TYPES.ROLE,
@@ -225,6 +271,9 @@ export function getCatalogRole(roleCatalogId, overrides = {}) {
     specialStageDefinitions: overrides.specialStageDefinitions
       ? cloneCatalogValue(overrides.specialStageDefinitions)
       : cloneCatalogValue(baseRole.specialStageDefinitions ?? []),
+    stageRules: overrides.stageRules
+      ? cloneCatalogValue(overrides.stageRules)
+      : cloneCatalogValue(baseRole.stageRules ?? []),
     metadata: {
       ...cloneCatalogValue(baseRole.metadata ?? {}),
       ...(overrides.metadata ?? {})
@@ -241,9 +290,10 @@ export function getCoreRoleCatalog() {
     getCatalogRole(ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS),
     getCatalogRole(ROLE_CATALOG_IDS.ROLE_INSPECTS),
     getCatalogRole(ROLE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY),
-    getCatalogRole(ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL),
+    getCatalogRole(ROLE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY),
     getCatalogRole(ROLE_CATALOG_IDS.ROLE_REACTIVE),
     getCatalogRole(ROLE_CATALOG_IDS.ROLE_ASSUMES_ROLE),
+    getCatalogRole(ROLE_CATALOG_IDS.ROLE_PEEK),
     getCatalogRole(ROLE_CATALOG_IDS.ROLE_PLAIN)
   ];
 }

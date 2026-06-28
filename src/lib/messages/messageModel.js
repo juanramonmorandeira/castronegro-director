@@ -35,11 +35,11 @@ export function createMessageFromEngineError({ session = {}, error = {}, context
 
   if (error.code === 'constraint/limited_uses') {
     const actorId = error.actorIds?.[0] ?? null;
-    const resourceKey = error.actionKey ?? 'unknown_resource';
+    const recipeKey = error.actionKey ?? 'unknown_recipe';
 
     return createMessage({
       type: MESSAGE_TYPES.GAMEPLAY,
-      key: MESSAGE_KEYS.RESOURCE_ALREADY_CONSUMED,
+      key: MESSAGE_KEYS.ACTION_USAGE_LIMIT_REACHED,
       severity: MESSAGE_SEVERITIES.WARNING,
       audience: {
         type: MESSAGE_AUDIENCE_TYPES.ROLE,
@@ -47,7 +47,7 @@ export function createMessageFromEngineError({ session = {}, error = {}, context
       },
       params: {
         actor: createEntityReference(MESSAGE_ENTITY_TYPES.ROLE, actorId ?? 'unknown_role'),
-        resource: createEntityReference(MESSAGE_ENTITY_TYPES.RESOURCE, resourceKey),
+        recipe: createEntityReference(MESSAGE_ENTITY_TYPES.RECIPE, recipeKey),
         limit: error.limit,
         used: error.used,
         window: error.window

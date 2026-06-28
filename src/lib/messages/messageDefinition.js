@@ -26,7 +26,6 @@ export const MESSAGE_AUDIENCE_TYPES = Object.freeze({
 export const MESSAGE_ENTITY_TYPES = Object.freeze({
   ROLE: 'role',
   GROUP: 'group',
-  RESOURCE: 'resource',
   STAGE: 'stage',
   OBJECTIVE: 'objective',
   ACTION: 'action',

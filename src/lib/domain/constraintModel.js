@@ -25,6 +25,8 @@ import {
 export const CONSTRAINT_TYPES = Object.freeze({
   NO_REPEAT_TARGET: 'no_repeat_target',
   REQUIRE_RECENT_SET_PROPERTY: 'require_recent_set_property',
+  REQUIRE_ACTOR_IN_PLAY: 'require_actor_in_play',
+  REQUIRE_SELF_TARGET_WHEN_ACTOR_OUT: 'require_self_target_when_actor_out',
   LIMITED_USES: 'limited_uses'
 });
 
@@ -150,6 +152,7 @@ export function evaluateRequireRecentSetPropertyConstraint({ session, targets, c
           value: constraint.value,
           targetId: target.id,
           stageKey: constraint.stageKey ?? null,
+          stageCatalogId: constraint.stageCatalogId ?? null,
           actionKey: constraint.actionKey ?? null
         }).length > 0
       );
@@ -168,7 +171,40 @@ export function evaluateRequireRecentSetPropertyConstraint({ session, targets, c
         value: constraint.value,
         actionKey: constraint.actionKey ?? null,
         stageKey: constraint.stageKey ?? null,
+        stageCatalogId: constraint.stageCatalogId ?? null,
         window
+      }
+    ];
+  });
+}
+
+export function evaluateRequireActorInPlayConstraint({ actor, constraint }) {
+  if (actor?.inPlay === true) return [];
+
+  return [
+    {
+      code: 'constraint/require_actor_in_play',
+      message: `actor "${actor?.id ?? 'missing'}" must be inPlay=true`,
+      constraint: constraint.type,
+      actorIds: actor?.id ? [actor.id] : []
+    }
+  ];
+}
+
+export function evaluateRequireSelfTargetWhenActorOutConstraint({ actor, targets, constraint }) {
+  if (!actor || actor.inPlay === true) return [];
+
+  return (targets ?? []).flatMap((target, index) => {
+    if (target?.id === actor.id) return [];
+
+    return [
+      {
+        code: 'constraint/require_self_target_when_actor_out',
+        message: `actor "${actor.id}" can only target self while inPlay=false`,
+        constraint: constraint.type,
+        actorIds: [actor.id],
+        targetId: target?.id ?? null,
+        index
       }
     ];
   });
@@ -287,6 +323,19 @@ export function evaluateRecipeConstraints({ session, recipe, actor, targets, con
     if (constraint?.type === CONSTRAINT_TYPES.REQUIRE_RECENT_SET_PROPERTY) {
       return evaluateRequireRecentSetPropertyConstraint({
         session,
+        targets,
+        constraint
+      });
+    }
+    if (constraint?.type === CONSTRAINT_TYPES.REQUIRE_ACTOR_IN_PLAY) {
+      return evaluateRequireActorInPlayConstraint({
+        actor,
+        constraint
+      });
+    }
+    if (constraint?.type === CONSTRAINT_TYPES.REQUIRE_SELF_TARGET_WHEN_ACTOR_OUT) {
+      return evaluateRequireSelfTargetWhenActorOutConstraint({
+        actor,
         targets,
         constraint
       });

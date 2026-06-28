@@ -59,6 +59,102 @@ Formato recomendado para un stage con varias recetas:
 `optional` expresa si la receta puede omitirse antes de cerrar el stage. No
 desactiva validaciones cuando la receta se ejecuta.
 
+## Contrato de recipe, actor y stage
+
+Definiciones aceptadas:
+
+```text
+Actor  -> declara quien tiene autoridad mecanica para ejecutar una recipe.
+Recipe -> define la mecanica reusable.
+Stage  -> define el contexto concreto de ejecucion.
+Session -> aporta los roles/groups reales.
+Input  -> aporta la intencion humana concreta: seleccion, target, confirmacion.
+```
+
+Tipos base de actor:
+
+```js
+actor: { type: 'role' }     // actua un role individual
+actor: { type: 'group' }    // actua un conjunto de roles derivado por stage/session
+actor: { type: 'system' }   // accion automatica del motor
+actor: { type: 'director' } // accion explicita del director de partida
+```
+
+Los tipos `role`, `group`, `session` y `objectiveRule` viven en
+`MECHANICAL_ENTITY_TYPES`. El nombre evita confundirlos con todas las entidades
+posibles del dominio: son sujetos mecanicos usados en contracts de actor, target,
+effect, holder e influence.
+
+La recipe debe declarar solo el tipo base cuando sea posible. La stage/session
+materializa el actor concreto. Por ejemplo, `set_out_of_play` declara
+`actor: { type: 'group' }`; la stage concreta decide que group actua.
+
+En acciones colectivas, el historial debe poder conservar el actor mecanico y
+los roles vivos que lo componian en ese momento:
+
+```js
+{
+  actionKey: 'set_out_of_play',
+  actor: {
+    type: 'group',
+    groupId: 'group_alignment_b',
+    memberRoleIds: ['role_b_0', 'role_b_1']
+  },
+  selectorIds: ['role_b_0', 'role_b_1'],
+  targetIds: ['role_a_0'],
+  actorContract: { type: 'group' },
+  targetContract: {
+    type: 'role',
+    count: 1,
+    filters: ['in_play', 'not_same_alignment']
+  }
+}
+```
+
+Filtros base aceptados:
+
+```text
+in_play
+not_in_play
+not_self
+same_alignment
+not_same_alignment
+recently_out_of_play
+assumable
+distinct
+```
+
+El catalogo de filtros es cerrado: el motor rechaza filtros desconocidos. Se
+pueden anadir filtros nuevos, pero no usarlos como strings libres sin soporte
+del dominio.
+
+Overrides permitidos desde una stage:
+
+```text
+actor
+target
+usage
+constraints
+visibility
+optional
+metadata
+influences
+```
+
+Overrides bloqueados desde una stage:
+
+```text
+id
+effect
+```
+
+Cambiar `effect` cambia la naturaleza de la recipe. Cambiar `id` cambia la
+action pura que ejecuta el motor; por tanto, tambien debe tratarse como otra
+recipe o como una factory explicita futura, no como un override casual. Si un
+override intenta cambiar `id` o `effect`, el dominio genera un diagnosticError
+`recipe/blocked-override`. Si usa un campo no permitido, genera
+`recipe/unknown-override`.
+
 ## Restricciones disponibles
 
 ### `no_repeat_target`
@@ -217,7 +313,7 @@ Configuracion principal:
 
 ```text
 blockedPropertyChange: property=inPlay, value=false
-blockedFor: group alignment_set_out_of_play y roles con alignment_b materializados
+blockedFor: group group_concealed_set_out_of_play y roles con alignment_b materializados
 duration: pool actual, boundary after
 target: 1 role
 filters: in_play, not_self
@@ -244,9 +340,23 @@ set_in_play
 
 Configuracion principal:
 
-```text
-effect: set_property inPlay=false
-target: 1 role
+```js
+{
+  key: 'set_out_of_play',
+  id: 'set_in_play',
+  actor: { type: 'group' },
+  target: {
+    type: 'role',
+    count: 1,
+    filters: ['in_play', 'not_same_alignment']
+  },
+  usage: { limit: null, window: 'session' },
+  effect: {
+    type: 'set_property',
+    property: 'inPlay',
+    value: false
+  }
+}
 ```
 
 Restricciones base:
@@ -258,22 +368,7 @@ ninguna
 Nota: una skin no anade restricciones mecanicas. Las restricciones mecanicas
 viven en ruleSet/role/group/recipe; la skin solo presenta el resultado.
 
-### `one_shot_set_out_of_play`
-
-Accion pura:
-
-```text
-set_in_play
-```
-
-Configuracion principal:
-
-```text
-effect: set_property inPlay=false
-target: 1 role
-```
-
-Uso:
+La misma recipe puede ser limitada por la stage que la usa:
 
 ```js
 usage: {
@@ -285,9 +380,8 @@ usage: {
 Lectura:
 
 ```text
-Es una receta distinta de set_out_of_play aunque use la misma accion pura.
-Su actionKey propio permite contar usos sin mezclarla con otros
-set_in_play(false) de la partida.
+No hace falta crear otra recipe para expresar que un uso es limitado. La
+limitacion vive en recipe.usage y se traduce internamente a limited_uses.
 ```
 
 ### `restore_recent_out_of_play`
@@ -314,7 +408,8 @@ constraints: [
     window: 'current_cycle',
     property: 'inPlay',
     value: false,
-    actionKey: 'set_out_of_play'
+    actionKey: 'set_out_of_play',
+    stageCatalogId: 'concealed_set_out_of_play' // cuando la aporta role_in_out_of_play en basic_ruleset
   }
 ],
 usage: {
@@ -329,6 +424,10 @@ Lectura:
 Puede restaurar un target solo si ese target recibio inPlay=false este ciclo
 por la receta set_out_of_play. El mismo actor solo puede usar esta receta una
 vez en la partida.
+
+En `basic_ruleset`, cuando la usa `role_in_out_of_play`, la constraint se acota
+a `stageCatalogId: concealed_set_out_of_play`. Eso evita que el restore se
+active por un `set_out_of_play` de otra stage catalogada.
 ```
 
 ### Seleccion + receta
@@ -345,7 +444,7 @@ Si hay `chosenId`, `stageModel` ejecuta la receta normal declarada en
 Ejemplo actual:
 
 ```text
-group_selection
+exposed_set_out_of_play
   selectionRules:
     required: all_selectors
     abstain: not_allowed
@@ -366,8 +465,8 @@ Lectura: el seleccion elige un target; la receta `set_out_of_play` aplica
 para aplicar otra receta distinta sin crear una receta compuesta nueva.
 
 Si existe un group `linked` activo, su propia `selectionRules` puede aportar
-`groupRestrictions` a esta seleccion. `group_selection` no conoce `linked` por si
-mismo.
+`groupRestrictions` a esta seleccion. `exposed_set_out_of_play` no conoce
+`linked` por si mismo.
 
 ### `start_cycle`
 

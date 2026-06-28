@@ -17,6 +17,7 @@ import {
 } from './selectionModel.js';
 import { createStage } from './stageDefinition.js';
 import { STAGE_STATUSES } from './sessionModel.js';
+import { STAGE_COMPLETION_REQUESTED_BY } from './stageTypes.js';
 import {
   appendSpecialStage,
   removeSpecialStages
@@ -64,7 +65,10 @@ export function createSelectDoubleSelectorStage(overrides = {}) {
     actorIds: [],
     completion: {
       mode: 'manual',
-      allowedRequesters: ['director', 'system']
+      allowedRequesters: [
+        STAGE_COMPLETION_REQUESTED_BY.DIRECTOR,
+        STAGE_COMPLETION_REQUESTED_BY.SYSTEM
+      ]
     },
     selectionRules: createSelectionRules({
       required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
@@ -90,7 +94,10 @@ export function createPickNextDoubleSelectorStage({ holderRoleId, candidateIds =
     actorIds: holderRoleId ? [holderRoleId] : [],
     completion: {
       mode: 'manual',
-      allowedRequesters: ['director', 'system']
+      allowedRequesters: [
+        STAGE_COMPLETION_REQUESTED_BY.DIRECTOR,
+        STAGE_COMPLETION_REQUESTED_BY.SYSTEM
+      ]
     },
     selectionRules: createSelectionRules({
       required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
@@ -111,7 +118,10 @@ export function createPickNextDoubleSelectorStage({ holderRoleId, candidateIds =
   });
 }
 
-export function requestSelectDoubleSelectorStage(session = {}, { requestedBy = 'director' } = {}) {
+export function requestSelectDoubleSelectorStage(
+  session = {},
+  { requestedBy = STAGE_COMPLETION_REQUESTED_BY.DIRECTOR } = {}
+) {
   if (!isSelectionCountsDoubleEnabled(session)) {
     return {
       ok: false,

@@ -7,7 +7,11 @@
 // -----------------------------------------------------------------------------
 
 import { getCatalogGroup, GROUP_CATALOG_IDS } from './groupCatalog.js';
-import { OBJECTIVE_CONDITIONS } from './objectiveModel.js';
+import {
+  OBJECTIVE_BENEFICIARY_TYPES,
+  OBJECTIVE_CONDITIONS,
+  OBJECTIVE_HOLDER_TYPES
+} from './objectiveModel.js';
 import { ROLE_CATALOG_IDS } from './roleCatalog.js';
 import { RECIPE_KEYS } from './recipeCatalog.js';
 import {
@@ -20,7 +24,6 @@ import { POOL_KEYS } from './sessionModel.js';
 import { MESSAGE_KEYS } from '../messages/messageCatalog.js';
 import {
   ALIGNMENT_IDS,
-  RULE_SET_SUPPORT_STATUSES,
   defineRuleSet
 } from './ruleSetDefinition.js';
 
@@ -32,11 +35,11 @@ export const BASIC_ROLE_OPTION_KEYS = Object.freeze({
   SET_OUT_OF_PLAY: ROLE_CATALOG_IDS.ROLE_SET_OUT_OF_PLAY,
   INSPECTS: ROLE_CATALOG_IDS.ROLE_INSPECTS,
   REACTIVE: ROLE_CATALOG_IDS.ROLE_REACTIVE,
-  IN_PLAY_CONTROL: ROLE_CATALOG_IDS.ROLE_IN_PLAY_CONTROL,
+  IN_OUT_OF_PLAY: ROLE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY,
   PLAIN: ROLE_CATALOG_IDS.ROLE_PLAIN,
   LINKS_TARGETS: ROLE_CATALOG_IDS.ROLE_LINKS_TARGETS,
   ASSUMES_ROLE: ROLE_CATALOG_IDS.ROLE_ASSUMES_ROLE,
-  OBSERVES_SELECTION: 'role_observes_selection'
+  PEEK: ROLE_CATALOG_IDS.ROLE_PEEK
 });
 
 export const BASIC_AVAILABLE_RULE_KEYS = Object.freeze({
@@ -59,24 +62,24 @@ export function getBasicAlignmentDistribution(playersExpected) {
 const BASIC_OBJECTIVE_RULES = [
   {
     key: 'alignment_b_reaches_in_play_parity',
-    holder: { type: 'group', id: 'group_alignment_b' },
+    holder: { type: OBJECTIVE_HOLDER_TYPES.GROUP, id: 'group_alignment_b' },
     condition: { type: OBJECTIVE_CONDITIONS.HOLDER_REACHES_IN_PLAY_PARITY },
     onFulfilled: [
       {
         conclusive: true,
-        beneficiaries: { type: 'holder' }
+        beneficiaries: { type: OBJECTIVE_BENEFICIARY_TYPES.HOLDER }
       }
     ],
     conflictRules: []
   },
   {
     key: 'only_alignment_a_remains_in_play',
-    holder: { type: 'group', id: 'group_alignment_a' },
+    holder: { type: OBJECTIVE_HOLDER_TYPES.GROUP, id: 'group_alignment_a' },
     condition: { type: OBJECTIVE_CONDITIONS.ONLY_HOLDER_GROUP_REMAINS_IN_PLAY },
     onFulfilled: [
       {
         conclusive: true,
-        beneficiaries: { type: 'holder' }
+        beneficiaries: { type: OBJECTIVE_BENEFICIARY_TYPES.HOLDER }
       }
     ],
     conflictRules: []
@@ -108,9 +111,30 @@ export const RULE_SET_CATALOG = Object.freeze({
           step: 1
         }
       },
-      { roleKey: BASIC_ROLE_OPTION_KEYS.INSPECTS },
-      { roleKey: BASIC_ROLE_OPTION_KEYS.REACTIVE },
-      { roleKey: BASIC_ROLE_OPTION_KEYS.IN_PLAY_CONTROL },
+      {
+        roleKey: BASIC_ROLE_OPTION_KEYS.INSPECTS,
+        instanceRule: {
+          min: 0,
+          max: 1,
+          step: 1
+        }
+      },
+      {
+        roleKey: BASIC_ROLE_OPTION_KEYS.REACTIVE,
+        instanceRule: {
+          min: 0,
+          max: 1,
+          step: 1
+        }
+      },
+      {
+        roleKey: BASIC_ROLE_OPTION_KEYS.IN_OUT_OF_PLAY,
+        instanceRule: {
+          min: 0,
+          max: 1,
+          step: 1
+        }
+      },
       {
         roleKey: BASIC_ROLE_OPTION_KEYS.PLAIN,
         instanceRule: {
@@ -136,14 +160,19 @@ export const RULE_SET_CATALOG = Object.freeze({
         }
       },
       {
-        roleKey: BASIC_ROLE_OPTION_KEYS.OBSERVES_SELECTION,
-        support: RULE_SET_SUPPORT_STATUSES.PENDING,
-        selectable: false,
-        missingMechanics: [
-          'observe_other_stage',
-          'observation_detection',
-          'replace_selected_candidate'
-        ]
+        roleKey: BASIC_ROLE_OPTION_KEYS.PEEK,
+        instanceRule: {
+          min: 0,
+          max: 1,
+          step: 1
+        },
+        metadata: {
+          advanced: true,
+          riskNotes: [
+            'Requires director judgement for human peek accusations.',
+            'Recommended only for experienced tables or sessions where conduct rules are explicit.'
+          ]
+        }
       }
     ],
     availableRules: [
@@ -203,10 +232,23 @@ export const RULE_SET_CATALOG = Object.freeze({
           alignmentId: ALIGNMENT_IDS.ALIGNMENT_A
         }
       },
-      getCatalogGroup(GROUP_CATALOG_IDS.ALIGNMENT_SET_OUT_OF_PLAY, {
+      {
         key: 'group_alignment_b',
+        membershipRule: {
+          type: 'alignment',
+          alignmentId: ALIGNMENT_IDS.ALIGNMENT_B
+        }
+      },
+      getCatalogGroup(GROUP_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY, {
+        key: GROUP_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY,
         metadata: {
-          mechanicalPurpose: 'alignment_holder_and_collective_action'
+          mechanicalPurpose: 'concealed_collective_set_out_of_play'
+        }
+      }),
+      getCatalogGroup(GROUP_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY, {
+        key: GROUP_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY,
+        metadata: {
+          mechanicalPurpose: 'exposed_collective_set_out_of_play'
         }
       })
     ],
@@ -238,12 +280,12 @@ export const RULE_SET_CATALOG = Object.freeze({
     skinRequirements: {
       languages: ['es', 'en'],
       requiredMessageKeys: [
-        MESSAGE_KEYS.RESOURCE_ALREADY_CONSUMED,
+        MESSAGE_KEYS.ACTION_USAGE_LIMIT_REACHED,
         MESSAGE_KEYS.INSPECTION_REVEALED,
         MESSAGE_KEYS.COLLECTIVE_SELECTION_REQUESTED,
         MESSAGE_KEYS.ROLE_STATE_REVEALED,
         MESSAGE_KEYS.REACTIVE_SELECTION_REQUESTED,
-        MESSAGE_KEYS.RESOURCE_ACTION_APPLIED,
+        MESSAGE_KEYS.LIMITED_ACTION_APPLIED,
         MESSAGE_KEYS.OBJECTIVE_ACHIEVED,
         MESSAGE_KEYS.PLAY_CONCLUDED
       ],
@@ -253,11 +295,17 @@ export const RULE_SET_CATALOG = Object.freeze({
           BASIC_ROLE_OPTION_KEYS.LINKS_TARGETS,
           BASIC_ROLE_OPTION_KEYS.INSPECTS,
           BASIC_ROLE_OPTION_KEYS.REACTIVE,
-          BASIC_ROLE_OPTION_KEYS.IN_PLAY_CONTROL,
+          BASIC_ROLE_OPTION_KEYS.IN_OUT_OF_PLAY,
           BASIC_ROLE_OPTION_KEYS.ASSUMES_ROLE,
+          BASIC_ROLE_OPTION_KEYS.PEEK,
           BASIC_ROLE_OPTION_KEYS.PLAIN
         ],
-        group: ['group_alignment_a', 'group_alignment_b'],
+        group: [
+          'group_alignment_a',
+          'group_alignment_b',
+          GROUP_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY,
+          GROUP_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY
+        ],
         objective: BASIC_OBJECTIVE_RULES.map((rule) => rule.key)
       }
     },

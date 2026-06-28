@@ -11,8 +11,8 @@
 // - conclude_play: concluye la parte jugable desde pool.onExit.
 //
 // Importante:
-// - No sabe que es "La Vidente".
-// - No sabe que es "Hombre Lobo".
+// - No sabe que skin o nombre visible tendra un role.
+// - No sabe que fantasia representa cada alignment.
 // - No pinta nada en pantalla.
 // - No guarda nada en Firebase.
 //
@@ -42,6 +42,14 @@ import {
   SELECTION_ROUND_TYPES,
   resolveSelectionRound
 } from './selectionModel.js';
+import {
+  MECHANICAL_ENTITY_TYPES,
+  TARGET_FILTER_TYPES,
+  isTargetFilterType
+} from './domainTypes.js';
+import { LINKED_PROPAGATED_EFFECT_STAGE } from './stageTypes.js';
+import { STAGE_STATUSES } from './sessionModel.js';
+import { appendSpecialStage } from './specialStagesModel.js';
 
 export const ACTION_IDS = Object.freeze({
   INSPECT_ROLE: 'inspect_role',
@@ -80,9 +88,26 @@ export function getActionActors(session, actorIds = []) {
 // necesite comparar target contra actor, como ocurre con not_self.
 export function canResolveWithoutActor(action) {
   const filters = action?.target?.filters ?? [];
-  const needsIndividualActor = filters.includes('not_self') || filters.includes('not_same_alignment');
+  const needsIndividualActor =
+    filters.includes(TARGET_FILTER_TYPES.NOT_SELF) ||
+    filters.includes(TARGET_FILTER_TYPES.SAME_ALIGNMENT) ||
+    filters.includes(TARGET_FILTER_TYPES.NOT_SAME_ALIGNMENT);
 
   return !needsIndividualActor;
+}
+
+function wasTargetRecentlyOutOfPlay(session = {}, target = {}) {
+  const currentCycleId = getCurrentCycleId(session);
+
+  return (session.actionHistory ?? []).some((entry) =>
+    entry.cycleId === currentCycleId &&
+    (entry.finalEffects ?? []).some((effect) =>
+      effect.targetType === MECHANICAL_ENTITY_TYPES.ROLE &&
+      effect.targetId === target?.id &&
+      effect.property === 'inPlay' &&
+      effect.value === false
+    )
+  );
 }
 
 // Comprueba si un objetivo cumple un filtro.
@@ -97,19 +122,27 @@ export function canResolveWithoutActor(action) {
 //
 // Iremos anadiendo filtros cuando haya reglas reales que los necesiten.
 export function targetMatchesFilter({ filter, actor, target, session }) {
-  if (filter === 'in_play') return target?.inPlay === true;
-  if (filter === 'assumable') {
+  if (filter === TARGET_FILTER_TYPES.IN_PLAY) return target?.inPlay === true;
+  if (filter === TARGET_FILTER_TYPES.NOT_IN_PLAY) return target?.inPlay === false;
+  if (filter === TARGET_FILTER_TYPES.ASSUMABLE) {
     return (
       (session?.assumableRoles ?? []).includes(target?.id) &&
       !target?.playerId &&
       target?.seat === null
     );
   }
-  if (filter === 'not_self') return actor?.id !== target?.id;
-  if (filter === 'not_same_alignment') {
+  if (filter === TARGET_FILTER_TYPES.NOT_SELF) return actor?.id !== target?.id;
+  if (filter === TARGET_FILTER_TYPES.SAME_ALIGNMENT) {
+    return !!actor?.alignmentId && actor.alignmentId === target?.alignmentId;
+  }
+  if (filter === TARGET_FILTER_TYPES.NOT_SAME_ALIGNMENT) {
     return actor?.alignmentId !== target?.alignmentId;
   }
-  return true;
+  if (filter === TARGET_FILTER_TYPES.RECENTLY_OUT_OF_PLAY) {
+    return target?.inPlay === false && wasTargetRecentlyOutOfPlay(session, target);
+  }
+  if (filter === TARGET_FILTER_TYPES.DISTINCT) return true;
+  return false;
 }
 
 // Valida si una lista de objetivos sirve para una accion.
@@ -131,6 +164,15 @@ export function validateActionTargets({
   const errors = [];
   const expectedCount = action?.target?.count ?? 0;
   const filters = action?.target?.filters ?? [];
+  const unknownFilters = filters.filter((filter) => !isTargetFilterType(filter));
+
+  unknownFilters.forEach((filter) => {
+    errors.push({
+      code: 'target/unknown-filter',
+      message: `unknown target filter "${filter}"`,
+      filter
+    });
+  });
 
   if (!actor && !canResolveWithoutActor(action)) {
     errors.push({
@@ -148,7 +190,7 @@ export function validateActionTargets({
     });
   }
 
-  if (filters.includes('distinct')) {
+  if (filters.includes(TARGET_FILTER_TYPES.DISTINCT)) {
     const targetIds = (targets ?? []).filter(Boolean).map((target) => target.id);
     if (new Set(targetIds).size !== targetIds.length) {
       errors.push({
@@ -169,7 +211,7 @@ export function validateActionTargets({
       return;
     }
 
-    filters.forEach((filter) => {
+    filters.filter(isTargetFilterType).forEach((filter) => {
       if (!targetMatchesFilter({ filter, actor, target, session })) {
         errors.push({
           code: `target/filter-${filter}`,
@@ -212,7 +254,7 @@ export function validateActionDefinition(action) {
         message: `${action.id} requires a set_property effect`
       });
     }
-    if (effect.targetType !== 'role') {
+    if (effect.targetType !== MECHANICAL_ENTITY_TYPES.ROLE) {
       errors.push({
         code: 'action/invalid-effect-target-type',
         message: `${action.id} currently requires targetType "role"`
@@ -262,7 +304,7 @@ export function validateActionDefinition(action) {
         message: 'link_targets requires a set_group effect'
       });
     }
-    if (effect.targetType !== 'group') {
+    if (effect.targetType !== MECHANICAL_ENTITY_TYPES.GROUP) {
       errors.push({
         code: 'action/invalid-effect-target-type',
         message: 'link_targets requires targetType "group"'
@@ -293,7 +335,7 @@ export function validateActionDefinition(action) {
         message: 'replace_role_identity requires a replace_role_identity effect'
       });
     }
-    if (effect.targetType !== 'role') {
+    if (effect.targetType !== MECHANICAL_ENTITY_TYPES.ROLE) {
       errors.push({
         code: 'action/invalid-effect-target-type',
         message: 'replace_role_identity requires targetType "role"'
@@ -401,17 +443,56 @@ export function applyFinalEffects({ session, finalEffects = [] }) {
 function getImmediateCause(actor = null, context = {}) {
   if (context.causedBy?.id) {
     return {
-      type: context.causedBy.type ?? 'role',
+      type: context.causedBy.type ?? MECHANICAL_ENTITY_TYPES.ROLE,
       id: context.causedBy.id
     };
   }
 
   return actor?.id
     ? {
-        type: 'role',
+        type: MECHANICAL_ENTITY_TYPES.ROLE,
         id: actor.id
       }
     : null;
+}
+
+function getHistoryContracts(context = {}) {
+  return {
+    actorContract: context.actorContract ?? null,
+    targetContract: context.targetContract ?? null
+  };
+}
+
+function appendLinkedPropagatedEffectStages(session = {}, linkedPropagatedEffects = [], context = {}) {
+  return (linkedPropagatedEffects ?? []).reduce((currentSession, effect, index) => {
+    const stage = {
+      key: LINKED_PROPAGATED_EFFECT_STAGE.KEY,
+      status: STAGE_STATUSES.ENABLED,
+      actorIds: [],
+      actions: [],
+      metadata: {
+        catalogId: LINKED_PROPAGATED_EFFECT_STAGE.CATALOG_ID,
+        propagatedEffect: effect,
+        sourceContext: {
+          cycleId: context.cycleId ?? currentSession.cycle?.id ?? 0,
+          poolKey: context.poolKey ?? null,
+          stageId: context.stageId ?? null,
+          stageKey: context.stageKey ?? null,
+          stageCatalogId: context.stageCatalogId ?? null,
+          actionKey: context.actionKey ?? null
+        }
+      }
+    };
+
+    return appendSpecialStage(currentSession, stage, {
+      reason: LINKED_PROPAGATED_EFFECT_STAGE.ACTION_KEY,
+      index,
+      causedBy: effect.causedBy ?? null,
+      derivedFrom: effect.derivedFrom ?? null,
+      causalCondition: effect.causalCondition ?? null,
+      targetId: effect.targetId ?? null
+    });
+  }, session);
 }
 
 // Resuelve la consecuencia principal de set_in_play.
@@ -432,7 +513,7 @@ export function resolveSetInPlayEffect({ session, action, actor, targets, contex
     targetId: target.id
   }));
   const effectResolution = resolveProposedEffects({ session, proposedEffects });
-  const { finalEffects, blockedEffects } = effectResolution;
+  const { finalEffects, blockedEffects, linkedPropagatedEffects } = effectResolution;
   const preventedPropertyChanges = blockedEffects
     .filter((effect) => effect.type === EFFECT_TYPES.SET_PROPERTY)
     .map((effect) => ({
@@ -445,15 +526,26 @@ export function resolveSetInPlayEffect({ session, action, actor, targets, contex
   const blockedTargetIds = new Set(
     preventedPropertyChanges.map((change) => change.targetId)
   );
-  const nextSession = appendActionHistory(applyFinalEffects({ session, finalEffects }), {
+  const sessionAfterEffects = applyFinalEffects({ session, finalEffects });
+  const sessionWithLinkedPropagationStages = appendLinkedPropagatedEffectStages(
+    sessionAfterEffects,
+    linkedPropagatedEffects,
+    {
+      ...context,
+      cycleId: currentCycleId
+    }
+  );
+  const nextSession = appendActionHistory(sessionWithLinkedPropagationStages, {
     cycleId: currentCycleId,
     poolKey: context.poolKey ?? null,
     stageId: context.stageId ?? null,
     stageKey: context.stageKey ?? null,
+    stageCatalogId: context.stageCatalogId ?? null,
     actionKey: context.actionKey ?? action.key ?? action.id,
     actionId: action.id,
     actionSignature: getActionHistorySignature(action),
     actorIds: actor ? [actor.id] : [],
+    ...getHistoryContracts(context),
     targetIds: targets.map((target) => target.id),
     proposedEffects,
     finalEffects,
@@ -482,7 +574,8 @@ export function resolveSetInPlayEffect({ session, action, actor, targets, contex
       finalEffects,
       causedBy,
       preventedPropertyChanges,
-      blockedEffects
+      blockedEffects,
+      linkedPropagatedEffects
     }
   };
 }
@@ -519,10 +612,12 @@ export function applyPropertyBlock({ session, action, actor, targets, context = 
     poolKey: context.poolKey ?? null,
     stageId: context.stageId ?? null,
     stageKey: context.stageKey ?? null,
+    stageCatalogId: context.stageCatalogId ?? null,
     actionKey: context.actionKey ?? action.key ?? action.id,
     actionId: action?.id ?? ACTION_IDS.BLOCK_PROPERTY_CHANGE,
     actionSignature: getActionHistorySignature(action),
     actorIds: [actor.id],
+    ...getHistoryContracts(context),
     targetIds: targets.map((target) => target.id),
     result: HISTORY_RESULTS.APPLIED
   });
@@ -558,7 +653,7 @@ export function applyLinkTargets({ session, action, actor, targets, context = {}
   const proposedEffects = [
     {
       ...action.effect,
-      causedBy: actor?.id ? { type: 'role', id: actor.id } : null,
+      causedBy: actor?.id ? { type: MECHANICAL_ENTITY_TYPES.ROLE, id: actor.id } : null,
       roleIds: targets.map((target) => target.id),
       sourceActionId: action.id
     }
@@ -571,10 +666,12 @@ export function applyLinkTargets({ session, action, actor, targets, context = {}
       poolKey: context.poolKey ?? null,
       stageId: context.stageId ?? null,
       stageKey: context.stageKey ?? null,
+      stageCatalogId: context.stageCatalogId ?? null,
       actionKey: context.actionKey ?? action.key ?? action.id,
       actionId: action.id,
       actionSignature: getActionHistorySignature(action),
       actorIds: actor ? [actor.id] : [],
+      ...getHistoryContracts(context),
       targetIds: targets.map((target) => target.id),
       proposedEffects: effectResolution.proposedEffects,
       finalEffects: effectResolution.finalEffects,
@@ -647,7 +744,7 @@ export function applyReplaceRoleIdentity({ session, action, actor, targets, cont
       actorRoleId: actor.id,
       targetId: target.id,
       actionKey: context.actionKey ?? action.key ?? action.id,
-      causedBy: actor?.id ? { type: 'role', id: actor.id } : null
+      causedBy: actor?.id ? { type: MECHANICAL_ENTITY_TYPES.ROLE, id: actor.id } : null
     }
   ];
   const finalEffects = proposedEffects;
@@ -658,10 +755,12 @@ export function applyReplaceRoleIdentity({ session, action, actor, targets, cont
       poolKey: context.poolKey ?? null,
       stageId: context.stageId ?? null,
       stageKey: context.stageKey ?? null,
+      stageCatalogId: context.stageCatalogId ?? null,
       actionKey: context.actionKey ?? action.key ?? action.id,
       actionId: action.id,
       actionSignature: getActionHistorySignature(action),
       actorIds: [actor.id],
+      ...getHistoryContracts(context),
       targetIds: [target.id],
       proposedEffects,
       finalEffects,

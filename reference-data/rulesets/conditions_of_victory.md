@@ -1,6 +1,6 @@
 # Conditions of Victory / Defeat
 
-This summary consolidates common end-state conditions for the Village Storyteller “Werewolf” sessions. Use it to decide when the game can be finished.
+This summary consolidates common end-state conditions for the Cyclic Social Engine “Werewolf” sessions. Use it to decide when the game can be finished.
 
 ## Village team wins
 - All Werewolves (including Big Bad Wolf, White Werewolf, Cursed Wolf-Father, Wolf-Hound if turned, etc.) are eliminated.

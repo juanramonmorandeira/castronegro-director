@@ -117,8 +117,8 @@ No pertenece a skin:
   },
   messages: {
     es: {
-      resource_already_consumed: {
-        default: '{resource} ya ha sido usado.'
+      action_usage_limit_reached: {
+        default: '{recipe} ya ha alcanzado su limite de usos.'
       }
     }
   },
@@ -136,7 +136,7 @@ Ejemplo conceptual:
 skinRequirements: {
   required: {
     roles: ['role_inspects', 'role_reactive'],
-    groups: ['alignment_set_out_of_play']
+    groups: ['group_concealed_set_out_of_play', 'group_exposed_set_out_of_play']
   },
   optional: {
     tokens: ['linked_marker'],

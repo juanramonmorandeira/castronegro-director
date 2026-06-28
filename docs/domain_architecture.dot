@@ -4,7 +4,7 @@ digraph DomainArchitecture {
     bgcolor="#ffffff",
     fontname="Arial",
     fontsize=20,
-    label="Village Storyteller - Arquitectura del nuevo dominio",
+    label="Cyclic Social Engine - Arquitectura del nuevo dominio",
     labelloc=t,
     pad=0.3,
     nodesep=0.35,

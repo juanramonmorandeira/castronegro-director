@@ -18,7 +18,6 @@ function getGroupKey(session = {}, groupId = null) {
 function getEntityCollectionKey(entityType) {
   if (entityType === MESSAGE_ENTITY_TYPES.ROLE) return 'roles';
   if (entityType === MESSAGE_ENTITY_TYPES.GROUP) return 'groups';
-  if (entityType === MESSAGE_ENTITY_TYPES.RESOURCE) return 'resources';
   if (entityType === MESSAGE_ENTITY_TYPES.STAGE) return 'stages';
   if (entityType === MESSAGE_ENTITY_TYPES.OBJECTIVE) return 'objectives';
   if (entityType === MESSAGE_ENTITY_TYPES.ACTION) return 'actions';

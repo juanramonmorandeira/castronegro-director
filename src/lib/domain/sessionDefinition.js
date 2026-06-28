@@ -181,7 +181,7 @@ function buildAssumableRole({
     seat: null,
     inPlay: false,
     reactions: roleDefinition?.reactions ?? [],
-    resources: roleDefinition?.resources ?? [],
+    stageRules: roleDefinition?.stageRules ?? [],
     flags: roleDefinition?.defaultFlags ?? {},
     counters: roleDefinition?.defaultCounters ?? {},
     metadata: {
@@ -235,7 +235,7 @@ function buildInputAssumableRoles(unassignedRoles = [], roleDefinitionMap = {}, 
       seat: null,
       inPlay: false,
       reactions: roleDefinition.reactions ?? [],
-      resources: roleDefinition.resources ?? [],
+      stageRules: roleDefinition.stageRules ?? [],
       flags: roleDefinition.defaultFlags ?? {},
       counters: roleDefinition.defaultCounters ?? {},
       metadata: {

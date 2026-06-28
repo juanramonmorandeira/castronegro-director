@@ -14,6 +14,7 @@
 import { createStage } from './stageDefinition.js';
 import { EFFECT_TYPES } from './effectModel.js';
 import { STAGE_STATUSES, normalizeId } from './sessionModel.js';
+import { MECHANICAL_ENTITY_TYPES } from './domainTypes.js';
 import { getCatalogRecipe, RECIPE_KEYS } from './recipeCatalog.js';
 import {
   SELECTION_ABSTAIN_RULES,
@@ -23,6 +24,7 @@ import {
   createSelectionRules
 } from './selectionModel.js';
 import { appendSpecialStage, removeSpecialStages } from './specialStagesModel.js';
+import { STAGE_COMPLETION_REQUESTED_BY } from './stageTypes.js';
 
 const DOUBLE_SELECTOR_RULE_KEY = 'selection_counts_double';
 const PICK_NEXT_DOUBLE_SELECTOR_STAGE_KEY = 'pick_next_double_selector';
@@ -70,7 +72,10 @@ function createPickNextDoubleSelectorStage({ holderRoleId, candidateIds }) {
     actorIds: holderRoleId ? [holderRoleId] : [],
     completion: {
       mode: 'manual',
-      allowedRequesters: ['director', 'system']
+      allowedRequesters: [
+        STAGE_COMPLETION_REQUESTED_BY.DIRECTOR,
+        STAGE_COMPLETION_REQUESTED_BY.SYSTEM
+      ]
     },
     selectionRules: createSelectionRules({
       required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
@@ -110,7 +115,7 @@ function getPropertyChangeEvent({ previousSession, effect, source = {} }) {
 
   return {
     type: EVENT_TYPES.PROPERTY_CHANGED,
-    targetType: 'role',
+    targetType: MECHANICAL_ENTITY_TYPES.ROLE,
     roleId: effect.targetId,
     property: effect.property,
     from,

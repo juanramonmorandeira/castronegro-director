@@ -9,8 +9,8 @@
     hu: '/flags/hu_HU.png'
   };
   const DEFAULT_AVATAR = '/avatars/Avatar_Default.png';
-  const DEFAULT_BRAND_LOGO = '/backgrounds/village-storyteller-logo.png';
-  const DEFAULT_BRAND_TITLE = 'The Village Storyteller';
+  const DEFAULT_BRAND_LOGO = '/backgrounds/cyclic-social-engine-logo.png';
+  const DEFAULT_BRAND_TITLE = 'The Cyclic Social Engine';
 
   export let title = '';
   export let titleKey = '';

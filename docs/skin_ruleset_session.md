@@ -35,7 +35,6 @@ Ejemplo conceptual:
 
 ```text
 role_reactive
-  en una skin puede llamarse Cazador
   en otra puede llamarse Operador de Retaliacion
   en otra puede llamarse Testigo Final
 ```
@@ -92,9 +91,10 @@ Define el universo mecanico:
 - que eventos, triggers o reacciones existen;
 - que reglas pueden generar stages dinamicos en `specialStages`.
 
-Un `ruleSet` no entiende de skins. No decide si un rol se llama Cazador,
-Alienigena, Inquisidor o Drone. Solo define que ese rol tiene una reaccion,
-que esa reaccion escucha un evento y que genera un stage especial.
+Un `ruleSet` no entiende de skins. No decide si un rol se llama Operador de
+Retaliacion, Testigo Final o cualquier otro nombre visible. Solo define que ese
+rol tiene una reaccion, que esa reaccion escucha un evento y que genera un
+stage especial.
 
 El motor no limita cuantos alignments puede declarar un ruleSet. Para ruleSets
 basicos recomendamos esta convencion:
@@ -124,12 +124,14 @@ ruleSet.basic_ruleset
   roles:
     role_inspects
     role_links_targets
-    role_blocks_out_of_play
-    role_in_play_control
+    role_in_out_of_play
     role_reactive
 
   groups:
-    alignment_set_out_of_play
+    group_alignment_a
+    group_alignment_b
+    group_concealed_set_out_of_play
+    group_exposed_set_out_of_play
 
   objectives:
     group_alignment_b holder_reaches_in_play_parity
@@ -175,15 +177,13 @@ Ejemplo conceptual:
 ruleSet.basic_ruleset permite:
   role_inspects
   role_links_targets
-  role_blocks_out_of_play
-  role_in_play_control
+  role_in_out_of_play
   role_reactive
 
 configuration.8_players selecciona:
   1 role_inspects
-  1 role_blocks_out_of_play
   1 role_reactive
-  2 alignment_set_out_of_play members
+  2 group_concealed_set_out_of_play members
   3 alignment_a_plain
 ```
 

@@ -10,23 +10,41 @@ import { getCatalogStage, STAGE_CATALOG_IDS } from './stageCatalog.js';
 import { defineGroup, GROUP_MEMBERSHIP_RULE_TYPES } from './groupDefinition.js';
 
 export const GROUP_CATALOG_IDS = Object.freeze({
-  ALIGNMENT_SET_OUT_OF_PLAY: 'alignment_set_out_of_play'
+  CONCEALED_SET_OUT_OF_PLAY: 'group_concealed_set_out_of_play',
+  EXPOSED_SET_OUT_OF_PLAY: 'group_exposed_set_out_of_play'
 });
 
 export const GROUP_CATALOG = Object.freeze({
-  [GROUP_CATALOG_IDS.ALIGNMENT_SET_OUT_OF_PLAY]: defineGroup({
-    key: GROUP_CATALOG_IDS.ALIGNMENT_SET_OUT_OF_PLAY,
+  [GROUP_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY]: defineGroup({
+    key: GROUP_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY,
     membershipRule: {
       type: GROUP_MEMBERSHIP_RULE_TYPES.ALIGNMENT,
       alignmentId: 'alignment_b'
     },
     stageDefinitions: [
-      getCatalogStage(STAGE_CATALOG_IDS.GROUP_SET_OUT_OF_PLAY, {
+      getCatalogStage(STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY, {
         poolKey: POOL_KEYS.POOL_CONCEALED,
         order: 30,
         metadata: {
           orderReason:
-            'Runs after blockers and before inPlay control so blocked targets fail first and same-cycle restore can inspect the result.'
+            'Runs before the out-of-play intervention stage so same-cycle restore can inspect the applied concealed result.'
+        }
+      })
+    ]
+  }),
+
+  [GROUP_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY]: defineGroup({
+    key: GROUP_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY,
+    membershipRule: {
+      type: GROUP_MEMBERSHIP_RULE_TYPES.ALL_ROLES
+    },
+    stageDefinitions: [
+      getCatalogStage(STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY, {
+        poolKey: POOL_KEYS.POOL_EXPOSED,
+        order: 10,
+        metadata: {
+          orderReason:
+            'Runs in the exposed pool as the public set_out_of_play decision stage.'
         }
       })
     ]
@@ -64,5 +82,8 @@ export function getCatalogGroup(groupCatalogId, overrides = {}) {
 }
 
 export function getCoreGroupCatalog() {
-  return [getCatalogGroup(GROUP_CATALOG_IDS.ALIGNMENT_SET_OUT_OF_PLAY)];
+  return [
+    getCatalogGroup(GROUP_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY),
+    getCatalogGroup(GROUP_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY)
+  ];
 }

@@ -1,4 +1,4 @@
-# Village Storyteller - Arquitectura de aplicacion
+# Cyclic Social Engine - Arquitectura de aplicacion
 
 > Documento de trabajo. Los diagramas Mermaid se renderizan en GitHub y en la vista previa de VS Code.
 

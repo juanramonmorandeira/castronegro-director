@@ -78,8 +78,8 @@ export const DEFAULT_POOL_ORDER = Object.freeze([
 // Convierte cualquier texto en un identificador estable.
 //
 // Ejemplos:
-// "The Seer" -> "the_seer"
-// "White Werewolf" -> "white_werewolf"
+// "Role Inspects" -> "role_inspects"
+// "Alignment B" -> "alignment_b"
 // "  Player 1  " -> "player_1"
 //
 // Lo usamos para que la logica no dependa de mayusculas, espacios o textos

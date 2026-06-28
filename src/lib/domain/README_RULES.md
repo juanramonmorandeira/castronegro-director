@@ -137,6 +137,7 @@ Ejemplos actuales:
 - `limited_uses` derivada desde `recipe.usage`
 - `no_repeat_target`
 - `require_recent_set_property`
+- `require_actor_in_play`
 
 ### Action
 

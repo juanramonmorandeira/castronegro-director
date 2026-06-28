@@ -12,6 +12,7 @@
 
 import { createGroup } from './groupDefinition.js';
 import { normalizeId } from './sessionModel.js';
+import { MECHANICAL_ENTITY_TYPES } from './domainTypes.js';
 
 export const EFFECT_TYPES = Object.freeze({
   REVEAL_PROPERTY: 'reveal_property',
@@ -37,7 +38,7 @@ export function getCurrentCycleId(session) {
 // Esta funcion pertenece al rol de Effect Applier: no decide si el efecto debe
 // ocurrir. Solo cambia el dato indicado porque otra parte ya lo decidio.
 export function applySetPropertyEffect({ session, effect }) {
-  if (effect?.targetType !== 'role') return session;
+  if (effect?.targetType !== MECHANICAL_ENTITY_TYPES.ROLE) return session;
 
   return {
     ...session,
@@ -58,7 +59,7 @@ export function applySetPropertyEffect({ session, effect }) {
 // No guarda "amor", "hermandad", "maldicion" ni ningun texto narrativo.
 // Solo registra que varios roles de sesion comparten un grupo mecanico.
 export function applySetGroupEffect({ session, effect }) {
-  if (effect?.targetType !== 'group') return session;
+  if (effect?.targetType !== MECHANICAL_ENTITY_TYPES.GROUP) return session;
 
   const groupType = normalizeId(effect.groupType);
   const roleIds = normalizeGroupMemberIds(effect.roleIds);
@@ -105,7 +106,7 @@ export function applySetGroupEffect({ session, effect }) {
 }
 
 export function applyReplaceRoleIdentityEffect({ session, effect }) {
-  if (effect?.targetType !== 'role') return session;
+  if (effect?.targetType !== MECHANICAL_ENTITY_TYPES.ROLE) return session;
 
   const actorRoleId = effect.actorRoleId ?? null;
   const targetId = effect.targetId ?? null;

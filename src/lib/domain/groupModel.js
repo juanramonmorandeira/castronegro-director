@@ -17,9 +17,12 @@ import {
   GROUP_MEMBERSHIP_RULE_TYPES,
   GROUP_RULE_TARGETS,
   GROUP_RULE_TYPES,
-  GROUP_SELECTION_RULE_TYPES
+  GROUP_SELECTION_RULE_TYPES,
+  GROUP_TYPES
 } from './groupDefinition.js';
 import { normalizeId } from './sessionModel.js';
+import { MECHANICAL_ENTITY_TYPES } from './domainTypes.js';
+import { EFFECT_TYPES } from './effectModel.js';
 
 function uniqueIds(ids = []) {
   return [...new Set((ids ?? []).filter(Boolean))];
@@ -173,23 +176,24 @@ function getGroupRuleTargetIds(group = {}, sourceRoleId = null, rule = {}) {
 // un efecto. No aplica cambios: devuelve nuevos efectos para que resolverModel
 // los procese mediante la misma cola y las mismas validaciones.
 export function getGroupRuleEffects({ session = {}, effect = {} } = {}) {
-  if (effect?.targetType !== 'role' || !effect?.targetId) return [];
+  if (effect?.targetType !== MECHANICAL_ENTITY_TYPES.ROLE || !effect?.targetId) return [];
 
   return findGroupsForRole(session, effect.targetId).flatMap((group) =>
     (group.groupRules ?? []).flatMap((rule) => {
+      if (group.type === GROUP_TYPES.LINKED) return [];
       if (rule.type !== GROUP_RULE_TYPES.PROPAGATE_PROPERTY_CHANGE) return [];
       if (!groupRuleMatchesEffect(rule, effect)) return [];
 
       return getGroupRuleTargetIds(group, effect.targetId, rule)
         .filter((targetId) => rule.includeOutOfPlay || findRole(session, targetId)?.inPlay === true)
         .map((targetId) => ({
-          type: 'set_property',
-          targetType: 'role',
+          type: EFFECT_TYPES.SET_PROPERTY,
+          targetType: MECHANICAL_ENTITY_TYPES.ROLE,
           targetId,
           property: rule.apply.property,
           value: rule.apply.value,
           causedBy: {
-            type: 'group',
+            type: MECHANICAL_ENTITY_TYPES.GROUP,
             id: group.id
           },
           derivedFrom: {
@@ -197,6 +201,43 @@ export function getGroupRuleEffects({ session = {}, effect = {} } = {}) {
             groupId: group.id,
             groupRuleType: rule.type,
             sourceTargetId: effect.targetId
+          }
+        }));
+    })
+  );
+}
+
+export function getLinkedPropagatedEffects({ session = {}, effect = {} } = {}) {
+  if (effect?.targetType !== MECHANICAL_ENTITY_TYPES.ROLE || !effect?.targetId) return [];
+
+  return findGroupsForRole(session, effect.targetId, GROUP_TYPES.LINKED).flatMap((group) =>
+    (group.groupRules ?? []).flatMap((rule) => {
+      if (rule.type !== GROUP_RULE_TYPES.PROPAGATE_PROPERTY_CHANGE) return [];
+      if (!groupRuleMatchesEffect(rule, effect)) return [];
+
+      return getGroupRuleTargetIds(group, effect.targetId, rule)
+        .filter((targetId) => rule.includeOutOfPlay || findRole(session, targetId)?.inPlay === true)
+        .map((targetId) => ({
+          type: EFFECT_TYPES.SET_PROPERTY,
+          targetType: MECHANICAL_ENTITY_TYPES.ROLE,
+          targetId,
+          property: rule.apply.property,
+          value: rule.apply.value,
+          causedBy: {
+            type: MECHANICAL_ENTITY_TYPES.GROUP,
+            id: group.id
+          },
+          derivedFrom: {
+            type: 'group_rule',
+            groupId: group.id,
+            groupRuleType: rule.type,
+            sourceTargetId: effect.targetId
+          },
+          causalCondition: {
+            targetType: effect.targetType,
+            targetId: effect.targetId,
+            property: effect.property,
+            value: effect.value
           }
         }));
     })

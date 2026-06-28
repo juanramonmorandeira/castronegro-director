@@ -83,11 +83,15 @@ export function appendActionHistory(session, entry = {}) {
     poolKey: entry.poolKey ?? null,
     stageId: entry.stageId ?? null,
     stageKey: entry.stageKey ?? null,
+    stageCatalogId: entry.stageCatalogId ?? null,
     actionKey: entry.actionKey ?? null,
     actionId: entry.actionId ?? null,
     actionSignature: entry.actionSignature ?? null,
     actorIds: [...(entry.actorIds ?? [])],
     actor: entry.actor ? { ...entry.actor } : null,
+    selectorIds: [...(entry.selectorIds ?? [])],
+    actorContract: entry.actorContract ? { ...entry.actorContract } : null,
+    targetContract: entry.targetContract ? { ...entry.targetContract } : null,
     targetIds: [...(entry.targetIds ?? [])],
     proposedEffects: [...(entry.proposedEffects ?? [])],
     finalEffects: [...(entry.finalEffects ?? [])],
@@ -108,11 +112,20 @@ export function appendActionHistory(session, entry = {}) {
 // inPlay=false durante el ciclo actual.
 export function findAppliedSetPropertyHistory(
   session,
-  { cycleId, property, value, targetId = null, stageKey = null, actionKey = null } = {}
+  {
+    cycleId,
+    property,
+    value,
+    targetId = null,
+    stageKey = null,
+    stageCatalogId = null,
+    actionKey = null
+  } = {}
 ) {
   return getActionHistory(session).filter((entry) => {
     if (cycleId !== undefined && entry.cycleId !== cycleId) return false;
     if (stageKey && entry.stageKey !== stageKey) return false;
+    if (stageCatalogId && entry.stageCatalogId !== stageCatalogId) return false;
     if (actionKey && entry.actionKey !== actionKey) return false;
     if (entry.result !== HISTORY_RESULTS.APPLIED && entry.result !== HISTORY_RESULTS.PARTIAL) {
       return false;

@@ -5,6 +5,7 @@
 
 import { AVAILABILITY_RULE_TYPES } from './stageDefinition.js';
 import { STAGE_STATUSES } from './sessionModel.js';
+import { findAppliedSetPropertyHistory } from './historyModel.js';
 
 export const POOL_HISTORY_OPERATIONS = Object.freeze({
   PREPARED: 'prepared',
@@ -70,6 +71,41 @@ function evaluateAvailabilityRule(stage = {}, rule = {}, context = {}) {
     return {
       ok: true,
       value: actorIds.length > 0 && actorIds.every((roleId) => getRole(context, roleId)?.inPlay === true)
+    };
+  }
+
+  if (rule.type === AVAILABILITY_RULE_TYPES.ACTOR_RECENTLY_OUT_OF_PLAY) {
+    const actorIds = rule.actorIds ?? stage.actorIds ?? [];
+    const missingActorIds = actorIds.filter((roleId) => !getRole(context, roleId));
+    if (missingActorIds.length > 0) {
+      return {
+        ok: false,
+        value: false,
+        errors: [{
+          code: POOL_ERRORS.MISSING_ACTOR,
+          stageId: stage.id,
+          stageKey: stage.key,
+          actorIds: missingActorIds,
+          message: `stage "${stage.key}" references missing actors`
+        }]
+      };
+    }
+
+    return {
+      ok: true,
+      value:
+        actorIds.length > 0 &&
+        actorIds.every((roleId) =>
+          getRole(context, roleId)?.inPlay === false &&
+          findAppliedSetPropertyHistory(context.session, {
+            cycleId: context.cycleId,
+            property: rule.property ?? 'inPlay',
+            value: Object.hasOwn(rule, 'value') ? rule.value : false,
+            targetId: roleId,
+            actionKey: rule.actionKey ?? null,
+            stageCatalogId: rule.stageCatalogId ?? null
+          }).length > 0
+        )
     };
   }
 

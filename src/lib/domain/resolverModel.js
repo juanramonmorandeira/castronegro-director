@@ -12,7 +12,7 @@
 // -----------------------------------------------------------------------------
 
 import { EFFECT_TYPES } from './effectModel.js';
-import { getGroupRuleEffects } from './groupModel.js';
+import { getGroupRuleEffects, getLinkedPropagatedEffects } from './groupModel.js';
 import { isPropertyChangeBlocked } from './roleModel.js';
 
 // Resuelve una lista de efectos propuestos contra el estado actual.
@@ -25,6 +25,7 @@ import { isPropertyChangeBlocked } from './roleModel.js';
 export function resolveProposedEffects({ session, proposedEffects = [] } = {}) {
   const finalEffects = [];
   const blockedEffects = [];
+  const linkedPropagatedEffects = [];
   const queuedEffects = [...(proposedEffects ?? [])];
   const seenAttemptKeys = new Set();
   const acceptedEffectKeys = new Set();
@@ -57,6 +58,7 @@ export function resolveProposedEffects({ session, proposedEffects = [] } = {}) {
     if (acceptedEffectKeys.has(acceptedEffectKey)) continue;
     acceptedEffectKeys.add(acceptedEffectKey);
     finalEffects.push(effect);
+    linkedPropagatedEffects.push(...getLinkedPropagatedEffects({ session, effect }));
 
     getGroupRuleEffects({ session, effect }).forEach((derivedEffect) => {
       if (!seenAttemptKeys.has(getEffectKey(derivedEffect))) {
@@ -68,7 +70,8 @@ export function resolveProposedEffects({ session, proposedEffects = [] } = {}) {
   return {
     proposedEffects: [...(proposedEffects ?? [])],
     finalEffects,
-    blockedEffects
+    blockedEffects,
+    linkedPropagatedEffects
   };
 }
 

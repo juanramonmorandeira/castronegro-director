@@ -110,9 +110,9 @@ comportamiento a partir de `group.type`; interpreta estas reglas.
 value)` sobre un miembro y genera otro cambio sobre los miembros indicados por
 `targets`. Cada efecto derivado usa como `causedBy` el id del group.
 
-`stage` = periodo ejecutable dentro de un pool. Normalmente permite actuar a
-uno o varios roles, pero no necesita distinguir conceptualmente si proceden de
-un role individual o de un group.
+`stage` = periodo ejecutable dentro de un pool. Define el contexto concreto de
+ejecucion: cuando ocurre, quien puede actuar, que actions/recipes estan
+disponibles y que reglas de seleccion o disponibilidad aplican.
 
 `stageKey` = clave mecanica estable de una definicion de stage. Varias
 materializaciones pueden compartirla.
@@ -174,7 +174,33 @@ ejecutarlo.
 `runPool` = ejecucion incremental de `pool.onEnter`, stages y `pool.onExit`.
 Puede quedar esperando input humano durante un stage.
 
-`recipe` = receta mecanica que combina una o varias acciones con restricciones.
+`actor` = contrato que declara quien tiene autoridad mecanica para ejecutar una
+recipe. Los tipos base aceptados son:
+
+```js
+{ type: 'role' }     // actua un role individual
+{ type: 'group' }    // actua un conjunto de roles derivado por stage/session
+{ type: 'system' }   // accion automatica del motor
+{ type: 'director' } // accion explicita del director de partida
+```
+
+`recipe` = receta mecanica reusable que combina action pura, actor, target,
+usage, constraints, effect y visibility. La recipe define la mecanica general;
+no decide por si sola en que momento concreto se ejecuta.
+
+`recipe.key` = identificador mecanico de la recipe concreta, por ejemplo
+`set_out_of_play`.
+
+`recipe.id` = identificador de la action pura que ejecuta el motor, por ejemplo
+`set_in_play`. Varias recipes pueden compartir `id` si configuran efectos
+distintos.
+
+`input` = intencion humana o externa concreta para una ejecucion: seleccion,
+target, confirmacion, requester, acusacion, validacion u otros datos de action.
+
+`session` = partida viva materializada. Aporta los roles, groups, pools,
+specialStages, objectiveRules e historiales reales sobre los que se resuelven
+stages y recipes.
 
 `action` = intento de producir un cambio o resultado mecanico.
 
@@ -198,11 +224,22 @@ session concreta. En el modelo objetivo vive como `session.objectiveRules`.
 `objectiveRule` = regla que define una condicion de objetivo, que propone al
 cumplirse y como resolver conflictos asociados.
 
+`holder` = sujeto mecanico sobre el que se evalua una objectiveRule. Puede ser
+un role o group runtime. En definiciones que se materializan despues, puede usar
+la referencia relativa `self`.
+
+`self` = referencia relativa de holder usada antes de materializar una
+objectiveRule dentro de un objeto como group. Al entrar en runtime debe
+resolverse a un holder concreto.
+
 `onFulfilled` = propuestas emitidas por una objectiveRule cuando su condicion se
 cumple. No es todavia el outcome final.
 
 `beneficiaries` = sujetos mecanicos beneficiados por un objetivo cumplido. No
 implica un resultado narrativo concreto.
+
+`beneficiaries: holder` = referencia relativa que indica que el beneficiario es
+el holder ya resuelto de esa misma objectiveRule.
 
 `conclusive` = indica si un objetivo cumplido concluye la parte jugable de la
 session.
@@ -227,10 +264,6 @@ de session y emite achievedObjectives o playOutcome.
 
 `conclude_play` = operacion de ciclo de vida que gestiona la conclusion jugable
 cuando existe un playOutcome concluyente y estable.
-
-`resources` = recursos mecanicos consumibles o contadores que un role materializa
-en session. Sustituye a los viejos tokens consumibles cuando no hacen falta como
-elemento visual de tablero.
 
 `blockedPropertyChanges` = bloqueos runtime almacenados en cada role. Cada
 entrada identifica `property`, `value`, los `blockedFor.actorIds` afectados y
@@ -298,11 +331,26 @@ seleccionadas y materializables.
 
 `out_of_play` = lectura conceptual de `inPlay=false`.
 
-`actorIds` = roleIds que actuan dentro de un stage.
+`actorIds` = roleIds que actuan dentro de una recipe/action. En flujos de
+seleccion se mantiene compatibilidad temporal, pero el nombre recomendado para
+quienes eligen es `selectorIds`.
+
+`selectorIds` = roleIds que participan como selectores en una seleccion. En una
+accion colectiva pueden coincidir con los miembros activos del group actor, pero
+no son conceptualmente lo mismo que el actor mecanico de la recipe.
 
 `targetIds` = roleIds que reciben una accion, recipe o decision.
 
-`actionHistory` = historial de acciones ejecutadas o intentadas.
+`actorContract` = copia del contrato `recipe.actor` usado al resolver una
+recipe/action. Se guarda para auditoria y depuracion.
+
+`targetContract` = copia del contrato `recipe.target` usado al resolver una
+recipe/action. Se guarda para auditoria y depuracion.
+
+`actionHistory` = historial de acciones ejecutadas o intentadas. Para acciones
+colectivas debe poder registrar el actor group, sus miembros activos en ese
+momento, `selectorIds` cuando haya seleccion, `targetIds`, y el contrato
+`actorContract`/`targetContract` usado para resolver la action.
 
 `stageHistory` = historial de cierres y avances de stages.
 
@@ -355,6 +403,5 @@ session.
 
 `cosmetic skin change` = puede modificar el elemento existente con aviso.
 
-`resource consumption` = si una recipe se usa, consume su resource aunque el
-efecto falle o sea bloqueado; si una restriccion impide usar la recipe antes de
-ejecutarla, el resource no se consume.
+`recipe.usage` = contrato publico de limite de uso de una recipe. El motor lo
+traduce internamente a una constraint `limited_uses`.

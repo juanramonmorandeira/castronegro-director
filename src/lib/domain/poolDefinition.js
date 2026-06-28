@@ -7,7 +7,7 @@
 // cursor.
 // -----------------------------------------------------------------------------
 
-import { assignUniqueStageIds, createStage } from './stageDefinition.js';
+import { assignUniqueStageIds, createStage, STAGE_SOURCE_TYPES } from './stageDefinition.js';
 import { getGroupRoleIds } from './groupModel.js';
 import { DEFAULT_POOL_ORDER, STAGE_STATUSES, POOL_KEYS, normalizeId } from './sessionModel.js';
 
@@ -128,7 +128,7 @@ function getRoleDefinitionStages(session = {}, roleDefinitions = []) {
     return matchingRoles.flatMap((role) =>
       (roleDefinition.stageDefinitions ?? []).map((stageDefinition) =>
         createStageWithActors(stageDefinition, [role.id], {
-          type: 'role',
+          type: STAGE_SOURCE_TYPES.ROLE,
           id: role.id,
           key: roleDefinition.key
         })
@@ -146,7 +146,7 @@ function getRoleDefinitionSpecialStages(session = {}, roleDefinitions = []) {
     return matchingRoles.flatMap((role) =>
       (roleDefinition.specialStageDefinitions ?? []).map((stageDefinition) =>
         createStageWithActors(stageDefinition, [role.id], {
-          type: 'role',
+          type: STAGE_SOURCE_TYPES.ROLE,
           id: role.id,
           key: roleDefinition.key
         })
@@ -162,7 +162,7 @@ function getGroupDefinitionStages(session = {}, groupDefinitions = []) {
 
     return (groupDefinition.stageDefinitions ?? []).map((stageDefinition) =>
       createStageWithActors(stageDefinition, actorIds, {
-        type: 'group',
+        type: STAGE_SOURCE_TYPES.GROUP,
         id: groupId,
         key: groupDefinition.key
       })

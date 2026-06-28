@@ -8,6 +8,12 @@
 // -----------------------------------------------------------------------------
 
 export {
+  MECHANICAL_ENTITY_TYPES,
+  RECIPE_ACTOR_TYPES,
+  TARGET_FILTER_TYPES
+} from './domainTypes.js';
+
+export {
   SESSION_STATUSES,
   PLAYER_TYPES,
   STAGE_STATUSES,
@@ -145,6 +151,9 @@ export {
   STAGE_COMPLETION_REQUESTED_BY,
   STAGE_KEYS,
   STAGE_ACTION_KEYS,
+  STAGE_RULE_TYPES,
+  PEEK_ACTION_KEYS,
+  PEEK_ACCUSATION_TIMINGS,
   getCurrentStage,
   getStageActionKey,
   selectStageAction,
@@ -168,13 +177,19 @@ export {
   completeSpecialStage
 } from './specialStagesModel.js';
 
-export { RECIPE_KEYS, RECIPE_CATALOG, getCatalogRecipe } from './recipeCatalog.js';
+export {
+  RECIPE_KEYS,
+  RECIPE_CATALOG,
+  getCatalogRecipe,
+  validateCatalogRecipeOverrides
+} from './recipeCatalog.js';
 export {
   getRecipeKey,
   createRecipe,
   getActionFromRecipe,
   getRecipeActorAndTargets,
   getRecipeConstraints,
+  validateRecipeContract,
   validateRecipeConstraints,
   resolveRecipe
 } from './recipeModel.js';
@@ -237,6 +252,8 @@ export {
 export {
   OBJECTIVE_EVALUATION_STATUSES,
   OBJECTIVE_CONDITIONS,
+  OBJECTIVE_HOLDER_TYPES,
+  OBJECTIVE_BENEFICIARY_TYPES,
   INFLUENCE_SUBJECTS,
   INFLUENCE_OPERATIONS,
   getSessionObjectiveRules,

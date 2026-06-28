@@ -11,7 +11,7 @@ export const locale = writable(initial);
 const dictionaries = {
   en: {
     common: {
-      app_name: 'Village Storyteller',
+      app_name: 'Cyclic Social Engine',
       untitled: 'Untitled',
       untitled_session: 'Untitled session',
       loading: 'Loading…',
@@ -52,8 +52,8 @@ const dictionaries = {
       back_to_dashboard: 'Back to dashboard'
     },
     header: {
-      title: 'The Village Storyteller',
-      logo_alt: 'Village Storyteller logo'
+      title: 'The Cyclic Social Engine',
+      logo_alt: 'Cyclic Social Engine logo'
     },
     login: {
       title: 'Login',
@@ -655,7 +655,7 @@ const dictionaries = {
   },
   es: {
     common: {
-      app_name: 'Village Storyteller',
+      app_name: 'Cyclic Social Engine',
       untitled: 'Sin título',
       untitled_session: 'Sesión sin título',
       loading: 'Cargando…',
@@ -697,7 +697,7 @@ const dictionaries = {
     },
     header: {
       title: 'El Narrador de la Aldea',
-      logo_alt: 'Logotipo de Village Storyteller'
+      logo_alt: 'Logotipo de Cyclic Social Engine'
     },
     login: {
       title: 'Login',
@@ -1339,7 +1339,7 @@ const dictionaries = {
     },
     header: {
       title: 'A falu mesemondója',
-      logo_alt: 'Village Storyteller logó'
+      logo_alt: 'Cyclic Social Engine logó'
     },
     login: {
       title: 'Bejelentkezés',
