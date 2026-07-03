@@ -65,6 +65,11 @@ export const SELECTION_REQUIRED_RULES = Object.freeze({
   ALL_SELECTORS: 'all_selectors'
 });
 
+export const SELECTION_SELECTOR_SOURCES = Object.freeze({
+  STAGE_ACTORS: 'stage_actors',
+  IN_PLAY_ROLES: 'in_play_roles'
+});
+
 export const SELECTION_ABSTAIN_RULES = Object.freeze({
   NOT_ALLOWED: 'not_allowed',
   ALLOWED: 'allowed'
@@ -114,7 +119,8 @@ export function createSelectionRules({
   selectionWeights = [],
   selectionValueRules = [],
   tieBreakers = [],
-  selectorEligibility = {}
+  selectorEligibility = {},
+  selectorSource = SELECTION_SELECTOR_SOURCES.STAGE_ACTORS
 } = {}) {
   return {
     required,
@@ -132,7 +138,10 @@ export function createSelectionRules({
     selectionWeights: normalizeSelectionWeights(selectionWeights),
     selectionValueRules: normalizeSelectionValueRules(selectionValueRules),
     tieBreakers: normalizeTieBreakers(tieBreakers),
-    selectorEligibility: normalizeSelectorEligibility(selectorEligibility)
+    selectorEligibility: normalizeSelectorEligibility(selectorEligibility),
+    selectorSource: Object.values(SELECTION_SELECTOR_SOURCES).includes(selectorSource)
+      ? selectorSource
+      : SELECTION_SELECTOR_SOURCES.STAGE_ACTORS
   };
 }
 

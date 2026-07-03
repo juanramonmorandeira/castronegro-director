@@ -189,7 +189,8 @@ export function applyConcludePlay({ session, playOutcome = null, visibility = 'a
         ...(session?.metadata ?? {}),
         playOutcome
       },
-      playOutcome
+      playOutcome,
+      specialStages: []
     },
     result: {
       type: EFFECT_TYPES.CONCLUDE_PLAY,

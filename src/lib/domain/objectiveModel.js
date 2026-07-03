@@ -8,6 +8,7 @@
 // -----------------------------------------------------------------------------
 
 import { getGroupRoles, isGroupActive } from './groupModel.js';
+import { getActionHistory } from './historyModel.js';
 import { STAGE_STATUSES, normalizeId } from './sessionModel.js';
 import { getSpecialStages } from './specialStagesModel.js';
 import { MECHANICAL_ENTITY_TYPES } from './domainTypes.js';
@@ -19,6 +20,7 @@ export const OBJECTIVE_EVALUATION_STATUSES = Object.freeze({
 
 export const OBJECTIVE_CONDITIONS = Object.freeze({
   HOLDER_REACHES_IN_PLAY_PARITY: 'holder_reaches_in_play_parity',
+  HOLDER_REACHES_STABLE_IN_PLAY_PARITY: 'holder_reaches_stable_in_play_parity',
   ONLY_HOLDER_GROUP_REMAINS_IN_PLAY: 'only_holder_group_remains_in_play',
   ALL_HOLDER_MEMBERS_ARE_ONLY_ROLES_IN_PLAY: 'all_holder_members_are_only_roles_in_play',
   MEMBERS_SPAN_MULTIPLE_EFFECTIVE_ALIGNMENTS: 'members_span_multiple_effective_alignments',
@@ -229,6 +231,7 @@ function getDefaultObjectiveDependencies(rule = {}) {
 
   if (
     conditionType === OBJECTIVE_CONDITIONS.HOLDER_REACHES_IN_PLAY_PARITY ||
+    conditionType === OBJECTIVE_CONDITIONS.HOLDER_REACHES_STABLE_IN_PLAY_PARITY ||
     conditionType === OBJECTIVE_CONDITIONS.ONLY_HOLDER_GROUP_REMAINS_IN_PLAY ||
     conditionType === OBJECTIVE_CONDITIONS.ALL_HOLDER_MEMBERS_ARE_ONLY_ROLES_IN_PLAY ||
     conditionType === OBJECTIVE_CONDITIONS.NO_ROLES_IN_PLAY
@@ -368,6 +371,14 @@ function canInfluenceValueChangeFulfilledRule({ session, objectiveRule, stage, i
       if (conditionType === OBJECTIVE_CONDITIONS.HOLDER_REACHES_IN_PLAY_PARITY) {
         return canRoleInPlaySetChangeFulfilledParity({ session, rule: objectiveRule, roleId, nextValue });
       }
+      if (conditionType === OBJECTIVE_CONDITIONS.HOLDER_REACHES_STABLE_IN_PLAY_PARITY) {
+        return canRoleInPlaySetChangeFulfilledStableParity({
+          session,
+          rule: objectiveRule,
+          roleId,
+          nextValue
+        });
+      }
       if (conditionType === OBJECTIVE_CONDITIONS.ONLY_HOLDER_GROUP_REMAINS_IN_PLAY) {
         return canRoleInPlaySetChangeOnlyHolderRemains({ session, rule: objectiveRule, roleId, nextValue });
       }
@@ -425,6 +436,98 @@ function evaluateHolderReachesInPlayParity(session = {}, rule = {}) {
       totalInPlayCount: inPlayRoles.length
     }
   });
+}
+
+function getStableParityState(session = {}, rule = {}) {
+  const inPlayRoles = getInPlayRoles(session);
+  const holderRoleIds = getHolderRoleIds(session, rule.holder);
+  const holderInPlayRoles = inPlayRoles.filter((role) => holderRoleIds.includes(role.id));
+  const nonHolderInPlayRoles = inPlayRoles.filter((role) => !holderRoleIds.includes(role.id));
+
+  return {
+    inPlayRoles,
+    holderRoleIds,
+    holderInPlayRoles,
+    nonHolderInPlayRoles,
+    holderInPlayCount: holderInPlayRoles.length,
+    nonHolderInPlayCount: nonHolderInPlayRoles.length
+  };
+}
+
+function roleHasUsedAction(session = {}, role = {}, actionKey = null) {
+  if (!role?.id || !actionKey) return false;
+
+  return getActionHistory(session).some(
+    (entry) => (entry.actorIds ?? []).includes(role.id) && entry.actionKey === actionKey
+  );
+}
+
+function roleHasAvailableSessionAction(session = {}, role = {}, actionKey = null) {
+  return !roleHasUsedAction(session, role, actionKey);
+}
+
+function stableParityHasNonHolderDoubleSelectorAdvantage(state = {}) {
+  return (
+    state.holderInPlayCount === state.nonHolderInPlayCount &&
+    state.nonHolderInPlayRoles.some((role) => role.doubleSelector === true)
+  );
+}
+
+function stableParityHasReactiveCounterplay(state = {}) {
+  return (
+    state.holderInPlayCount === 1 &&
+    state.nonHolderInPlayCount === 1 &&
+    state.nonHolderInPlayRoles[0]?.roleKey === 'role_reactive'
+  );
+}
+
+function stableParityHasInOutOfPlayCounterplay(session = {}, state = {}) {
+  if (state.holderInPlayCount !== 1 || state.nonHolderInPlayCount !== 1) return false;
+
+  const role = state.nonHolderInPlayRoles[0];
+  if (role?.roleKey !== 'role_in_out_of_play') return false;
+
+  return (
+    roleHasAvailableSessionAction(session, role, 'restore_recent_out_of_play') &&
+    roleHasAvailableSessionAction(session, role, 'set_out_of_play')
+  );
+}
+
+function evaluateHolderReachesStableInPlayParity(session = {}, rule = {}) {
+  const state = getStableParityState(session, rule);
+  if (!state.holderRoleIds.length || !state.holderInPlayCount) return null;
+  if (state.holderInPlayCount < state.nonHolderInPlayCount) return null;
+  if (stableParityHasNonHolderDoubleSelectorAdvantage(state)) return null;
+  if (stableParityHasReactiveCounterplay(state)) return null;
+  if (stableParityHasInOutOfPlayCounterplay(session, state)) return null;
+
+  return createFulfilledRuleResult({
+    rule,
+    condition: OBJECTIVE_CONDITIONS.HOLDER_REACHES_STABLE_IN_PLAY_PARITY,
+    holderRoleIds: state.holderRoleIds,
+    details: {
+      holderInPlayCount: state.holderInPlayCount,
+      nonHolderInPlayCount: state.nonHolderInPlayCount,
+      totalInPlayCount: state.inPlayRoles.length,
+      stable: true
+    }
+  });
+}
+
+function canRoleInPlaySetChangeFulfilledStableParity({ session, rule, roleId, nextValue }) {
+  const fulfilled = evaluateHolderReachesStableInPlayParity(session, rule);
+  if (!fulfilled) return false;
+
+  const holderRoleIds = getHolderRoleIds(session, rule.holder);
+  const delta = getInPlayChangeDelta({ session, roleId, nextValue });
+  if (delta === 0) return false;
+
+  const holderDelta = holderRoleIds.includes(roleId) ? delta : 0;
+  const nonHolderDelta = holderRoleIds.includes(roleId) ? 0 : delta;
+  const holderInPlayCount = fulfilled.details.holderInPlayCount + holderDelta;
+  const nonHolderInPlayCount = fulfilled.details.nonHolderInPlayCount + nonHolderDelta;
+
+  return holderInPlayCount < nonHolderInPlayCount;
 }
 
 function evaluateOnlyHolderGroupRemainsInPlay(session = {}, rule = {}) {
@@ -493,6 +596,10 @@ export function evaluateObjectiveRule(session = {}, rule = {}) {
 
   if (conditionType === OBJECTIVE_CONDITIONS.HOLDER_REACHES_IN_PLAY_PARITY) {
     return evaluateHolderReachesInPlayParity(session, rule);
+  }
+
+  if (conditionType === OBJECTIVE_CONDITIONS.HOLDER_REACHES_STABLE_IN_PLAY_PARITY) {
+    return evaluateHolderReachesStableInPlayParity(session, rule);
   }
 
   if (conditionType === OBJECTIVE_CONDITIONS.ONLY_HOLDER_GROUP_REMAINS_IN_PLAY) {

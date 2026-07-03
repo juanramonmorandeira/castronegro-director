@@ -13,12 +13,16 @@ import {
   STAGE_COMPLETION_REQUESTED_BY,
   STAGE_KEYS
 } from './stageModel.js';
-import { LINKED_PROPAGATED_EFFECT_STAGE } from './stageTypes.js';
+import {
+  LINKED_PROPAGATED_EFFECT_STAGE,
+  ROLE_STATE_REVEALED_STAGE
+} from './stageTypes.js';
 import { getCatalogRecipe, RECIPE_KEYS } from './recipeCatalog.js';
 import {
   SELECTION_ABSTAIN_RULES,
   SELECTION_REQUIRED_RULES,
   SELECTION_RUNOFF_RULES,
+  SELECTION_SELECTOR_SOURCES,
   SELECTION_TIE_RULES,
   SELECTION_UNANIMOUS_RULES,
   createSelectionRules
@@ -39,6 +43,7 @@ export const STAGE_CATALOG_IDS = Object.freeze({
   SELECT_DOUBLE_SELECTOR: 'select_double_selector',
   PICK_NEXT_DOUBLE_SELECTOR: 'pick_next_double_selector',
   LINKED_PROPAGATED_EFFECT: LINKED_PROPAGATED_EFFECT_STAGE.CATALOG_ID,
+  ROLE_STATE_REVEALED: ROLE_STATE_REVEALED_STAGE.CATALOG_ID,
   CONCEALED_SET_OUT_OF_PLAY: 'concealed_set_out_of_play',
   EXPOSED_SET_OUT_OF_PLAY: 'exposed_set_out_of_play'
 });
@@ -187,7 +192,6 @@ export const STAGE_CATALOG = Object.freeze({
       required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
       abstain: SELECTION_ABSTAIN_RULES.NOT_ALLOWED,
       unanimous: SELECTION_UNANIMOUS_RULES.NOT_REQUIRED,
-      tie: SELECTION_TIE_RULES.NULL_ON_TIE,
       selectorEligibility: {
         requireInPlay: false
       }
@@ -209,11 +213,28 @@ export const STAGE_CATALOG = Object.freeze({
     }
   }),
 
+  [STAGE_CATALOG_IDS.ROLE_STATE_REVEALED]: defineStage({
+    key: STAGE_KEYS.ROLE_STATE_REVEALED,
+    status: STAGE_STATUSES.ENABLED,
+    actorIds: [],
+    completion: getManualCompletion([STAGE_COMPLETION_REQUESTED_BY.DIRECTOR]),
+    actions: [],
+    metadata: {
+      catalogId: STAGE_CATALOG_IDS.ROLE_STATE_REVEALED
+    }
+  }),
+
   [STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY]: defineStage({
     key: STAGE_KEYS.STAGE_04,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
+    selectionRules: createSelectionRules({
+      required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
+      abstain: SELECTION_ABSTAIN_RULES.NOT_ALLOWED,
+      unanimous: SELECTION_UNANIMOUS_RULES.REQUIRED,
+      tie: SELECTION_TIE_RULES.NULL_ON_TIE
+    }),
     actions: [getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY)],
     metadata: {
       catalogId: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY
@@ -226,6 +247,7 @@ export const STAGE_CATALOG = Object.freeze({
     actorIds: [],
     completion: getManualCompletion(),
     selectionRules: createSelectionRules({
+      selectorSource: SELECTION_SELECTOR_SOURCES.IN_PLAY_ROLES,
       required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
       abstain: SELECTION_ABSTAIN_RULES.NOT_ALLOWED,
       unanimous: SELECTION_UNANIMOUS_RULES.NOT_REQUIRED,
@@ -241,7 +263,12 @@ export const STAGE_CATALOG = Object.freeze({
       })
     ],
     metadata: {
-      catalogId: STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY
+      catalogId: STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY,
+      interaction: {
+        participants: SELECTION_SELECTOR_SOURCES.IN_PLAY_ROLES,
+        discussion: true,
+        selectionMethod: 'vote'
+      }
     }
   })
 });

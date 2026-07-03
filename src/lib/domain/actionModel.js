@@ -49,7 +49,10 @@ import {
 } from './domainTypes.js';
 import { LINKED_PROPAGATED_EFFECT_STAGE } from './stageTypes.js';
 import { STAGE_STATUSES } from './sessionModel.js';
-import { appendSpecialStage } from './specialStagesModel.js';
+import {
+  SPECIAL_STAGE_EVENT_WINDOWS,
+  appendSpecialStage
+} from './specialStagesModel.js';
 
 export const ACTION_IDS = Object.freeze({
   INSPECT_ROLE: 'inspect_role',
@@ -57,6 +60,7 @@ export const ACTION_IDS = Object.freeze({
   SET_IN_PLAY: 'set_in_play',
   BLOCK_PROPERTY_CHANGE: 'block_property_change',
   LINK_TARGETS: 'link_targets',
+  LINKED_TARGET_RECOGNITION: 'linked_target_recognition',
   SELECT: 'select',
   REPLACE_ROLE_IDENTITY: 'replace_role_identity',
   CONCLUDE_PLAY: 'conclude_play'
@@ -465,6 +469,11 @@ function getHistoryContracts(context = {}) {
 
 function appendLinkedPropagatedEffectStages(session = {}, linkedPropagatedEffects = [], context = {}) {
   return (linkedPropagatedEffects ?? []).reduce((currentSession, effect, index) => {
+    const eventWindow = context.poolKey === 'poolConcealed'
+      ? SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED
+      : context.poolKey === 'poolExposed'
+        ? SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED
+        : null;
     const stage = {
       key: LINKED_PROPAGATED_EFFECT_STAGE.KEY,
       status: STAGE_STATUSES.ENABLED,
@@ -472,6 +481,7 @@ function appendLinkedPropagatedEffectStages(session = {}, linkedPropagatedEffect
       actions: [],
       metadata: {
         catalogId: LINKED_PROPAGATED_EFFECT_STAGE.CATALOG_ID,
+        ...(eventWindow ? { eventWindow } : {}),
         propagatedEffect: effect,
         sourceContext: {
           cycleId: context.cycleId ?? currentSession.cycle?.id ?? 0,
@@ -493,6 +503,73 @@ function appendLinkedPropagatedEffectStages(session = {}, linkedPropagatedEffect
       targetId: effect.targetId ?? null
     });
   }, session);
+}
+
+function sameRoleIdSet(left = [], right = []) {
+  const leftIds = [...new Set(left ?? [])].sort();
+  const rightIds = [...new Set(right ?? [])].sort();
+  return leftIds.length === rightIds.length && leftIds.every((roleId, index) => roleId === rightIds[index]);
+}
+
+function findGroupCreatedBySetGroupEffect(session = {}, effect = {}) {
+  const roleIds = effect.roleIds ?? [];
+  const groupType = effect.groupType ?? null;
+
+  return (session.groups ?? []).find((group) =>
+    group.type === groupType &&
+    sameRoleIdSet(group.roleIds ?? [], roleIds)
+  ) ?? null;
+}
+
+function appendLinkedTargetRecognitionHistory({
+  session = {},
+  action = {},
+  actor = null,
+  context = {},
+  currentCycleId = 0,
+  group = null
+} = {}) {
+  if (!group || (group.roleIds ?? []).length === 0) return session;
+
+  const memberRoleIds = [...(group.roleIds ?? [])];
+
+  return appendActionHistory(session, {
+    cycleId: currentCycleId,
+    poolKey: context.poolKey ?? null,
+    stageId: context.stageId ?? null,
+    stageKey: context.stageKey ?? null,
+    stageCatalogId: context.stageCatalogId ?? null,
+    actionKey: ACTION_IDS.LINKED_TARGET_RECOGNITION,
+    actionId: ACTION_IDS.LINKED_TARGET_RECOGNITION,
+    actionSignature: ACTION_IDS.LINKED_TARGET_RECOGNITION,
+    actorIds: actor ? [actor.id] : [],
+    targetIds: memberRoleIds,
+    proposedEffects: [],
+    finalEffects: [],
+    blockedEffects: [],
+    result: HISTORY_RESULTS.NO_EFFECT,
+    metadata: {
+      visibility: 'linked_members',
+      audienceRoleIds: memberRoleIds,
+      directorVisible: true,
+      causedBy: {
+        actionKey: context.actionKey ?? action.key ?? action.id,
+        actionId: action.id ?? null,
+        actorId: actor?.id ?? null,
+        groupId: group.id
+      },
+      derivedFrom: {
+        type: MECHANICAL_ENTITY_TYPES.GROUP,
+        id: group.id,
+        groupType: group.type ?? null,
+        sourceActionId: group.sourceActionId ?? null
+      },
+      reveals: {
+        groupId: group.id,
+        memberRoleIds
+      }
+    }
+  });
 }
 
 // Resuelve la consecuencia principal de set_in_play.
@@ -659,8 +736,9 @@ export function applyLinkTargets({ session, action, actor, targets, context = {}
     }
   ];
   const effectResolution = resolveProposedEffects({ session, proposedEffects });
-  const nextSession = appendActionHistory(
-    applyFinalEffects({ session, finalEffects: effectResolution.finalEffects }),
+  const sessionAfterEffects = applyFinalEffects({ session, finalEffects: effectResolution.finalEffects });
+  const sessionWithLinkHistory = appendActionHistory(
+    sessionAfterEffects,
     {
       cycleId: currentCycleId,
       poolKey: context.poolKey ?? null,
@@ -682,6 +760,17 @@ export function applyLinkTargets({ session, action, actor, targets, context = {}
       })
     }
   );
+  const nextSession = effectResolution.finalEffects
+    .filter((effect) => effect.type === EFFECT_TYPES.SET_GROUP)
+    .reduce((currentSession, effect) =>
+      appendLinkedTargetRecognitionHistory({
+        session: currentSession,
+        action,
+        actor,
+        context,
+        currentCycleId,
+        group: findGroupCreatedBySetGroupEffect(sessionAfterEffects, effect)
+      }), sessionWithLinkHistory);
 
   return {
     session: nextSession,

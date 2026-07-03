@@ -15,9 +15,7 @@ import {
 import { ROLE_CATALOG_IDS } from './roleCatalog.js';
 import { RECIPE_KEYS } from './recipeCatalog.js';
 import {
-  SELECTION_RUNOFF_RULES,
   SELECTION_TIE_BREAKER_TYPES,
-  SELECTION_TIE_RULES,
   SELECTION_VALUE_RULE_TYPES
 } from './selectionModel.js';
 import { POOL_KEYS } from './sessionModel.js';
@@ -61,9 +59,9 @@ export function getBasicAlignmentDistribution(playersExpected) {
 
 const BASIC_OBJECTIVE_RULES = [
   {
-    key: 'alignment_b_reaches_in_play_parity',
+    key: 'alignment_b_reaches_stable_in_play_parity',
     holder: { type: OBJECTIVE_HOLDER_TYPES.GROUP, id: 'group_alignment_b' },
-    condition: { type: OBJECTIVE_CONDITIONS.HOLDER_REACHES_IN_PLAY_PARITY },
+    condition: { type: OBJECTIVE_CONDITIONS.HOLDER_REACHES_STABLE_IN_PLAY_PARITY },
     onFulfilled: [
       {
         conclusive: true,
@@ -197,9 +195,6 @@ export const RULE_SET_CATALOG = Object.freeze({
                 actionKeys: [RECIPE_KEYS.SET_OUT_OF_PLAY]
               },
               rules: {
-                tie: SELECTION_TIE_RULES.RUNOFF_ON_TIE,
-                runoff: SELECTION_RUNOFF_RULES.SAME_CANDIDATES,
-                repeatLimit: 1,
                 selectionValueRules: [
                   {
                     type: SELECTION_VALUE_RULE_TYPES.SELECTOR_PROPERTY,

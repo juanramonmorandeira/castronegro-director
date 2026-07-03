@@ -131,7 +131,7 @@ Cobertura inicial:
 | --- | --- | --- |
 | `role_set_out_of_play` | ready | Actua mediante `group_concealed_set_out_of_play`. |
 | `role_inspects` | ready | Inspeccion privada. |
-| `role_reactive` | ready | Crea una specialStage al cambiar a `inPlay=false`. |
+| `role_reactive` | ready | Crea una specialStage si cambia a `inPlay=false` desde `concealed_set_out_of_play` o `exposed_set_out_of_play`. |
 | `role_in_out_of_play` | ready | Dos acciones limitadas durante la session. |
 | `role_plain` | ready | Sin stage personal. |
 | `role_links_targets` | ready | Crea un group, aporta selectionRules y objectiveRules propias. |

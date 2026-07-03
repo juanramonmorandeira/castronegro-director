@@ -148,6 +148,19 @@ marca el stage como `done` y avanza el cursor.
 Si ese avance dispara operaciones de ciclo de vida, `completeCurrentStage`
 devuelve `lifecycleResults` con las ejecuciones realizadas.
 
+## Activacion de superficie
+
+El motor no activa pantallas, ojos, camaras, chats ni estados visuales de
+jugador.
+
+La UI debe derivar esa activacion desde el estado mecanico:
+
+```text
+currentStageSource + poolCurrent + currentStage + actorIds + role.inPlay
+```
+
+El contrato normativo vive en `surface_contract.md`.
+
 ## Regla de nombres
 
 Preferimos nombres mecanicos y anonimos:

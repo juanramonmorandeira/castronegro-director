@@ -23,7 +23,7 @@ limpio. No es un documento de ambientacion y evita nombres narrativos.
 | `link_targets` | implementada | Crea un group con miembros, `groupRules`, `selectionRules` y `objectiveRules`. |
 | `propagate_property_change` | implementada | Propaga cambios por regla declarativa; no depende del `group.type`. |
 | `linked_objective` | implementada | El group aporta objectiveRule y `objectiveModel` la recopila si aplica. |
-| `group_objective_rule` | implementada | `holder_reaches_in_play_parity`, `only_holder_group_remains_in_play` y `all_holder_members_are_only_roles_in_play`. |
+| `group_objective_rule` | implementada | `holder_reaches_in_play_parity`, `holder_reaches_stable_in_play_parity`, `only_holder_group_remains_in_play` y `all_holder_members_are_only_roles_in_play`. |
 | `selection_count` | implementada | `selectionModel.js` valida selecciones, suma unidades y resuelve chosen/empate. |
 | `exposed_set_out_of_play` | implementada | El stage vota para elegir `chosenId`; despues aplica la receta `set_out_of_play`. |
 | `assume_role` | implementada | `replace_role_identity` asigna un role de `assumableRoles` al asiento/player del actor. |
@@ -79,19 +79,23 @@ Regla inicial configurada:
 
 ```js
 {
-  key: 'alignment_b_reaches_threshold',
+  key: 'alignment_b_reaches_stable_in_play_parity',
   holder: {
     type: 'group',
     id: 'group_alignment_b'
   },
   condition: {
-    type: 'holder_reaches_in_play_parity'
+    type: 'holder_reaches_stable_in_play_parity'
   }
 }
 ```
 
-`holder_reaches_in_play_parity` significa:
+`holder_reaches_in_play_parity` queda como condicion generica de catalogo:
 
 ```text
 miembros inPlay del group holder >= roles inPlay que no pertenecen a ese group
 ```
+
+`basic_ruleset` usa `holder_reaches_stable_in_play_parity`: la misma base de
+paridad, pero sin dar por cumplida una igualdad que conserve counterplay
+mecanico inmediato contra el holder.

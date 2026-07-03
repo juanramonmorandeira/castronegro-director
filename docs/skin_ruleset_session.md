@@ -134,7 +134,7 @@ ruleSet.basic_ruleset
     group_exposed_set_out_of_play
 
   objectives:
-    group_alignment_b holder_reaches_in_play_parity
+    group_alignment_b holder_reaches_stable_in_play_parity
 ```
 
 ## Configuration

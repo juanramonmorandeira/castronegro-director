@@ -295,6 +295,16 @@ target: 2 roles
 filters: in_play, distinct
 ```
 
+Consecuencia informativa:
+
+```text
+linked_target_recognition
+```
+
+Si `link_targets` crea el group linked, el motor registra en `actionHistory` que
+los miembros del group conocen al resto de miembros. La entrada usa
+`result: no_effect`, no crea `specialStage` y no modifica estado mecanico.
+
 Restricciones:
 
 ```text
@@ -446,6 +456,7 @@ Ejemplo actual:
 ```text
 exposed_set_out_of_play
   selectionRules:
+    selectorSource: in_play_roles
     required: all_selectors
     abstain: not_allowed
     unanimous: not_required
@@ -463,6 +474,10 @@ exposed_set_out_of_play
 Lectura: el seleccion elige un target; la receta `set_out_of_play` aplica
 `set_in_play(inPlay=false)` sobre ese target. La misma estructura podra elegir
 para aplicar otra receta distinta sin crear una receta compuesta nueva.
+
+Aunque la stage la aporta `group_exposed_set_out_of_play`, la seleccion efectiva
+usa `selectorSource: in_play_roles`: participan en el debate y en el vote solo
+los roles que siguen con `inPlay=true`.
 
 Si existe un group `linked` activo, su propia `selectionRules` puede aportar
 `groupRestrictions` a esta seleccion. `exposed_set_out_of_play` no conoce

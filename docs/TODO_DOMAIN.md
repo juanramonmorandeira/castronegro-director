@@ -4,9 +4,27 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
 
 ## Mensajes y skin
 
+- Tras cerrar el bloque de flujos por stage, definir como encaja la skin en el
+  contrato de surface:
+  - transformacion de mensajes tecnicos en texto final;
+  - cobertura requerida por ruleSet;
+  - entidades visuales requeridas;
+  - filtrado de `surfaceMessages`/`surfaceItems`;
+  - idiomas y fallback.
 - Ampliar `MESSAGE_CATALOG` al incorporar nuevas mecanicas.
 - Definir requisitos de cobertura de mensajes por ruleSet.
 - Conectar `messagePresenter` con la UI cuando exista una primera skin real.
+- Revisar y depurar todos los logs/histories antes de persistir mensajes
+  tecnicos de director/player:
+  - `stageHistory`;
+  - `poolHistory`;
+  - `cycleHistory`;
+  - `actionHistory`;
+  - `errorLog`;
+  - `applicationLog`.
+- Determinar que mensajes publicos deben guardarse en un futuro pool de
+  revelaciones para el siguiente pool, incluyendo como se proyectan,
+  acknowledgements requeridos y cuando pasan a ser visibles.
 - Definir persistencia externa de `applicationLog`.
 - Clasificar progresivamente los errores restantes como gameplay o diagnostic.
 
@@ -40,6 +58,8 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
 - Consolidar `role_peek` tras la primera implementacion:
   - definir la experiencia visual de `peekAttempt` para partidas no presenciales;
   - definir UI/director para resolver `peekAccusation`;
+  - definir el flujo paralelo de surface durante `concealed_set_out_of_play`,
+    desde `start_stage` hasta envio de candidate;
   - documentar reglas de conducta humana durante `stage_concealed_set_out_of_play`.
   - Nota: la mecanica de dominio de `role_peek` esta cerrada para
     `basic_ruleset`; estos pendientes pertenecen a UI/skin/director.

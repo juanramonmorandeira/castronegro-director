@@ -166,6 +166,7 @@ export {
   resolveCurrentStage
 } from './stageModel.js';
 export {
+  SPECIAL_STAGE_EVENT_WINDOWS,
   SPECIAL_STAGE_HISTORY_OPERATIONS,
   getSpecialStages,
   hasPendingSpecialStages,
@@ -176,6 +177,20 @@ export {
   startSpecialStages,
   completeSpecialStage
 } from './specialStagesModel.js';
+
+export {
+  SURFACE_SCREEN_MODES,
+  SURFACE_FLOW_STEPS,
+  SURFACE_FLOW_ORDER,
+  SURFACE_ITEM_TYPES,
+  SURFACE_MESSAGE_EXPIRATIONS,
+  SURFACE_EFFECT_REASONS,
+  getSurfaceFlowOrder,
+  createSurfaceMessage,
+  createSurfaceItem,
+  createPublicTableStateItem,
+  createEffectResultItem
+} from './surfaceModel.js';
 
 export {
   RECIPE_KEYS,
@@ -283,6 +298,7 @@ export {
   SELECTION_ROUND_TYPES,
   SELECTION_REQUIRED_RULES,
   SELECTION_RESTRICTION_TYPES,
+  SELECTION_SELECTOR_SOURCES,
   CANDIDATE_RULE_TYPES,
   createSelection,
   createSelectionRules,

@@ -243,7 +243,23 @@ pools[poolKey] -> orden de stages dentro de ese pool
 
 `session.specialStages` es una cola FIFO independiente de `pools`. Antes de
 entrar en cualquier pool normal, el ciclo comprueba si contiene stages
-pendientes y, si los tiene, los resuelve primero.
+pendientes y, si los tiene, los resuelve primero. Cada stage dinamico puede
+declarar `metadata.eventWindow` (`before_concealed`, `after_concealed`,
+`before_exposed`, `after_exposed`) para que la superficie lo proyecte en la
+ventana correcta sin convertir la FIFO en cuatro colas fisicas.
+
+Orden de superficie aceptado para un ciclo:
+
+```text
+before_concealed
+-> poolConcealed
+-> after_concealed
+-> publicReveal
+-> before_exposed
+-> poolExposed
+-> after_exposed
+-> privateHide
+```
 
 Identidad usada por el flujo:
 
@@ -372,7 +388,7 @@ aplicador:
 | Un cambio de propiedad queda bloqueado? | `roleModel.js` | `block_property_change` bloquea `inPlay=false` frente a actores concretos |
 | Un efecto genera consecuencias de group? | `groupModel.js` + `resolverModel.js` | `propagate_property_change` genera efectos derivados |
 | Como se escribe un cambio final? | `effectModel.js` | `set_property`, `set_group` |
-| La parte jugable ha concluido? | `objectiveModel.js` | `holder_reaches_in_play_parity`, `only_holder_group_remains_in_play`, `no_roles_in_play` |
+| La parte jugable ha concluido? | `objectiveModel.js` | `holder_reaches_in_play_parity`, `holder_reaches_stable_in_play_parity`, `only_holder_group_remains_in_play`, `no_roles_in_play` |
 
 ## Flujo de efectos
 
@@ -472,6 +488,7 @@ effectModel aplica cambios.
 ```mermaid
 graph TD
   A[link_targets] --> B[set_group linked]
+  B --> R[linked_target_recognition]
   B --> C[session.groups]
   C --> D{Grupo activo}
   D -->|No| E[No ocurre nada mas]
@@ -485,6 +502,9 @@ Lectura:
 ```text
 link_targets no elimina a nadie.
 link_targets solo crea un grupo.
+Si el grupo se crea, `linked_target_recognition` registra en `actionHistory`
+que los miembros del group linked conocen al resto de miembros. No es una
+`specialStage` y no cambia estado mecanico.
 El group linked declara `propagate_property_change`. Su `type` no activa
 ninguna logica especial por si solo.
 ```
@@ -574,6 +594,7 @@ Cuando aparezca una mecanica nueva, seguir este orden:
 | Si un miembro sale de juego, el otro tambien | `propagate_property_change` | `groupModel.js` + `resolverModel.js` |
 | Si solo quedan linked de alignments distintos, cumplen objective especial | objectiveRule sobre group linked | `session.objectiveRules` |
 | Un group de alignment alcanza al resto | `holder_reaches_in_play_parity` | `session.objectiveRules` |
+| `alignment_b` alcanza paridad estable en `basic_ruleset` | `holder_reaches_stable_in_play_parity` | `session.objectiveRules` |
 | Un jugador no puede elegir contra su linked | selectionRule del group `linked` | `group.selectionRules` |
 
 ## Modelo de seleccion
@@ -710,6 +731,7 @@ exposed_set_out_of_play = selectionRules + set_out_of_play
 Reglas actuales de esa seleccion:
 
 ```text
+selectionRules.selectorSource: in_play_roles
 selectionRules.required: all_selectors
 selectionRules.tie: null_on_tie
 selectionRules.runoff: tied_candidates
@@ -720,9 +742,39 @@ selectionRules.supportThreshold: none
 selectionRules.candidateIds: null -> todos los roles inPlay
 ```
 
+Definicion precisa de `stage_exposed_set_out_of_play` en `basic_ruleset`:
+
+```text
+1. Participan todos los roles con inPlay=true.
+2. La conversacion/debate/chat/videoconferencia es contexto humano del stage;
+   no produce efectos mecanicos por si misma.
+3. La seleccion mecanica es method=vote.
+4. Todos los selectors inPlay deben emitir seleccion.
+5. Los candidates por defecto son todos los roles con inPlay=true.
+6. Si hay chosen, `stageModel` ejecuta la recipe `set_out_of_play` con ese
+   chosen como target.
+7. Si el resultado es null por empate sin desempate o abstencion nula, la stage
+   queda para cierre manual con una unica ronda resuelta.
+```
+
 Si el selector pertenece a un group `linked` activo creado por `link_targets`,
 `stageModel` recopila su regla y anade una restriccion efectiva de grupo para esa
 resolucion.
+
+Interacciones relevantes:
+
+- `selection_counts_double`: si esta seleccionada en la session, aporta
+  `selectionValueRules` y `tieBreakers` scoped a `poolExposed + vote +
+  set_out_of_play`.
+- `linked`: no vive en la stage. El group linked aporta restricciones de
+  seleccion y, si el target final queda `inPlay=false`, encola
+  `linked_propagated_effect`.
+- `role_reactive`: si el target final es ese role y queda `inPlay=false` desde
+  `concealed_set_out_of_play` o `exposed_set_out_of_play`, `eventModel` puede
+  encolar su specialStage de respuesta.
+- `role_in_out_of_play`: su ventana especial de self-restore pertenece al
+  concealed set_out_of_play. En exposed, si queda `inPlay=false`, no abre esa
+  excepcion.
 
 La deuda tecnica anterior era mezclar recuento de seleccion y consecuencia en una
 receta compuesta. Eso ya queda separado:

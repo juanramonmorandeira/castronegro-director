@@ -20,3 +20,8 @@ export const LINKED_PROPAGATED_EFFECT_STAGE = Object.freeze({
   CATALOG_ID: 'linked_propagated_effect',
   ACTION_KEY: 'linked_propagated_effect'
 });
+
+export const ROLE_STATE_REVEALED_STAGE = Object.freeze({
+  KEY: 'stage_role_state_revealed',
+  CATALOG_ID: 'role_state_revealed'
+});

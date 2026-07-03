@@ -21,6 +21,13 @@ export const SPECIAL_STAGE_HISTORY_OPERATIONS = Object.freeze({
   FAILED: 'failed'
 });
 
+export const SPECIAL_STAGE_EVENT_WINDOWS = Object.freeze({
+  BEFORE_CONCEALED: 'before_concealed',
+  AFTER_CONCEALED: 'after_concealed',
+  BEFORE_EXPOSED: 'before_exposed',
+  AFTER_EXPOSED: 'after_exposed'
+});
+
 export function getSpecialStages(session = {}) {
   return Array.isArray(session?.specialStages) ? session.specialStages : [];
 }

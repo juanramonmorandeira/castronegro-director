@@ -150,8 +150,9 @@ jugable.
 Un rol tambien puede declarar `reactions`. Una reaccion no se ejecuta por si
 misma: `eventModel.js` la evalua cuando un efecto final produce un evento. El
 primer caso implementado es `role_reactive`: cuando ese rol recibe un cambio
-real a `inPlay=false`, se crea un stage en `specialStages` para que pueda ejecutar
-una respuesta.
+real a `inPlay=false` desde `concealed_set_out_of_play` o
+`exposed_set_out_of_play`, se crea un stage en `specialStages` para que pueda
+ejecutar una respuesta.
 
 El motor debe ejecutar `check_objectives` al final de cada pool. Si se emite un
 `playOutcome` concluyente, primero se comprueba que no haya stages pendientes en

@@ -156,7 +156,11 @@ export const ROLE_CATALOG = Object.freeze({
           targetType: MECHANICAL_ENTITY_TYPES.ROLE,
           target: EVENT_TRIGGER_TARGETS.SELF,
           property: 'inPlay',
-          to: false
+          to: false,
+          stageCatalogIds: [
+            STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY,
+            STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY
+          ]
         },
         response: {
           type: EVENT_RESPONSE_TYPES.CREATE_STAGE,
@@ -164,7 +168,7 @@ export const ROLE_CATALOG = Object.freeze({
             poolKey: null,
             metadata: {
               orderReason:
-                'Created only after this role receives a final inPlay=false effect.'
+                'Created only after this role receives a final inPlay=false effect from a configured set_out_of_play stage.'
             }
           })
         }

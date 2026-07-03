@@ -33,13 +33,13 @@ Estructura aceptada:
 
 ```js
 {
-  key: 'alignment_b_reaches_parity',
+  key: 'alignment_b_reaches_stable_in_play_parity',
   holder: {
     type: 'group',
     id: 'group_alignment_b'
   },
   condition: {
-    type: 'holder_reaches_in_play_parity'
+    type: 'holder_reaches_stable_in_play_parity'
   },
   dependencies: [
     {
@@ -154,7 +154,7 @@ Ejemplo conceptual:
       ids: ['alignment_b']
     }
   ],
-  fulfilledObjectiveRuleKeys: ['alignment_b_reaches_parity'],
+  fulfilledObjectiveRuleKeys: ['alignment_b_reaches_stable_in_play_parity'],
   resolutionReason: 'single_conclusive_objective'
 }
 ```
@@ -286,6 +286,7 @@ Tipos de condicion aceptados provisionalmente:
 
 ```text
 holder_reaches_in_play_parity
+holder_reaches_stable_in_play_parity
 only_holder_group_remains_in_play
 no_roles_in_play
 ```
@@ -295,6 +296,26 @@ no_roles_in_play
 ```text
 members inPlay del holder >= roles inPlay que no pertenecen al holder
 ```
+
+`holder_reaches_stable_in_play_parity`:
+
+```text
+members inPlay del holder >= roles inPlay que no pertenecen al holder,
+siempre que la igualdad no conserve counterplay mecanico inmediato contra el
+holder.
+```
+
+En `basic_ruleset`, esta es la condicion usada por `alignment_b`.
+
+Casos que impiden considerar estable la igualdad:
+
+- un role fuera del holder conserva `doubleSelector=true`;
+- queda un uno contra uno contra `role_reactive`;
+- queda un uno contra uno contra `role_in_out_of_play` y ese role conserva sin
+  usar ambas recipes: `restore_recent_out_of_play` y `set_out_of_play`.
+
+Si el holder supera estrictamente al resto, la paridad estable se cumple aunque
+existan esas piezas de counterplay.
 
 `only_holder_group_remains_in_play`:
 

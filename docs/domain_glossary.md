@@ -72,6 +72,19 @@ runtime se guarda como `role.id`.
 
 `playerId` = id de un jugador de la aplicacion.
 
+`player` = persona o cliente de aplicacion que participa en una session. Un
+player ocupa un `seat` y puede tener un role asignado, pero no es el role.
+
+`player asignado a un role` = vinculacion runtime entre `playerId` y `roleId`.
+Las recipes, stages y efectos mecanicos apuntan normalmente a roles; la UI,
+presencia remota/presencial y surface necesitan saber que player ve o introduce
+esa informacion.
+
+`role asignado a un player` = identidad mecanica que ese player controla o
+representa en la session. Si el role cambia de estado, por ejemplo
+`inPlay=false`, la mecanica cambia el role; la surface puede comunicarlo como
+informacion sobre el player que tiene ese role asignado.
+
 `seat` = posicion/asiento asignado dentro de una match/session.
 
 `groupId` = id de un group dentro de una session o definicion mecanica.
@@ -149,6 +162,19 @@ Cada elemento tiene `stageId`, `stageKey` y metadatos de origen. Los stages
 generados durante un pool se resuelven despues de completar ese pool y antes
 del siguiente, conservando su relacion causal con el ciclo actual.
 
+`eventWindow` = metadata opcional de una specialStage que indica en que ventana
+de superficie debe proyectarse: `before_concealed`, `after_concealed`,
+`before_exposed` o `after_exposed`. No convierte `specialStages` en varios
+pools ni en varias colas.
+
+`publicReveal` = transicion de superficie entre `after_concealed` y
+`before_exposed`. Proyecta la mesa publica por `seat`, estados publicos como
+`inPlay`, mensajes temporales filtrables por skin y resultados publicos ya
+resueltos.
+
+`privateHide` = transicion de superficie posterior a `after_exposed` que devuelve
+la pantalla de roles al modo oculto antes del siguiente tramo privado.
+
 `specialStageDefinitions` = stages iniciales que una definicion aporta
 directamente a `session.specialStages`. No usan una bandera dentro del stage.
 
@@ -158,6 +184,11 @@ directamente a `session.specialStages`. No usan una bandera dentro del stage.
 
 `specialStagesHistory` = historial propio de altas, inicios, cierres y fallos de
 la cola `specialStages`.
+
+`role_state_revealed` = specialStage informativa generada cuando un role queda
+`inPlay=false` y debe comunicarse publicamente. No tiene actions ni
+acknowledgements de jugadores; el director la cierra tras comunicar player,
+role revelado, estado y causa.
 
 `cycleModel` = modelo runtime responsable de iniciar ciclos, contar sus
 iteraciones y mover el flujo entre pools.

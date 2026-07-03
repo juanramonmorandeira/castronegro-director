@@ -37,13 +37,18 @@ import {
   validatePool
 } from './poolModel.js';
 import { collectSelectionRules } from './groupModel.js';
+import { RECIPE_ACTOR_TYPES } from './domainTypes.js';
 import { POOL_LIFECYCLE_OPERATION_TYPES } from './poolDefinition.js';
 import {
   OBJECTIVE_EVALUATION_STATUSES,
   checkObjectives,
   getPendingObjectiveInfluenceStages
 } from './objectiveModel.js';
-import { SELECTION_OUTCOME_TYPES } from './selectionModel.js';
+import {
+  SELECTION_OUTCOME_TYPES,
+  SELECTION_SELECTOR_SOURCES,
+  getInPlaySelectorIds
+} from './selectionModel.js';
 import {
   startSpecialStages,
   completeSpecialStage,
@@ -53,6 +58,7 @@ import {
 import { reviewPropertyBlocks } from './roleModel.js';
 import {
   LINKED_PROPAGATED_EFFECT_STAGE,
+  ROLE_STATE_REVEALED_STAGE,
   STAGE_COMPLETION_MODES,
   STAGE_COMPLETION_REQUESTED_BY
 } from './stageTypes.js';
@@ -112,6 +118,7 @@ export const STAGE_KEYS = Object.freeze({
   STAGE_04: 'stage_04',
   STAGE_05: 'stage_05',
   LINKED_PROPAGATED_EFFECT: LINKED_PROPAGATED_EFFECT_STAGE.KEY,
+  ROLE_STATE_REVEALED: ROLE_STATE_REVEALED_STAGE.KEY,
   STAGE_07: 'stage_07',
   STAGE_08: 'stage_08',
   STAGE_09: 'stage_09'
@@ -330,16 +337,19 @@ function hasStageSelectionRules(stage = {}) {
   return !!getStageSelectionRules(stage);
 }
 
-function getSelectionSelectorIds(stage = {}, input = {}) {
+function getSelectionSelectorIds(session = {}, stage = {}, input = {}, selectionRules = {}) {
   if ((input.selectorIds ?? []).length > 0) return input.selectorIds;
+  if (selectionRules.selectorSource === SELECTION_SELECTOR_SOURCES.IN_PLAY_ROLES) {
+    return getInPlaySelectorIds(session);
+  }
   if ((input.actorIds ?? []).length > 0) return input.actorIds;
   if ((stage.actorIds ?? []).length > 0) return stage.actorIds;
 
   return [];
 }
 
-function getSelectionRuleSelectorIds(stage = {}, input = {}) {
-  const selectorIds = getSelectionSelectorIds(stage, input);
+function getSelectionRuleSelectorIds(session = {}, stage = {}, input = {}, selectionRules = {}) {
+  const selectorIds = getSelectionSelectorIds(session, stage, input, selectionRules);
   if (selectorIds.length > 0) return selectorIds;
 
   return [
@@ -408,7 +418,7 @@ function mergeSelectionRules(baseRules = {}, additionalRules = []) {
 
 function getSelectionInputForStage(session = {}, stage = {}, recipe = {}, input = {}) {
   const selectionRules = getStageSelectionRules(stage) ?? {};
-  const selectorIds = getSelectionSelectorIds(stage, input);
+  const selectorIds = getSelectionSelectorIds(session, stage, input, selectionRules);
   const selectionContext = {
     method: 'vote',
     poolKey: stage.poolKey ?? null,
@@ -416,7 +426,7 @@ function getSelectionInputForStage(session = {}, stage = {}, recipe = {}, input 
     actionKey: getStageActionKey(recipe)
   };
   const collectedRules = collectSelectionRules(session, {
-    selectorIds: getSelectionRuleSelectorIds(stage, input),
+    selectorIds: getSelectionRuleSelectorIds(session, stage, input, selectionRules),
     selectionContext
   });
   const sessionSelectionRules = collectSessionSelectionRules(session, selectionContext);
@@ -439,9 +449,14 @@ function getSelectionInputForStage(session = {}, stage = {}, recipe = {}, input 
 }
 
 function getRecipeInputFromSelection({ stage = {}, input = {}, chosenId = null }) {
+  const { recipeActorType = null, ...recipeInput } = input;
+
   return {
-    ...input,
-    actorIds: input.actorIds ?? stage.actorIds ?? [],
+    ...recipeInput,
+    actorIds:
+      recipeActorType === RECIPE_ACTOR_TYPES.ROLE
+        ? recipeInput.actorIds ?? stage.actorIds ?? []
+        : recipeInput.actorIds ?? [],
     targetIds: chosenId ? [chosenId] : []
   };
 }
@@ -614,7 +629,14 @@ function resolveSelectionStageRecipe(session, stage, recipe, input = {}, context
   const recipeResolution = resolveRecipe(
     selectionResolution.session,
     recipe,
-    getRecipeInputFromSelection({ stage, input, chosenId: targetId }),
+    getRecipeInputFromSelection({
+      stage,
+      input: {
+        ...input,
+        recipeActorType: recipe.actor?.type ?? null
+      },
+      chosenId: targetId
+    }),
     peekOverride
       ? {
           ...context,
@@ -1115,6 +1137,7 @@ function resolveLinkedPropagatedEffectSpecialStage(session = {}, currentStage = 
     stageId: currentStage.stageId,
     stageKey: currentStage.stageKey,
     stageCatalogId: stage.metadata.catalogId,
+    eventWindow: stage.metadata.eventWindow ?? null,
     actionKey: LINKED_PROPAGATED_EFFECT_STAGE.ACTION_KEY,
     causedBy: effect?.causedBy ?? null
   };
@@ -1142,7 +1165,8 @@ function resolveLinkedPropagatedEffectSpecialStage(session = {}, currentStage = 
     });
   }
 
-  return resolveAction(
+  const previousSession = session;
+  const actionResolution = resolveAction(
     session,
     {
       id: actionId,
@@ -1163,7 +1187,14 @@ function resolveLinkedPropagatedEffectSpecialStage(session = {}, currentStage = 
       targetIds: [effect.targetId]
     },
     context
-  ).session;
+  );
+  const postActionState = getPostActionEventState({
+    previousSession,
+    actionResolution,
+    context
+  });
+
+  return postActionState.session;
 }
 
 function completeCurrentSpecialStage(session, currentStage, input, requestedBy) {
@@ -1542,6 +1573,7 @@ export function resolveCurrentStage(session, input = {}) {
     stageId: stageValidation.currentStage.stageId,
     stageKey: stageValidation.currentStage.stageKey,
     stageCatalogId: stageValidation.currentStage.stage?.metadata?.catalogId ?? null,
+    eventWindow: stageValidation.currentStage.stage?.metadata?.eventWindow ?? null,
     causedBy: stageValidation.currentStage.stage?.metadata?.source?.id
       ? {
           type: stageValidation.currentStage.stage.metadata.source.type ?? 'role',

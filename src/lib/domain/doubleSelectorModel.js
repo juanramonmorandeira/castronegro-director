@@ -103,7 +103,6 @@ export function createPickNextDoubleSelectorStage({ holderRoleId, candidateIds =
       required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
       abstain: SELECTION_ABSTAIN_RULES.NOT_ALLOWED,
       unanimous: SELECTION_UNANIMOUS_RULES.NOT_REQUIRED,
-      tie: SELECTION_TIE_RULES.NULL_ON_TIE,
       candidateIds,
       selectorEligibility: {
         requireInPlay: false

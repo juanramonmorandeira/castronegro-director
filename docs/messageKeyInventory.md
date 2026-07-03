@@ -23,6 +23,22 @@ textos ES/EN pertenecen a una skin.
 | `selection_authority_transferred` | gameplay | public | planned | La autoridad paso a otro role. |
 | `objective_achieved` | gameplay | public | planned | Se cumplio un objective. |
 | `play_concluded` | gameplay | public | planned | La parte jugable ha concluido. |
+| `director_pool_started` | gameplay | director | planned | El director debe saber que ha empezado un pool. |
+| `director_stage_started` | gameplay | director | planned | El director debe saber que ha empezado una stage. |
+| `director_role_turn_started` | gameplay | director | planned | El director debe llamar o habilitar al role actor de la stage. |
+| `director_group_stage_started` | gameplay | director | planned | El director debe coordinar una stage cuyo actor es un group. |
+| `director_waiting_for_player_action` | gameplay | director | planned | El director espera acciones de players o roles pendientes. |
+| `director_player_action_provided` | gameplay | director | planned | Se recibio o registro una accion de player/role. |
+| `director_waiting_for_acknowledgement` | gameplay | director | planned | El director espera acknowledgements requeridos. |
+| `director_acknowledgement_provided` | gameplay | director | planned | Se recibio o registro un acknowledgement. |
+| `director_stage_ready_to_finish` | gameplay | director | planned | La stage ya no tiene inputs ni acknowledgements requeridos pendientes. |
+| `director_selection_round_started` | gameplay | director | planned | Ha empezado una ronda de seleccion dentro de la stage. |
+| `director_selection_result_ready` | gameplay | director | planned | Hay un resultado de seleccion listo para revisar o registrar. |
+| `director_special_stage_started` | gameplay | director | planned | Ha empezado una specialStage. |
+| `director_informational_item_ready` | gameplay | director | planned | Hay informacion no accionable que el director debe mostrar o verificar. |
+| `player_action_required` | gameplay | role | planned | El player/role debe realizar una accion en la stage actual. |
+| `player_acknowledgement_required` | gameplay | role | planned | El player/role debe confirmar informacion recibida. |
+| `player_waiting_for_director` | gameplay | role | planned | El player/role ya no debe actuar y espera cierre o avance del director. |
 | `missing_group` | diagnostic | system | implemented | Falta un group requerido por el dominio. |
 | `invalid_stage` | diagnostic | system | implemented | Una stage no cumple su contrato. |
 | `unknown_action` | diagnostic | system | implemented | La action solicitada no existe o no esta soportada. |
