@@ -2805,6 +2805,175 @@ test('un stage con recetas opcionales permanece abierto hasta cierre explicito',
   assert.equal(completed.completion.requestedBy, STAGE_COMPLETION_REQUESTED_BY.DIRECTOR);
 });
 
+test('completeCurrentStage al terminar poolExposed arranca solo after_exposed', () => {
+  const session = withCycle(
+    createSession(),
+    createCycle({
+      poolOrder: [POOL_KEYS.POOL_EXPOSED, POOL_KEYS.POOL_CONCEALED],
+      poolCurrent: POOL_KEYS.POOL_EXPOSED,
+      poolNext: POOL_KEYS.POOL_CONCEALED,
+      pools: {
+        [POOL_KEYS.POOL_EXPOSED]: [
+          createStage({
+            key: STAGE_KEYS.STAGE_05,
+            status: STAGE_STATUSES.ENABLED,
+            actions: []
+          })
+        ],
+        [POOL_KEYS.POOL_CONCEALED]: [
+          createStage({
+            key: STAGE_KEYS.STAGE_01,
+            status: STAGE_STATUSES.ENABLED,
+            actions: []
+          })
+        ]
+      }
+    })
+  );
+  const queuedBeforeConcealed = appendSpecialStage(
+    session,
+    createStage({
+      key: 'stage_before_concealed_test',
+      status: STAGE_STATUSES.ENABLED,
+      metadata: { eventWindow: SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_CONCEALED }
+    })
+  );
+  const queuedAfterExposed = appendSpecialStage(
+    queuedBeforeConcealed,
+    createStage({
+      key: 'stage_after_exposed_test',
+      status: STAGE_STATUSES.ENABLED,
+      metadata: { eventWindow: SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED }
+    })
+  );
+  const completed = completeCurrentStage(queuedAfterExposed, {
+    requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
+  });
+
+  assert.equal(completed.ok, true);
+  assert.equal(completed.stageAdvance.reason, 'special-stages-before-next-pool');
+  assert.equal(completed.stageAdvance.next.source, CURRENT_STAGE_SOURCES.SPECIAL_STAGES);
+  assert.equal(completed.stageAdvance.next.stage.key, 'stage_after_exposed_test');
+  assert.equal(completed.session.currentSpecialStageWindow, SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED);
+  assert.deepEqual(
+    completed.session.specialStages.map((stage) => stage.key),
+    ['stage_before_concealed_test', 'stage_after_exposed_test']
+  );
+
+  const afterExposedCompleted = completeCurrentStage(completed.session, {
+    requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
+  });
+
+  assert.equal(afterExposedCompleted.ok, true);
+  assert.equal(afterExposedCompleted.stageAdvance.reason, 'special-stages-before-next-pool');
+  assert.equal(afterExposedCompleted.stageAdvance.next.stage.key, 'stage_before_concealed_test');
+  assert.equal(
+    afterExposedCompleted.session.currentSpecialStageWindow,
+    SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_CONCEALED
+  );
+  assert.deepEqual(
+    afterExposedCompleted.session.specialStages.map((stage) => stage.key),
+    ['stage_before_concealed_test']
+  );
+  assert.deepEqual(
+    afterExposedCompleted.lifecycleResults.find((entry) => entry.key === 'surface_transition'),
+    {
+      key: 'surface_transition',
+      ok: true,
+      result: { step: 'privateHide' },
+      errors: [],
+      metadata: {
+        from: SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED,
+        to: SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_CONCEALED
+      }
+    }
+  );
+});
+
+test('completeCurrentStage al terminar poolConcealed encadena after_concealed publicReveal y before_exposed', () => {
+  const session = withCycle(
+    createSession(),
+    createCycle({
+      poolOrder: [POOL_KEYS.POOL_CONCEALED, POOL_KEYS.POOL_EXPOSED],
+      poolCurrent: POOL_KEYS.POOL_CONCEALED,
+      poolNext: POOL_KEYS.POOL_EXPOSED,
+      pools: {
+        [POOL_KEYS.POOL_CONCEALED]: [
+          createStage({
+            key: STAGE_KEYS.STAGE_04,
+            status: STAGE_STATUSES.ENABLED,
+            actions: []
+          })
+        ],
+        [POOL_KEYS.POOL_EXPOSED]: [
+          createStage({
+            key: STAGE_KEYS.STAGE_05,
+            status: STAGE_STATUSES.ENABLED,
+            actions: []
+          })
+        ]
+      }
+    })
+  );
+  const queuedBeforeExposed = appendSpecialStage(
+    session,
+    createStage({
+      key: 'stage_before_exposed_test',
+      status: STAGE_STATUSES.ENABLED,
+      metadata: { eventWindow: SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_EXPOSED }
+    })
+  );
+  const queuedAfterConcealed = appendSpecialStage(
+    queuedBeforeExposed,
+    createStage({
+      key: 'stage_after_concealed_test',
+      status: STAGE_STATUSES.ENABLED,
+      metadata: { eventWindow: SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED }
+    })
+  );
+  const completed = completeCurrentStage(queuedAfterConcealed, {
+    requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
+  });
+
+  assert.equal(completed.ok, true);
+  assert.equal(completed.stageAdvance.reason, 'special-stages-before-next-pool');
+  assert.equal(completed.stageAdvance.next.stage.key, 'stage_after_concealed_test');
+  assert.equal(completed.session.currentSpecialStageWindow, SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED);
+  assert.deepEqual(
+    completed.session.specialStages.map((stage) => stage.key),
+    ['stage_before_exposed_test', 'stage_after_concealed_test']
+  );
+
+  const afterConcealedCompleted = completeCurrentStage(completed.session, {
+    requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
+  });
+
+  assert.equal(afterConcealedCompleted.ok, true);
+  assert.equal(afterConcealedCompleted.stageAdvance.reason, 'special-stages-before-next-pool');
+  assert.equal(afterConcealedCompleted.stageAdvance.next.stage.key, 'stage_before_exposed_test');
+  assert.equal(
+    afterConcealedCompleted.session.currentSpecialStageWindow,
+    SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_EXPOSED
+  );
+  assert.deepEqual(
+    afterConcealedCompleted.session.specialStages.map((stage) => stage.key),
+    ['stage_before_exposed_test']
+  );
+  assert.deepEqual(
+    afterConcealedCompleted.lifecycleResults.find((entry) => entry.key === 'surface_transition'),
+    {
+      key: 'surface_transition',
+      ok: true,
+      result: { step: 'publicReveal' },
+      errors: [],
+      metadata: {
+        from: SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED,
+        to: SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_EXPOSED
+      }
+    }
+  );
+});
+
 test('completeCurrentStage respeta allowedRequesters del stage', () => {
   const stage = createStage({
     key: STAGE_KEYS.STAGE_03,

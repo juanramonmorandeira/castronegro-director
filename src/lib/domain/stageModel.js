@@ -50,7 +50,9 @@ import {
   getInPlaySelectorIds
 } from './selectionModel.js';
 import {
+  SPECIAL_STAGE_EVENT_WINDOWS,
   startSpecialStages,
+  startSpecialStagesForWindow,
   completeSpecialStage,
   getCurrentSpecialStage,
   hasPendingSpecialStages
@@ -874,6 +876,59 @@ function createLifecycleOperationResult({ key, ok = true, result = null, errors 
   };
 }
 
+function createSurfaceTransitionResult({ step, from = null, to = null } = {}) {
+  return createLifecycleOperationResult({
+    key: 'surface_transition',
+    result: { step },
+    metadata: {
+      ...(from ? { from } : {}),
+      ...(to ? { to } : {})
+    }
+  });
+}
+
+function getSurfaceTransitionAfterWindow(eventWindow = null) {
+  if (eventWindow === SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED) {
+    return {
+      step: 'publicReveal',
+      from: SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED,
+      to: SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_EXPOSED
+    };
+  }
+
+  if (eventWindow === SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED) {
+    return {
+      step: 'privateHide',
+      from: SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED,
+      to: SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_CONCEALED
+    };
+  }
+
+  return null;
+}
+
+function continueAfterWindow({ session = {}, eventWindow = null } = {}) {
+  const transition = getSurfaceTransitionAfterWindow(eventWindow);
+
+  if (!transition) {
+    return {
+      ok: true,
+      errors: [],
+      session,
+      stage: null,
+      lifecycleResults: []
+    };
+  }
+
+  const transitionResult = createSurfaceTransitionResult(transition);
+  const nextWindowStart = startSpecialStagesForWindow(session, transition.to);
+
+  return {
+    ...nextWindowStart,
+    lifecycleResults: [transitionResult]
+  };
+}
+
 function runCheckObjectivesLifecycleOperation(session = {}, lifecycleOperation = {}) {
   const objectiveEvaluation = checkObjectives(session);
   const concludePlayState = applyConcludePlayLifecycleOperationIfNeeded({
@@ -1123,9 +1178,33 @@ function getPostCompletionLifecycleOperationState({ session, stageAdvance }) {
     session,
     poolKey: stageAdvance.current?.poolKey
   });
-  const sessionBeforePoolEntry = hasPendingSpecialStages(exitState.session)
-    ? startSpecialStages(exitState.session)
-    : exitState.session;
+  const afterPoolSpecialStageStart = exitState.session.playOutcome
+    ? { ok: true, errors: [], session: exitState.session, stage: null, lifecycleResults: [] }
+    : startSpecialStagesAfterPoolExit({
+        session: exitState.session,
+        poolKey: stageAdvance.current?.poolKey
+      });
+  if (!afterPoolSpecialStageStart.ok) {
+    return {
+      session: afterPoolSpecialStageStart.session,
+      stageAdvance: {
+        ...stageAdvance,
+        ok: false,
+        errors: afterPoolSpecialStageStart.errors,
+        reason: 'special-stage-window-failed',
+        cycle: afterPoolSpecialStageStart.session.cycle,
+        next: null
+      },
+      objectiveEvaluation: exitState.objectiveEvaluation,
+      playOutcome: exitState.playOutcome,
+      eventResponses: [],
+      lifecycleResults: [
+        ...exitState.lifecycleResults,
+        ...(afterPoolSpecialStageStart.lifecycleResults ?? [])
+      ]
+    };
+  }
+  const sessionBeforePoolEntry = afterPoolSpecialStageStart.session;
   const specialStage = getCurrentSpecialStage(sessionBeforePoolEntry);
   const poolEntry = exitState.session.playOutcome
     ? {
@@ -1194,7 +1273,10 @@ function getPostCompletionLifecycleOperationState({ session, stageAdvance }) {
       objectiveEvaluation: exitState.objectiveEvaluation,
       playOutcome: exitState.playOutcome,
       eventResponses: [],
-      lifecycleResults: exitState.lifecycleResults
+      lifecycleResults: [
+        ...exitState.lifecycleResults,
+        ...(afterPoolSpecialStageStart.lifecycleResults ?? [])
+      ]
     };
   }
   const enterState = shouldRunOnEnter
@@ -1224,8 +1306,41 @@ function getPostCompletionLifecycleOperationState({ session, stageAdvance }) {
     eventResponses: [],
     lifecycleResults: [
       ...exitState.lifecycleResults,
+      ...(afterPoolSpecialStageStart.lifecycleResults ?? []),
       ...enterState.lifecycleResults
     ]
+  };
+}
+
+function startSpecialStagesAfterPoolExit({ session = {}, poolKey = null } = {}) {
+  const eventWindow =
+    poolKey === 'poolConcealed'
+      ? SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED
+      : poolKey === 'poolExposed'
+        ? SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED
+        : null;
+
+  if (eventWindow) {
+    const windowStart = startSpecialStagesForWindow(session, eventWindow);
+    if (!windowStart.ok || windowStart.stage) {
+      return {
+        ...windowStart,
+        lifecycleResults: []
+      };
+    }
+
+    return continueAfterWindow({
+      session: windowStart.session,
+      eventWindow
+    });
+  }
+
+  return {
+    ok: true,
+    errors: [],
+    session: hasPendingSpecialStages(session) ? startSpecialStages(session) : session,
+    stage: null,
+    lifecycleResults: []
   };
 }
 
@@ -1316,6 +1431,7 @@ function resolveLinkedPropagatedEffectSpecialStage(session = {}, currentStage = 
 }
 
 function completeCurrentSpecialStage(session, currentStage, input, requestedBy) {
+  const completedEventWindow = currentStage.stage?.metadata?.eventWindow ?? null;
   const sessionAfterSpecialStageEffect = resolveLinkedPropagatedEffectSpecialStage(
     session,
     currentStage
@@ -1337,7 +1453,10 @@ function completeCurrentSpecialStage(session, currentStage, input, requestedBy) 
       source: CURRENT_STAGE_SOURCES.SPECIAL_STAGES
     }
   });
-  const nextSpecialStage = getCurrentSpecialStage(sessionWithCompletion);
+  const nextSpecialStage =
+    sessionWithCompletion.currentStageSource === CURRENT_STAGE_SOURCES.SPECIAL_STAGES
+      ? getCurrentSpecialStage(sessionWithCompletion)
+      : null;
 
   if (nextSpecialStage) {
     return {
@@ -1371,20 +1490,80 @@ function completeCurrentSpecialStage(session, currentStage, input, requestedBy) 
     key: STAGE_ACTION_KEYS.CHECK_OBJECTIVES,
     metadata: { reason: 'special_stages_empty' }
   });
-  const poolEntry = objectiveState.session.playOutcome
+  const nextWindowStart = !objectiveState.session.playOutcome
+    ? continueAfterWindow({
+        session: objectiveState.session,
+        eventWindow: completedEventWindow
+      })
+    : { ok: true, errors: [], session: objectiveState.session, stage: null, lifecycleResults: [] };
+  if (!nextWindowStart.ok) {
+    return {
+      ok: false,
+      errors: nextWindowStart.errors,
+      session: nextWindowStart.session,
+      stage: currentStage,
+      stageAdvance: {
+        ok: false,
+        errors: nextWindowStart.errors,
+        reason: 'special-stage-window-failed',
+        cycle: nextWindowStart.session.cycle,
+        next: null
+      },
+      completion: nextWindowStart.session.stageHistory.at(-1),
+      objectiveEvaluation: objectiveState.objectiveEvaluation,
+      playOutcome: objectiveState.playOutcome,
+      eventResponses: [],
+      lifecycleResults: [
+        ...objectiveState.lifecycleResults,
+        ...(nextWindowStart.lifecycleResults ?? [])
+      ]
+    };
+  }
+  if (nextWindowStart.stage) {
+    return {
+      ok: true,
+      errors: [],
+      session: nextWindowStart.session,
+      stage: currentStage,
+      stageAdvance: {
+        ok: true,
+        errors: [],
+        reason: 'special-stages-before-next-pool',
+        cycle: nextWindowStart.session.cycle,
+        next: {
+          poolKey: null,
+          stageId: nextWindowStart.stage.id,
+          stageKey: nextWindowStart.stage.key,
+          status: nextWindowStart.stage.status,
+          index: 0,
+          source: CURRENT_STAGE_SOURCES.SPECIAL_STAGES,
+          stage: nextWindowStart.stage
+        }
+      },
+      completion: nextWindowStart.session.stageHistory.at(-1),
+      objectiveEvaluation: objectiveState.objectiveEvaluation,
+      playOutcome: objectiveState.playOutcome,
+      eventResponses: [],
+      lifecycleResults: [
+        ...objectiveState.lifecycleResults,
+        ...(nextWindowStart.lifecycleResults ?? [])
+      ]
+    };
+  }
+  const poolEntry = nextWindowStart.session.playOutcome
     ? {
         ok: true,
         errors: [],
         reason: 'play-concluded',
-        cycle: objectiveState.session.cycle,
+        cycle: nextWindowStart.session.cycle,
         next: null
       }
     : enterNextPool(
-        objectiveState.session.cycle,
-        objectiveState.session.cycle?.poolNext
+        nextWindowStart.session.cycle,
+        nextWindowStart.session.cycle?.poolNext
       );
   const sessionAfterPoolEntry = {
-    ...objectiveState.session,
+    ...nextWindowStart.session,
     cycle: poolEntry.cycle
   };
   const startedSession =
@@ -1422,6 +1601,7 @@ function completeCurrentSpecialStage(session, currentStage, input, requestedBy) 
     eventResponses: [],
     lifecycleResults: [
       ...objectiveState.lifecycleResults,
+      ...(nextWindowStart.lifecycleResults ?? []),
       ...(enterState.lifecycleResults ?? [])
     ]
   };

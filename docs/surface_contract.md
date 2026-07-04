@@ -1489,6 +1489,7 @@ before_concealed
 -> poolExposed
 -> after_exposed
 -> privateHide
+-> before_concealed
 ```
 
 Durante `publicReveal`, todos los jugadores ven un plano publico de la mesa:
@@ -1507,6 +1508,19 @@ Durante `publicReveal`, todos los jugadores ven un plano publico de la mesa:
   jugador ha quedado `inPlay=false`;
 - `surfaceItems`: informacion estructurada para pintar la mesa, por ejemplo el
   estado publico de cada seat.
+
+En la respuesta de dominio puede aparecer como resultado de lifecycle:
+
+```js
+{
+  key: 'surface_transition',
+  result: { step: 'publicReveal' },
+  metadata: {
+    from: 'after_concealed',
+    to: 'before_exposed'
+  }
+}
+```
 
 Ejemplo de `surfaceItem` para el plano publico:
 
@@ -1617,6 +1631,19 @@ ventana, el plano publico de players queda actualizado para todos los jugadores.
 
 Tras `after_exposed`, `privateHide` devuelve la superficie de roles al estado
 oculto antes del siguiente tramo privado.
+
+En la respuesta de dominio puede aparecer como resultado de lifecycle:
+
+```js
+{
+  key: 'surface_transition',
+  result: { step: 'privateHide' },
+  metadata: {
+    from: 'after_exposed',
+    to: 'before_concealed'
+  }
+}
+```
 
 ## Fuera Del Motor
 
