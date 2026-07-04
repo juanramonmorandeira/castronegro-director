@@ -76,7 +76,7 @@ function hasPendingPickNextDoubleSelectorStage(session = {}, holderRoleId = null
   );
 }
 
-function createPickNextDoubleSelectorStage({ holderRoleId, candidateIds }) {
+function createPickNextDoubleSelectorStage({ holderRoleId, candidateIds, eventWindow = null }) {
   return createStage({
     key: PICK_NEXT_DOUBLE_SELECTOR_STAGE_KEY,
     status: STAGE_STATUSES.ENABLED,
@@ -101,7 +101,8 @@ function createPickNextDoubleSelectorStage({ holderRoleId, candidateIds }) {
     metadata: {
       ruleKey: DOUBLE_SELECTOR_RULE_KEY,
       requestKey: PICK_NEXT_DOUBLE_SELECTOR_STAGE_KEY,
-      holderRoleId
+      holderRoleId,
+      ...(eventWindow ? { eventWindow } : {})
     }
   });
 }
@@ -154,7 +155,7 @@ function getEventWindowForSourceStage(stageCatalogId = null) {
   return null;
 }
 
-function getRevealEventWindow(event = {}) {
+function getEventResponseWindow(event = {}) {
   const sourceStageCatalogId = event.source?.stageCatalogId ?? null;
   const sourceEventWindow = event.source?.eventWindow ?? null;
 
@@ -185,6 +186,10 @@ function getRevealEventWindow(event = {}) {
   }
 
   return null;
+}
+
+function getRevealEventWindow(event = {}) {
+  return getEventResponseWindow(event);
 }
 
 // Convierte efectos finales ya aplicados en eventos mecanicos.
@@ -438,18 +443,21 @@ function getDoubleSelectorEventResponses({ session = {}, events = [] } = {}) {
 
       const candidateIds = getInPlayCandidateIds(session, [event.roleId]);
       if (candidateIds.length === 0) return [];
+      const eventWindow = getEventResponseWindow(event);
 
       return [
         {
           type: EVENT_RESPONSE_TYPES.CREATE_STAGE,
           stage: createPickNextDoubleSelectorStage({
             holderRoleId: event.roleId,
-            candidateIds
+            candidateIds,
+            eventWindow
           }),
           metadata: {
             ruleKey: DOUBLE_SELECTOR_RULE_KEY,
             requestKey: PICK_NEXT_DOUBLE_SELECTOR_STAGE_KEY,
-            holderRoleId: event.roleId
+            holderRoleId: event.roleId,
+            ...(eventWindow ? { eventWindow } : {})
           }
         }
       ];

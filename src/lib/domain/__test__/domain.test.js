@@ -1897,6 +1897,10 @@ test('selection_counts_double encola sucesion cuando el holder queda out_of_play
     resolved.session.specialStages[1].metadata.requestKey,
     DOUBLE_SELECTOR_STAGE_KEYS.PICK_NEXT_DOUBLE_SELECTOR
   );
+  assert.equal(
+    resolved.session.specialStages[1].metadata.eventWindow,
+    SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED
+  );
   assert.deepEqual(resolved.session.specialStages[1].actorIds, ['alignment_a_target-0']);
   assert.equal(
     resolved.session.specialStages[1].selectionRules.selectorEligibility.requireInPlay,
