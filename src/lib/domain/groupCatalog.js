@@ -39,6 +39,14 @@ export const GROUP_CATALOG = Object.freeze({
       type: GROUP_MEMBERSHIP_RULE_TYPES.ALL_ROLES
     },
     stageDefinitions: [
+      getCatalogStage(STAGE_CATALOG_IDS.DELIBERATION, {
+        poolKey: POOL_KEYS.POOL_EXPOSED,
+        order: 5,
+        metadata: {
+          orderReason:
+            'Runs before the public set_out_of_play decision stage so in-play roles can deliberate.'
+        }
+      }),
       getCatalogStage(STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY, {
         poolKey: POOL_KEYS.POOL_EXPOSED,
         order: 10,

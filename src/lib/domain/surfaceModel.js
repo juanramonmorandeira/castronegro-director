@@ -39,6 +39,8 @@ export const SURFACE_ITEM_TYPES = Object.freeze({
   EFFECT_RESULT: 'effect_result',
   CONCEALED_SELECTION_DRAFT: 'concealed_selection_draft',
   CONCEALED_SELECTION_SUBMISSION: 'concealed_selection_submission',
+  EXPOSED_SELECTION_SUBMISSION: 'exposed_selection_submission',
+  SELECTION_TALLY: 'selection_tally',
   SELECTION_RESULT: 'selection_result'
 });
 
@@ -160,6 +162,42 @@ export function createConcealedSelectionSubmissionItem({
       selectorRoleId,
       candidateRoleId,
       editable: false
+    }
+  });
+}
+
+export function createExposedSelectionSubmissionItem({
+  recipientRoleIds = [],
+  selectorRoleId = null,
+  candidateRoleId = null,
+  weight = 1
+} = {}) {
+  return createSurfaceItem({
+    type: SURFACE_ITEM_TYPES.EXPOSED_SELECTION_SUBMISSION,
+    recipientRoleIds,
+    payload: {
+      selectorRoleId,
+      candidateRoleId,
+      weight
+    }
+  });
+}
+
+export function createSelectionTallyItem({
+  recipientRoleIds = [],
+  counts = [],
+  pendingSelectorRoleIds = [],
+  resolvedByRule = null,
+  doubleSelectorRoleId = null
+} = {}) {
+  return createSurfaceItem({
+    type: SURFACE_ITEM_TYPES.SELECTION_TALLY,
+    recipientRoleIds,
+    payload: {
+      counts: clonePayload(counts),
+      pendingSelectorRoleIds: [...(pendingSelectorRoleIds ?? [])],
+      ...(resolvedByRule ? { resolvedByRule } : {}),
+      ...(doubleSelectorRoleId ? { doubleSelectorRoleId } : {})
     }
   });
 }

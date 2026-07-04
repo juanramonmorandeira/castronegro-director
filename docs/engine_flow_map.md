@@ -725,6 +725,7 @@ flowchart TD
 Implementacion actual:
 
 ```text
+deliberation = public stage, no recipes
 exposed_set_out_of_play = selectionRules + set_out_of_play
 ```
 
@@ -734,26 +735,34 @@ Reglas actuales de esa seleccion:
 selectionRules.selectorSource: in_play_roles
 selectionRules.required: all_selectors
 selectionRules.tie: null_on_tie
-selectionRules.runoff: tied_candidates
+selectionRules.runoff: none
 selectionRules.nullResult: end_as_null
-selectionRules.repeatLimit: 1
+selectionRules.repeatLimit: 0
 selectionRules.abstainResolution: ignore
 selectionRules.supportThreshold: none
 selectionRules.candidateIds: null -> todos los roles inPlay
+```
+
+Definicion precisa de `stage_deliberation` en `basic_ruleset`:
+
+```text
+1. Ocurre en poolExposed antes de `exposed_set_out_of_play`.
+2. Participan de forma interactiva todos los roles con inPlay=true.
+3. Los roles con inPlay=false observan en modo readonly.
+4. No tiene recipes ni selectionRules.
+5. Se cierra por director.
 ```
 
 Definicion precisa de `stage_exposed_set_out_of_play` en `basic_ruleset`:
 
 ```text
 1. Participan todos los roles con inPlay=true.
-2. La conversacion/debate/chat/videoconferencia es contexto humano del stage;
-   no produce efectos mecanicos por si misma.
-3. La seleccion mecanica es method=vote.
-4. Todos los selectors inPlay deben emitir seleccion.
-5. Los candidates por defecto son todos los roles con inPlay=true.
-6. Si hay chosen, `stageModel` ejecuta la recipe `set_out_of_play` con ese
+2. La seleccion mecanica es method=vote.
+3. Todos los selectors inPlay deben emitir seleccion.
+4. Los candidates por defecto son todos los roles con inPlay=true.
+5. Si hay chosen, `stageModel` ejecuta la recipe `set_out_of_play` con ese
    chosen como target.
-7. Si el resultado es null por empate sin desempate o abstencion nula, la stage
+6. Si el resultado es null por empate sin desempate o abstencion nula, la stage
    queda para cierre manual con una unica ronda resuelta.
 ```
 

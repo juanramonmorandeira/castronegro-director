@@ -640,6 +640,7 @@ poolConcealed entra
 -> durante cada stage, solo sus actores/audiencia derivada quedan screenInteractive
 -> publicReveal proyecta la mesa publica y todos los jugadores quedan screenReadonly
 -> before_exposed resuelve eventos publicos previos al exposed
+-> stage_deliberation
 -> stage_exposed_set_out_of_play
 -> after_exposed resuelve eventos publicos posteriores al exposed
 -> privateHide devuelve los jugadores role a screenHidden antes del siguiente tramo privado
@@ -655,6 +656,7 @@ stage(role_inspects)
 stage(concealed_set_out_of_play)
 stage(role_in_out_of_play)
 all roles active
+stage(deliberation)
 stage(exposed_set_out_of_play)
 all roles inactive
 ```
@@ -1011,6 +1013,35 @@ Contrato mecanico aceptado:
   partida mixta si debe registrarse para coordinar app y mesa fisica;
 - `role_peek` no recibe comunicacion especial ni acknowledgement.
 
+### `deliberation`
+
+Ficha base:
+
+```js
+{
+  stageCatalogId: 'deliberation',
+  actorProjection,
+  audienceProjection,
+  directorProjection,
+  hiddenProjection,
+  availableInputs,
+  acknowledgements,
+  surfaceMessages,
+  surfaceItems,
+  historyEntries
+}
+```
+
+Flujo:
+
+1. `start_stage` de `deliberation`.
+2. Todos los roles de la session reciben la stage como publica:
+   - roles `inPlay=true`: `screenInteractive`;
+   - roles `inPlay=false`: `screenReadonly`.
+3. Los roles `inPlay=true` deliberan antes de la seleccion publica.
+4. No hay recipes mecanicas ni `selection_draft`.
+5. El director ejecuta `finish_stage`.
+
 ### `exposed_set_out_of_play`
 
 Ficha base:
@@ -1037,7 +1068,7 @@ Flujo:
    - roles `inPlay=true`: `screenInteractive`;
    - roles `inPlay=false`: `screenReadonly`.
 3. Solo los roles `inPlay=true` pueden votar.
-4. Los roles `inPlay=true` conectados emiten:
+4. Los roles `inPlay=true` conectados emiten una seleccion definitiva publica:
 
 ```js
 {
@@ -1048,12 +1079,44 @@ Flujo:
 }
 ```
 
-5. La abstencion no esta permitida. Si un role conectado no vota, la seleccion
+5. La seleccion definitiva se proyecta en tiempo real a todos:
+
+```js
+{
+  type: 'exposed_selection_submission',
+  recipientRoleIds: ['role_a-0', 'role_b-0', 'role_c-0'],
+  payload: {
+    selectorRoleId: 'role_a-0',
+    candidateRoleId: 'role_b-0',
+    weight: 1
+  }
+}
+```
+
+6. Todos ven candidates y conteo de votos en tiempo real:
+
+```js
+{
+  type: 'selection_tally',
+  recipientRoleIds: ['role_a-0', 'role_b-0', 'role_c-0'],
+  payload: {
+    counts: [
+      { candidateRoleId: 'role_b-0', count: 2 },
+      { candidateRoleId: 'role_c-0', count: 1 }
+    ],
+    pendingSelectorRoleIds: []
+  }
+}
+```
+
+7. La abstencion no esta permitida. Si un role conectado no vota, la seleccion
    queda pendiente hasta que vote o el director intervenga.
-6. Si todos los votos llegan por app, el sistema puede resolver automaticamente
+8. Si todos los votos llegan por app, el sistema puede resolver automaticamente
    candidate o null en una unica ronda.
-7. En partida presencial o mixta, el director registra el resultado agregado con
-   `director_submit_selection`:
+9. En partida presencial o mixta, el director registra el resultado agregado
+    con `director_submit_selection`. El director puede registrarlo antes de que
+    todos los conectados hayan votado.
+10. El director puede anular o reemplazar un resultado calculado por sistema:
 
 ```js
 {
@@ -1066,20 +1129,31 @@ Flujo:
 }
 ```
 
-8. Si el outcome es candidate, todos ven solo el candidate elegido, no el
-    detalle de votos.
-9. El acknowledgement publico de resultado basta; el target elegido no recibe
-    un acknowledgement especial por quedar out of play en esta stage.
-10. Si `selection_counts_double` decide o altera el resultado, el outcome debe
-    indicar que el candidate gano gracias a esa regla, no solo como mensaje
-    tecnico de director.
-11. Si `role_reactive` es el candidate y queda out of play, el publico ve solo
-    el candidate; la respuesta reactiva se comunica en su propia specialStage.
-12. Si el candidate esta linked, el publico ve solo el candidate; la propagacion
-    se comunica en `linked_propagated_effect`.
-13. Solo los roles `inPlay=true` deben hacer acknowledgement del resultado antes
-    de `finish_stage`.
-14. El director ejecuta `finish_stage`.
+11. Todos ven el resultado y su razon antes de que el director cierre la stage.
+12. Si `selection_counts_double` aplica, su voto cuenta doble siempre. Si afecta
+    al resultado, se comunica publicamente en el resultado.
+13. Si el conteo ponderado sigue empatado, el outcome es null. No hay runoff en
+    `exposed_set_out_of_play`.
+14. Si nunca se eligio un holder de `selection_counts_double`, el voto doble no
+    existe. Si ya existia holder y el role holder esta out of play, eso indica un
+    error de sistema porque la sucesion debio haberse resuelto.
+15. Si el candidate es el role holder de `selection_counts_double`, se encola
+    `pick_next_double_selector` en `after_exposed`.
+16. Si el outcome es candidate, `set_out_of_play` se aplica antes de
+    `finish_stage` bajo `basic_ruleset`.
+17. El reveal del role asociado al player se encola como `role_state_revealed`
+    en `after_exposed`.
+18. Si `role_reactive` es el candidate, `role_reactive_response` se encola en
+    `after_exposed` despues de `role_state_revealed`.
+19. Si el candidate esta linked, la propagacion linked se encola en
+    `after_exposed`.
+20. Las specialStages de `after_exposed` mantienen FIFO natural. Cada nuevo
+    `set_out_of_play` derivado genera su propio `role_state_revealed` con razon.
+21. No hay acknowledgement publico de resultado; basta el cierre por director.
+22. Despues de `finish_stage`, todos permanecen en `screenReadonly` hasta vaciar
+    `after_exposed`. Si la partida concluye, se entra en `conclude_play`; si no,
+    se pasa a `privateHide`.
+23. El director ejecuta `finish_stage`.
 
 Ejemplo de `surfaceItem`:
 
@@ -1092,8 +1166,7 @@ Ejemplo de `surfaceItem`:
     candidateRoleId: 'role_x',
     reason: 'selection_resolved',
     resolvedByRule: null
-  },
-  acknowledgementsRequired: true
+  }
 }
 ```
 
@@ -1109,8 +1182,7 @@ Ejemplo con `selection_counts_double`:
     reason: 'tie_broken_by_selection_counts_double',
     resolvedByRule: 'selection_counts_double',
     resolvedByRoleId: 'role_double_selector'
-  },
-  acknowledgementsRequired: true
+  }
 }
 ```
 
@@ -1290,7 +1362,8 @@ Columnas:
 | `role_inspects` | Todo lo que ve el player: candidates, target, resultado revelado, y control de cierre. | Candidates validos y resultado revelado inmediatamente tras seleccionar target. | Registrar target y mostrar/comunicar el resultado al jugador presencial. | Selecciona target y hace acknowledgement de que vio el resultado. Tras ese acknowledgement no vuelve a consultar el resultado. | Si. | Por director. |
 | `stage_concealed_set_out_of_play` | Group actor, candidates, recuento recibido por candidate, estado de voto de jugadores conectados, unanimidad/no unanimidad, candidate final, efectos finales, y control de cierre. | Cada miembro conectado del group puede emitir seleccion individual. Tras resolver, conoce unanimidad/no unanimidad y candidate final si lo hay. | Ver votos remotos, sumar votos presenciales fuera del motor y registrar el candidate final o null segun unanimidad. | Cada miembro conectado emite seleccion individual. | Si, porque deben conocer el resultado de su seleccion. | Por director. |
 | `role_in_out_of_play` | Todo lo que ve el player: designacion previa, recipes disponibles/usadas, targets, resultado, y control de cierre. | Si fue puesto out en el concealed actual, primero ve que ha sido designado; luego decide restore/no restore. Si no puede actuar, solo ve acknowledgement. | Registrar acknowledgement, restore self, y si procede `set_out_of_play`. | Puede restaurarse self; si queda inPlay y conserva recipes, puede usar `set_out_of_play` en la misma stage; tambien puede no actuar. | Si, incluso si no actua. | Por director. |
-| `stage_exposed_set_out_of_play` | Debate, roles `inPlay=true`, recuento recibido por candidate, estado de voto de jugadores conectados, candidate final o null, efectos finales, y control de cierre. | Roles `inPlay=true`: debate y vote. Roles `inPlay=false`: observan todo, pero no interactuan. | Ver votos remotos, sumar votos presenciales fuera del motor y registrar el candidate final o null. | Debate y emite vote en una unica ronda. | Si. Los players ven candidate final antes de cierre. | Por director. |
+| `stage_deliberation` | Roles `inPlay=true`, mesa publica, informacion publica disponible, y control de cierre. | Roles `inPlay=true`: deliberan. Roles `inPlay=false`: observan todo, pero no interactuan. | Facilitar o cerrar la deliberacion presencial/remota. | Delibera sin input mecanico. | No. | Por director. |
+| `stage_exposed_set_out_of_play` | Roles `inPlay=true`, recuento publico por candidate, estado de voto de jugadores conectados, candidate final o null, razon del resultado, efectos finales, y control de cierre. | Roles `inPlay=true`: emiten seleccion definitiva publica. Roles `inPlay=false`: observan todo, pero no interactuan. | Ver votos remotos, sumar votos presenciales fuera del motor, registrar el candidate final o null, y anular/reemplazar resultado si procede. | Emite vote en una unica ronda. | No. Los players ven candidate final antes de cierre. | Por director. |
 | `role_reactive_response` | Causa de activacion, candidates, target elegido, efecto final publico, y control de cierre. | Ve por que se activo su respuesta y elige target durante su stage. | Registrar y confirmar target indicado por el jugador presencial. | Selecciona target inmediatamente dentro de su stage. | No. | Por director. |
 | `select_double_selector` | Seleccion publica, candidates `inPlay=true`, holder elegido, acknowledgements, y control de cierre. | Participa en la votacion si esta `inPlay=true`. El holder elegido conoce publicamente que ahora es `doubleSelector`. | Votar en representacion de jugadores presenciales. | Vota. Si resulta elegido, hace acknowledgement. | Si, para el nuevo holder. | Por director. |
 | `pick_next_double_selector` | Holder saliente, candidates, seleccion del nuevo holder, acknowledgements, y control de cierre. | El holder anterior selecciona sucesor si puede actuar; todos conocen la transferencia publicamente. | Registrar seleccion del holder anterior. | Holder anterior elige sucesor; nuevo holder hace acknowledgement. | Si, para el nuevo holder. | Por director. |

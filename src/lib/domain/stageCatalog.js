@@ -44,6 +44,7 @@ export const STAGE_CATALOG_IDS = Object.freeze({
   PICK_NEXT_DOUBLE_SELECTOR: 'pick_next_double_selector',
   LINKED_PROPAGATED_EFFECT: LINKED_PROPAGATED_EFFECT_STAGE.CATALOG_ID,
   ROLE_STATE_REVEALED: ROLE_STATE_REVEALED_STAGE.CATALOG_ID,
+  DELIBERATION: 'deliberation',
   CONCEALED_SET_OUT_OF_PLAY: 'concealed_set_out_of_play',
   EXPOSED_SET_OUT_OF_PLAY: 'exposed_set_out_of_play'
 });
@@ -224,6 +225,21 @@ export const STAGE_CATALOG = Object.freeze({
     }
   }),
 
+  [STAGE_CATALOG_IDS.DELIBERATION]: defineStage({
+    key: STAGE_KEYS.DELIBERATION,
+    status: STAGE_STATUSES.ENABLED,
+    actorIds: [],
+    completion: getManualCompletion([STAGE_COMPLETION_REQUESTED_BY.DIRECTOR]),
+    actions: [],
+    metadata: {
+      catalogId: STAGE_CATALOG_IDS.DELIBERATION,
+      interaction: {
+        participants: SELECTION_SELECTOR_SOURCES.IN_PLAY_ROLES,
+        mode: 'deliberation'
+      }
+    }
+  }),
+
   [STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY]: defineStage({
     key: STAGE_KEYS.STAGE_04,
     status: STAGE_STATUSES.ENABLED,
@@ -266,7 +282,6 @@ export const STAGE_CATALOG = Object.freeze({
       catalogId: STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY,
       interaction: {
         participants: SELECTION_SELECTOR_SOURCES.IN_PLAY_ROLES,
-        discussion: true,
         selectionMethod: 'vote'
       }
     }

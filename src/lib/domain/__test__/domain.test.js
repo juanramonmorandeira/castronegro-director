@@ -113,11 +113,13 @@ import {
   materializePropertyBlockExpiration,
   createConcealedSelectionDraftItem,
   createConcealedSelectionSubmissionItem,
+  createExposedSelectionSubmissionItem,
   getCatalogRecipe,
   validateCatalogRecipeOverrides,
   getCatalogStage,
   createEffectResultItem,
   createPublicTableStateItem,
+  createSelectionTallyItem,
   createSelectionResultItem,
   createSurfaceMessage,
   getSurfaceFlowOrder,
@@ -847,6 +849,64 @@ test('surfaceModel crea items para seleccion concealed', () => {
   });
 });
 
+test('surfaceModel crea items para seleccion exposed publica', () => {
+  const recipientRoleIds = ['role_a-0', 'role_b-0', 'role_c-0'];
+  const submission = createExposedSelectionSubmissionItem({
+    recipientRoleIds,
+    selectorRoleId: 'role_a-0',
+    candidateRoleId: 'role_b-0',
+    weight: 2
+  });
+  const tally = createSelectionTallyItem({
+    recipientRoleIds,
+    counts: [
+      { candidateRoleId: 'role_b-0', count: 2 },
+      { candidateRoleId: 'role_c-0', count: 1 }
+    ],
+    pendingSelectorRoleIds: ['role_c-0'],
+    resolvedByRule: 'selection_counts_double',
+    doubleSelectorRoleId: 'role_a-0'
+  });
+  const result = createSelectionResultItem({
+    recipientRoleIds,
+    outcome: 'candidate',
+    candidateRoleId: 'role_b-0',
+    reason: 'selection_counts_double'
+  });
+
+  assert.deepEqual(submission, {
+    type: SURFACE_ITEM_TYPES.EXPOSED_SELECTION_SUBMISSION,
+    recipientRoleIds,
+    payload: {
+      selectorRoleId: 'role_a-0',
+      candidateRoleId: 'role_b-0',
+      weight: 2
+    }
+  });
+  assert.deepEqual(tally, {
+    type: SURFACE_ITEM_TYPES.SELECTION_TALLY,
+    recipientRoleIds,
+    payload: {
+      counts: [
+        { candidateRoleId: 'role_b-0', count: 2 },
+        { candidateRoleId: 'role_c-0', count: 1 }
+      ],
+      pendingSelectorRoleIds: ['role_c-0'],
+      resolvedByRule: 'selection_counts_double',
+      doubleSelectorRoleId: 'role_a-0'
+    }
+  });
+  assert.deepEqual(result, {
+    type: SURFACE_ITEM_TYPES.SELECTION_RESULT,
+    recipientRoleIds,
+    payload: {
+      outcome: 'candidate',
+      candidateRoleId: 'role_b-0',
+      reason: 'selection_counts_double'
+    }
+  });
+});
+
 test('materializePropertyBlockExpiration resuelve offsets de stage, pool, cycle y session', () => {
   const cycle = createCycle({
     id: 2,
@@ -1405,6 +1465,7 @@ test('stageCatalog expone los stages mecanicos ya definidos', () => {
     getCatalogStage(STAGE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY, { key: STAGE_KEYS.STAGE_03 }),
     getCatalogStage(STAGE_CATALOG_IDS.ROLE_REACTIVE_RESPONSE, { key: STAGE_KEYS.STAGE_07 }),
     getCatalogStage(STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY, { key: STAGE_KEYS.STAGE_04 }),
+    getCatalogStage(STAGE_CATALOG_IDS.DELIBERATION, { key: STAGE_KEYS.DELIBERATION }),
     getCatalogStage(STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY, { key: STAGE_KEYS.STAGE_05 })
   ];
 
@@ -1417,6 +1478,7 @@ test('stageCatalog expone los stages mecanicos ya definidos', () => {
       [STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY],
       [STAGE_ACTION_KEYS.SET_OUT_OF_PLAY],
       [STAGE_ACTION_KEYS.SET_OUT_OF_PLAY],
+      [],
       [STAGE_ACTION_KEYS.SET_OUT_OF_PLAY]
     ]
   );
@@ -1428,9 +1490,21 @@ test('stageCatalog deja exposed_set_out_of_play sin restricciones linked implici
 
   assert.equal(stage.selectionRules.selectorSource, SELECTION_SELECTOR_SOURCES.IN_PLAY_ROLES);
   assert.equal(stage.metadata.interaction.participants, SELECTION_SELECTOR_SOURCES.IN_PLAY_ROLES);
-  assert.equal(stage.metadata.interaction.discussion, true);
   assert.equal(stage.metadata.interaction.selectionMethod, 'vote');
   assert.deepEqual(stage.selectionRules.groupRestrictions, []);
+});
+
+test('stageCatalog define deliberation como stage publica sin recetas', () => {
+  const stage = getCatalogStage(STAGE_CATALOG_IDS.DELIBERATION);
+
+  assert.equal(stage.key, STAGE_KEYS.DELIBERATION);
+  assert.deepEqual(stage.actions, []);
+  assert.equal(stage.metadata.catalogId, STAGE_CATALOG_IDS.DELIBERATION);
+  assert.equal(stage.metadata.interaction.participants, SELECTION_SELECTOR_SOURCES.IN_PLAY_ROLES);
+  assert.equal(stage.metadata.interaction.mode, 'deliberation');
+  assert.deepEqual(stage.completion.allowedRequesters, [
+    STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
+  ]);
 });
 
 test('stageCatalog define concealed_set_out_of_play como seleccion unanime del group actor', () => {
@@ -1510,7 +1584,8 @@ test('groupCatalog declara grupos mecanicos y razones de orden', () => {
     (groupDefinition) => groupDefinition.key === GROUP_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY
   );
   const concealedStageDefinition = concealedGroup.stageDefinitions[0];
-  const exposedStageDefinition = exposedGroup.stageDefinitions[0];
+  const deliberationStageDefinition = exposedGroup.stageDefinitions[0];
+  const exposedStageDefinition = exposedGroup.stageDefinitions[1];
 
   assert.equal(concealedGroup.membershipRule.type, 'alignment');
   assert.equal(concealedGroup.membershipRule.alignmentId, 'alignment_b');
@@ -1525,8 +1600,13 @@ test('groupCatalog declara grupos mecanicos y razones de orden', () => {
     true
   );
   assert.equal(exposedGroup.membershipRule.type, 'all_roles');
+  assert.equal(deliberationStageDefinition.metadata.catalogId, STAGE_CATALOG_IDS.DELIBERATION);
+  assert.equal(deliberationStageDefinition.poolKey, POOL_KEYS.POOL_EXPOSED);
+  assert.equal(deliberationStageDefinition.order, 5);
+  assert.deepEqual(deliberationStageDefinition.actions, []);
   assert.equal(exposedStageDefinition.poolKey, POOL_KEYS.POOL_EXPOSED);
   assert.equal(exposedStageDefinition.order, 10);
+  assert.equal(exposedStageDefinition.metadata.catalogId, STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY);
 });
 
 test('createPool materializa los stages de un pool concreto', () => {

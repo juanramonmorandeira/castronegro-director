@@ -193,6 +193,8 @@ export {
   createEffectResultItem,
   createConcealedSelectionDraftItem,
   createConcealedSelectionSubmissionItem,
+  createExposedSelectionSubmissionItem,
+  createSelectionTallyItem,
   createSelectionResultItem
 } from './surfaceModel.js';
 

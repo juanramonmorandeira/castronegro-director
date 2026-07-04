@@ -461,9 +461,9 @@ exposed_set_out_of_play
     abstain: not_allowed
     unanimous: not_required
     tie: null_on_tie
-    runoff: tied_candidates
+    runoff: none
     nullResult: end_as_null
-    repeatLimit: 1
+    repeatLimit: 0
     abstainResolution: ignore
     supportThreshold: none
     candidateIds: null -> todos los roles inPlay
@@ -476,8 +476,8 @@ Lectura: el seleccion elige un target; la receta `set_out_of_play` aplica
 para aplicar otra receta distinta sin crear una receta compuesta nueva.
 
 Aunque la stage la aporta `group_exposed_set_out_of_play`, la seleccion efectiva
-usa `selectorSource: in_play_roles`: participan en el debate y en el vote solo
-los roles que siguen con `inPlay=true`.
+usa `selectorSource: in_play_roles`: votan solo los roles que siguen con
+`inPlay=true`. La deliberacion previa vive en la stage `deliberation`.
 
 Si existe un group `linked` activo, su propia `selectionRules` puede aportar
 `groupRestrictions` a esta seleccion. `exposed_set_out_of_play` no conoce

@@ -122,6 +122,7 @@ export const STAGE_KEYS = Object.freeze({
   STAGE_03: 'stage_03',
   STAGE_04: 'stage_04',
   STAGE_05: 'stage_05',
+  DELIBERATION: 'stage_deliberation',
   LINKED_PROPAGATED_EFFECT: LINKED_PROPAGATED_EFFECT_STAGE.KEY,
   ROLE_STATE_REVEALED: ROLE_STATE_REVEALED_STAGE.KEY,
   STAGE_07: 'stage_07',
