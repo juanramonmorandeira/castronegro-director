@@ -1426,6 +1426,32 @@ correcto:
 - `before_exposed`;
 - `after_exposed`.
 
+Operativamente, `specialStages` es una unica lista fisica, pero el dominio la
+proyecta como cuatro colas FIFO virtuales filtradas por `eventWindow`.
+
+Ejemplo:
+
+```text
+specialStages = [
+  A before_exposed,
+  B after_exposed,
+  C before_exposed
+]
+```
+
+Al ejecutar `before_exposed`, la cola virtual efectiva es `[A, C]`. `B` no
+bloquea esa window y queda pendiente para `after_exposed`.
+
+Reglas:
+
+- toda specialStage ejecutada por window debe declarar `metadata.eventWindow`;
+- si falta `eventWindow` o su valor no pertenece a las ventanas aceptadas, la
+  ejecucion por window falla con diagnostic;
+- completar una specialStage de una window arranca la siguiente de esa misma
+  window si existe;
+- cuando no quedan specialStages de esa window, el flujo vuelve a `POOL`;
+- la lista fisica no se reordena; solo se retira la specialStage completada.
+
 - si una specialStage requiere director, el director queda `screenInteractive`;
 - si una specialStage tiene actores, esos actores quedan `screenInteractive`;
 - si es informativa, la UI puede mostrarla como revision/acknowledgement del

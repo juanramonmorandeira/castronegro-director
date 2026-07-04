@@ -48,6 +48,8 @@ import {
   preparePool,
   startCycle,
   startSpecialStages,
+  startSpecialStagesForWindow,
+  completeSpecialStageForWindow,
   validatePool,
   organizePoolStages,
   createSelectionRules,
@@ -72,6 +74,8 @@ import {
   findAppliedSetPropertyHistory,
   STAGE_STATUSES,
   CURRENT_STAGE_SOURCES,
+  SPECIAL_STAGE_ERRORS,
+  SPECIAL_STAGE_HISTORY_OPERATIONS,
   SPECIAL_STAGE_EVENT_WINDOWS,
   SURFACE_FLOW_STEPS,
   SURFACE_EFFECT_REASONS,
@@ -1172,6 +1176,84 @@ test('specialStages pendientes no interrumpen el pool hasta cambiar currentStage
 
   assert.equal(started.currentStageSource, CURRENT_STAGE_SOURCES.SPECIAL_STAGES);
   assert.equal(getCurrentStage(started).stageKey, STAGE_KEYS.STAGE_07);
+});
+
+test('specialStages por window se comporta como colas FIFO virtuales', () => {
+  const session = createSession();
+  const queuedBeforeA = appendSpecialStage(
+    session,
+    createStage({
+      key: 'stage_before_a',
+      status: STAGE_STATUSES.ENABLED,
+      metadata: { eventWindow: SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_EXPOSED }
+    })
+  );
+  const queuedAfter = appendSpecialStage(
+    queuedBeforeA,
+    createStage({
+      key: 'stage_after',
+      status: STAGE_STATUSES.ENABLED,
+      metadata: { eventWindow: SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED }
+    })
+  );
+  const queuedBeforeC = appendSpecialStage(
+    queuedAfter,
+    createStage({
+      key: 'stage_before_c',
+      status: STAGE_STATUSES.ENABLED,
+      metadata: { eventWindow: SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_EXPOSED }
+    })
+  );
+  const startedBefore = startSpecialStagesForWindow(
+    queuedBeforeC,
+    SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_EXPOSED
+  );
+  const completedBeforeA = completeSpecialStageForWindow(
+    startedBefore.session,
+    SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_EXPOSED
+  );
+  const completedBeforeC = completeSpecialStageForWindow(
+    completedBeforeA.session,
+    SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_EXPOSED
+  );
+  const startedAfter = startSpecialStagesForWindow(
+    completedBeforeC.session,
+    SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED
+  );
+
+  assert.equal(startedBefore.ok, true);
+  assert.equal(startedBefore.stage.key, 'stage_before_a');
+  assert.equal(getCurrentStage(startedBefore.session).stageKey, 'stage_before_a');
+  assert.equal(completedBeforeA.nextStage.key, 'stage_before_c');
+  assert.equal(getCurrentStage(completedBeforeA.session).stageKey, 'stage_before_c');
+  assert.deepEqual(
+    completedBeforeC.session.specialStages.map((stage) => stage.key),
+    ['stage_after']
+  );
+  assert.equal(completedBeforeC.session.currentStageSource, CURRENT_STAGE_SOURCES.POOL);
+  assert.equal(startedAfter.stage.key, 'stage_after');
+});
+
+test('specialStages por window rechaza stages sin eventWindow', () => {
+  const session = appendSpecialStage(
+    createSession(),
+    createStage({
+      key: 'stage_without_window',
+      status: STAGE_STATUSES.ENABLED
+    })
+  );
+  const started = startSpecialStagesForWindow(
+    session,
+    SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED
+  );
+
+  assert.equal(started.ok, false);
+  assert.equal(started.errors[0].code, SPECIAL_STAGE_ERRORS.MISSING_EVENT_WINDOW);
+  assert.equal(started.session.specialStagesHistory.at(-1).operation, SPECIAL_STAGE_HISTORY_OPERATIONS.FAILED);
+  assert.equal(
+    started.session.specialStagesHistory.at(-1).metadata.error.code,
+    SPECIAL_STAGE_ERRORS.MISSING_EVENT_WINDOW
+  );
 });
 
 test('selection_counts_double permite al director encolar la specialStage inicial una sola vez', () => {

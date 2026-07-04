@@ -167,15 +167,21 @@ export {
   resolveCurrentStage
 } from './stageModel.js';
 export {
+  SPECIAL_STAGE_ERRORS,
   SPECIAL_STAGE_EVENT_WINDOWS,
   SPECIAL_STAGE_HISTORY_OPERATIONS,
+  isValidSpecialStageEventWindow,
   getSpecialStages,
+  getSpecialStagesForWindow,
   hasPendingSpecialStages,
   getCurrentSpecialStage,
+  getCurrentSpecialStageForWindow,
   appendSpecialStagesHistory,
   appendSpecialStage,
   removeSpecialStages,
   startSpecialStages,
+  startSpecialStagesForWindow,
+  completeSpecialStageForWindow,
   completeSpecialStage
 } from './specialStagesModel.js';
 
