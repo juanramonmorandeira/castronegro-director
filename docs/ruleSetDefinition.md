@@ -136,7 +136,7 @@ Cobertura inicial:
 | `role_plain` | ready | Sin stage personal. |
 | `role_links_targets` | ready | Crea un group, aporta selectionRules y objectiveRules propias. |
 | `role_assumes_role` | ready | Usa `assumableRoles` y `assume_role` para reemplazar identidad en el primer `poolConcealed` del ciclo 1. |
-| `role_peek` | ready | Role avanzado: puede intentar espiar `stage_concealed_set_out_of_play`; una `peekAccusation` validada por director aplica `override_selected_candidate` sobre el verdadero `role_peek`. |
+| `role_peek` | ready | Role avanzado: puede intentar espiar `stage_concealed_set_out_of_play`; un `peek_warning` confirmado por el group aplica `override_selected_candidate` sobre el role señalado. |
 
 Matriz de cierre de roles de `basic_ruleset` en dominio:
 
@@ -379,7 +379,7 @@ Estructura de trabajo:
 
 `stageRules` gobierna lo que puede ocurrir dentro o durante una stage concreta,
 aunque la regla la aporte un role, group o ruleSet. `role_peek` usa una
-`stageRule` de tipo `peek_accusation_override` sobre
+`stageRule` de tipo `peek_warning_override` sobre
 `stage_concealed_set_out_of_play`.
 
 Las categorias `candidateRules` y `configurationRules` siguen abiertas a

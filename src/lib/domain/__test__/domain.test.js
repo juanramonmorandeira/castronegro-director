@@ -97,7 +97,8 @@ import {
   buildRuleSet,
   getBasicAlignmentDistribution,
   getCatalogRuleSet,
-  PEEK_ACCUSATION_TIMINGS,
+  PEEK_WARNING_CONFIRMATION_RULES,
+  PEEK_WARNING_TIMINGS,
   PEEK_ACTION_KEYS,
   STAGE_ACTION_KEYS,
   STAGE_CATALOG_IDS,
@@ -110,11 +111,14 @@ import {
   PROPERTY_BLOCK_EXPIRATION_TYPES,
   SESSION_STATUSES,
   materializePropertyBlockExpiration,
+  createConcealedSelectionDraftItem,
+  createConcealedSelectionSubmissionItem,
   getCatalogRecipe,
   validateCatalogRecipeOverrides,
   getCatalogStage,
   createEffectResultItem,
   createPublicTableStateItem,
+  createSelectionResultItem,
   createSurfaceMessage,
   getSurfaceFlowOrder,
   validateRecipeContract,
@@ -792,6 +796,53 @@ test('surfaceModel crea mensajes temporales y resultados de efecto', () => {
         property: 'inPlay',
         value: false
       }
+    }
+  });
+});
+
+test('surfaceModel crea items para seleccion concealed', () => {
+  const recipientRoleIds = ['role_set_out_of_play-0', 'role_set_out_of_play-1'];
+  const draft = createConcealedSelectionDraftItem({
+    recipientRoleIds,
+    selectorRoleId: 'role_set_out_of_play-0',
+    candidateRoleId: 'role_plain-0'
+  });
+  const submission = createConcealedSelectionSubmissionItem({
+    recipientRoleIds,
+    selectorRoleId: 'role_set_out_of_play-0',
+    candidateRoleId: 'role_plain-0'
+  });
+  const result = createSelectionResultItem({
+    recipientRoleIds: ['role_set_out_of_play-0'],
+    outcome: 'null',
+    candidateRoleId: null,
+    reason: 'no_unanimity'
+  });
+
+  assert.deepEqual(draft, {
+    type: SURFACE_ITEM_TYPES.CONCEALED_SELECTION_DRAFT,
+    recipientRoleIds,
+    payload: {
+      selectorRoleId: 'role_set_out_of_play-0',
+      candidateRoleId: 'role_plain-0'
+    }
+  });
+  assert.deepEqual(submission, {
+    type: SURFACE_ITEM_TYPES.CONCEALED_SELECTION_SUBMISSION,
+    recipientRoleIds,
+    payload: {
+      selectorRoleId: 'role_set_out_of_play-0',
+      candidateRoleId: 'role_plain-0',
+      editable: false
+    }
+  });
+  assert.deepEqual(result, {
+    type: SURFACE_ITEM_TYPES.SELECTION_RESULT,
+    recipientRoleIds: ['role_set_out_of_play-0'],
+    payload: {
+      outcome: 'null',
+      candidateRoleId: null,
+      reason: 'no_unanimity'
     }
   });
 });
@@ -5447,7 +5498,13 @@ test('role_peek registra peekAttempt privado durante la stage observada', () => 
     session,
     collectiveSelectionInput({
       actorIds: ['alignment_b_attacker-0', 'alignment_b_target-0', 'hidden_enemy-0'],
-      peekAttempt: { roleId: 'role_peek-0' },
+      peekAttempt: {
+        roleId: 'role_peek-0',
+        count: 2,
+        timestamps: ['2026-07-03T10:00:00.000Z', '2026-07-03T10:00:02.000Z'],
+        durationMs: 4000,
+        revealedRoleIds: ['alignment_b_attacker-0', 'hidden_enemy-0']
+      },
       selections: createSelections({
         'alignment_b_attacker-0': 'alignment_a_target-0',
         'alignment_b_target-0': 'alignment_a_target-0',
@@ -5470,20 +5527,31 @@ test('role_peek registra peekAttempt privado durante la stage observada', () => 
   assert.deepEqual(peekAttempt.finalEffects, []);
   assert.equal(peekAttempt.metadata.visibility, 'private');
   assert.equal(peekAttempt.metadata.stageRuleKey, 'peek_concealed_set_out_of_play');
-  assert.equal(peekAttempt.metadata.stageRuleType, 'peek_accusation_override');
+  assert.equal(peekAttempt.metadata.stageRuleType, 'peek_warning_override');
+  assert.equal(peekAttempt.metadata.count, 2);
+  assert.deepEqual(peekAttempt.metadata.timestamps, [
+    '2026-07-03T10:00:00.000Z',
+    '2026-07-03T10:00:02.000Z'
+  ]);
+  assert.equal(peekAttempt.metadata.durationMs, 4000);
+  assert.deepEqual(peekAttempt.metadata.revealedRoleIds, [
+    'alignment_b_attacker-0',
+    'hidden_enemy-0'
+  ]);
 });
 
-test('role_peek validado por director sustituye el candidate final de set_out_of_play', () => {
+test('role_peek warning confirmado sustituye el candidate final de set_out_of_play', () => {
   const session = withPeekRole(createBaseSession());
   const resolved = resolveSelectionOutOfPlayStage(
     session,
     collectiveSelectionInput({
       actorIds: ['alignment_b_attacker-0', 'alignment_b_target-0', 'hidden_enemy-0'],
-      peekAccusation: {
-        id: 'peek-accusation-1',
-        accusedRoleId: 'role_peek-0',
-        timing: PEEK_ACCUSATION_TIMINGS.AFTER_SELECTION,
-        directorValidated: true
+      peekWarning: {
+        id: 'peek-warning-1',
+        issuerRoleId: 'alignment_b_attacker-0',
+        targetRoleId: 'alignment_a_plain-0',
+        timing: PEEK_WARNING_TIMINGS.AFTER_SELECTION,
+        confirmingRoleIds: ['alignment_b_target-0', 'hidden_enemy-0']
       },
       selections: createSelections({
         'alignment_b_attacker-0': 'alignment_a_target-0',
@@ -5500,27 +5568,28 @@ test('role_peek validado por director sustituye el candidate final de set_out_of
 
   assert.equal(resolved.ok, true);
   assert.equal(resolved.result.selection.chosenId, 'alignment_a_target-0');
-  assert.equal(resolved.result.selectedCandidateOverride.candidateRoleId, 'role_peek-0');
+  assert.equal(resolved.result.selectedCandidateOverride.candidateRoleId, 'alignment_a_plain-0');
   assert.equal(resolved.result.selectedCandidateOverride.previousCandidateRoleId, 'alignment_a_target-0');
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, true);
-  assert.equal(roleById(resolved.session, 'role_peek-0').inPlay, false);
+  assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, false);
   assert.deepEqual(resolved.result.finalEffects[0].causedBy, {
-    type: PEEK_ACTION_KEYS.PEEK_ACCUSATION,
-    id: 'peek-accusation-1'
+    type: PEEK_ACTION_KEYS.PEEK_WARNING,
+    id: 'peek-warning-1'
   });
 });
 
-test('role_peek validado por director fuerza candidate aunque la seleccion sea nula', () => {
+test('role_peek warning confirmado fuerza candidate aunque la seleccion sea nula', () => {
   const session = withPeekRole(createBaseSession());
   const resolved = resolveSelectionOutOfPlayStage(
     session,
     collectiveSelectionInput({
       actorIds: ['alignment_b_attacker-0', 'alignment_b_target-0'],
-      peekAccusation: {
-        id: 'peek-accusation-null',
-        accusedRoleId: 'role_peek-0',
-        timing: PEEK_ACCUSATION_TIMINGS.SELECTION_NULL,
-        directorValidated: true
+      peekWarning: {
+        id: 'peek-warning-null',
+        issuerRoleId: 'alignment_b_attacker-0',
+        targetRoleId: 'alignment_a_plain-0',
+        timing: PEEK_WARNING_TIMINGS.SELECTION_NULL,
+        confirmingRoleIds: ['alignment_b_target-0']
       },
       selections: createSelections({
         'alignment_b_attacker-0': 'alignment_a_target-0',
@@ -5540,21 +5609,22 @@ test('role_peek validado por director fuerza candidate aunque la seleccion sea n
 
   assert.equal(resolved.ok, true);
   assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.NULL);
-  assert.equal(resolved.result.selectedCandidateOverride.candidateRoleId, 'role_peek-0');
-  assert.equal(roleById(resolved.session, 'role_peek-0').inPlay, false);
+  assert.equal(resolved.result.selectedCandidateOverride.candidateRoleId, 'alignment_a_plain-0');
+  assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, false);
 });
 
-test('role_peek no permite validar acusaciones contra un role incorrecto', () => {
+test('role_peek warning sin confirmar no sustituye candidate', () => {
   const session = withPeekRole(createBaseSession());
   const resolved = resolveSelectionOutOfPlayStage(
     session,
     collectiveSelectionInput({
       actorIds: ['alignment_b_attacker-0', 'alignment_b_target-0', 'hidden_enemy-0'],
-      peekAccusation: {
-        id: 'peek-accusation-wrong-role',
-        accusedRoleId: 'alignment_a_plain-0',
-        timing: PEEK_ACCUSATION_TIMINGS.AFTER_SELECTION,
-        directorValidated: true
+      peekWarning: {
+        id: 'peek-warning-unconfirmed',
+        issuerRoleId: 'alignment_b_attacker-0',
+        targetRoleId: 'alignment_a_plain-0',
+        timing: PEEK_WARNING_TIMINGS.AFTER_SELECTION,
+        confirmingRoleIds: ['alignment_b_target-0']
       },
       selections: createSelections({
         'alignment_b_attacker-0': 'alignment_a_target-0',
@@ -5572,7 +5642,131 @@ test('role_peek no permite validar acusaciones contra un role incorrecto', () =>
   assert.equal(resolved.ok, true);
   assert.equal(resolved.result.selectedCandidateOverride, null);
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
-  assert.equal(roleById(resolved.session, 'role_peek-0').inPlay, true);
+  assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, true);
+});
+
+test('role_peek warning confirmado antes de seleccionar resuelve candidate directamente', () => {
+  const session = withPeekRole(createBaseSession());
+  const resolved = resolveSelectionOutOfPlayStage(
+    session,
+    collectiveSelectionInput({
+      actorIds: ['alignment_b_attacker-0', 'alignment_b_target-0', 'hidden_enemy-0'],
+      peekWarning: {
+        id: 'peek-warning-before',
+        issuerRoleId: 'alignment_b_attacker-0',
+        targetRoleId: 'alignment_a_plain-0',
+        timing: PEEK_WARNING_TIMINGS.BEFORE_SELECTION,
+        confirmingRoleIds: ['alignment_b_target-0', 'hidden_enemy-0']
+      }
+    }),
+    {
+      key: STAGE_KEYS.STAGE_04,
+      poolKey: POOL_KEYS.POOL_CONCEALED,
+      metadata: { catalogId: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY }
+    }
+  );
+
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.result.selection, null);
+  assert.equal(resolved.result.selectedCandidateOverride.candidateRoleId, 'alignment_a_plain-0');
+  assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, false);
+});
+
+test('role_peek warning acepta mayoria simple configurable', () => {
+  const session = withPeekRole(createBaseSession());
+  const resolved = resolveSelectionOutOfPlayStage(
+    session,
+    collectiveSelectionInput({
+      actorIds: ['alignment_b_attacker-0', 'alignment_b_target-0', 'hidden_enemy-0'],
+      peekWarning: {
+        id: 'peek-warning-majority',
+        issuerRoleId: 'alignment_b_attacker-0',
+        targetRoleId: 'alignment_a_plain-0',
+        timing: PEEK_WARNING_TIMINGS.AFTER_SELECTION,
+        confirmationRule: PEEK_WARNING_CONFIRMATION_RULES.SIMPLE_MAJORITY,
+        confirmingRoleIds: ['alignment_b_target-0']
+      },
+      selections: createSelections({
+        'alignment_b_attacker-0': 'alignment_a_target-0',
+        'alignment_b_target-0': 'alignment_a_target-0',
+        'hidden_enemy-0': 'alignment_a_target-0'
+      })
+    }),
+    {
+      key: STAGE_KEYS.STAGE_04,
+      poolKey: POOL_KEYS.POOL_CONCEALED,
+      metadata: { catalogId: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY }
+    }
+  );
+
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.result.selectedCandidateOverride.candidateRoleId, 'alignment_a_plain-0');
+});
+
+test('role_peek warning no puede apuntar a un target miembro del group', () => {
+  const session = withPeekRole(createBaseSession());
+  const resolved = resolveSelectionOutOfPlayStage(
+    session,
+    collectiveSelectionInput({
+      actorIds: ['alignment_b_attacker-0', 'alignment_b_target-0', 'hidden_enemy-0'],
+      peekWarning: {
+        id: 'peek-warning-group-member',
+        issuerRoleId: 'alignment_b_attacker-0',
+        targetRoleId: 'alignment_b_target-0',
+        timing: PEEK_WARNING_TIMINGS.AFTER_SELECTION,
+        confirmingRoleIds: ['alignment_b_target-0', 'hidden_enemy-0']
+      },
+      selections: createSelections({
+        'alignment_b_attacker-0': 'alignment_a_target-0',
+        'alignment_b_target-0': 'alignment_a_target-0',
+        'hidden_enemy-0': 'alignment_a_target-0'
+      })
+    }),
+    {
+      key: STAGE_KEYS.STAGE_04,
+      poolKey: POOL_KEYS.POOL_CONCEALED,
+      metadata: { catalogId: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY }
+    }
+  );
+
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.result.selectedCandidateOverride, null);
+  assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
+  assert.equal(roleById(resolved.session, 'alignment_b_target-0').inPlay, true);
+});
+
+test('role_peek warning no puede apuntar a un target fuera de juego', () => {
+  const session = withInPlayState(withPeekRole(createBaseSession()), {
+    'alignment_a_plain-0': false
+  });
+  const resolved = resolveSelectionOutOfPlayStage(
+    session,
+    collectiveSelectionInput({
+      actorIds: ['alignment_b_attacker-0', 'alignment_b_target-0', 'hidden_enemy-0'],
+      peekWarning: {
+        id: 'peek-warning-out-target',
+        issuerRoleId: 'alignment_b_attacker-0',
+        targetRoleId: 'alignment_a_plain-0',
+        timing: PEEK_WARNING_TIMINGS.AFTER_SELECTION,
+        confirmingRoleIds: ['alignment_b_target-0', 'hidden_enemy-0']
+      },
+      selections: createSelections({
+        'alignment_b_attacker-0': 'alignment_a_target-0',
+        'alignment_b_target-0': 'alignment_a_target-0',
+        'hidden_enemy-0': 'alignment_a_target-0'
+      })
+    }),
+    {
+      key: STAGE_KEYS.STAGE_04,
+      poolKey: POOL_KEYS.POOL_CONCEALED,
+      metadata: { catalogId: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY }
+    }
+  );
+
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.result.selectedCandidateOverride, null);
+  assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
+  assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, false);
 });
 
 test('stage con seleccion y set_out_of_play no permite desactivar restricciones estructurales desde input', () => {

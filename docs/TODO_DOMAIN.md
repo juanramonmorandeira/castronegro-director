@@ -57,7 +57,7 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
   - reglas que referencian actions o conditions inexistentes.
 - Consolidar `role_peek` tras la primera implementacion:
   - definir la experiencia visual de `peekAttempt` para partidas no presenciales;
-  - definir UI/director para resolver `peekAccusation`;
+  - definir UI/director para emitir y confirmar `peek_warning`;
   - definir el flujo paralelo de surface durante `concealed_set_out_of_play`,
     desde `start_stage` hasta envio de candidate;
   - documentar reglas de conducta humana durante `stage_concealed_set_out_of_play`.

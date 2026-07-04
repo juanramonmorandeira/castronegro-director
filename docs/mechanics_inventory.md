@@ -28,7 +28,7 @@ limpio. No es un documento de ambientacion y evita nombres narrativos.
 | `exposed_set_out_of_play` | implementada | El stage vota para elegir `chosenId`; despues aplica la receta `set_out_of_play`. |
 | `assume_role` | implementada | `replace_role_identity` asigna un role de `assumableRoles` al asiento/player del actor. |
 | `peek_attempt` | implementada | `role_peek` puede registrar un intento privado durante la stage observada. |
-| `peek_accusation` | implementada | Una `stageRule` validada por director contra el verdadero `role_peek` aplica `override_selected_candidate`. |
+| `peek_warning` | implementada | Un warning confirmado por los miembros del group aplica `override_selected_candidate` sobre el role señalado, aunque no sea realmente `role_peek`. |
 
 ## Mecanicas pendientes detectadas
 

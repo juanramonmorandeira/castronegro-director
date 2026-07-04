@@ -78,18 +78,23 @@ export const STAGE_ERRORS = Object.freeze({
 
 export const PEEK_ACTION_KEYS = Object.freeze({
   PEEK_ATTEMPT: 'peekAttempt',
-  PEEK_ACCUSATION: 'peekAccusation',
+  PEEK_WARNING: 'peek_warning',
   OVERRIDE_SELECTED_CANDIDATE: 'override_selected_candidate'
 });
 
-export const PEEK_ACCUSATION_TIMINGS = Object.freeze({
+export const PEEK_WARNING_TIMINGS = Object.freeze({
   BEFORE_SELECTION: 'before_selection',
   AFTER_SELECTION: 'after_selection',
   SELECTION_NULL: 'selection_null'
 });
 
+export const PEEK_WARNING_CONFIRMATION_RULES = Object.freeze({
+  UNANIMITY: 'unanimity',
+  SIMPLE_MAJORITY: 'simple_majority'
+});
+
 export const STAGE_RULE_TYPES = Object.freeze({
-  PEEK_ACCUSATION_OVERRIDE: 'peek_accusation_override'
+  PEEK_WARNING_OVERRIDE: 'peek_warning_override'
 });
 
 export { STAGE_COMPLETION_MODES, STAGE_COMPLETION_REQUESTED_BY };
@@ -523,12 +528,84 @@ function appendPeekAttemptHistoryIfNeeded({ session, input = {}, stage = {}, con
       visibility: 'private',
       stageRuleKey: activeRule.rule.key ?? null,
       stageRuleType: activeRule.rule.type ?? null,
-      observedStageKey: activeRule.rule.observedStageKey ?? null
+      observedStageKey: activeRule.rule.observedStageKey ?? null,
+      count: input.peekAttempt.count ?? null,
+      startedAt: input.peekAttempt.startedAt ?? null,
+      endedAt: input.peekAttempt.endedAt ?? null,
+      durationMs: input.peekAttempt.durationMs ?? null,
+      timestamps: [...(input.peekAttempt.timestamps ?? [])],
+      revealedRoleIds: [...(input.peekAttempt.revealedRoleIds ?? [])]
     }
   });
 }
 
-function getValidatedPeekOverride({
+function getPeekWarningTargetRoleId(warning = {}) {
+  return warning.targetRoleId ?? warning.roleId ?? null;
+}
+
+function getPeekWarningIssuerRoleId(warning = {}) {
+  return warning.issuerRoleId ?? warning.actorId ?? null;
+}
+
+function getStageActorIds(stage = {}, input = {}) {
+  return [...new Set([...(input.actorIds ?? []), ...(stage.actorIds ?? [])].filter(Boolean))];
+}
+
+function getPeekWarningConfirmingRoleIds(warning = {}) {
+  const issuerRoleId = getPeekWarningIssuerRoleId(warning);
+  return [
+    ...new Set([
+      issuerRoleId,
+      ...(warning.confirmingRoleIds ?? []),
+      ...(warning.confirmations ?? [])
+    ].filter(Boolean))
+  ];
+}
+
+function getPeekWarningConfirmationRule(warning = {}, matchingRule = null) {
+  const type =
+    warning.confirmationRule?.type ??
+    warning.confirmationRule ??
+    matchingRule?.rule?.confirmationRule?.type ??
+    matchingRule?.rule?.confirmationRule ??
+    PEEK_WARNING_CONFIRMATION_RULES.UNANIMITY;
+
+  return Object.values(PEEK_WARNING_CONFIRMATION_RULES).includes(type)
+    ? type
+    : PEEK_WARNING_CONFIRMATION_RULES.UNANIMITY;
+}
+
+function isPeekWarningConfirmed({ warning = {}, matchingRule = null, stage = {}, input = {} } = {}) {
+  if (warning.confirmed === true || warning.directorOverride === true) return true;
+
+  const actorIds = getStageActorIds(stage, input);
+  if (actorIds.length === 0) return false;
+
+  const confirmingRoleIds = getPeekWarningConfirmingRoleIds(warning);
+  const actorConfirmations = actorIds.filter((roleId) => confirmingRoleIds.includes(roleId));
+  const confirmationRule = getPeekWarningConfirmationRule(warning, matchingRule);
+
+  if (confirmationRule === PEEK_WARNING_CONFIRMATION_RULES.SIMPLE_MAJORITY) {
+    return actorConfirmations.length > actorIds.length / 2;
+  }
+
+  return actorConfirmations.length === actorIds.length;
+}
+
+function isPeekWarningEligible({ session = {}, warning = {}, stage = {}, input = {} } = {}) {
+  const issuerRoleId = getPeekWarningIssuerRoleId(warning);
+  const targetRoleId = getPeekWarningTargetRoleId(warning);
+  const actorIds = getStageActorIds(stage, input);
+
+  if (!issuerRoleId || !targetRoleId) return false;
+  if (!actorIds.includes(issuerRoleId)) return false;
+  if (actorIds.includes(targetRoleId)) return false;
+
+  const targetRole = (session.roles ?? []).find((role) => role.id === targetRoleId);
+  return targetRole?.inPlay === true;
+}
+
+function getConfirmedPeekWarningOverride({
   session = {},
   input = {},
   stage = {},
@@ -536,34 +613,37 @@ function getValidatedPeekOverride({
   normalChosenId = null,
   selectionType = null
 } = {}) {
-  const accusation = input.peekAccusation ?? null;
-  if (!accusation || accusation.directorValidated !== true) return null;
-
-  const timing = accusation.timing ?? (normalChosenId
-    ? PEEK_ACCUSATION_TIMINGS.AFTER_SELECTION
-    : PEEK_ACCUSATION_TIMINGS.SELECTION_NULL);
-  if (timing === PEEK_ACCUSATION_TIMINGS.BEFORE_SELECTION) return null;
+  const warning = input.peekWarning ?? null;
+  const targetRoleId = getPeekWarningTargetRoleId(warning ?? {});
+  if (!warning || !targetRoleId) return null;
+  if (!isPeekWarningEligible({ session, warning, stage, input })) return null;
 
   const matchingRule = collectActiveStageRules(
     session,
     stage,
     actionKey,
-    STAGE_RULE_TYPES.PEEK_ACCUSATION_OVERRIDE
-  )
-    .find(({ role }) => role.id === accusation.accusedRoleId);
+    STAGE_RULE_TYPES.PEEK_WARNING_OVERRIDE
+  )[0] ?? null;
   if (!matchingRule) return null;
+  if (!isPeekWarningConfirmed({ warning, matchingRule, stage, input })) return null;
+
+  const timing = warning.timing ?? (normalChosenId
+    ? PEEK_WARNING_TIMINGS.AFTER_SELECTION
+    : PEEK_WARNING_TIMINGS.SELECTION_NULL);
 
   return {
-    candidateRoleId: matchingRule.role.id,
+    candidateRoleId: targetRoleId,
     previousCandidateRoleId: normalChosenId,
     timing,
     selectionType,
     causedBy: {
-      type: PEEK_ACTION_KEYS.PEEK_ACCUSATION,
-      id: accusation.id ?? `${PEEK_ACTION_KEYS.PEEK_ACCUSATION}-${session?.cycle?.id ?? 0}`
+      type: PEEK_ACTION_KEYS.PEEK_WARNING,
+      id: warning.id ?? `${PEEK_ACTION_KEYS.PEEK_WARNING}-${session?.cycle?.id ?? 0}`
     },
     metadata: {
-      accusedRoleId: accusation.accusedRoleId,
+      targetRoleId,
+      confirmingRoleIds: getPeekWarningConfirmingRoleIds(warning),
+      confirmationRule: getPeekWarningConfirmationRule(warning, matchingRule),
       stageRuleKey: matchingRule.rule.key ?? null,
       stageRuleType: matchingRule.rule.type ?? null,
       overrideActionKey:
@@ -590,7 +670,7 @@ function resolveSelectionStageRecipe(session, stage, recipe, input = {}, context
     session,
     stage,
     context.actionKey ?? getStageActionKey(recipe),
-    STAGE_RULE_TYPES.PEEK_ACCUSATION_OVERRIDE
+    STAGE_RULE_TYPES.PEEK_WARNING_OVERRIDE
   );
   const sessionWithPeekAttempt = appendPeekAttemptHistoryIfNeeded({
     session,
@@ -599,6 +679,43 @@ function resolveSelectionStageRecipe(session, stage, recipe, input = {}, context
     context,
     stageRules: activePeekStageRules
   });
+  const earlyPeekOverride = getConfirmedPeekWarningOverride({
+    session: sessionWithPeekAttempt,
+    input,
+    stage,
+    actionKey: context.actionKey ?? getStageActionKey(recipe),
+    normalChosenId: null,
+    selectionType: null
+  });
+
+  if (earlyPeekOverride?.timing === PEEK_WARNING_TIMINGS.BEFORE_SELECTION) {
+    const recipeResolution = resolveRecipe(
+      sessionWithPeekAttempt,
+      recipe,
+      getRecipeInputFromSelection({
+        stage,
+        input: {
+          ...input,
+          recipeActorType: recipe.actor?.type ?? null
+        },
+        chosenId: earlyPeekOverride.candidateRoleId
+      }),
+      {
+        ...context,
+        causedBy: earlyPeekOverride.causedBy
+      }
+    );
+
+    return {
+      ...recipeResolution,
+      result: {
+        ...(recipeResolution.result ?? {}),
+        selection: null,
+        selectedCandidateOverride: earlyPeekOverride
+      }
+    };
+  }
+
   const selectionResolution = resolveAction(
     sessionWithPeekAttempt,
     {
@@ -612,7 +729,7 @@ function resolveSelectionStageRecipe(session, stage, recipe, input = {}, context
   if (!selectionResolution.ok) return selectionResolution;
 
   const chosenId = selectionResolution.result?.selection?.chosenId ?? null;
-  const peekOverride = getValidatedPeekOverride({
+  const peekOverride = getConfirmedPeekWarningOverride({
     session: selectionResolution.session,
     input,
     stage,

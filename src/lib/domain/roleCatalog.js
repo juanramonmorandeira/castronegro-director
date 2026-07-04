@@ -222,12 +222,12 @@ export const ROLE_CATALOG = Object.freeze({
     stageRules: [
       {
         key: 'peek_concealed_set_out_of_play',
-        type: 'peek_accusation_override',
+        type: 'peek_warning_override',
         observedStageKey: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY,
         poolKeys: [POOL_KEYS.POOL_CONCEALED],
         actionKeys: ['set_out_of_play'],
         requireInPlay: true,
-        resolution: 'director_validated',
+        confirmationRule: 'unanimity',
         overrideActionKey: 'override_selected_candidate'
       }
     ],

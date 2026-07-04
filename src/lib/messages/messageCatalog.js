@@ -23,7 +23,7 @@ export const MESSAGE_KEYS = Object.freeze({
   ROLE_ASSUMPTION_REQUESTED: 'role_assumption_requested',
   ROLE_ASSUMPTION_COMPLETED: 'role_assumption_completed',
   PEEK_AVAILABLE: 'peek_available',
-  PEEK_ACCUSATION_RECEIVED: 'peek_accusation_received',
+  PEEK_WARNING_RECEIVED: 'peek_warning_received',
   SELECTION_AUTHORITY_ASSIGNED: 'selection_authority_assigned',
   SELECTION_AUTHORITY_TRANSFERRED: 'selection_authority_transferred',
   OBJECTIVE_ACHIEVED: 'objective_achieved',
@@ -127,12 +127,12 @@ export const MESSAGE_CATALOG = Object.freeze({
     status: MESSAGE_IMPLEMENTATION_STATUSES.PLANNED,
     requiredParams: ['actor', 'observedStage']
   },
-  [MESSAGE_KEYS.PEEK_ACCUSATION_RECEIVED]: {
+  [MESSAGE_KEYS.PEEK_WARNING_RECEIVED]: {
     type: MESSAGE_TYPES.GAMEPLAY,
     severity: MESSAGE_SEVERITIES.INFO,
     defaultAudience: MESSAGE_AUDIENCE_TYPES.DIRECTOR,
     status: MESSAGE_IMPLEMENTATION_STATUSES.PLANNED,
-    requiredParams: ['accusedRole', 'group']
+    requiredParams: ['targetRole', 'group']
   },
   [MESSAGE_KEYS.SELECTION_AUTHORITY_ASSIGNED]: {
     type: MESSAGE_TYPES.GAMEPLAY,

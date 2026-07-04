@@ -18,7 +18,7 @@ textos ES/EN pertenecen a una skin.
 | `role_assumption_requested` | gameplay | role | planned | Un role debe elegir una definicion que asumir. |
 | `role_assumption_completed` | gameplay | role | planned | La asuncion de role quedo aplicada. |
 | `peek_available` | gameplay | role | planned | `role_peek` puede intentar espiar la stage observada. |
-| `peek_accusation_received` | gameplay | director | planned | El group observado registro una acusacion de peek que requiere resolucion. |
+| `peek_warning_received` | gameplay | director | planned | El group observado registro un warning de peek que puede resolver la seleccion. |
 | `selection_authority_assigned` | gameplay | public | planned | Se asigno una autoridad que modifica selecciones. |
 | `selection_authority_transferred` | gameplay | public | planned | La autoridad paso a otro role. |
 | `objective_achieved` | gameplay | public | planned | Se cumplio un objective. |

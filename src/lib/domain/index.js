@@ -153,7 +153,8 @@ export {
   STAGE_ACTION_KEYS,
   STAGE_RULE_TYPES,
   PEEK_ACTION_KEYS,
-  PEEK_ACCUSATION_TIMINGS,
+  PEEK_WARNING_TIMINGS,
+  PEEK_WARNING_CONFIRMATION_RULES,
   getCurrentStage,
   getStageActionKey,
   selectStageAction,
@@ -189,7 +190,10 @@ export {
   createSurfaceMessage,
   createSurfaceItem,
   createPublicTableStateItem,
-  createEffectResultItem
+  createEffectResultItem,
+  createConcealedSelectionDraftItem,
+  createConcealedSelectionSubmissionItem,
+  createSelectionResultItem
 } from './surfaceModel.js';
 
 export {

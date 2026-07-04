@@ -904,10 +904,26 @@ Flujo:
 
 1. `start_stage` de `concealed_set_out_of_play`.
 2. La surface muestra a los miembros de `group_concealed_set_out_of_play` los
-   candidates validos.
+   candidates validos sobre el plano de jugadores.
 3. Los candidates son roles `inPlay=true` que no forman parte de
    `group_concealed_set_out_of_play`.
-4. Cada miembro conectado del group emite una seleccion individual:
+4. Cada miembro conectado del group puede marcar una seleccion provisional
+   visible para el resto del group y para el director:
+
+```js
+{
+  type: 'concealed_selection_draft',
+  recipientRoleIds: ['role_set_out_of_play-0', 'role_set_out_of_play-1'],
+  payload: {
+    selectorRoleId: 'role_set_out_of_play-0',
+    candidateRoleId: 'role_plain-0'
+  }
+}
+```
+
+5. La seleccion provisional es temporal, puede cambiarse hasta enviar la
+   seleccion definitiva y no se guarda en history.
+6. Cada miembro conectado del group emite una seleccion definitiva:
 
 ```js
 {
@@ -917,14 +933,28 @@ Flujo:
 }
 ```
 
-5. No se permite abstencion. Si un miembro no selecciona nada, no hay unanimidad
+7. La seleccion definitiva se proyecta como no editable al group y al director:
+
+```js
+{
+  type: 'concealed_selection_submission',
+  recipientRoleIds: ['role_set_out_of_play-0', 'role_set_out_of_play-1'],
+  payload: {
+    selectorRoleId: 'role_set_out_of_play-0',
+    candidateRoleId: 'role_plain-0',
+    editable: false
+  }
+}
+```
+
+8. No se permite abstencion. Si un miembro no selecciona nada, no hay unanimidad
    y la seleccion queda nula.
-6. Si todos los votos llegan por app, el sistema puede resolver automaticamente
+9. Si todos los votos llegan por app, el sistema puede resolver automaticamente
    el resultado.
-7. Si el director selecciona en representacion de uno o varios players, o hay
-   mezcla app/presencial, el director registra el resultado agregado con
-   `director_submit_selection`.
-8. Si no hay unanimidad, el outcome es null:
+10. En partida presencial o mixta, el director registra la seleccion definitiva
+    agregada con `director_submit_selection`. Puede hacerlo antes de que todos
+    los miembros conectados hayan enviado su seleccion.
+11. Si no hay unanimidad, el outcome es null:
 
 ```js
 {
@@ -935,36 +965,51 @@ Flujo:
 }
 ```
 
-9. Si hay unanimidad, el candidate elegido pasa a ser el target de
-   `set_out_of_play`.
-10. Tras resolver la seleccion, todos los miembros del group reciben un
-    `surfaceItem` `selection_result` y deben hacer acknowledgement, o el director
-    lo hace en su representacion.
-11. Si el outcome es null, tambien deben confirmar que no hubo unanimidad.
-12. Si el outcome es candidate, se muestra solo que candidate fue elegido. No se
-    comunica aqui que el efecto `set_out_of_play` se aplico.
-13. El role elegido como candidate no recibe aqui un acknowledgement propio; lo
-    sabra por su estado o por el flujo que corresponda en el siguiente pool/stage.
-14. El director ejecuta `finish_stage`.
+12. Si hay unanimidad, el candidate elegido pasa a ser el target de
+    `set_out_of_play`.
+13. El director ve selecciones provisionales, selecciones definitivas, roles
+    pendientes de enviar seleccion y resultado calculable.
+14. El group no ve aqui el resultado final de eliminacion. Al cerrar la stage,
+    sus pantallas pasan a `screenHidden`.
+15. El role elegido como candidate no recibe comunicacion propia en esta stage.
+16. El director ejecuta `finish_stage`.
 
-Ejemplo de `surfaceItem`:
+Ejemplo de resultado proyectable cuando una stage lo necesite:
 
 ```js
 {
   type: 'selection_result',
-  recipientRoleIds: ['role_set_out_of_play-0', 'role_set_out_of_play-1'],
+  recipientRoleIds: ['role_set_out_of_play-0'],
   payload: {
     outcome: 'candidate',
     candidateRoleId: 'role_plain-0'
-  },
-  acknowledgementsRequired: true
+  }
 }
 ```
 
 `role_peek` durante `concealed_set_out_of_play` queda como flujo paralelo: opera
-desde `start_stage` hasta que se envia el candidate. Se definira mejor al
-trabajar UI, porque depende de como representemos el intento de espiar y la
-validacion del director.
+desde `start_stage` hasta que se envia el candidate.
+
+Contrato mecanico aceptado:
+
+- `peekAttempt` lo registra el sistema cuando el player pulsa o mantiene el
+  control de espiar;
+- el historial guarda contador, timestamps, duracion y roles revelados al peek;
+- mientras el control esta pulsado, los miembros de
+  `group_concealed_set_out_of_play` pueden ver al player/role_peek expuesto;
+- los miembros del group pueden emitir `peek_warning` contra un role/player
+  visible siempre que el target este `inPlay=true` y no sea miembro del group;
+- la confirmacion del warning es configurable, con unanimidad por defecto y
+  mayoria simple como alternativa;
+- si el warning queda confirmado, aplica `override_selected_candidate` sobre el
+  role señalado, aunque no sea realmente `role_peek`;
+- si el warning se confirma antes de votar, resuelve candidate directamente;
+- si se confirma despues de votos emitidos y antes del cierre por director,
+  sobrescribe el resultado previo;
+- la mecanica separada para esta situacion es `peek_warning`;
+- en partida presencial pura no es necesario registrar `peek_warning`; en
+  partida mixta si debe registrarse para coordinar app y mesa fisica;
+- `role_peek` no recibe comunicacion especial ni acknowledgement.
 
 ### `exposed_set_out_of_play`
 

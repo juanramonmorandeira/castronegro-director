@@ -36,7 +36,10 @@ export const SURFACE_FLOW_ORDER = Object.freeze([
 
 export const SURFACE_ITEM_TYPES = Object.freeze({
   PUBLIC_TABLE_STATE: 'public_table_state',
-  EFFECT_RESULT: 'effect_result'
+  EFFECT_RESULT: 'effect_result',
+  CONCEALED_SELECTION_DRAFT: 'concealed_selection_draft',
+  CONCEALED_SELECTION_SUBMISSION: 'concealed_selection_submission',
+  SELECTION_RESULT: 'selection_result'
 });
 
 export const SURFACE_MESSAGE_EXPIRATIONS = Object.freeze({
@@ -127,5 +130,55 @@ export function createEffectResultItem({
       ...(reason ? { reason } : {}),
       effect: clonePayload(effect)
     }
+  });
+}
+
+export function createConcealedSelectionDraftItem({
+  recipientRoleIds = [],
+  selectorRoleId = null,
+  candidateRoleId = null
+} = {}) {
+  return createSurfaceItem({
+    type: SURFACE_ITEM_TYPES.CONCEALED_SELECTION_DRAFT,
+    recipientRoleIds,
+    payload: {
+      selectorRoleId,
+      candidateRoleId
+    }
+  });
+}
+
+export function createConcealedSelectionSubmissionItem({
+  recipientRoleIds = [],
+  selectorRoleId = null,
+  candidateRoleId = null
+} = {}) {
+  return createSurfaceItem({
+    type: SURFACE_ITEM_TYPES.CONCEALED_SELECTION_SUBMISSION,
+    recipientRoleIds,
+    payload: {
+      selectorRoleId,
+      candidateRoleId,
+      editable: false
+    }
+  });
+}
+
+export function createSelectionResultItem({
+  recipientRoleIds = [],
+  outcome = null,
+  candidateRoleId = null,
+  reason = null,
+  acknowledgementsRequired = false
+} = {}) {
+  return createSurfaceItem({
+    type: SURFACE_ITEM_TYPES.SELECTION_RESULT,
+    recipientRoleIds,
+    payload: {
+      outcome,
+      candidateRoleId,
+      ...(reason ? { reason } : {})
+    },
+    acknowledgementsRequired
   });
 }
