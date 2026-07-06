@@ -192,7 +192,7 @@ export const RULE_SET_CATALOG = Object.freeze({
               scope: {
                 methods: ['vote'],
                 poolKeys: [POOL_KEYS.POOL_EXPOSED],
-                actionKeys: [RECIPE_KEYS.SET_OUT_OF_PLAY]
+                recipeKeys: [RECIPE_KEYS.SET_OUT_OF_PLAY]
               },
               rules: {
                 selectionValueRules: [
@@ -275,12 +275,12 @@ export const RULE_SET_CATALOG = Object.freeze({
     skinRequirements: {
       languages: ['es', 'en'],
       requiredMessageKeys: [
-        MESSAGE_KEYS.ACTION_USAGE_LIMIT_REACHED,
+        MESSAGE_KEYS.RECIPE_USAGE_LIMIT_REACHED,
         MESSAGE_KEYS.INSPECTION_REVEALED,
         MESSAGE_KEYS.COLLECTIVE_SELECTION_REQUESTED,
         MESSAGE_KEYS.ROLE_STATE_REVEALED,
         MESSAGE_KEYS.REACTIVE_SELECTION_REQUESTED,
-        MESSAGE_KEYS.LIMITED_ACTION_APPLIED,
+        MESSAGE_KEYS.LIMITED_RECIPE_APPLIED,
         MESSAGE_KEYS.OBJECTIVE_ACHIEVED,
         MESSAGE_KEYS.PLAY_CONCLUDED
       ],

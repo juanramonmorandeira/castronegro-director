@@ -133,12 +133,12 @@ La relacion actual es esta:
 Role o Group
 -> stageDefinitions
 -> Stage
--> actions
+-> recipes
 -> Recipe
 ```
 
 Un rol no ejecuta recetas directamente. Un rol define que stages puede aportar
-al flujo. Las recetas ejecutables viven dentro de `stage.actions`.
+al flujo. Las recetas ejecutables viven dentro de `stage.recipes`.
 
 Los stages iniciales que no pertenecen a pools se declaran por separado en
 `specialStageDefinitions` y se materializan en `session.specialStages`.
@@ -175,7 +175,7 @@ La sesion guarda:
 - `roles`
 - `groups`
 - `session.cycle.pools` contiene el mapa de pools runtime.
-- `actionHistory`
+- `recipeHistory`
 - `cycleHistory`
 - `poolHistory`
 - `stageHistory`

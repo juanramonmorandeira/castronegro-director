@@ -44,10 +44,10 @@ export {
 
 export {
   HISTORY_RESULTS,
-  getActionHistory,
-  getActionHistorySignature,
+  getRecipeHistory,
+  getRecipeHistorySignature,
   appendEntry,
-  appendActionHistory,
+  appendRecipeHistory,
   findAppliedSetPropertyHistory
 } from './historyModel.js';
 
@@ -150,14 +150,14 @@ export {
   STAGE_COMPLETION_MODES,
   STAGE_COMPLETION_REQUESTED_BY,
   STAGE_KEYS,
-  STAGE_ACTION_KEYS,
+  STAGE_RECIPE_KEYS,
   STAGE_RULE_TYPES,
-  PEEK_ACTION_KEYS,
+  PEEK_RECIPE_KEYS,
   PEEK_WARNING_TIMINGS,
   PEEK_WARNING_CONFIRMATION_RULES,
   getCurrentStage,
-  getStageActionKey,
-  selectStageAction,
+  getStageRecipeKey,
+  selectStageRecipe,
   validateCurrentStage,
   isValidStageCompletionRequester,
   getStageCompletionDefinition,

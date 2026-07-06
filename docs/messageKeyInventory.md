@@ -5,7 +5,7 @@ textos ES/EN pertenecen a una skin.
 
 | messageKey | Tipo | Audiencia por defecto | Estado | Significado mecanico |
 | --- | --- | --- | --- | --- |
-| `action_usage_limit_reached` | gameplay | role | implemented | La accion limitada ya agoto sus usos declarados por `recipe.usage`. |
+| `recipe_usage_limit_reached` | gameplay | role | implemented | La recipe limitada ya agoto sus usos declarados por `recipe.usage`. |
 | `invalid_candidate` | gameplay | role | planned | La opcion elegida no pertenece a los candidatos validos. |
 | `property_change_blocked` | gameplay | role | planned | Un cambio de propiedad fue impedido. |
 | `selection_tied` | gameplay | group | planned | La seleccion colectiva termino empatada. |
@@ -13,7 +13,7 @@ textos ES/EN pertenecen a una skin.
 | `collective_selection_requested` | gameplay | group | planned | Un grupo debe realizar una seleccion. |
 | `role_state_revealed` | gameplay | public | planned | Un estado mecanico pasa a ser publico. |
 | `reactive_selection_requested` | gameplay | role | planned | Una reaction habilita una seleccion privada. |
-| `limited_action_applied` | gameplay | role | planned | Se aplico una accion con limite de uso. |
+| `limited_recipe_applied` | gameplay | role | planned | Se aplico una accion con limite de uso. |
 | `group_created` | gameplay | group | planned | Se materializo un grupo dinamico. |
 | `role_assumption_requested` | gameplay | role | planned | Un role debe elegir una definicion que asumir. |
 | `role_assumption_completed` | gameplay | role | planned | La asuncion de role quedo aplicada. |

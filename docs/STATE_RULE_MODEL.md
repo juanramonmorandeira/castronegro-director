@@ -280,7 +280,7 @@ Tipos iniciales:
 
 ```text
 actor_in_play
-has_executable_action
+has_executable_recipe
 within_execution_window
 always_available
 ```

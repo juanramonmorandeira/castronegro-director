@@ -16,10 +16,12 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
 - Conectar `messagePresenter` con la UI cuando exista una primera skin real.
 - Revisar y depurar todos los logs/histories antes de persistir mensajes
   tecnicos de director/player:
+  - estructura anidada `session.history`;
   - `stageHistory`;
+  - `specialStageHistory`;
   - `poolHistory`;
   - `cycleHistory`;
-  - `actionHistory`;
+  - `recipeHistory`;
   - `errorLog`;
   - `applicationLog`.
 - Determinar que mensajes publicos deben guardarse en un futuro pool de
@@ -170,8 +172,8 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
 
 - Definir `runPool` como coordinador incremental, porque los stages pueden
   esperar input humano.
-- Completar `poolHistory` con `started`, `completed` y `failed` durante la
-  ejecucion incremental.
+- Completar `poolHistory` segun `docs/history_contract.md` durante la ejecucion
+  incremental.
 - Aplicar pausa administrativa en session cuando un error ascienda desde pool.
 - No crear `cycleSpecialStages` hasta que exista una mecanica real ejecutada
   entre ciclos. Mantener mientras tanto una unica cola `session.specialStages`.

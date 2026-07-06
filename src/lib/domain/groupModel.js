@@ -246,9 +246,9 @@ export function getLinkedPropagatedEffects({ session = {}, effect = {} } = {}) {
 
 function selectionRuleMatchesContext(rule = {}, context = {}) {
   const methods = rule.scope?.methods ?? [];
-  const actionKeys = rule.scope?.actionKeys ?? [];
+  const recipeKeys = rule.scope?.recipeKeys ?? [];
   if (methods.length > 0 && !methods.includes(normalizeId(context.method))) return false;
-  if (actionKeys.length > 0 && !actionKeys.includes(normalizeId(context.actionKey))) return false;
+  if (recipeKeys.length > 0 && !recipeKeys.includes(normalizeId(context.recipeKey))) return false;
   return true;
 }
 

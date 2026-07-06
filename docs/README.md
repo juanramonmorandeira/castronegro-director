@@ -15,6 +15,7 @@ documentos normativos describen el modelo vigente.
 - `configurationDefinition.md`: configuraciones y match.
 - `skinDefinition.md`: capa visual y narrativa.
 - `surface_contract.md`: proyeccion de visibilidad/interaccion desde la session.
+- `history_contract.md`: contrato de histories de session.
 - `objectiveDefinition.md`: objetivos y conclusion jugable.
 - `messageSystem.md`: mensajes, logs, skin y presentacion.
 - `messageKeyInventory.md`: keys, audiencias y estado de implementacion.

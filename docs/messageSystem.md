@@ -86,7 +86,7 @@ recipes.
   },
   messages: {
     es: {
-      action_usage_limit_reached: {
+      recipe_usage_limit_reached: {
         role: '{actor}, la {recipe} ya ha sido usada.',
         director: '{actor} ya uso {recipe} hasta su limite.'
       }
@@ -150,7 +150,7 @@ aplicacion
 
 ## Casos implementados
 
-`constraint/limited_uses` produce `action_usage_limit_reached`. El error tecnico
+`constraint/limited_uses` produce `recipe_usage_limit_reached`. El error tecnico
 original sigue disponible en `result.errors` y el gameplayMessage se guarda en
 `sessionMessageLog`.
 

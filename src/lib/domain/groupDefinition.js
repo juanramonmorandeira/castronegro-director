@@ -76,7 +76,7 @@ export function defineGroupSelectionRule({
     type: normalizeId(type),
     scope: {
       methods: [...(scope.methods ?? [])].map(normalizeId),
-      actionKeys: [...(scope.actionKeys ?? [])].map(normalizeId)
+      recipeKeys: [...(scope.recipeKeys ?? [])].map(normalizeId)
     },
     appliesWhen: {
       sourceState: normalizeId(appliesWhen.sourceState ?? 'active')

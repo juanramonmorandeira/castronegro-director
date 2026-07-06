@@ -117,7 +117,7 @@ No pertenece a skin:
   },
   messages: {
     es: {
-      action_usage_limit_reached: {
+      recipe_usage_limit_reached: {
         default: '{recipe} ya ha alcanzado su limite de usos.'
       }
     }

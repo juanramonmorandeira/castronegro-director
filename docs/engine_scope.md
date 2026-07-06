@@ -94,7 +94,7 @@ La sesion es el estado vivo de la partida:
 - `roles`
 - `groups`
 - `session.cycle.pools` como mapa de pools runtime.
-- `actionHistory`
+- `recipeHistory`
 - `stageHistory`
 - `objectiveRules`
 - `achievedObjectives`

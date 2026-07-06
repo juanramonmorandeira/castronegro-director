@@ -3,7 +3,7 @@
 // Gestiona recetas mecanicas.
 //
 // Una receta NO es una accion nueva. Es:
-// - actionKey: nombre mecanico de la receta dentro de un stage;
+// - recipeKey: nombre mecanico de la receta dentro de un stage;
 // - actionId: accion generica que se ejecutara;
 // - parametros/efecto de esa accion;
 // - restricciones que limitan cuando puede usarse.
@@ -31,7 +31,7 @@ import { createMessagesFromEngineErrors } from '../messages/messageModel.js';
 import { routeMessages } from '../messages/messageLogModel.js';
 
 export function getRecipeKey(recipe = {}) {
-  return normalizeId(recipe.key ?? recipe.actionKey ?? recipe.id);
+  return normalizeId(recipe.key ?? recipe.recipeKey ?? recipe.id);
 }
 
 // Constructor generico de receta.
@@ -63,7 +63,7 @@ function normalizeUsage(usage = {}) {
 export function getActionFromRecipe(recipe = {}) {
   const action = { ...recipe };
   delete action.key;
-  delete action.actionKey;
+  delete action.recipeKey;
   delete action.constraints;
   delete action.diagnostics;
   return action;
@@ -275,20 +275,20 @@ function appendEngineErrorMessages(session, errors, context = {}) {
 // 2. Convierte la receta en accion pura.
 // 3. Llama a actionModel.
 export function resolveRecipe(session, recipe, input = {}, context = {}) {
-  const actionKey = context.actionKey ?? getRecipeKey(recipe);
+  const recipeKey = context.recipeKey ?? getRecipeKey(recipe);
   const contractValidation = validateRecipeContract({ recipe, input });
 
   if (!contractValidation.ok) {
     const messageState = appendEngineErrorMessages(session, contractValidation.errors, {
       ...context,
       actionId: recipe?.id ?? null,
-      actionKey
+      recipeKey
     });
 
     return {
       ok: false,
       actionId: recipe?.id ?? null,
-      actionKey,
+      recipeKey,
       errors: contractValidation.errors,
       session: messageState.session,
       result: null,
@@ -302,13 +302,13 @@ export function resolveRecipe(session, recipe, input = {}, context = {}) {
     const messageState = appendEngineErrorMessages(session, constraintValidation.errors, {
       ...context,
       actionId: recipe?.id ?? null,
-      actionKey
+      recipeKey
     });
 
     return {
       ok: false,
       actionId: recipe?.id ?? null,
-      actionKey,
+      recipeKey,
       errors: constraintValidation.errors,
       session: messageState.session,
       result: null,
@@ -321,13 +321,13 @@ export function resolveRecipe(session, recipe, input = {}, context = {}) {
     const messageState = appendEngineErrorMessages(session, materialization.errors, {
       ...context,
       actionId: recipe?.id ?? null,
-      actionKey
+      recipeKey
     });
 
     return {
       ok: false,
       actionId: recipe?.id ?? null,
-      actionKey,
+      recipeKey,
       errors: materialization.errors,
       session: messageState.session,
       result: null,
@@ -337,7 +337,7 @@ export function resolveRecipe(session, recipe, input = {}, context = {}) {
 
   return resolveAction(session, getActionFromRecipe(materialization.recipe), input, {
     ...context,
-    actionKey,
+    recipeKey,
     actorContract: materialization.recipe.actor ?? null,
     targetContract: materialization.recipe.target ?? null
   });

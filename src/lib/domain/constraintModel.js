@@ -1,8 +1,8 @@
 import { getCurrentCycleId } from './effectModel.js';
 import {
   findAppliedSetPropertyHistory,
-  getActionHistory,
-  getActionHistorySignature
+  getRecipeHistory,
+  getRecipeHistorySignature
 } from './historyModel.js';
 
 // constraintModel.js
@@ -91,12 +91,12 @@ export function evaluateNoRepeatTargetConstraint({
 }) {
   const currentCycleId = getCurrentCycleId(session);
   const window = constraint.window ?? CONSTRAINT_WINDOWS.CURRENT_OR_NEXT_CYCLE;
-  const actionSignature = getActionHistorySignature(action);
+  const actionSignature = getRecipeHistorySignature(action);
 
   return (targets ?? []).flatMap((target, index) => {
     if (!actor || !target) return [];
 
-    const repeated = getActionHistory(session).some((entry) => {
+    const repeated = getRecipeHistory(session).some((entry) => {
       const sameActor = (entry.actorIds ?? []).includes(actor.id);
       const sameTarget = (entry.targetIds ?? []).includes(target.id);
       const sameAction = entry.actionSignature === actionSignature;
@@ -153,7 +153,7 @@ export function evaluateRequireRecentSetPropertyConstraint({ session, targets, c
           targetId: target.id,
           stageKey: constraint.stageKey ?? null,
           stageCatalogId: constraint.stageCatalogId ?? null,
-          actionKey: constraint.actionKey ?? null
+          recipeKey: constraint.recipeKey ?? null
         }).length > 0
       );
     });
@@ -169,7 +169,7 @@ export function evaluateRequireRecentSetPropertyConstraint({ session, targets, c
         index,
         property: constraint.property,
         value: constraint.value,
-        actionKey: constraint.actionKey ?? null,
+        recipeKey: constraint.recipeKey ?? null,
         stageKey: constraint.stageKey ?? null,
         stageCatalogId: constraint.stageCatalogId ?? null,
         window
@@ -245,19 +245,19 @@ export function isEntryInsideLimitedUseWindow(entry, currentCycleId, window, con
 // Decision actual:
 // limited_uses siempre se cuenta por actor + receta. En datos eso significa:
 // - actorIds: que roles usaron la receta;
-// - actionKey: que receta concreta dentro del stage se uso.
+// - recipeKey: que receta concreta dentro del stage se uso.
 //
 // No exponemos un campo "scope" en las recetas normales porque todavia no
 // tenemos una regla real que necesite contar por actor global o por receta
 // global. Si aparece, lo anadiremos con un caso de uso concreto.
 export function isEntryInsideLimitedUseCounter(entry, { actor, recipe }) {
-  const actionKey = recipe?.key ?? recipe?.actionKey ?? recipe?.id ?? null;
+  const recipeKey = recipe?.key ?? recipe?.recipeKey ?? recipe?.id ?? null;
 
   return (
     !!actor &&
-    !!actionKey &&
+    !!recipeKey &&
     (entry.actorIds ?? []).includes(actor.id) &&
-    entry.actionKey === actionKey
+    entry.recipeKey === recipeKey
   );
 }
 
@@ -277,11 +277,11 @@ export function evaluateLimitedUsesConstraint({ session, recipe, actor, constrai
         message: 'pool usage window requires a pool context',
         constraint: constraint.type,
         window,
-        actionKey: recipe?.key ?? recipe?.actionKey ?? recipe?.id ?? null
+        recipeKey: recipe?.key ?? recipe?.recipeKey ?? recipe?.id ?? null
       }
     ];
   }
-  const uses = getActionHistory(session).filter((entry) => {
+  const uses = getRecipeHistory(session).filter((entry) => {
     if (!isEntryInsideLimitedUseWindow(entry, currentCycleId, window, context)) return false;
     return isEntryInsideLimitedUseCounter(entry, { actor, recipe });
   });
@@ -297,7 +297,7 @@ export function evaluateLimitedUsesConstraint({ session, recipe, actor, constrai
       used: uses.length,
       window,
       actorIds: actor ? [actor.id] : [],
-      actionKey: recipe?.key ?? recipe?.actionKey ?? recipe?.id ?? null
+      recipeKey: recipe?.key ?? recipe?.recipeKey ?? recipe?.id ?? null
     }
   ];
 }

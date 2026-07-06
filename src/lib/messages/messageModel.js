@@ -24,7 +24,7 @@ function getMessageContext(session = {}, context = {}) {
     poolKey: context.poolKey ?? session.cycle?.poolCurrent ?? null,
     stageId: context.stageId ?? null,
     stageKey: context.stageKey ?? null,
-    recipeKey: context.actionKey ?? null,
+    recipeKey: context.recipeKey ?? null,
     actionId: context.actionId ?? null,
     phase: context.phase ?? null
   };
@@ -35,11 +35,11 @@ export function createMessageFromEngineError({ session = {}, error = {}, context
 
   if (error.code === 'constraint/limited_uses') {
     const actorId = error.actorIds?.[0] ?? null;
-    const recipeKey = error.actionKey ?? 'unknown_recipe';
+    const recipeKey = error.recipeKey ?? 'unknown_recipe';
 
     return createMessage({
       type: MESSAGE_TYPES.GAMEPLAY,
-      key: MESSAGE_KEYS.ACTION_USAGE_LIMIT_REACHED,
+      key: MESSAGE_KEYS.RECIPE_USAGE_LIMIT_REACHED,
       severity: MESSAGE_SEVERITIES.WARNING,
       audience: {
         type: MESSAGE_AUDIENCE_TYPES.ROLE,

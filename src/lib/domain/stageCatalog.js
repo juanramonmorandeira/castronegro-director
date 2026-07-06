@@ -62,7 +62,7 @@ export const STAGE_CATALOG = Object.freeze({
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
-    actions: [getCatalogRecipe(RECIPE_KEYS.INSPECT_ROLE)],
+    recipes: [getCatalogRecipe(RECIPE_KEYS.INSPECT_ROLE)],
     metadata: {
       catalogId: STAGE_CATALOG_IDS.ROLE_INSPECTS
     }
@@ -73,7 +73,7 @@ export const STAGE_CATALOG = Object.freeze({
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
-    actions: [getCatalogRecipe(RECIPE_KEYS.LINK_TARGETS)],
+    recipes: [getCatalogRecipe(RECIPE_KEYS.LINK_TARGETS)],
     metadata: {
       catalogId: STAGE_CATALOG_IDS.ROLE_LINKS_TARGETS
     }
@@ -84,7 +84,7 @@ export const STAGE_CATALOG = Object.freeze({
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
-    actions: [getCatalogRecipe(RECIPE_KEYS.BLOCK_OUT_OF_PLAY)],
+    recipes: [getCatalogRecipe(RECIPE_KEYS.BLOCK_OUT_OF_PLAY)],
     metadata: {
       catalogId: STAGE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY
     }
@@ -95,7 +95,7 @@ export const STAGE_CATALOG = Object.freeze({
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
-    actions: [
+    recipes: [
       getCatalogRecipe(RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY, {
         constraints: [
           {
@@ -106,7 +106,7 @@ export const STAGE_CATALOG = Object.freeze({
             window: CONSTRAINT_WINDOWS.CURRENT_CYCLE,
             property: 'inPlay',
             value: false,
-            actionKey: RECIPE_KEYS.SET_OUT_OF_PLAY,
+            recipeKey: RECIPE_KEYS.SET_OUT_OF_PLAY,
             stageCatalogId: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY
           }
         ]
@@ -139,7 +139,7 @@ export const STAGE_CATALOG = Object.freeze({
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
-    actions: [
+    recipes: [
       getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY, {
         actor: { type: RECIPE_ACTOR_TYPES.ROLE },
         target: {
@@ -159,7 +159,7 @@ export const STAGE_CATALOG = Object.freeze({
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
-    actions: [getCatalogRecipe(RECIPE_KEYS.ASSUME_ROLE)],
+    recipes: [getCatalogRecipe(RECIPE_KEYS.ASSUME_ROLE)],
     metadata: {
       catalogId: STAGE_CATALOG_IDS.ROLE_ASSUMES_ROLE
     }
@@ -178,7 +178,7 @@ export const STAGE_CATALOG = Object.freeze({
       runoff: SELECTION_RUNOFF_RULES.TIED_CANDIDATES,
       repeatLimit: 1
     }),
-    actions: [getCatalogRecipe(RECIPE_KEYS.SET_DOUBLE_SELECTOR)],
+    recipes: [getCatalogRecipe(RECIPE_KEYS.SET_DOUBLE_SELECTOR)],
     metadata: {
       catalogId: STAGE_CATALOG_IDS.SELECT_DOUBLE_SELECTOR
     }
@@ -197,7 +197,7 @@ export const STAGE_CATALOG = Object.freeze({
         requireInPlay: false
       }
     }),
-    actions: [getCatalogRecipe(RECIPE_KEYS.SET_DOUBLE_SELECTOR)],
+    recipes: [getCatalogRecipe(RECIPE_KEYS.SET_DOUBLE_SELECTOR)],
     metadata: {
       catalogId: STAGE_CATALOG_IDS.PICK_NEXT_DOUBLE_SELECTOR
     }
@@ -208,7 +208,7 @@ export const STAGE_CATALOG = Object.freeze({
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion([STAGE_COMPLETION_REQUESTED_BY.DIRECTOR]),
-    actions: [],
+    recipes: [],
     metadata: {
       catalogId: STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT
     }
@@ -219,7 +219,7 @@ export const STAGE_CATALOG = Object.freeze({
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion([STAGE_COMPLETION_REQUESTED_BY.DIRECTOR]),
-    actions: [],
+    recipes: [],
     metadata: {
       catalogId: STAGE_CATALOG_IDS.ROLE_STATE_REVEALED
     }
@@ -230,7 +230,7 @@ export const STAGE_CATALOG = Object.freeze({
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion([STAGE_COMPLETION_REQUESTED_BY.DIRECTOR]),
-    actions: [],
+    recipes: [],
     metadata: {
       catalogId: STAGE_CATALOG_IDS.DELIBERATION,
       interaction: {
@@ -251,7 +251,7 @@ export const STAGE_CATALOG = Object.freeze({
       unanimous: SELECTION_UNANIMOUS_RULES.REQUIRED,
       tie: SELECTION_TIE_RULES.NULL_ON_TIE
     }),
-    actions: [getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY)],
+    recipes: [getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY)],
     metadata: {
       catalogId: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY
     }
@@ -269,7 +269,7 @@ export const STAGE_CATALOG = Object.freeze({
       unanimous: SELECTION_UNANIMOUS_RULES.NOT_REQUIRED,
       tie: SELECTION_TIE_RULES.NULL_ON_TIE
     }),
-    actions: [
+    recipes: [
       getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY, {
         target: {
           type: MECHANICAL_ENTITY_TYPES.ROLE,
@@ -314,9 +314,9 @@ export function getCatalogStage(stageCatalogId, overrides = {}) {
     selectionRules: overrides.selectionRules
       ? cloneCatalogValue(overrides.selectionRules)
       : cloneCatalogValue(baseStage.selectionRules),
-    actions: overrides.actions
-      ? cloneCatalogValue(overrides.actions)
-      : cloneCatalogValue(baseStage.actions),
+    recipes: overrides.recipes
+      ? cloneCatalogValue(overrides.recipes)
+      : cloneCatalogValue(baseStage.recipes),
     metadata: {
       ...cloneCatalogValue(baseStage.metadata ?? {}),
       ...(overrides.metadata ?? {})

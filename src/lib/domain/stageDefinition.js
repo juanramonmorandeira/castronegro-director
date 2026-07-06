@@ -5,7 +5,7 @@
 // Este archivo describe "que es un stage":
 // - que slot ocupa;
 // - que roles concretos pueden actuar, si ya se conocen;
-// - que acciones ofrece;
+// - que recipes ofrece;
 // - que metadatos de definicion arrastra.
 //
 // No decide en que pool vive ni en que posicion se ejecuta. Esa organizacion
@@ -22,7 +22,7 @@ import { createSelectionRules } from './selectionModel.js';
 export const AVAILABILITY_RULE_TYPES = Object.freeze({
   ACTOR_IN_PLAY: 'actor_in_play',
   ACTOR_RECENTLY_OUT_OF_PLAY: 'actor_recently_out_of_play',
-  HAS_EXECUTABLE_ACTION: 'has_executable_action',
+  HAS_EXECUTABLE_RECIPE: 'has_executable_recipe',
   WITHIN_EXECUTION_WINDOW: 'within_execution_window',
   ALWAYS_AVAILABLE: 'always_available'
 });
@@ -71,17 +71,17 @@ export function assignUniqueStageIds(stages = []) {
   });
 }
 
-// Prepara una receta para vivir dentro de stage.actions.
+// Prepara una receta para vivir dentro de stage.recipes.
 //
 // No crea la receta: normalmente ya viene de recipeCatalog o de createRecipe.
 // Aqui solo garantizamos la key mecanica que stageModel usara para seleccionarla
 // y el valor optional por defecto.
 function prepareRecipe(recipe = {}) {
-  const actionKey = normalizeId(recipe.key ?? recipe.actionKey ?? recipe.id);
+  const recipeKey = normalizeId(recipe.key ?? recipe.recipeKey ?? recipe.id);
 
   return {
     ...recipe,
-    key: actionKey,
+    key: recipeKey,
     optional: recipe.optional !== false
   };
 }
@@ -90,7 +90,7 @@ function prepareRecipe(recipe = {}) {
 //
 // El seleccion no es una receta: es un mecanismo del stage para elegir target. Estas
 // reglas le dicen a selectionModel como contar decisiones antes de ejecutar la receta
-// declarada en stage.actions sobre el chosenId resultante.
+// declarada en stage.recipes sobre el chosenId resultante.
 function prepareSelectionRules(selectionRules = null) {
   if (!selectionRules) return null;
   return createSelectionRules(selectionRules);
@@ -169,7 +169,7 @@ export function defineStage({
   completion = {},
   selectionRules = null,
   availabilityRules = [],
-  actions = [],
+  recipes = [],
   influences = [],
   order = null,
   source = null,
@@ -190,7 +190,7 @@ export function defineStage({
     completion: validateStageCompletion(completion),
     selectionRules: prepareSelectionRules(selectionRules),
     availabilityRules: normalizeAvailabilityRules(availabilityRules),
-    actions: (actions ?? []).map(prepareRecipe),
+    recipes: (recipes ?? []).map(prepareRecipe),
     influences: prepareInfluences(influences),
     order: Number.isFinite(order) ? order : null,
     metadata: {

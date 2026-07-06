@@ -185,14 +185,14 @@ ambas piezas y separa ejecutar receta de cerrar stage.
 
 Los IDs de stage son slots neutros, por ejemplo `stage_01`, `stage_02` o
 `stage_03`. Quien actua se define en `actor`; la accion disponible dentro
-del stage describe la mecanica. Si un stage ofrece varias acciones, el input debe
-indicar `actionKey`.
+del stage describe la mecanica. Si un stage ofrece varias recipes, el input debe
+indicar `recipeKey`.
 
 ## Flujo de una receta
 
 ```mermaid
 flowchart TD
-  A[stageModel selecciona actionKey] --> B[recipeCatalog define receta]
+  A[stageModel selecciona recipeKey] --> B[recipeCatalog define receta]
   B --> C[recipeModel]
   C --> D[constraintModel]
   D --> E{Restricciones validas}
@@ -379,7 +379,7 @@ aplicador:
 | Existe la sesion y sus datos basicos son coherentes? | `sessionValidation.js` | IDs duplicados, grupo apunta a rol inexistente |
 | Que ocurrio antes en esta partida? | `historyModel.js` | efectos aplicados en el ciclo actual |
 | Este stage debe ejecutarse ahora? | `poolCursorModel.js` | saltar stages disabled |
-| El stage actual tiene una receta ejecutable? | `stageModel.js` | stage enabled con `actions` definida |
+| El stage actual tiene una receta ejecutable? | `stageModel.js` | stage enabled con `recipes` definida |
 | La receta puede usarse ahora? | `recipeModel.js` + `constraintModel.js` | `restore_recent_out_of_play` exige historial previo |
 | La accion esta bien definida? | `actionModel.js` | `set_in_play` debe traer `property: inPlay` |
 | El actor existe? | `actionModel.js` | `missing actor` |
@@ -502,7 +502,7 @@ Lectura:
 ```text
 link_targets no elimina a nadie.
 link_targets solo crea un grupo.
-Si el grupo se crea, `linked_target_recognition` registra en `actionHistory`
+Si el grupo se crea, `linked_target_recognition` registra en `recipeHistory`
 que los miembros del group linked conocen al resto de miembros. No es una
 `specialStage` y no cambia estado mecanico.
 El group linked declara `propagate_property_change`. Su `type` no activa
@@ -661,7 +661,7 @@ Ejemplo conceptual:
       }
     ]
   },
-  actions: [
+  recipes: [
     {
       key: 'set_out_of_play',
       id: 'set_in_play',

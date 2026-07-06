@@ -20,7 +20,7 @@ export const POOL_ERRORS = Object.freeze({
   INVALID_STAGES: 'pool/invalid-stages',
   INVALID_STAGE_INDEX: 'pool/invalid-stage-index',
   NO_RUNNABLE_STAGES: 'pool/no-runnable-stages',
-  MISSING_STAGE_ACTION: 'pool/missing-stage-action',
+  MISSING_STAGE_RECIPE: 'pool/missing-stage-recipe',
   UNKNOWN_LIFECYCLE_OPERATION: 'pool/unknown-lifecycle-operation',
   MISSING_ACTOR: 'pool/missing-actor',
   UNKNOWN_AVAILABILITY_RULE: 'pool/unknown-availability-rule'
@@ -44,8 +44,8 @@ function isWithinExecutionWindow(rule = {}, context = {}) {
 function evaluateAvailabilityRule(stage = {}, rule = {}, context = {}) {
   if (rule.type === AVAILABILITY_RULE_TYPES.ALWAYS_AVAILABLE) return { ok: true, value: true };
 
-  if (rule.type === AVAILABILITY_RULE_TYPES.HAS_EXECUTABLE_ACTION) {
-    return { ok: true, value: (stage.actions ?? []).length > 0 };
+  if (rule.type === AVAILABILITY_RULE_TYPES.HAS_EXECUTABLE_RECIPE) {
+    return { ok: true, value: (stage.recipes ?? []).length > 0 };
   }
 
   if (rule.type === AVAILABILITY_RULE_TYPES.WITHIN_EXECUTION_WINDOW) {
@@ -102,7 +102,7 @@ function evaluateAvailabilityRule(stage = {}, rule = {}, context = {}) {
             property: rule.property ?? 'inPlay',
             value: Object.hasOwn(rule, 'value') ? rule.value : false,
             targetId: roleId,
-            actionKey: rule.actionKey ?? null,
+            recipeKey: rule.recipeKey ?? null,
             stageCatalogId: rule.stageCatalogId ?? null
           }).length > 0
         )
@@ -218,12 +218,12 @@ export function validatePool(pool = {}, knownLifecycleOperationTypes = []) {
   }
 
   enabledStages.forEach((stage) => {
-    if ((stage.actions ?? []).length === 0) {
+    if ((stage.recipes ?? []).length === 0) {
       errors.push({
-        code: POOL_ERRORS.MISSING_STAGE_ACTION,
+        code: POOL_ERRORS.MISSING_STAGE_RECIPE,
         stageId: stage.id,
         stageKey: stage.key,
-        message: `enabled stage "${stage.key}" has no actions`
+        message: `enabled stage "${stage.key}" has no recipes`
       });
     }
   });

@@ -5,7 +5,7 @@
 // Responsabilidad:
 // - leer el stage actual de poolCursorModel;
 // - comprobar que ese stage es ejecutable;
-// - extraer la action declarada por el stage;
+// - extraer la recipe declarada por el stage;
 // - pedir a actionModel que la resuelva;
 // - cerrar explicitamente el stage cuando player/director/sistema lo pidan.
 //
@@ -24,7 +24,7 @@ import {
   startCycle,
   updateCyclePool
 } from './cycleModel.js';
-import { HISTORY_RESULTS, appendActionHistory, appendEntry } from './historyModel.js';
+import { HISTORY_RESULTS, appendRecipeHistory, appendEntry } from './historyModel.js';
 import { resolveRecipe } from './recipeModel.js';
 import { ACTION_IDS, VISIBILITY, resolveAction } from './actionModel.js';
 import { processActionResultEvents } from './eventModel.js';
@@ -72,13 +72,13 @@ export const STAGE_ERRORS = Object.freeze({
   MISSING_STAGE_POOLS: 'stage/missing-stage-pools',
   MISSING_CURRENT_STAGE: 'stage/missing-current-stage',
   STAGE_NOT_RUNNABLE: 'stage/not-runnable',
-  MISSING_ACTION: 'stage/missing-action',
-  MISSING_ACTION_KEY: 'stage/missing-action-key',
-  ACTION_NOT_FOUND: 'stage/action-not-found',
+  MISSING_RECIPE: 'stage/missing-recipe',
+  MISSING_RECIPE_KEY: 'stage/missing-recipe-key',
+  RECIPE_NOT_FOUND: 'stage/recipe-not-found',
   COMPLETION_NOT_ALLOWED: 'stage/completion-not-allowed'
 });
 
-export const PEEK_ACTION_KEYS = Object.freeze({
+export const PEEK_RECIPE_KEYS = Object.freeze({
   PEEK_ATTEMPT: 'peekAttempt',
   PEEK_WARNING: 'peek_warning',
   OVERRIDE_SELECTED_CANDIDATE: 'override_selected_candidate'
@@ -117,7 +117,7 @@ function appendEngineErrors(session, errors, context = {}) {
 // IDs anonimos recomendados para slots de ejecucion.
 //
 // El stage no describe que accion ejecuta. Describe donde ocurre dentro del
-// flujo. La accion concreta vive en stage.actions.
+// flujo. Las recipes concretas viven en stage.recipes.
 export const STAGE_KEYS = Object.freeze({
   STAGE_01: 'stage_01',
   STAGE_02: 'stage_02',
@@ -134,9 +134,9 @@ export const STAGE_KEYS = Object.freeze({
 
 // Claves de receta dentro de un stage.
 //
-// actionId puede ser generico, por ejemplo set_in_play. actionKey permite
+// actionId puede ser generico, por ejemplo set_in_play. recipeKey permite
 // distinguir recetas que usan esa misma accion generica con parametros distintos.
-export const STAGE_ACTION_KEYS = Object.freeze({
+export const STAGE_RECIPE_KEYS = Object.freeze({
   INSPECT_ROLE: 'inspect_role',
   LINK_TARGETS: 'link_targets',
   BLOCK_OUT_OF_PLAY: 'block_out_of_play',
@@ -167,68 +167,68 @@ export function getCurrentStage(session) {
   return getCurrentCycleStage(session?.cycle);
 }
 
-// Devuelve la clave mecanica de una receta de accion.
-export function getStageActionKey(action) {
-  return normalizeId(action?.key ?? action?.actionKey ?? action?.id);
+// Devuelve la clave mecanica de una recipe dentro del stage.
+export function getStageRecipeKey(recipe) {
+  return normalizeId(recipe?.key ?? recipe?.recipeKey ?? recipe?.id);
 }
 
-// Elige que accion del stage se va a ejecutar.
+// Elige que recipe del stage se va a ejecutar.
 //
-// Si solo hay una accion, no exigimos actionKey. Si hay varias, el input debe
-// indicar actionKey para evitar que el motor elija por posicion sin querer.
-export function selectStageAction(actions = [], requestedActionKey = null) {
-  if (!actions.length) {
+// Si solo hay una recipe, no exigimos recipeKey. Si hay varias, el input debe
+// indicar recipeKey para evitar que el motor elija por posicion sin querer.
+export function selectStageRecipe(recipes = [], requestedRecipeKey = null) {
+  if (!recipes.length) {
     return {
       ok: false,
-      action: null,
-      actionKey: null,
+      recipe: null,
+      recipeKey: null,
       error: {
-        code: STAGE_ERRORS.MISSING_ACTION,
-        message: 'current stage has no actions'
+        code: STAGE_ERRORS.MISSING_RECIPE,
+        message: 'current stage has no recipes'
       }
     };
   }
 
-  const normalizedRequestedKey = requestedActionKey ? normalizeId(requestedActionKey) : null;
+  const normalizedRequestedKey = requestedRecipeKey ? normalizeId(requestedRecipeKey) : null;
 
-  if (!normalizedRequestedKey && actions.length > 1) {
+  if (!normalizedRequestedKey && recipes.length > 1) {
     return {
       ok: false,
-      action: null,
-      actionKey: null,
+      recipe: null,
+      recipeKey: null,
       error: {
-        code: STAGE_ERRORS.MISSING_ACTION_KEY,
-        message: 'current stage has multiple actions and requires actionKey'
+        code: STAGE_ERRORS.MISSING_RECIPE_KEY,
+        message: 'current stage has multiple recipes and requires recipeKey'
       }
     };
   }
 
-  const selectedAction = normalizedRequestedKey
-    ? actions.find((action) => getStageActionKey(action) === normalizedRequestedKey)
-    : actions[0];
+  const selectedRecipe = normalizedRequestedKey
+    ? recipes.find((recipe) => getStageRecipeKey(recipe) === normalizedRequestedKey)
+    : recipes[0];
 
-  if (!selectedAction) {
+  if (!selectedRecipe) {
     return {
       ok: false,
-      action: null,
-      actionKey: normalizedRequestedKey,
+      recipe: null,
+      recipeKey: normalizedRequestedKey,
       error: {
-        code: STAGE_ERRORS.ACTION_NOT_FOUND,
-        message: `current stage has no action "${normalizedRequestedKey}"`,
-        actionKey: normalizedRequestedKey
+        code: STAGE_ERRORS.RECIPE_NOT_FOUND,
+        message: `current stage has no recipe "${normalizedRequestedKey}"`,
+        recipeKey: normalizedRequestedKey
       }
     };
   }
 
-  const actionKey = getStageActionKey(selectedAction);
+  const recipeKey = getStageRecipeKey(selectedRecipe);
 
   return {
     ok: true,
-    action: {
-      ...selectedAction,
-      key: selectedAction.key ?? actionKey
+    recipe: {
+      ...selectedRecipe,
+      key: selectedRecipe.key ?? recipeKey
     },
-    actionKey,
+    recipeKey,
     error: null
   };
 }
@@ -237,8 +237,8 @@ export function selectStageAction(actions = [], requestedActionKey = null) {
 //
 // Esta validacion no revisa targets, filtros ni efectos. Eso pertenece a
 // actionModel. Aqui solo comprobamos que existe un stage ejecutable con una
-// accion declarada.
-export function validateCurrentStage(session, { actionKey = null } = {}) {
+// recipe declarada.
+export function validateCurrentStage(session, { recipeKey = null } = {}) {
   const errors = [];
 
   if (!session) {
@@ -249,8 +249,8 @@ export function validateCurrentStage(session, { actionKey = null } = {}) {
     return {
       ok: false,
       currentStage: null,
-      action: null,
-      actionKey: null,
+      recipe: null,
+      recipeKey: null,
       errors
     };
   }
@@ -272,8 +272,8 @@ export function validateCurrentStage(session, { actionKey = null } = {}) {
     return {
       ok: false,
       currentStage: null,
-      action: null,
-      actionKey: null,
+      recipe: null,
+      recipeKey: null,
       errors
     };
   }
@@ -289,13 +289,13 @@ export function validateCurrentStage(session, { actionKey = null } = {}) {
     });
   }
 
-  const actions = (currentStage.stage?.actions ?? []).map((action) => ({ ...action }));
-  const selectedAction = selectStageAction(actions, actionKey);
+  const recipes = (currentStage.stage?.recipes ?? []).map((recipe) => ({ ...recipe }));
+  const selectedRecipe = selectStageRecipe(recipes, recipeKey);
 
-  if (!selectedAction.ok) {
+  if (!selectedRecipe.ok) {
     errors.push({
-      ...selectedAction.error,
-      message: `${selectedAction.error.message} in stage "${currentStage.stageKey}"`,
+      ...selectedRecipe.error,
+      message: `${selectedRecipe.error.message} in stage "${currentStage.stageKey}"`,
       poolKey: currentStage.poolKey,
       stageId: currentStage.stageId,
       stageKey: currentStage.stageKey
@@ -305,8 +305,8 @@ export function validateCurrentStage(session, { actionKey = null } = {}) {
   return {
     ok: errors.length === 0,
     currentStage,
-    action: selectedAction.action,
-    actionKey: selectedAction.actionKey,
+    recipe: selectedRecipe.recipe,
+    recipeKey: selectedRecipe.recipeKey,
     errors
   };
 }
@@ -368,12 +368,12 @@ function getSelectionRuleSelectorIds(session = {}, stage = {}, input = {}, selec
 function ruleScopeMatchesContext(scope = {}, context = {}) {
   const poolKeys = (scope.poolKeys ?? []).map(normalizeId);
   const stageKeys = (scope.stageKeys ?? []).map(normalizeId);
-  const actionKeys = (scope.actionKeys ?? []).map(normalizeId);
+  const recipeKeys = (scope.recipeKeys ?? []).map(normalizeId);
   const methods = (scope.methods ?? []).map(normalizeId);
 
   if (poolKeys.length > 0 && !poolKeys.includes(normalizeId(context.poolKey))) return false;
   if (stageKeys.length > 0 && !stageKeys.includes(normalizeId(context.stageKey))) return false;
-  if (actionKeys.length > 0 && !actionKeys.includes(normalizeId(context.actionKey))) return false;
+  if (recipeKeys.length > 0 && !recipeKeys.includes(normalizeId(context.recipeKey))) return false;
   if (methods.length > 0 && !methods.includes(normalizeId(context.method))) return false;
 
   return true;
@@ -431,7 +431,7 @@ function getSelectionInputForStage(session = {}, stage = {}, recipe = {}, input 
     method: 'vote',
     poolKey: stage.poolKey ?? null,
     stageKey: stage.key ?? null,
-    actionKey: getStageActionKey(recipe)
+    recipeKey: getStageRecipeKey(recipe)
   };
   const collectedRules = collectSelectionRules(session, {
     selectorIds: getSelectionRuleSelectorIds(session, stage, input, selectionRules),
@@ -476,20 +476,20 @@ function getStageMatchKeys(stage = {}) {
   ].map(normalizeId).filter(Boolean);
 }
 
-function stageRuleMatchesStage(rule = {}, stage = {}, actionKey = null) {
+function stageRuleMatchesStage(rule = {}, stage = {}, recipeKey = null) {
   const observedStageKey = normalizeId(rule.observedStageKey);
   const stageKeys = getStageMatchKeys(stage);
   const poolKeys = (rule.poolKeys ?? []).map(normalizeId);
-  const actionKeys = (rule.actionKeys ?? []).map(normalizeId);
+  const recipeKeys = (rule.recipeKeys ?? []).map(normalizeId);
 
   if (!observedStageKey || !stageKeys.includes(observedStageKey)) return false;
   if (poolKeys.length > 0 && !poolKeys.includes(normalizeId(stage.poolKey))) return false;
-  if (actionKeys.length > 0 && !actionKeys.includes(normalizeId(actionKey))) return false;
+  if (recipeKeys.length > 0 && !recipeKeys.includes(normalizeId(recipeKey))) return false;
 
   return true;
 }
 
-function collectActiveStageRules(session = {}, stage = {}, actionKey = null, type = null) {
+function collectActiveStageRules(session = {}, stage = {}, recipeKey = null, type = null) {
   const normalizedType = normalizeId(type);
 
   return (session.roles ?? []).flatMap((role) =>
@@ -497,7 +497,7 @@ function collectActiveStageRules(session = {}, stage = {}, actionKey = null, typ
       .filter((rule) => {
         if (normalizedType && normalizeId(rule.type) !== normalizedType) return false;
         if (rule.requireInPlay !== false && role.inPlay !== true) return false;
-        return stageRuleMatchesStage(rule, stage, actionKey);
+        return stageRuleMatchesStage(rule, stage, recipeKey);
       })
       .map((rule) => ({ role, rule }))
   );
@@ -515,15 +515,15 @@ function appendPeekAttemptHistoryIfNeeded({ session, input = {}, stage = {}, con
 
   if (!activeRule) return session;
 
-  return appendActionHistory(session, {
+  return appendRecipeHistory(session, {
     cycleId: session?.cycle?.id ?? 0,
     poolKey: context.poolKey ?? stage.poolKey ?? null,
     stageId: context.stageId ?? stage.id ?? null,
     stageKey: context.stageKey ?? stage.key ?? null,
     stageCatalogId: context.stageCatalogId ?? stage.metadata?.catalogId ?? null,
-    actionKey: PEEK_ACTION_KEYS.PEEK_ATTEMPT,
-    actionId: PEEK_ACTION_KEYS.PEEK_ATTEMPT,
-    actionSignature: PEEK_ACTION_KEYS.PEEK_ATTEMPT,
+    recipeKey: PEEK_RECIPE_KEYS.PEEK_ATTEMPT,
+    actionId: PEEK_RECIPE_KEYS.PEEK_ATTEMPT,
+    actionSignature: PEEK_RECIPE_KEYS.PEEK_ATTEMPT,
     actorIds: [activeRule.role.id],
     targetIds: [],
     result: HISTORY_RESULTS.NO_EFFECT,
@@ -612,7 +612,7 @@ function getConfirmedPeekWarningOverride({
   session = {},
   input = {},
   stage = {},
-  actionKey = null,
+  recipeKey = null,
   normalChosenId = null,
   selectionType = null
 } = {}) {
@@ -624,7 +624,7 @@ function getConfirmedPeekWarningOverride({
   const matchingRule = collectActiveStageRules(
     session,
     stage,
-    actionKey,
+    recipeKey,
     STAGE_RULE_TYPES.PEEK_WARNING_OVERRIDE
   )[0] ?? null;
   if (!matchingRule) return null;
@@ -640,8 +640,8 @@ function getConfirmedPeekWarningOverride({
     timing,
     selectionType,
     causedBy: {
-      type: PEEK_ACTION_KEYS.PEEK_WARNING,
-      id: warning.id ?? `${PEEK_ACTION_KEYS.PEEK_WARNING}-${session?.cycle?.id ?? 0}`
+      type: PEEK_RECIPE_KEYS.PEEK_WARNING,
+      id: warning.id ?? `${PEEK_RECIPE_KEYS.PEEK_WARNING}-${session?.cycle?.id ?? 0}`
     },
     metadata: {
       targetRoleId,
@@ -649,8 +649,8 @@ function getConfirmedPeekWarningOverride({
       confirmationRule: getPeekWarningConfirmationRule(warning, matchingRule),
       stageRuleKey: matchingRule.rule.key ?? null,
       stageRuleType: matchingRule.rule.type ?? null,
-      overrideActionKey:
-        matchingRule.rule.overrideActionKey ?? PEEK_ACTION_KEYS.OVERRIDE_SELECTED_CANDIDATE
+      overrideRecipeKey:
+        matchingRule.rule.overrideRecipeKey ?? PEEK_RECIPE_KEYS.OVERRIDE_SELECTED_CANDIDATE
     }
   };
 }
@@ -672,7 +672,7 @@ function resolveSelectionStageRecipe(session, stage, recipe, input = {}, context
   const activePeekStageRules = collectActiveStageRules(
     session,
     stage,
-    context.actionKey ?? getStageActionKey(recipe),
+    context.recipeKey ?? getStageRecipeKey(recipe),
     STAGE_RULE_TYPES.PEEK_WARNING_OVERRIDE
   );
   const sessionWithPeekAttempt = appendPeekAttemptHistoryIfNeeded({
@@ -686,7 +686,7 @@ function resolveSelectionStageRecipe(session, stage, recipe, input = {}, context
     session: sessionWithPeekAttempt,
     input,
     stage,
-    actionKey: context.actionKey ?? getStageActionKey(recipe),
+    recipeKey: context.recipeKey ?? getStageRecipeKey(recipe),
     normalChosenId: null,
     selectionType: null
   });
@@ -736,7 +736,7 @@ function resolveSelectionStageRecipe(session, stage, recipe, input = {}, context
     session: selectionResolution.session,
     input,
     stage,
-    actionKey: context.actionKey ?? getStageActionKey(recipe),
+    recipeKey: context.recipeKey ?? getStageRecipeKey(recipe),
     normalChosenId: chosenId,
     selectionType: selectionResolution.result?.selection?.type ?? null
   });
@@ -836,7 +836,7 @@ function applyConcludePlayLifecycleOperationIfNeeded({ session, objectiveEvaluat
       session,
       lifecycleResults: [
         {
-          key: STAGE_ACTION_KEYS.CONCLUDE_PLAY,
+          key: STAGE_RECIPE_KEYS.CONCLUDE_PLAY,
           ok: false,
           errors: concluded.errors
         }
@@ -849,7 +849,7 @@ function applyConcludePlayLifecycleOperationIfNeeded({ session, objectiveEvaluat
     session: concluded.session,
     lifecycleResults: [
       {
-        key: STAGE_ACTION_KEYS.CONCLUDE_PLAY,
+        key: STAGE_RECIPE_KEYS.CONCLUDE_PLAY,
         ok: true,
         result: concluded.result
       }
@@ -942,7 +942,7 @@ function runCheckObjectivesLifecycleOperation(session = {}, lifecycleOperation =
     playOutcome: concludePlayState.objectiveEvaluation?.playOutcome ?? null,
     lifecycleResults: [
       createLifecycleOperationResult({
-        key: STAGE_ACTION_KEYS.CHECK_OBJECTIVES,
+        key: STAGE_RECIPE_KEYS.CHECK_OBJECTIVES,
         result: concludePlayState.objectiveEvaluation,
         metadata: lifecycleOperation.metadata
       }),
@@ -980,7 +980,7 @@ function runLifecycleOperation(session = {}, lifecycleOperation = {}) {
     return runReviewPropertyBlocksLifecycleOperation(session, lifecycleOperation);
   }
 
-  if (key === STAGE_ACTION_KEYS.CHECK_OBJECTIVES) {
+  if (key === STAGE_RECIPE_KEYS.CHECK_OBJECTIVES) {
     return runCheckObjectivesLifecycleOperation(session, lifecycleOperation);
   }
 
@@ -1371,18 +1371,18 @@ function resolveLinkedPropagatedEffectSpecialStage(session = {}, currentStage = 
     stageKey: currentStage.stageKey,
     stageCatalogId: stage.metadata.catalogId,
     eventWindow: stage.metadata.eventWindow ?? null,
-    actionKey: LINKED_PROPAGATED_EFFECT_STAGE.ACTION_KEY,
+    recipeKey: LINKED_PROPAGATED_EFFECT_STAGE.RECIPE_KEY,
     causedBy: effect?.causedBy ?? null
   };
 
   if (!effect || !causalConditionIsMet(session, condition)) {
-    return appendActionHistory(session, {
+    return appendRecipeHistory(session, {
       cycleId,
       poolKey: null,
       stageId: currentStage.stageId,
       stageKey: currentStage.stageKey,
       stageCatalogId: stage.metadata?.catalogId ?? null,
-      actionKey: LINKED_PROPAGATED_EFFECT_STAGE.ACTION_KEY,
+      recipeKey: LINKED_PROPAGATED_EFFECT_STAGE.RECIPE_KEY,
       actionId,
       actionSignature: actionId,
       actorIds: [],
@@ -1446,7 +1446,7 @@ function completeCurrentSpecialStage(session, currentStage, input, requestedBy) 
     stageKey: currentStage.stageKey,
     requestedBy,
     actorIds: [...(input.actorIds ?? [])],
-    actionKey: input.actionKey ?? null,
+    recipeKey: input.recipeKey ?? null,
     reason: input.reason ?? 'manual_completion',
     metadata: {
       ...(input.metadata ?? {}),
@@ -1487,7 +1487,7 @@ function completeCurrentSpecialStage(session, currentStage, input, requestedBy) 
   }
 
   const objectiveState = runCheckObjectivesLifecycleOperation(sessionWithCompletion, {
-    key: STAGE_ACTION_KEYS.CHECK_OBJECTIVES,
+    key: STAGE_RECIPE_KEYS.CHECK_OBJECTIVES,
     metadata: { reason: 'special_stages_empty' }
   });
   const nextWindowStart = !objectiveState.session.playOutcome
@@ -1637,7 +1637,7 @@ function getPostActionEventState({
 // Anade una entrada al historial de stages.
 //
 // Cerrar un stage no es una accion de juego. Por eso no se registra en
-// actionHistory: vive en stageHistory para poder reconstruir quien decidio pasar
+// recipeHistory: vive en stageHistory para poder reconstruir quien decidio pasar
 // al siguiente stage y por que.
 export function appendStageHistory(session, entry = {}) {
   const requestedBy = isValidStageCompletionRequester(entry.requestedBy)
@@ -1649,7 +1649,7 @@ export function appendStageHistory(session, entry = {}) {
     stageKey: entry.stageKey ?? null,
     requestedBy,
     actorIds: [...(entry.actorIds ?? [])],
-    actionKey: entry.actionKey ?? null,
+    recipeKey: entry.recipeKey ?? null,
     reason: entry.reason ?? 'manual_completion',
     metadata: { ...(entry.metadata ?? {}) }
   };
@@ -1768,7 +1768,7 @@ export function completeCurrentStage(session, input = {}) {
     stageKey: currentStage.stageKey,
     requestedBy,
     actorIds: [...(input.actorIds ?? [])],
-    actionKey: input.actionKey ?? null,
+    recipeKey: input.recipeKey ?? null,
     reason: input.reason ?? 'manual_completion',
     metadata: input.metadata ?? {}
   });
@@ -1837,7 +1837,7 @@ export function resolveCurrentStage(session, input = {}) {
         }).session
       : session;
   const stageValidation = validateCurrentStage(workingSession, {
-    actionKey: input.actionKey ?? null
+    recipeKey: input.recipeKey ?? null
   });
 
   if (!stageValidation.ok) {
@@ -1846,13 +1846,13 @@ export function resolveCurrentStage(session, input = {}) {
       poolKey: stageValidation.currentStage?.poolKey ?? workingSession?.cycle?.poolCurrent ?? null,
       stageId: stageValidation.currentStage?.stageId ?? null,
       stageKey: stageValidation.currentStage?.stageKey ?? null,
-      actionKey: input.actionKey ?? null
+      recipeKey: input.recipeKey ?? null
     });
 
     return {
       ok: false,
-      actionId: stageValidation.action?.id ?? null,
-      actionKey: stageValidation.actionKey,
+      actionId: stageValidation.recipe?.id ?? null,
+      recipeKey: stageValidation.recipeKey,
       errors: stageValidation.errors,
       messages: messageState.messages,
       session: messageState.session,
@@ -1878,19 +1878,19 @@ export function resolveCurrentStage(session, input = {}) {
           id: stageValidation.currentStage.stage.metadata.source.id
         }
       : null,
-    actionKey: stageValidation.actionKey
+    recipeKey: stageValidation.recipeKey
   };
   const actionResolution = hasStageSelectionRules(stageValidation.currentStage.stage)
     ? resolveSelectionStageRecipe(
         workingSession,
         stageValidation.currentStage.stage,
-        stageValidation.action,
+        stageValidation.recipe,
         recipeInput,
         resolutionContext
       )
     : resolveRecipe(
         workingSession,
-        stageValidation.action,
+        stageValidation.recipe,
         recipeInput,
         resolutionContext
       );

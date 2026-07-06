@@ -6,7 +6,7 @@ Regla base:
 
 ```text
 accion pura = operacion simple
-receta = actionKey + accion pura + configuracion + restricciones
+receta = recipeKey + accion pura + configuracion + restricciones
 ```
 
 `actionModel.js` debe recibir acciones puras. `recipeModel.js` valida
@@ -43,7 +43,7 @@ Formato recomendado para un stage con varias recetas:
     mode: 'manual',
     allowedRequesters: ['player', 'director', 'system']
   },
-  actions: [
+  recipes: [
     {
       key: 'restore_recent_out_of_play',
       optional: true
@@ -94,7 +94,7 @@ los roles vivos que lo componian en ese momento:
 
 ```js
 {
-  actionKey: 'set_out_of_play',
+  recipeKey: 'set_out_of_play',
   actor: {
     type: 'group',
     groupId: 'group_alignment_b',
@@ -181,7 +181,7 @@ current_or_next_cycle -> combina current_cycle y next_cycle
 session               -> no repetir ese target durante toda la partida
 ```
 
-El motor evalua desde el ciclo actual mirando `session.actionHistory`. Por eso
+El motor evalua desde el ciclo actual mirando `session.recipeHistory`. Por eso
 `next_cycle` significa que una entrada del ciclo anterior bloquea este ciclo:
 este ciclo es el siguiente respecto al uso registrado.
 
@@ -197,7 +197,7 @@ Campos principales:
   window: 'current_cycle',
   property: 'inPlay',
   value: false,
-  actionKey: 'set_out_of_play'
+  recipeKey: 'set_out_of_play'
 }
 ```
 
@@ -250,7 +250,7 @@ Una recipe invalida antes de ejecutarse no consume uso.
 ```
 
 Cuenta cualquier intento registrado con el mismo role actor y el mismo
-`actionKey` dentro de la ventana. Si el efecto queda bloqueado, tambien consume
+`recipeKey` dentro de la ventana. Si el efecto queda bloqueado, tambien consume
 uso.
 
 ## Recetas definidas
@@ -301,7 +301,7 @@ Consecuencia informativa:
 linked_target_recognition
 ```
 
-Si `link_targets` crea el group linked, el motor registra en `actionHistory` que
+Si `link_targets` crea el group linked, el motor registra en `recipeHistory` que
 los miembros del group conocen al resto de miembros. La entrada usa
 `result: no_effect`, no crea `specialStage` y no modifica estado mecanico.
 
@@ -418,7 +418,7 @@ constraints: [
     window: 'current_cycle',
     property: 'inPlay',
     value: false,
-    actionKey: 'set_out_of_play',
+    recipeKey: 'set_out_of_play',
     stageCatalogId: 'concealed_set_out_of_play' // cuando la aporta role_in_out_of_play en basic_ruleset
   }
 ],
@@ -449,7 +449,7 @@ stage.selectionRules -> selectionModel -> chosenId / empate / nulo
 ```
 
 Si hay `chosenId`, `stageModel` ejecuta la receta normal declarada en
-`stage.actions` usando ese `chosenId` como `targetId`.
+`stage.recipes` usando ese `chosenId` como `targetId`.
 
 Ejemplo actual:
 
@@ -467,7 +467,7 @@ exposed_set_out_of_play
     abstainResolution: ignore
     supportThreshold: none
     candidateIds: null -> todos los roles inPlay
-  actions:
+  recipes:
     set_out_of_play
 ```
 

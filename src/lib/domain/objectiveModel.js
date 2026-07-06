@@ -8,7 +8,7 @@
 // -----------------------------------------------------------------------------
 
 import { getGroupRoles, isGroupActive } from './groupModel.js';
-import { getActionHistory } from './historyModel.js';
+import { getRecipeHistory } from './historyModel.js';
 import { STAGE_STATUSES, normalizeId } from './sessionModel.js';
 import { getSpecialStages } from './specialStagesModel.js';
 import { MECHANICAL_ENTITY_TYPES } from './domainTypes.js';
@@ -271,14 +271,14 @@ export function getStageInfluences(stage = {}) {
     return stage.influences.map(normalizeInfluence).filter((influence) => influence.subject && influence.property);
   }
 
-  return (stage.actions ?? []).flatMap(getActionInfluences);
+  return (stage.recipes ?? []).flatMap(getActionInfluences);
 }
 
 function hasUnconsumedStageAction(stage = {}) {
-  const consumedActionKeys = new Set(stage.executionState?.consumedActionKeys ?? []);
-  const actionConsumed = (action) => consumedActionKeys.has(getRuleKey(action));
+  const consumedRecipeKeys = new Set(stage.executionState?.consumedRecipeKeys ?? []);
+  const actionConsumed = (action) => consumedRecipeKeys.has(getRuleKey(action));
 
-  return (stage.actions ?? []).some((action) => !actionConsumed(action));
+  return (stage.recipes ?? []).some((action) => !actionConsumed(action));
 }
 
 export function isStagePendingForObjectiveStability(stage = {}) {
@@ -286,7 +286,7 @@ export function isStagePendingForObjectiveStability(stage = {}) {
   if (stage.executionState?.resolved === true) return false;
   if (stage.executionState?.skipped === true) return false;
   if (stage.executionState?.consumed === true) return false;
-  if (Array.isArray(stage.actions) && stage.actions.length > 0) return hasUnconsumedStageAction(stage);
+  if (Array.isArray(stage.recipes) && stage.recipes.length > 0) return hasUnconsumedStageAction(stage);
   return getStageInfluences(stage).length > 0;
 }
 
@@ -454,16 +454,16 @@ function getStableParityState(session = {}, rule = {}) {
   };
 }
 
-function roleHasUsedAction(session = {}, role = {}, actionKey = null) {
-  if (!role?.id || !actionKey) return false;
+function roleHasUsedAction(session = {}, role = {}, recipeKey = null) {
+  if (!role?.id || !recipeKey) return false;
 
-  return getActionHistory(session).some(
-    (entry) => (entry.actorIds ?? []).includes(role.id) && entry.actionKey === actionKey
+  return getRecipeHistory(session).some(
+    (entry) => (entry.actorIds ?? []).includes(role.id) && entry.recipeKey === recipeKey
   );
 }
 
-function roleHasAvailableSessionAction(session = {}, role = {}, actionKey = null) {
-  return !roleHasUsedAction(session, role, actionKey);
+function roleHasAvailableSessionAction(session = {}, role = {}, recipeKey = null) {
+  return !roleHasUsedAction(session, role, recipeKey);
 }
 
 function stableParityHasNonHolderDoubleSelectorAdvantage(state = {}) {

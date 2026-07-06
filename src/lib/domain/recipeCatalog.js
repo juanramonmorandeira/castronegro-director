@@ -142,7 +142,7 @@ export const RECIPE_CATALOG = Object.freeze({
         window: CONSTRAINT_WINDOWS.CURRENT_CYCLE,
         property: 'inPlay',
         value: false,
-        actionKey: RECIPE_KEYS.SET_OUT_OF_PLAY
+        recipeKey: RECIPE_KEYS.SET_OUT_OF_PLAY
       },
     ],
     effect: {
@@ -270,7 +270,7 @@ export const RECIPE_CATALOG = Object.freeze({
           type: GROUP_SELECTION_RULE_TYPES.EXCLUDE_OTHER_GROUP_MEMBERS,
           scope: {
             methods: ['vote'],
-            actionKeys: [RECIPE_KEYS.SET_OUT_OF_PLAY]
+            recipeKeys: [RECIPE_KEYS.SET_OUT_OF_PLAY]
           }
         }
       ],

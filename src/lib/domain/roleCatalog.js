@@ -127,7 +127,7 @@ export const ROLE_CATALOG = Object.freeze({
             { type: AVAILABILITY_RULE_TYPES.ACTOR_IN_PLAY },
             {
               type: AVAILABILITY_RULE_TYPES.ACTOR_RECENTLY_OUT_OF_PLAY,
-              actionKey: RECIPE_KEYS.SET_OUT_OF_PLAY,
+              recipeKey: RECIPE_KEYS.SET_OUT_OF_PLAY,
               stageCatalogId: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY
             }
           ]
@@ -225,10 +225,10 @@ export const ROLE_CATALOG = Object.freeze({
         type: 'peek_warning_override',
         observedStageKey: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY,
         poolKeys: [POOL_KEYS.POOL_CONCEALED],
-        actionKeys: ['set_out_of_play'],
+        recipeKeys: ['set_out_of_play'],
         requireInPlay: true,
         confirmationRule: 'unanimity',
-        overrideActionKey: 'override_selected_candidate'
+        overrideRecipeKey: 'override_selected_candidate'
       }
     ],
     metadata: {

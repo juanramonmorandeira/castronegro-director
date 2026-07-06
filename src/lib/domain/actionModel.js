@@ -33,8 +33,8 @@ import {
 } from './roleModel.js';
 import {
   HISTORY_RESULTS,
-  appendActionHistory,
-  getActionHistorySignature
+  appendRecipeHistory,
+  getRecipeHistorySignature
 } from './historyModel.js';
 import { resolveProposedEffects } from './resolverModel.js';
 import {
@@ -103,7 +103,7 @@ export function canResolveWithoutActor(action) {
 function wasTargetRecentlyOutOfPlay(session = {}, target = {}) {
   const currentCycleId = getCurrentCycleId(session);
 
-  return (session.actionHistory ?? []).some((entry) =>
+  return (session.recipeHistory ?? []).some((entry) =>
     entry.cycleId === currentCycleId &&
     (entry.finalEffects ?? []).some((effect) =>
       effect.targetType === MECHANICAL_ENTITY_TYPES.ROLE &&
@@ -478,7 +478,7 @@ function appendLinkedPropagatedEffectStages(session = {}, linkedPropagatedEffect
       key: LINKED_PROPAGATED_EFFECT_STAGE.KEY,
       status: STAGE_STATUSES.ENABLED,
       actorIds: [],
-      actions: [],
+      recipes: [],
       metadata: {
         catalogId: LINKED_PROPAGATED_EFFECT_STAGE.CATALOG_ID,
         ...(eventWindow ? { eventWindow } : {}),
@@ -489,13 +489,13 @@ function appendLinkedPropagatedEffectStages(session = {}, linkedPropagatedEffect
           stageId: context.stageId ?? null,
           stageKey: context.stageKey ?? null,
           stageCatalogId: context.stageCatalogId ?? null,
-          actionKey: context.actionKey ?? null
+          recipeKey: context.recipeKey ?? null
         }
       }
     };
 
     return appendSpecialStage(currentSession, stage, {
-      reason: LINKED_PROPAGATED_EFFECT_STAGE.ACTION_KEY,
+      reason: LINKED_PROPAGATED_EFFECT_STAGE.RECIPE_KEY,
       index,
       causedBy: effect.causedBy ?? null,
       derivedFrom: effect.derivedFrom ?? null,
@@ -533,13 +533,13 @@ function appendLinkedTargetRecognitionHistory({
 
   const memberRoleIds = [...(group.roleIds ?? [])];
 
-  return appendActionHistory(session, {
+  return appendRecipeHistory(session, {
     cycleId: currentCycleId,
     poolKey: context.poolKey ?? null,
     stageId: context.stageId ?? null,
     stageKey: context.stageKey ?? null,
     stageCatalogId: context.stageCatalogId ?? null,
-    actionKey: ACTION_IDS.LINKED_TARGET_RECOGNITION,
+    recipeKey: ACTION_IDS.LINKED_TARGET_RECOGNITION,
     actionId: ACTION_IDS.LINKED_TARGET_RECOGNITION,
     actionSignature: ACTION_IDS.LINKED_TARGET_RECOGNITION,
     actorIds: actor ? [actor.id] : [],
@@ -553,7 +553,7 @@ function appendLinkedTargetRecognitionHistory({
       audienceRoleIds: memberRoleIds,
       directorVisible: true,
       causedBy: {
-        actionKey: context.actionKey ?? action.key ?? action.id,
+        recipeKey: context.recipeKey ?? action.key ?? action.id,
         actionId: action.id ?? null,
         actorId: actor?.id ?? null,
         groupId: group.id
@@ -612,15 +612,15 @@ export function resolveSetInPlayEffect({ session, action, actor, targets, contex
       cycleId: currentCycleId
     }
   );
-  const nextSession = appendActionHistory(sessionWithLinkedPropagationStages, {
+  const nextSession = appendRecipeHistory(sessionWithLinkedPropagationStages, {
     cycleId: currentCycleId,
     poolKey: context.poolKey ?? null,
     stageId: context.stageId ?? null,
     stageKey: context.stageKey ?? null,
     stageCatalogId: context.stageCatalogId ?? null,
-    actionKey: context.actionKey ?? action.key ?? action.id,
+    recipeKey: context.recipeKey ?? action.key ?? action.id,
     actionId: action.id,
-    actionSignature: getActionHistorySignature(action),
+    actionSignature: getRecipeHistorySignature(action),
     actorIds: actor ? [actor.id] : [],
     ...getHistoryContracts(context),
     targetIds: targets.map((target) => target.id),
@@ -679,20 +679,20 @@ export function applyPropertyBlock({ session, action, actor, targets, context = 
         expiresAt,
         metadata: {
           createdByRoleId: actor?.id ?? null,
-          actionKey: context.actionKey ?? action.key ?? action.id
+          recipeKey: context.recipeKey ?? action.key ?? action.id
         }
       });
     })
   };
-  const nextSession = appendActionHistory(sessionWithBlock, {
+  const nextSession = appendRecipeHistory(sessionWithBlock, {
     cycleId: currentCycleId,
     poolKey: context.poolKey ?? null,
     stageId: context.stageId ?? null,
     stageKey: context.stageKey ?? null,
     stageCatalogId: context.stageCatalogId ?? null,
-    actionKey: context.actionKey ?? action.key ?? action.id,
+    recipeKey: context.recipeKey ?? action.key ?? action.id,
     actionId: action?.id ?? ACTION_IDS.BLOCK_PROPERTY_CHANGE,
-    actionSignature: getActionHistorySignature(action),
+    actionSignature: getRecipeHistorySignature(action),
     actorIds: [actor.id],
     ...getHistoryContracts(context),
     targetIds: targets.map((target) => target.id),
@@ -737,7 +737,7 @@ export function applyLinkTargets({ session, action, actor, targets, context = {}
   ];
   const effectResolution = resolveProposedEffects({ session, proposedEffects });
   const sessionAfterEffects = applyFinalEffects({ session, finalEffects: effectResolution.finalEffects });
-  const sessionWithLinkHistory = appendActionHistory(
+  const sessionWithLinkHistory = appendRecipeHistory(
     sessionAfterEffects,
     {
       cycleId: currentCycleId,
@@ -745,9 +745,9 @@ export function applyLinkTargets({ session, action, actor, targets, context = {}
       stageId: context.stageId ?? null,
       stageKey: context.stageKey ?? null,
       stageCatalogId: context.stageCatalogId ?? null,
-      actionKey: context.actionKey ?? action.key ?? action.id,
+      recipeKey: context.recipeKey ?? action.key ?? action.id,
       actionId: action.id,
-      actionSignature: getActionHistorySignature(action),
+      actionSignature: getRecipeHistorySignature(action),
       actorIds: actor ? [actor.id] : [],
       ...getHistoryContracts(context),
       targetIds: targets.map((target) => target.id),
@@ -832,12 +832,12 @@ export function applyReplaceRoleIdentity({ session, action, actor, targets, cont
       ...action.effect,
       actorRoleId: actor.id,
       targetId: target.id,
-      actionKey: context.actionKey ?? action.key ?? action.id,
+      recipeKey: context.recipeKey ?? action.key ?? action.id,
       causedBy: actor?.id ? { type: MECHANICAL_ENTITY_TYPES.ROLE, id: actor.id } : null
     }
   ];
   const finalEffects = proposedEffects;
-  const nextSession = appendActionHistory(
+  const nextSession = appendRecipeHistory(
     applyFinalEffects({ session, finalEffects }),
     {
       cycleId: currentCycleId,
@@ -845,9 +845,9 @@ export function applyReplaceRoleIdentity({ session, action, actor, targets, cont
       stageId: context.stageId ?? null,
       stageKey: context.stageKey ?? null,
       stageCatalogId: context.stageCatalogId ?? null,
-      actionKey: context.actionKey ?? action.key ?? action.id,
+      recipeKey: context.recipeKey ?? action.key ?? action.id,
       actionId: action.id,
-      actionSignature: getActionHistorySignature(action),
+      actionSignature: getRecipeHistorySignature(action),
       actorIds: [actor.id],
       ...getHistoryContracts(context),
       targetIds: [target.id],
@@ -1084,7 +1084,7 @@ export function resolveSetProperty(session, action, input = {}, context = {}) {
 // 2. Busca el objetivo.
 // 3. Valida count y filtros. Las restricciones ya las valido recipeModel.
 // 4. Marca al objetivo como prevenido contra la accion indicada.
-// 5. Registra el bloqueo aplicado en session.actionHistory.
+// 5. Registra el bloqueo aplicado en session.recipeHistory.
 export function resolveBlockPropertyChange(session, action, input = {}, context = {}) {
   const actors = getActionActors(session, input.actorIds ?? []);
   const actor = actors[0] ?? null;

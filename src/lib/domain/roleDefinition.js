@@ -62,7 +62,7 @@ export function defineRole({
       type: normalizeId(rule.type),
       observedStageKey: normalizeId(rule.observedStageKey),
       poolKeys: (rule.poolKeys ?? []).map(normalizeId),
-      actionKeys: (rule.actionKeys ?? []).map(normalizeId),
+      recipeKeys: (rule.recipeKeys ?? []).map(normalizeId),
       requireInPlay: rule.requireInPlay !== false,
       metadata: { ...(rule.metadata ?? {}) }
     })),
@@ -105,7 +105,7 @@ export function createRole({
       type: normalizeId(rule.type),
       observedStageKey: normalizeId(rule.observedStageKey),
       poolKeys: (rule.poolKeys ?? []).map(normalizeId),
-      actionKeys: (rule.actionKeys ?? []).map(normalizeId),
+      recipeKeys: (rule.recipeKeys ?? []).map(normalizeId),
       requireInPlay: rule.requireInPlay !== false,
       metadata: { ...(rule.metadata ?? {}) }
     })),

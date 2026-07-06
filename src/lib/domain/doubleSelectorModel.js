@@ -78,7 +78,7 @@ export function createSelectDoubleSelectorStage(overrides = {}) {
       runoff: SELECTION_RUNOFF_RULES.TIED_CANDIDATES,
       repeatLimit: 1
     }),
-    actions: [getCatalogRecipe(RECIPE_KEYS.SET_DOUBLE_SELECTOR)],
+    recipes: [getCatalogRecipe(RECIPE_KEYS.SET_DOUBLE_SELECTOR)],
     metadata: {
       ruleKey: DOUBLE_SELECTOR_RULE_KEY,
       requestKey: DOUBLE_SELECTOR_STAGE_KEYS.SELECT_DOUBLE_SELECTOR,
@@ -108,7 +108,7 @@ export function createPickNextDoubleSelectorStage({ holderRoleId, candidateIds =
         requireInPlay: false
       }
     }),
-    actions: [getCatalogRecipe(RECIPE_KEYS.SET_DOUBLE_SELECTOR)],
+    recipes: [getCatalogRecipe(RECIPE_KEYS.SET_DOUBLE_SELECTOR)],
     metadata: {
       ruleKey: DOUBLE_SELECTOR_RULE_KEY,
       requestKey: DOUBLE_SELECTOR_STAGE_KEYS.PICK_NEXT_DOUBLE_SELECTOR,

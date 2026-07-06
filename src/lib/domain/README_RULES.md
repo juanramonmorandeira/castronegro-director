@@ -77,7 +77,7 @@ Unidad ejecutable dentro de un pool.
 La stageDefinition define:
 
 - `key`
-- `actions`
+- `recipes`
 - `completion`
 - `metadata`
 
@@ -85,7 +85,7 @@ El stage runtime anade datos de session como `actorIds` y `status`.
 
 El nombre del stage debe ser neutro, por ejemplo `stage_01`.
 
-Las recetas ejecutables viven en `stage.actions`. Roles y groups solo aportan
+Las recetas ejecutables viven en `stage.recipes`. Roles y groups solo aportan
 `stageDefinitions`.
 
 ### Pool

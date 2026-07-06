@@ -2,7 +2,7 @@
 // -----------------------------------------------------------------------------
 // Este archivo centraliza la memoria mecanica de la sesion.
 //
-// actionHistory vive dentro de la sesion porque cada partida tiene su propia
+// recipeHistory vive dentro de la sesion porque cada partida tiene su propia
 // historia. Este modelo no guarda nada fuera: solo crea, anade y consulta
 // entradas de historial de forma consistente.
 //
@@ -21,16 +21,16 @@ export const HISTORY_RESULTS = Object.freeze({
   FAILED: 'failed'
 });
 
-// Devuelve las acciones registradas en la sesion.
+// Devuelve las recipes registradas en la sesion.
 //
 // No se limpia al iniciar ciclo. Es memoria de partida, no estado temporal.
-export function getActionHistory(session) {
-  return Array.isArray(session?.actionHistory) ? session.actionHistory : [];
+export function getRecipeHistory(session) {
+  return Array.isArray(session?.recipeHistory) ? session.recipeHistory : [];
 }
 
-// Construye una firma estable para comparar acciones en actionHistory.
+// Construye una firma estable para comparar la action pura ejecutada por una recipe.
 //
-export function getActionHistorySignature(action = {}) {
+export function getRecipeHistorySignature(action = {}) {
   const blockedPropertyChange = action?.effect?.blockedPropertyChange;
   if (blockedPropertyChange?.property) {
     return [
@@ -46,7 +46,7 @@ export function getActionHistorySignature(action = {}) {
 // Anade una entrada a una coleccion de historial dentro de la sesion.
 //
 // Esta es la mecanica comun de escritura. Los modelos concretos siguen
-// preparando sus entradas antes de llamar aqui, porque actionHistory y
+// preparando sus entradas antes de llamar aqui, porque recipeHistory y
 // stageHistory no guardan el mismo tipo de hecho.
 export function appendEntry(session, collectionName, entry, { getId } = {}) {
   const history = Array.isArray(session?.[collectionName]) ? session[collectionName] : [];
@@ -68,15 +68,15 @@ export function appendEntry(session, collectionName, entry, { getId } = {}) {
   };
 }
 
-// Anade una entrada al historial de acciones de la sesion.
+// Anade una entrada al historial de recipes de la sesion.
 //
 // La entrada guarda datos mecanicos, no textos visibles. Esto permite que una
 // regla futura pregunte cosas como:
 // - quien fue afectado en este ciclo?
 // - que stage lo produjo?
-// - hubo efectos finales o la accion fue bloqueada?
-export function appendActionHistory(session, entry = {}) {
-  const history = getActionHistory(session);
+// - hubo efectos finales o la recipe no produjo efecto?
+export function appendRecipeHistory(session, entry = {}) {
+  const history = getRecipeHistory(session);
   const normalizedEntry = {
     id: entry.id ?? null,
     cycleId: entry.cycleId ?? 0,
@@ -84,7 +84,7 @@ export function appendActionHistory(session, entry = {}) {
     stageId: entry.stageId ?? null,
     stageKey: entry.stageKey ?? null,
     stageCatalogId: entry.stageCatalogId ?? null,
-    actionKey: entry.actionKey ?? null,
+    recipeKey: entry.recipeKey ?? null,
     actionId: entry.actionId ?? null,
     actionSignature: entry.actionSignature ?? null,
     actorIds: [...(entry.actorIds ?? [])],
@@ -101,7 +101,7 @@ export function appendActionHistory(session, entry = {}) {
     metadata: { ...(entry.metadata ?? {}) }
   };
 
-  return appendEntry(session, 'actionHistory', normalizedEntry, {
+  return appendEntry(session, 'recipeHistory', normalizedEntry, {
     getId: (item) => `${item.actionId ?? 'action'}-${item.cycleId}-${history.length}`
   });
 }
@@ -119,14 +119,14 @@ export function findAppliedSetPropertyHistory(
     targetId = null,
     stageKey = null,
     stageCatalogId = null,
-    actionKey = null
+    recipeKey = null
   } = {}
 ) {
-  return getActionHistory(session).filter((entry) => {
+  return getRecipeHistory(session).filter((entry) => {
     if (cycleId !== undefined && entry.cycleId !== cycleId) return false;
     if (stageKey && entry.stageKey !== stageKey) return false;
     if (stageCatalogId && entry.stageCatalogId !== stageCatalogId) return false;
-    if (actionKey && entry.actionKey !== actionKey) return false;
+    if (recipeKey && entry.recipeKey !== recipeKey) return false;
     if (entry.result !== HISTORY_RESULTS.APPLIED && entry.result !== HISTORY_RESULTS.PARTIAL) {
       return false;
     }

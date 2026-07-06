@@ -128,7 +128,7 @@ export function applyReplaceRoleIdentityEffect({ session, effect }) {
           metadata: {
             ...(role.metadata ?? {}),
             replacedByRoleId: targetId,
-            replacedByActionKey: effect.actionKey ?? null
+            replacedByRecipeKey: effect.recipeKey ?? null
           }
         };
       }
@@ -143,7 +143,7 @@ export function applyReplaceRoleIdentityEffect({ session, effect }) {
             ...(role.metadata ?? {}),
             assumable: false,
             assumedFromRoleId: actorRoleId,
-            assumedByActionKey: effect.actionKey ?? null
+            assumedByRecipeKey: effect.recipeKey ?? null
           }
         };
       }

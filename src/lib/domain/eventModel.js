@@ -97,7 +97,7 @@ function createPickNextDoubleSelectorStage({ holderRoleId, candidateIds, eventWi
         requireInPlay: false
       }
     }),
-    actions: [getCatalogRecipe(RECIPE_KEYS.SET_DOUBLE_SELECTOR)],
+    recipes: [getCatalogRecipe(RECIPE_KEYS.SET_DOUBLE_SELECTOR)],
     metadata: {
       ruleKey: DOUBLE_SELECTOR_RULE_KEY,
       requestKey: PICK_NEXT_DOUBLE_SELECTOR_STAGE_KEY,
@@ -133,7 +133,7 @@ function getPropertyChangeEvent({ previousSession, effect, source = {} }) {
     to,
     source: {
       actionId: source.actionId ?? null,
-      actionKey: source.actionKey ?? null,
+      recipeKey: source.recipeKey ?? null,
       poolKey: source.poolKey ?? null,
       stageId: source.stageId ?? null,
       stageKey: source.stageKey ?? null,
@@ -203,7 +203,7 @@ export function getEventsFromActionResult({
 } = {}) {
   const source = {
     actionId: actionResult?.actionId ?? null,
-    actionKey: context.actionKey ?? null,
+    recipeKey: context.recipeKey ?? null,
     poolKey: context.poolKey ?? null,
     stageId: context.stageId ?? null,
     stageKey: context.stageKey ?? null,
@@ -231,7 +231,7 @@ function createRoleStateRevealedStage({ session = {}, event = {} } = {}) {
       mode: 'manual',
       allowedRequesters: [STAGE_COMPLETION_REQUESTED_BY.DIRECTOR]
     },
-    actions: [],
+    recipes: [],
     metadata: {
       catalogId: ROLE_STATE_REVEALED_STAGE.CATALOG_ID,
       eventWindow,
@@ -243,8 +243,7 @@ function createRoleStateRevealedStage({ session = {}, event = {} } = {}) {
         value: event.to,
         causedBy: event.source?.effect?.causedBy ?? null,
         sourceActionId: event.source?.actionId ?? null,
-        sourceActionKey: event.source?.actionKey ?? null,
-        sourceRecipeKey: event.source?.actionKey ?? null,
+        sourceRecipeKey: event.source?.recipeKey ?? null,
         sourceStageId: event.source?.stageId ?? null,
         sourceStageKey: event.source?.stageKey ?? null,
         sourceStageCatalogId: event.source?.stageCatalogId ?? null
@@ -514,6 +513,47 @@ function applyDoubleSelectorEventResponses({ session = {}, responses = [] } = {}
   }, session);
 }
 
+function sameMetadataValue(left, right) {
+  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+}
+
+function stageMatchesLinkedPropagatedEffect(stage = {}, effect = {}) {
+  const propagatedEffect = stage.metadata?.propagatedEffect ?? null;
+
+  return (
+    stage.metadata?.catalogId === EVENT_SOURCE_STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT &&
+    propagatedEffect?.targetId === effect.targetId &&
+    propagatedEffect?.property === effect.property &&
+    propagatedEffect?.value === effect.value &&
+    sameMetadataValue(propagatedEffect?.causedBy, effect.causedBy) &&
+    sameMetadataValue(propagatedEffect?.derivedFrom, effect.derivedFrom) &&
+    sameMetadataValue(propagatedEffect?.causalCondition, effect.causalCondition)
+  );
+}
+
+function moveCurrentLinkedPropagationStagesAfterRoleResponses({
+  session = {},
+  linkedPropagatedEffects = []
+} = {}) {
+  if (!linkedPropagatedEffects.length) return session;
+
+  const movedStages = [];
+  const remainingStages = (session.specialStages ?? []).filter((stage) => {
+    const matched = linkedPropagatedEffects.some((effect) =>
+      stageMatchesLinkedPropagatedEffect(stage, effect)
+    );
+    if (matched) movedStages.push(stage);
+    return !matched;
+  });
+
+  if (!movedStages.length) return session;
+
+  return {
+    ...session,
+    specialStages: [...remainingStages, ...movedStages]
+  };
+}
+
 // Punto de entrada para stageModel.
 //
 // Recibe el resultado de una accion/receta ya resuelta, crea eventos desde sus
@@ -541,14 +581,18 @@ export function processActionResultEvents({
     session: sessionWithRevealResponses,
     responses
   });
-  const doubleSelectorResponses = getDoubleSelectorEventResponses({
+  const sessionWithLinkedAfterRoleResponses = moveCurrentLinkedPropagationStagesAfterRoleResponses({
     session: sessionWithRoleResponses,
+    linkedPropagatedEffects: actionResult.linkedPropagatedEffects ?? []
+  });
+  const doubleSelectorResponses = getDoubleSelectorEventResponses({
+    session: sessionWithLinkedAfterRoleResponses,
     events
   });
 
   return {
     session: applyDoubleSelectorEventResponses({
-      session: sessionWithRoleResponses,
+      session: sessionWithLinkedAfterRoleResponses,
       responses: doubleSelectorResponses
     }),
     events,

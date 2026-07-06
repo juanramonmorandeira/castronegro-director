@@ -59,7 +59,7 @@ import {
   defineGroup,
   addRoleToGroup,
   addBlockedPropertyChange,
-  appendActionHistory,
+  appendRecipeHistory,
   appendSpecialStage,
   getCoreGroupCatalog,
   getCurrentStage,
@@ -103,8 +103,8 @@ import {
   getCatalogRuleSet,
   PEEK_WARNING_CONFIRMATION_RULES,
   PEEK_WARNING_TIMINGS,
-  PEEK_ACTION_KEYS,
-  STAGE_ACTION_KEYS,
+  PEEK_RECIPE_KEYS,
+  STAGE_RECIPE_KEYS,
   STAGE_CATALOG_IDS,
   STAGE_COMPLETION_MODES,
   STAGE_COMPLETION_REQUESTED_BY,
@@ -283,7 +283,7 @@ function createLinkedGroup({
       type: 'exclude_other_group_members',
       scope: {
         methods: ['vote'],
-        actionKeys: [RECIPE_KEYS.SET_OUT_OF_PLAY]
+        recipeKeys: [RECIPE_KEYS.SET_OUT_OF_PLAY]
       }
     }
   ]
@@ -343,7 +343,7 @@ function createSelectionOutOfPlayStage(overrides = {}) {
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     selectionRules: selectionOutOfPlayRules,
-    actions: [actionRecipe(setOutOfPlayAfterSelectionRecipe, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY)],
+    recipes: [actionRecipe(setOutOfPlayAfterSelectionRecipe, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY)],
     ...overrides
   });
 }
@@ -410,7 +410,7 @@ function createStableParityObjectiveRule() {
   });
 }
 
-function createStableParitySession(roles = [], { actionHistory = [] } = {}) {
+function createStableParitySession(roles = [], { recipeHistory = [] } = {}) {
   const players = roles.map((role, index) => ({
     id: role.playerId ?? `stable-player-${index}`,
     displayName: `Stable Player ${index + 1}`,
@@ -430,7 +430,7 @@ function createStableParitySession(roles = [], { actionHistory = [] } = {}) {
       )
     ],
     objectiveRules: [createStableParityObjectiveRule()],
-    actionHistory
+    recipeHistory
   });
 }
 
@@ -499,13 +499,13 @@ test('validateActionTargets aplica filtros not_in_play y same_alignment', () => 
 });
 
 test('validateActionTargets aplica filtro recently_out_of_play en el ciclo actual', () => {
-  const session = appendActionHistory(
+  const session = appendRecipeHistory(
     withInPlayState(createBaseSession(), {
       'alignment_a_target-0': false
     }),
     {
       cycleId: 0,
-      actionKey: STAGE_ACTION_KEYS.SET_OUT_OF_PLAY,
+      recipeKey: STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY,
       actionId: ACTION_IDS.SET_IN_PLAY,
       actorIds: ['alignment_b_attacker-0'],
       targetIds: ['alignment_a_target-0'],
@@ -562,12 +562,12 @@ test('resolveCurrentStage ejecuta receta y completeCurrentStage avanza el cursor
       createStage({
         key: STAGE_KEYS.STAGE_01,
         status: STAGE_STATUSES.ENABLED,
-        actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+        recipes: [actionRecipe(inspectRoleAction, STAGE_RECIPE_KEYS.INSPECT_ROLE)]
       }),
       createStage({
         key: STAGE_KEYS.STAGE_02,
         status: STAGE_STATUSES.ENABLED,
-        actions: [actionRecipe(linkTargetsAction, STAGE_ACTION_KEYS.LINK_TARGETS)]
+        recipes: [actionRecipe(linkTargetsAction, STAGE_RECIPE_KEYS.LINK_TARGETS)]
       })
     ]
   });
@@ -616,7 +616,7 @@ test('resolveCurrentStage ejecuta receta y completeCurrentStage avanza el cursor
   assert.equal(linked.session.stageHistory[1].requestedBy, STAGE_COMPLETION_REQUESTED_BY.DIRECTOR);
 });
 
-test('resolveCurrentStage rechaza un stage ejecutable sin action declarada', () => {
+test('resolveCurrentStage rechaza un stage ejecutable sin recipe declarada', () => {
   const session = createSession({
     ...createBaseSession(),
     currentStageSource: CURRENT_STAGE_SOURCES.SPECIAL_STAGES,
@@ -630,7 +630,7 @@ test('resolveCurrentStage rechaza un stage ejecutable sin action declarada', () 
   const resolved = resolveCurrentStage(session, {});
 
   assert.equal(resolved.ok, false);
-  assert.equal(resolved.errors[0].code, 'stage/missing-action');
+  assert.equal(resolved.errors[0].code, 'stage/missing-recipe');
   assert.equal(
     resolved.session.specialStages[0].status,
     STAGE_STATUSES.ENABLED
@@ -646,14 +646,14 @@ test('poolDefinition organiza stages construidos por stageDefinition', () => {
     status: STAGE_STATUSES.ENABLED,
     order: 20,
     actorIds: ['role_inspector-0'],
-    actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+    recipes: [actionRecipe(inspectRoleAction, STAGE_RECIPE_KEYS.INSPECT_ROLE)]
   });
   const earlyStage = createStage({
     key: STAGE_KEYS.STAGE_01,
     status: STAGE_STATUSES.ENABLED,
     order: 10,
     actorIds: ['alignment_a_target-0', 'alignment_a_plain-0'],
-    actions: [actionRecipe(setOutOfPlayAfterSelectionRecipe, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY)]
+    recipes: [actionRecipe(setOutOfPlayAfterSelectionRecipe, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY)]
   });
   const created = organizePoolStages({
     poolOrder: ['poolExposed'],
@@ -714,13 +714,13 @@ test('stageId distingue materializaciones que comparten stageKey', () => {
         key: STAGE_KEYS.STAGE_01,
         status: STAGE_STATUSES.ENABLED,
         actorIds: ['role-1'],
-        actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+        recipes: [actionRecipe(inspectRoleAction, STAGE_RECIPE_KEYS.INSPECT_ROLE)]
       }),
       createStage({
         key: STAGE_KEYS.STAGE_01,
         status: STAGE_STATUSES.ENABLED,
         actorIds: ['role-1'],
-        actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+        recipes: [actionRecipe(inspectRoleAction, STAGE_RECIPE_KEYS.INSPECT_ROLE)]
       })
     ]
   });
@@ -922,26 +922,26 @@ test('materializePropertyBlockExpiration resuelve offsets de stage, pool, cycle 
           id: 'stage-current',
           key: STAGE_KEYS.STAGE_01,
           status: STAGE_STATUSES.ENABLED,
-          actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+          recipes: [actionRecipe(inspectRoleAction, STAGE_RECIPE_KEYS.INSPECT_ROLE)]
         }),
         createStage({
           id: 'stage-disabled',
           key: STAGE_KEYS.STAGE_02,
           status: STAGE_STATUSES.DISABLED,
-          actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+          recipes: [actionRecipe(inspectRoleAction, STAGE_RECIPE_KEYS.INSPECT_ROLE)]
         }),
         createStage({
           id: 'stage-next',
           key: STAGE_KEYS.STAGE_03,
           status: STAGE_STATUSES.ENABLED,
-          actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+          recipes: [actionRecipe(inspectRoleAction, STAGE_RECIPE_KEYS.INSPECT_ROLE)]
         })
       ],
       [POOL_KEYS.POOL_EXPOSED]: [
         createStage({
           key: STAGE_KEYS.STAGE_04,
           status: STAGE_STATUSES.ENABLED,
-          actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+          recipes: [actionRecipe(inspectRoleAction, STAGE_RECIPE_KEYS.INSPECT_ROLE)]
         })
       ]
     }
@@ -1071,19 +1071,19 @@ test('preparePool evalua availabilityRules all/any y conserva finished', () => {
         availabilityRules: {
           all: [
             { type: AVAILABILITY_RULE_TYPES.ACTOR_IN_PLAY },
-            { type: AVAILABILITY_RULE_TYPES.HAS_EXECUTABLE_ACTION }
+            { type: AVAILABILITY_RULE_TYPES.HAS_EXECUTABLE_RECIPE }
           ],
           any: [
             { type: AVAILABILITY_RULE_TYPES.WITHIN_EXECUTION_WINDOW, firstCycle: 2 },
             { type: AVAILABILITY_RULE_TYPES.ALWAYS_AVAILABLE }
           ]
         },
-        actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+        recipes: [actionRecipe(inspectRoleAction, STAGE_RECIPE_KEYS.INSPECT_ROLE)]
       }),
       createStage({
         key: 'finished_stage',
         status: STAGE_STATUSES.FINISHED,
-        actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+        recipes: [actionRecipe(inspectRoleAction, STAGE_RECIPE_KEYS.INSPECT_ROLE)]
       })
     ]
   });
@@ -1105,7 +1105,7 @@ test('validatePool rechaza pools sin stages ejecutables', () => {
       createStage({
         key: 'disabled_stage',
         status: STAGE_STATUSES.DISABLED,
-        actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+        recipes: [actionRecipe(inspectRoleAction, STAGE_RECIPE_KEYS.INSPECT_ROLE)]
       })
     ]
   });
@@ -1122,7 +1122,7 @@ test('specialStages tiene prioridad inicial sin formar parte de pools', () => {
       createStage({
         key: STAGE_KEYS.STAGE_01,
         status: STAGE_STATUSES.ENABLED,
-        actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+        recipes: [actionRecipe(inspectRoleAction, STAGE_RECIPE_KEYS.INSPECT_ROLE)]
       })
     ],
     cycle: createCycle({
@@ -1131,7 +1131,7 @@ test('specialStages tiene prioridad inicial sin formar parte de pools', () => {
           createStage({
             key: STAGE_KEYS.STAGE_02,
             status: STAGE_STATUSES.ENABLED,
-            actions: [actionRecipe(blockOutOfPlayRecipe, STAGE_ACTION_KEYS.BLOCK_OUT_OF_PLAY)]
+            recipes: [actionRecipe(blockOutOfPlayRecipe, STAGE_RECIPE_KEYS.BLOCK_OUT_OF_PLAY)]
           })
         ]
       }
@@ -1154,7 +1154,7 @@ test('specialStages pendientes no interrumpen el pool hasta cambiar currentStage
           createStage({
             key: STAGE_KEYS.STAGE_02,
             status: STAGE_STATUSES.ENABLED,
-            actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+            recipes: [actionRecipe(inspectRoleAction, STAGE_RECIPE_KEYS.INSPECT_ROLE)]
           })
         ]
       }
@@ -1165,7 +1165,7 @@ test('specialStages pendientes no interrumpen el pool hasta cambiar currentStage
     createStage({
       key: STAGE_KEYS.STAGE_07,
       status: STAGE_STATUSES.ENABLED,
-      actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+      recipes: [actionRecipe(inspectRoleAction, STAGE_RECIPE_KEYS.INSPECT_ROLE)]
     })
   );
 
@@ -1318,10 +1318,10 @@ test('stageDefinition define completion y recetas opcionales', () => {
         STAGE_COMPLETION_REQUESTED_BY.SYSTEM
       ]
     },
-    actions: [
-      actionRecipe(restoreRecentOutOfPlayAction, STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY),
+    recipes: [
+      actionRecipe(restoreRecentOutOfPlayAction, STAGE_RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY),
       {
-        ...actionRecipe(setInPlayFalseAction, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY),
+        ...actionRecipe(setInPlayFalseAction, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY),
         optional: true
       }
     ]
@@ -1333,9 +1333,9 @@ test('stageDefinition define completion y recetas opcionales', () => {
     STAGE_COMPLETION_REQUESTED_BY.DIRECTOR,
     STAGE_COMPLETION_REQUESTED_BY.SYSTEM
   ]);
-  assert.equal(stage.actions.length, 2);
-  assert.equal(stage.actions[0].optional, true);
-  assert.equal(stage.actions[1].optional, true);
+  assert.equal(stage.recipes.length, 2);
+  assert.equal(stage.recipes[0].optional, true);
+  assert.equal(stage.recipes[1].optional, true);
 });
 
 test('getCatalogRecipe permite adaptar contexto pero bloquea id y effect', () => {
@@ -1498,41 +1498,41 @@ test('stageCatalog define y createStage materializa un stage de in-out-of-play',
     STAGE_COMPLETION_REQUESTED_BY.SYSTEM
   ]);
   assert.deepEqual(
-    stage.actions.map((action) => action.key),
-    [STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY]
+    stage.recipes.map((action) => action.key),
+    [STAGE_RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY]
   );
-  assert.equal(stage.actions.every((action) => action.optional === true), true);
-  assert.deepEqual(stage.actions[0].actor, { type: RECIPE_ACTOR_TYPES.ROLE });
-  assert.deepEqual(stage.actions[0].target, {
+  assert.equal(stage.recipes.every((action) => action.optional === true), true);
+  assert.deepEqual(stage.recipes[0].actor, { type: RECIPE_ACTOR_TYPES.ROLE });
+  assert.deepEqual(stage.recipes[0].target, {
     type: MECHANICAL_ENTITY_TYPES.ROLE,
     count: 1,
     filters: []
   });
-  assert.deepEqual(stage.actions[0].usage, {
+  assert.deepEqual(stage.recipes[0].usage, {
     limit: 1,
     window: CONSTRAINT_WINDOWS.SESSION
   });
-  assert.deepEqual(stage.actions[0].constraints[0], {
+  assert.deepEqual(stage.recipes[0].constraints[0], {
     type: CONSTRAINT_TYPES.REQUIRE_SELF_TARGET_WHEN_ACTOR_OUT
   });
-  assert.deepEqual(stage.actions[0].constraints[1], {
+  assert.deepEqual(stage.recipes[0].constraints[1], {
     type: CONSTRAINT_TYPES.REQUIRE_RECENT_SET_PROPERTY,
     window: CONSTRAINT_WINDOWS.CURRENT_CYCLE,
     property: 'inPlay',
     value: false,
-    actionKey: STAGE_ACTION_KEYS.SET_OUT_OF_PLAY,
+    recipeKey: STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY,
     stageCatalogId: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY
   });
-  assert.deepEqual(stage.actions[1].actor, { type: RECIPE_ACTOR_TYPES.ROLE });
-  assert.deepEqual(stage.actions[1].target, {
+  assert.deepEqual(stage.recipes[1].actor, { type: RECIPE_ACTOR_TYPES.ROLE });
+  assert.deepEqual(stage.recipes[1].target, {
     type: MECHANICAL_ENTITY_TYPES.ROLE,
     count: 1,
     filters: [TARGET_FILTER_TYPES.IN_PLAY, TARGET_FILTER_TYPES.NOT_SELF]
   });
-  assert.deepEqual(stage.actions[1].constraints[0], {
+  assert.deepEqual(stage.recipes[1].constraints[0], {
     type: CONSTRAINT_TYPES.REQUIRE_ACTOR_IN_PLAY
   });
-  assert.deepEqual(stage.actions[1].usage, {
+  assert.deepEqual(stage.recipes[1].usage, {
     limit: 1,
     window: CONSTRAINT_WINDOWS.SESSION
   });
@@ -1552,16 +1552,16 @@ test('stageCatalog expone los stages mecanicos ya definidos', () => {
   ];
 
   assert.deepEqual(
-    stages.map((stage) => stage.actions.map((action) => action.key)),
+    stages.map((stage) => stage.recipes.map((action) => action.key)),
     [
-      [STAGE_ACTION_KEYS.INSPECT_ROLE],
-      [STAGE_ACTION_KEYS.LINK_TARGETS],
-      [STAGE_ACTION_KEYS.BLOCK_OUT_OF_PLAY],
-      [STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY],
-      [STAGE_ACTION_KEYS.SET_OUT_OF_PLAY],
-      [STAGE_ACTION_KEYS.SET_OUT_OF_PLAY],
+      [STAGE_RECIPE_KEYS.INSPECT_ROLE],
+      [STAGE_RECIPE_KEYS.LINK_TARGETS],
+      [STAGE_RECIPE_KEYS.BLOCK_OUT_OF_PLAY],
+      [STAGE_RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY],
+      [STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY],
+      [STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY],
       [],
-      [STAGE_ACTION_KEYS.SET_OUT_OF_PLAY]
+      [STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY]
     ]
   );
   assert.equal(stages.every((stage) => stage.actorIds === undefined), true);
@@ -1580,7 +1580,7 @@ test('stageCatalog define deliberation como stage publica sin recetas', () => {
   const stage = getCatalogStage(STAGE_CATALOG_IDS.DELIBERATION);
 
   assert.equal(stage.key, STAGE_KEYS.DELIBERATION);
-  assert.deepEqual(stage.actions, []);
+  assert.deepEqual(stage.recipes, []);
   assert.equal(stage.metadata.catalogId, STAGE_CATALOG_IDS.DELIBERATION);
   assert.equal(stage.metadata.interaction.participants, SELECTION_SELECTOR_SOURCES.IN_PLAY_ROLES);
   assert.equal(stage.metadata.interaction.mode, 'deliberation');
@@ -1604,7 +1604,7 @@ test('stageCatalog define role_state_revealed como specialStage informativa', ()
   const stage = getCatalogStage(STAGE_CATALOG_IDS.ROLE_STATE_REVEALED);
 
   assert.equal(stage.key, STAGE_KEYS.ROLE_STATE_REVEALED);
-  assert.deepEqual(stage.actions, []);
+  assert.deepEqual(stage.recipes, []);
   assert.deepEqual(stage.completion.allowedRequesters, [
     STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
   ]);
@@ -1674,8 +1674,8 @@ test('groupCatalog declara grupos mecanicos y razones de orden', () => {
   assert.equal(concealedStageDefinition.poolKey, POOL_KEYS.POOL_CONCEALED);
   assert.equal(concealedStageDefinition.order, 30);
   assert.deepEqual(
-    concealedStageDefinition.actions.map((action) => action.key),
-    [STAGE_ACTION_KEYS.SET_OUT_OF_PLAY]
+    concealedStageDefinition.recipes.map((action) => action.key),
+    [STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY]
   );
   assert.equal(
     concealedStageDefinition.metadata.orderReason.includes('same-cycle restore'),
@@ -1685,7 +1685,7 @@ test('groupCatalog declara grupos mecanicos y razones de orden', () => {
   assert.equal(deliberationStageDefinition.metadata.catalogId, STAGE_CATALOG_IDS.DELIBERATION);
   assert.equal(deliberationStageDefinition.poolKey, POOL_KEYS.POOL_EXPOSED);
   assert.equal(deliberationStageDefinition.order, 5);
-  assert.deepEqual(deliberationStageDefinition.actions, []);
+  assert.deepEqual(deliberationStageDefinition.recipes, []);
   assert.equal(exposedStageDefinition.poolKey, POOL_KEYS.POOL_EXPOSED);
   assert.equal(exposedStageDefinition.order, 10);
   assert.equal(exposedStageDefinition.metadata.catalogId, STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY);
@@ -1704,7 +1704,7 @@ test('createPool materializa los stages de un pool concreto', () => {
   assert.equal(pool.stages.length, 1);
   assert.equal(pool.stages[0].poolKey, POOL_KEYS.POOL_CONCEALED);
   assert.equal(pool.stages[0].order, 10);
-  assert.equal(pool.stages[0].actions[0].key, STAGE_ACTION_KEYS.INSPECT_ROLE);
+  assert.equal(pool.stages[0].recipes[0].key, STAGE_RECIPE_KEYS.INSPECT_ROLE);
 });
 
 test('buildPools ensambla stages desde roles y grupos', () => {
@@ -1780,7 +1780,7 @@ test('role reactive crea un stage especial al recibir inPlay=false desde conceal
             metadata: {
               catalogId: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY
             },
-            actions: [actionRecipe(setInPlayFalseAction, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY)]
+            recipes: [actionRecipe(setInPlayFalseAction, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY)]
           })
         ]
       }
@@ -1862,7 +1862,7 @@ test('role reactive crea un stage especial al recibir inPlay=false desde exposed
             metadata: {
               catalogId: STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY
             },
-            actions: [actionRecipe(setInPlayFalseAction, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY)]
+            recipes: [actionRecipe(setInPlayFalseAction, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY)]
           })
         ]
       }
@@ -1918,7 +1918,7 @@ test('role reactive no reacciona a inPlay=false desde otra stage catalogada', ()
             metadata: {
               catalogId: STAGE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY
             },
-            actions: [actionRecipe(setInPlayFalseAction, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY)]
+            recipes: [actionRecipe(setInPlayFalseAction, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY)]
           })
         ]
       }
@@ -1987,6 +1987,94 @@ test('selection_counts_double encola sucesion cuando el holder queda out_of_play
   assert.equal(
     resolved.session.specialStages[1].selectionRules.selectorEligibility.requireInPlay,
     false
+  );
+});
+
+test('after_exposed ordena reveal reactive linked y sucesion doubleSelector', () => {
+  const roleDefinitions = getCoreRoleCatalog();
+  const roleDefinitionMap = Object.fromEntries(roleDefinitions.map((role) => [role.key, role]));
+  const baseSession = createSession({
+    id: 'after-exposed-order-session',
+    players: [
+      { id: 'player-1', displayName: 'Player 1' },
+      { id: 'player-2', displayName: 'Player 2' },
+      { id: 'player-3', displayName: 'Player 3' }
+    ],
+    settings: {
+      selectedRuleKeys: [BASIC_AVAILABLE_RULE_KEYS.SELECTION_COUNTS_DOUBLE]
+    },
+    roles: buildRoles(
+      [
+        { seat: 0, playerId: 'player-1', role: ROLE_CATALOG_IDS.ROLE_SET_OUT_OF_PLAY, alignmentId: 'alignment_b' },
+        { seat: 1, playerId: 'player-2', role: ROLE_CATALOG_IDS.ROLE_REACTIVE, alignmentId: 'alignment_a' },
+        { seat: 2, playerId: 'player-3', role: ROLE_CATALOG_IDS.ROLE_PLAIN, alignmentId: 'alignment_a' }
+      ],
+      roleDefinitionMap
+    )
+  });
+  const session = withCycle(
+    {
+      ...baseSession,
+      roles: baseSession.roles.map((role) =>
+        role.id === `${ROLE_CATALOG_IDS.ROLE_REACTIVE}-0`
+          ? { ...role, doubleSelector: true }
+          : role
+      ),
+      groups: [
+        createLinkedGroup({
+          id: 'linked-reactive-plain',
+          roleIds: [`${ROLE_CATALOG_IDS.ROLE_REACTIVE}-0`, `${ROLE_CATALOG_IDS.ROLE_PLAIN}-0`],
+          selectionRules: []
+        })
+      ]
+    },
+    createCycle({
+      poolCurrent: POOL_KEYS.POOL_EXPOSED,
+      poolNext: POOL_KEYS.POOL_CONCEALED,
+      pools: {
+        [POOL_KEYS.POOL_EXPOSED]: [
+          createStage({
+            key: STAGE_KEYS.STAGE_05,
+            status: STAGE_STATUSES.ENABLED,
+            metadata: {
+              catalogId: STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY
+            },
+            recipes: [actionRecipe(setInPlayFalseAction, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY)]
+          })
+        ]
+      }
+    })
+  );
+  const resolved = resolveCurrentStage(session, {
+    actorIds: [`${ROLE_CATALOG_IDS.ROLE_SET_OUT_OF_PLAY}-0`],
+    targetIds: [`${ROLE_CATALOG_IDS.ROLE_REACTIVE}-0`]
+  });
+
+  assert.equal(resolved.ok, true);
+  assert.deepEqual(
+    resolved.session.specialStages.map((stage) => stage.metadata.catalogId ?? stage.metadata.requestKey),
+    [
+      STAGE_CATALOG_IDS.ROLE_STATE_REVEALED,
+      STAGE_CATALOG_IDS.ROLE_REACTIVE_RESPONSE,
+      STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT,
+      DOUBLE_SELECTOR_STAGE_KEYS.PICK_NEXT_DOUBLE_SELECTOR
+    ]
+  );
+  assert.equal(
+    resolved.session.specialStages[0].metadata.eventWindow,
+    SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED
+  );
+  assert.equal(
+    resolved.session.specialStages[1].metadata.eventWindow,
+    SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED
+  );
+  assert.equal(
+    resolved.session.specialStages[2].metadata.eventWindow,
+    SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED
+  );
+  assert.equal(
+    resolved.session.specialStages[3].metadata.eventWindow,
+    SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED
   );
 });
 
@@ -2079,7 +2167,7 @@ test('specialStages resuelve stages pendientes antes de conclude_play si pueden 
             metadata: {
               catalogId: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY
             },
-            actions: [actionRecipe(setInPlayFalseAction, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY)]
+            recipes: [actionRecipe(setInPlayFalseAction, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY)]
           })
         ]
       }
@@ -2158,7 +2246,7 @@ test('conclude_play se aplica como lifecycleOperation cuando el outcome es estab
           createStage({
             key: STAGE_KEYS.STAGE_04,
             status: STAGE_STATUSES.ENABLED,
-            actions: [actionRecipe(setInPlayFalseAction, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY)]
+            recipes: [actionRecipe(setInPlayFalseAction, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY)]
           })
         ]
       }
@@ -2182,8 +2270,8 @@ test('conclude_play se aplica como lifecycleOperation cuando el outcome es estab
     completed.lifecycleResults.map((entry) => entry.key),
     [
       POOL_LIFECYCLE_OPERATION_TYPES.REVIEW_PROPERTY_BLOCKS,
-      STAGE_ACTION_KEYS.CHECK_OBJECTIVES,
-      STAGE_ACTION_KEYS.CONCLUDE_PLAY
+      STAGE_RECIPE_KEYS.CHECK_OBJECTIVES,
+      STAGE_RECIPE_KEYS.CONCLUDE_PLAY
     ]
   );
   assert.equal(completed.lifecycleResults[2].result.type, EFFECT_TYPES.CONCLUDE_PLAY);
@@ -2197,7 +2285,7 @@ test('cycle inicia un nuevo ciclo antes de entrar en poolConcealed', () => {
       createStage({
         key: STAGE_KEYS.STAGE_01,
         status: STAGE_STATUSES.ENABLED,
-        actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+        recipes: [actionRecipe(inspectRoleAction, STAGE_RECIPE_KEYS.INSPECT_ROLE)]
       })
     ],
     cycle: createCycle({
@@ -2208,14 +2296,14 @@ test('cycle inicia un nuevo ciclo antes de entrar en poolConcealed', () => {
           createStage({
             key: STAGE_KEYS.STAGE_02,
             status: STAGE_STATUSES.ENABLED,
-            actions: [actionRecipe(blockOutOfPlayRecipe, STAGE_ACTION_KEYS.BLOCK_OUT_OF_PLAY)]
+            recipes: [actionRecipe(blockOutOfPlayRecipe, STAGE_RECIPE_KEYS.BLOCK_OUT_OF_PLAY)]
           })
         ],
         [POOL_KEYS.POOL_EXPOSED]: [
           createStage({
             key: STAGE_KEYS.STAGE_05,
             status: STAGE_STATUSES.ENABLED,
-            actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+            recipes: [actionRecipe(inspectRoleAction, STAGE_RECIPE_KEYS.INSPECT_ROLE)]
           })
         ]
       }
@@ -2233,7 +2321,7 @@ test('cycle inicia un nuevo ciclo antes de entrar en poolConcealed', () => {
   assert.equal(completed.stageAdvance.next.poolKey, POOL_KEYS.POOL_CONCEALED);
   assert.deepEqual(
     completed.lifecycleResults.map((entry) => entry.key),
-    [STAGE_ACTION_KEYS.CHECK_OBJECTIVES]
+    [STAGE_RECIPE_KEYS.CHECK_OBJECTIVES]
   );
   assert.equal(completed.lifecycleResults[0].result.status, OBJECTIVE_EVALUATION_STATUSES.ONGOING);
   assert.equal(completed.session.cycle.id, 1);
@@ -2342,7 +2430,7 @@ test('groupModel anade y elimina roles de grupos persistentes de sesion', () => 
   assert.deepEqual(withRemovedRole.groups[0].roleIds, ['alignment_b_target-0']);
 });
 
-test('resolveCurrentStage exige actionKey cuando un stage ofrece varias acciones', () => {
+test('resolveCurrentStage exige recipeKey cuando un stage ofrece varias recipes', () => {
   const session = withCycle(
     createBaseSession({
       groups: [
@@ -2361,7 +2449,7 @@ test('resolveCurrentStage exige actionKey cuando un stage ofrece varias acciones
           {
             key: STAGE_KEYS.STAGE_03,
             status: STAGE_STATUSES.ENABLED,
-            actions: [
+            recipes: [
               actionRecipe(
                 {
                   ...setInPlayFalseAction,
@@ -2370,32 +2458,32 @@ test('resolveCurrentStage exige actionKey cuando un stage ofrece varias acciones
                     value: true
                   }
                 },
-                STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY
+                STAGE_RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY
               ),
-              actionRecipe(setInPlayFalseAction, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY)
+              actionRecipe(setInPlayFalseAction, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY)
             ]
           }
         ]
       }
     })
   );
-  const missingActionKey = resolveCurrentStage(session, {
+  const missingRecipeKey = resolveCurrentStage(session, {
     actorIds: ['alignment_b_attacker-0'],
     targetIds: ['alignment_a_target-0']
   });
   const selectedAction = resolveCurrentStage(session, {
-    actionKey: STAGE_ACTION_KEYS.SET_OUT_OF_PLAY,
+    recipeKey: STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY,
     actorIds: ['alignment_b_attacker-0'],
     targetIds: ['alignment_a_target-0']
   });
 
-  assert.equal(missingActionKey.ok, false);
-  assert.equal(missingActionKey.errors[0].code, 'stage/missing-action-key');
+  assert.equal(missingRecipeKey.ok, false);
+  assert.equal(missingRecipeKey.errors[0].code, 'stage/missing-recipe-key');
   assert.equal(selectedAction.ok, true);
-  assert.equal(selectedAction.session.actionHistory.at(-1).stageKey, STAGE_KEYS.STAGE_03);
+  assert.equal(selectedAction.session.recipeHistory.at(-1).stageKey, STAGE_KEYS.STAGE_03);
   assert.equal(
-    selectedAction.session.actionHistory.at(-1).actionKey,
-    STAGE_ACTION_KEYS.SET_OUT_OF_PLAY
+    selectedAction.session.recipeHistory.at(-1).recipeKey,
+    STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY
   );
   assert.equal(roleById(selectedAction.session, 'alignment_a_target-0').inPlay, false);
 });
@@ -2414,7 +2502,7 @@ test('resolveCurrentStage ejecuta stage_05 con seleccion y receta set_out_of_pla
             status: STAGE_STATUSES.ENABLED,
             actorIds: [],
             selectionRules: selectionOutOfPlayRules,
-            actions: [actionRecipe(setOutOfPlayAfterSelectionRecipe, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY)]
+            recipes: [actionRecipe(setOutOfPlayAfterSelectionRecipe, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY)]
           }
         ]
       }
@@ -2468,7 +2556,7 @@ test('resolveCurrentStage usa actorIds del stage como participantes de seleccion
             status: STAGE_STATUSES.ENABLED,
             actorIds: ['alignment_b_attacker-0', 'alignment_a_blocker-0'],
             selectionRules: selectionOutOfPlayRules,
-            actions: [actionRecipe(setOutOfPlayAfterSelectionRecipe, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY)]
+            recipes: [actionRecipe(setOutOfPlayAfterSelectionRecipe, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY)]
           }
         ]
       }
@@ -2497,7 +2585,7 @@ test('resolveCurrentStage ejecuta stage_02 con receta block_out_of_play', () => 
           {
             key: STAGE_KEYS.STAGE_02,
             status: STAGE_STATUSES.ENABLED,
-            actions: [actionRecipe(blockOutOfPlayRecipe, STAGE_ACTION_KEYS.BLOCK_OUT_OF_PLAY)]
+            recipes: [actionRecipe(blockOutOfPlayRecipe, STAGE_RECIPE_KEYS.BLOCK_OUT_OF_PLAY)]
           }
         ]
       }
@@ -2555,12 +2643,12 @@ test('resolveCurrentStage ejecuta stage_04 con receta set_out_of_play', () => {
           {
             key: STAGE_KEYS.STAGE_02,
             status: STAGE_STATUSES.ENABLED,
-            actions: [actionRecipe(blockOutOfPlayRecipe, STAGE_ACTION_KEYS.BLOCK_OUT_OF_PLAY)]
+            recipes: [actionRecipe(blockOutOfPlayRecipe, STAGE_RECIPE_KEYS.BLOCK_OUT_OF_PLAY)]
           },
           {
             key: STAGE_KEYS.STAGE_04,
             status: STAGE_STATUSES.ENABLED,
-            actions: [actionRecipe(setInPlayFalseAction, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY)]
+            recipes: [actionRecipe(setInPlayFalseAction, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY)]
           }
         ]
       }
@@ -2601,7 +2689,7 @@ test('resolveCurrentStage ejecuta stage_04 con receta set_out_of_play', () => {
   );
 });
 
-test('actionHistory registra stage, efectos finales y cambios impedidos', () => {
+test('recipeHistory registra stage, efectos finales y cambios impedidos', () => {
   const session = withCycle(
     createBaseSession(),
     createCycle({
@@ -2614,7 +2702,7 @@ test('actionHistory registra stage, efectos finales y cambios impedidos', () => 
             key: STAGE_KEYS.STAGE_04,
             status: STAGE_STATUSES.ENABLED,
             actorIds: ['alignment_b_attacker-0', 'hidden_enemy-0'],
-            actions: [actionRecipe(setInPlayFalseAction, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY)]
+            recipes: [actionRecipe(setInPlayFalseAction, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY)]
           })
         ]
       }
@@ -2630,20 +2718,20 @@ test('actionHistory registra stage, efectos finales y cambios impedidos', () => 
 
   assert.equal(resolved.ok, true);
 
-  const historyEntry = resolved.session.actionHistory.at(-1);
+  const historyEntry = resolved.session.recipeHistory.at(-1);
   const appliedEntries = findAppliedSetPropertyHistory(resolved.session, {
     cycleId: historyEntry.cycleId,
     property: 'inPlay',
     value: false,
     targetId: 'alignment_a_target-0',
     stageCatalogId: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY,
-    actionKey: STAGE_ACTION_KEYS.SET_OUT_OF_PLAY
+    recipeKey: STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY
   });
 
   assert.equal(historyEntry.stageId, resolved.stage.stageId);
   assert.equal(historyEntry.stageKey, STAGE_KEYS.STAGE_04);
   assert.equal(historyEntry.stageCatalogId, STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY);
-  assert.equal(historyEntry.actionKey, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY);
+  assert.equal(historyEntry.recipeKey, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY);
   assert.equal(historyEntry.actionId, ACTION_IDS.SET_IN_PLAY);
   assert.equal(historyEntry.result, HISTORY_RESULTS.APPLIED);
   assert.deepEqual(historyEntry.actorContract, { type: RECIPE_ACTOR_TYPES.GROUP });
@@ -2669,17 +2757,17 @@ test('restore_recent_out_of_play ejecuta set_in_play(true) solo sobre un set_out
           {
             key: STAGE_KEYS.STAGE_02,
             status: STAGE_STATUSES.ENABLED,
-            actions: [actionRecipe(setInPlayFalseAction, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY)]
+            recipes: [actionRecipe(setInPlayFalseAction, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY)]
           },
           {
             key: STAGE_KEYS.STAGE_03,
             status: STAGE_STATUSES.ENABLED,
-            actions: [
+            recipes: [
               actionRecipe(
                 restoreRecentOutOfPlayAction,
-                STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY
+                STAGE_RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY
               ),
-              actionRecipe(setInPlayFalseAction, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY)
+              actionRecipe(setInPlayFalseAction, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY)
             ]
           }
         ]
@@ -2695,7 +2783,7 @@ test('restore_recent_out_of_play ejecuta set_in_play(true) solo sobre un set_out
     reason: 'director_closed_set_out_stage'
   });
   const restored = resolveCurrentStage(setOutStageClosed.session, {
-    actionKey: STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
+    recipeKey: STAGE_RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
     actorIds: ['alignment_a_blocker-0'],
     targetIds: ['alignment_a_target-0']
   });
@@ -2712,18 +2800,18 @@ test('restore_recent_out_of_play ejecuta set_in_play(true) solo sobre un set_out
     restored.session.cycle.pools.poolConcealed.stages[1].status,
     STAGE_STATUSES.ENABLED
   );
-  assert.equal(restored.session.actionHistory.at(-1).stageKey, STAGE_KEYS.STAGE_03);
+  assert.equal(restored.session.recipeHistory.at(-1).stageKey, STAGE_KEYS.STAGE_03);
   assert.equal(
-    restored.session.actionHistory.at(-1).actionKey,
-    STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY
+    restored.session.recipeHistory.at(-1).recipeKey,
+    STAGE_RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY
   );
-  assert.equal(restored.session.actionHistory.at(-1).finalEffects[0].value, true);
+  assert.equal(restored.session.recipeHistory.at(-1).finalEffects[0].value, true);
 });
 
 test('un stage con recetas opcionales permanece abierto hasta cierre explicito', () => {
   const preStageSetOut = resolveRecipe(
     createBaseSession(),
-    actionRecipe(setInPlayFalseAction, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY),
+    actionRecipe(setInPlayFalseAction, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY),
     {
       actorIds: ['alignment_b_attacker-0'],
       targetIds: ['alignment_a_target-0']
@@ -2740,7 +2828,7 @@ test('un stage con recetas opcionales permanece abierto hasta cierre explicito',
         }
       ]
     },
-    STAGE_ACTION_KEYS.SET_OUT_OF_PLAY
+    STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY
   );
   const session = withCycle(
     preStageSetOut.session,
@@ -2753,10 +2841,10 @@ test('un stage con recetas opcionales permanece abierto hasta cierre explicito',
           {
             key: STAGE_KEYS.STAGE_03,
             status: STAGE_STATUSES.ENABLED,
-            actions: [
+            recipes: [
               actionRecipe(
                 restoreRecentOutOfPlayAction,
-                STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY
+                STAGE_RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY
               ),
               optionalSetOutRecipe
             ]
@@ -2766,12 +2854,12 @@ test('un stage con recetas opcionales permanece abierto hasta cierre explicito',
     })
   );
   const restored = resolveCurrentStage(session, {
-    actionKey: STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
+    recipeKey: STAGE_RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
     actorIds: ['alignment_a_blocker-0'],
     targetIds: ['alignment_a_target-0']
   });
   const setOut = resolveCurrentStage(restored.session, {
-    actionKey: STAGE_ACTION_KEYS.SET_OUT_OF_PLAY,
+    recipeKey: STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY,
     actorIds: ['alignment_a_blocker-0'],
     targetIds: ['alignment_b_target-0']
   });
@@ -2817,14 +2905,14 @@ test('completeCurrentStage al terminar poolExposed arranca solo after_exposed', 
           createStage({
             key: STAGE_KEYS.STAGE_05,
             status: STAGE_STATUSES.ENABLED,
-            actions: []
+            recipes: []
           })
         ],
         [POOL_KEYS.POOL_CONCEALED]: [
           createStage({
             key: STAGE_KEYS.STAGE_01,
             status: STAGE_STATUSES.ENABLED,
-            actions: []
+            recipes: []
           })
         ]
       }
@@ -2902,14 +2990,14 @@ test('completeCurrentStage al terminar poolConcealed encadena after_concealed pu
           createStage({
             key: STAGE_KEYS.STAGE_04,
             status: STAGE_STATUSES.ENABLED,
-            actions: []
+            recipes: []
           })
         ],
         [POOL_KEYS.POOL_EXPOSED]: [
           createStage({
             key: STAGE_KEYS.STAGE_05,
             status: STAGE_STATUSES.ENABLED,
-            actions: []
+            recipes: []
           })
         ]
       }
@@ -2982,7 +3070,7 @@ test('completeCurrentStage respeta allowedRequesters del stage', () => {
       mode: STAGE_COMPLETION_MODES.MANUAL,
       allowedRequesters: [STAGE_COMPLETION_REQUESTED_BY.DIRECTOR]
     },
-    actions: [actionRecipe(restoreRecentOutOfPlayAction, STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY)]
+    recipes: [actionRecipe(restoreRecentOutOfPlayAction, STAGE_RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY)]
   });
   const session = withCycle(
     createBaseSession(),
@@ -3025,10 +3113,10 @@ test('restore_recent_out_of_play rechaza targets sin set_out_of_play aplicado es
           {
             key: STAGE_KEYS.STAGE_03,
             status: STAGE_STATUSES.ENABLED,
-            actions: [
+            recipes: [
               actionRecipe(
                 restoreRecentOutOfPlayAction,
-                STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY
+                STAGE_RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY
               )
             ]
           }
@@ -3037,7 +3125,7 @@ test('restore_recent_out_of_play rechaza targets sin set_out_of_play aplicado es
     })
   );
   const restored = resolveCurrentStage(session, {
-    actionKey: STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
+    recipeKey: STAGE_RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
     actorIds: ['alignment_a_blocker-0'],
     targetIds: ['alignment_a_target-0']
   });
@@ -3059,20 +3147,20 @@ test('restore_recent_out_of_play rechaza un set_out_of_play bloqueado', () => {
           {
             key: STAGE_KEYS.STAGE_01,
             status: STAGE_STATUSES.ENABLED,
-            actions: [actionRecipe(blockOutOfPlayRecipe, STAGE_ACTION_KEYS.BLOCK_OUT_OF_PLAY)]
+            recipes: [actionRecipe(blockOutOfPlayRecipe, STAGE_RECIPE_KEYS.BLOCK_OUT_OF_PLAY)]
           },
           {
             key: STAGE_KEYS.STAGE_02,
             status: STAGE_STATUSES.ENABLED,
-            actions: [actionRecipe(setInPlayFalseAction, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY)]
+            recipes: [actionRecipe(setInPlayFalseAction, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY)]
           },
           {
             key: STAGE_KEYS.STAGE_03,
             status: STAGE_STATUSES.ENABLED,
-            actions: [
+            recipes: [
               actionRecipe(
                 restoreRecentOutOfPlayAction,
-                STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY
+                STAGE_RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY
               )
             ]
           }
@@ -3096,7 +3184,7 @@ test('restore_recent_out_of_play rechaza un set_out_of_play bloqueado', () => {
     requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
   });
   const restored = resolveCurrentStage(blockedSetOutClosed.session, {
-    actionKey: STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
+    recipeKey: STAGE_RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
     actorIds: ['alignment_a_blocker-0'],
     targetIds: ['alignment_a_target-0']
   });
@@ -3112,10 +3200,10 @@ test('restore_recent_out_of_play rechaza un set_out_of_play bloqueado', () => {
 });
 
 test('limited_uses bloquea una segunda ejecucion de la misma receta por el mismo actor', () => {
-  const setOutRecipe = actionRecipe(setInPlayFalseAction, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY);
+  const setOutRecipe = actionRecipe(setInPlayFalseAction, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY);
   const restoreRecipe = actionRecipe(
     restoreRecentOutOfPlayAction,
-    STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY
+    STAGE_RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY
   );
   const firstSetOut = resolveRecipe(createBaseSession(), setOutRecipe, {
     actorIds: ['alignment_b_attacker-0'],
@@ -3139,7 +3227,7 @@ test('limited_uses bloquea una segunda ejecucion de la misma receta por el mismo
   assert.equal(secondRestore.ok, false);
   assert.equal(secondRestore.errors[0].code, 'constraint/limited_uses');
   assert.equal(secondRestore.errors[0].window, CONSTRAINT_WINDOWS.SESSION);
-  assert.equal(secondRestore.messages[0].key, MESSAGE_KEYS.ACTION_USAGE_LIMIT_REACHED);
+  assert.equal(secondRestore.messages[0].key, MESSAGE_KEYS.RECIPE_USAGE_LIMIT_REACHED);
   assert.equal(secondRestore.session.sessionMessageLog.length, 1);
   assert.equal(
     secondRestore.session.sessionMessageLog[0].message.audience.type,
@@ -3161,7 +3249,7 @@ test('skin presenta gameplayMessage y conserva estructura junto al texto mostrad
     },
     messages: {
       es: {
-        [MESSAGE_KEYS.ACTION_USAGE_LIMIT_REACHED]: {
+        [MESSAGE_KEYS.RECIPE_USAGE_LIMIT_REACHED]: {
           role: '{actor}, la {recipe} ya ha sido usada.'
         }
       }
@@ -3171,7 +3259,7 @@ test('skin presenta gameplayMessage y conserva estructura junto al texto mostrad
   const message = createMessage({
     id: 'message-1',
     type: MESSAGE_TYPES.GAMEPLAY,
-    key: MESSAGE_KEYS.ACTION_USAGE_LIMIT_REACHED,
+    key: MESSAGE_KEYS.RECIPE_USAGE_LIMIT_REACHED,
     severity: MESSAGE_SEVERITIES.WARNING,
     audience: {
       type: MESSAGE_AUDIENCE_TYPES.ROLE,
@@ -3222,7 +3310,7 @@ test('skinValidation distingue cobertura obligatoria y opcional', () => {
     defaultLanguage: 'es',
     messages: {
       es: {
-        [MESSAGE_KEYS.ACTION_USAGE_LIMIT_REACHED]: {
+        [MESSAGE_KEYS.RECIPE_USAGE_LIMIT_REACHED]: {
           default: 'Uso de accion agotado.'
         }
       }
@@ -3237,7 +3325,7 @@ test('skinValidation distingue cobertura obligatoria y opcional', () => {
     skin,
     language: 'es',
     requiredMessageKeys: [
-      MESSAGE_KEYS.ACTION_USAGE_LIMIT_REACHED,
+      MESSAGE_KEYS.RECIPE_USAGE_LIMIT_REACHED,
       MESSAGE_KEYS.OBJECTIVE_ACHIEVED
     ],
     requiredEntities: {
@@ -3270,7 +3358,7 @@ test('applicationMessage se registra fuera de session', () => {
 });
 
 test('limited_uses con ventana current_cycle permite reutilizar en otro ciclo', () => {
-  const setOutRecipe = actionRecipe(setInPlayFalseAction, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY);
+  const setOutRecipe = actionRecipe(setInPlayFalseAction, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY);
   const restorePerCycleRecipe = actionRecipe(
     {
       ...restoreRecentOutOfPlayAction,
@@ -3279,7 +3367,7 @@ test('limited_uses con ventana current_cycle permite reutilizar en otro ciclo', 
         window: CONSTRAINT_WINDOWS.CURRENT_CYCLE
       }
     },
-    STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY
+    STAGE_RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY
   );
   const firstSetOut = resolveRecipe(createBaseSession(), setOutRecipe, {
     actorIds: ['alignment_b_attacker-0'],
@@ -3305,7 +3393,7 @@ test('limited_uses con ventana current_cycle permite reutilizar en otro ciclo', 
 });
 
 test('limited_uses con ventana next_cycle cuenta usos del ciclo anterior', () => {
-  const setOutRecipe = actionRecipe(setInPlayFalseAction, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY);
+  const setOutRecipe = actionRecipe(setInPlayFalseAction, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY);
   const restoreNextCycleRecipe = actionRecipe(
     {
       ...restoreRecentOutOfPlayAction,
@@ -3314,7 +3402,7 @@ test('limited_uses con ventana next_cycle cuenta usos del ciclo anterior', () =>
         window: CONSTRAINT_WINDOWS.NEXT_CYCLE
       }
     },
-    STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY
+    STAGE_RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY
   );
   const firstSetOut = resolveRecipe(createBaseSession(), setOutRecipe, {
     actorIds: ['alignment_b_attacker-0'],
@@ -3342,7 +3430,7 @@ test('limited_uses con ventana next_cycle cuenta usos del ciclo anterior', () =>
 });
 
 test('limited_uses con ventana current_or_next_cycle cuenta el ciclo actual y el anterior', () => {
-  const setOutRecipe = actionRecipe(setInPlayFalseAction, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY);
+  const setOutRecipe = actionRecipe(setInPlayFalseAction, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY);
   const restoreCurrentOrNextRecipe = actionRecipe(
     {
       ...restoreRecentOutOfPlayAction,
@@ -3351,7 +3439,7 @@ test('limited_uses con ventana current_or_next_cycle cuenta el ciclo actual y el
         window: CONSTRAINT_WINDOWS.CURRENT_OR_NEXT_CYCLE
       }
     },
-    STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY
+    STAGE_RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY
   );
   const firstSetOut = resolveRecipe(createBaseSession(), setOutRecipe, {
     actorIds: ['alignment_b_attacker-0'],
@@ -3390,7 +3478,7 @@ test('limited_uses cuenta una receta aunque su efecto quede bloqueado', () => {
         }
       ]
     },
-    STAGE_ACTION_KEYS.SET_OUT_OF_PLAY
+    STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY
   );
   const blocking = resolveRecipe(createBaseSession(), blockOutOfPlayRecipe, {
     actorIds: ['alignment_a_blocker-0'],
@@ -3410,7 +3498,7 @@ test('limited_uses cuenta una receta aunque su efecto quede bloqueado', () => {
     blockedUse.result.preventedPropertyChanges[0].reason,
     'blocked_property_change'
   );
-  assert.equal(blockedUse.session.actionHistory.at(-1).result, 'blocked');
+  assert.equal(blockedUse.session.recipeHistory.at(-1).result, 'blocked');
   assert.equal(secondUse.ok, false);
   assert.equal(secondUse.errors[0].code, 'constraint/limited_uses');
 });
@@ -3495,14 +3583,14 @@ test('blockedPropertyChanges vence en stage_boundary.after antes de avanzar', ()
             key: STAGE_KEYS.STAGE_02,
             status: STAGE_STATUSES.ENABLED,
             actorIds: ['alignment_a_blocker-0'],
-            actions: [actionRecipe(stageBlockRecipe, STAGE_ACTION_KEYS.BLOCK_OUT_OF_PLAY)]
+            recipes: [actionRecipe(stageBlockRecipe, STAGE_RECIPE_KEYS.BLOCK_OUT_OF_PLAY)]
           },
           {
             id: 'stage-after-block',
             key: STAGE_KEYS.STAGE_01,
             status: STAGE_STATUSES.ENABLED,
             actorIds: ['role_inspector-0'],
-            actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+            recipes: [actionRecipe(inspectRoleAction, STAGE_RECIPE_KEYS.INSPECT_ROLE)]
           }
         ]
       }
@@ -3551,8 +3639,8 @@ test('blockedPropertyChanges vence en stage_boundary.before al entrar en el sigu
             key: STAGE_KEYS.STAGE_02,
             status: STAGE_STATUSES.ENABLED,
             actorIds: ['alignment_a_blocker-0'],
-            actions: [
-              actionRecipe(nextStageBlockRecipe, STAGE_ACTION_KEYS.BLOCK_OUT_OF_PLAY)
+            recipes: [
+              actionRecipe(nextStageBlockRecipe, STAGE_RECIPE_KEYS.BLOCK_OUT_OF_PLAY)
             ]
           },
           {
@@ -3560,8 +3648,8 @@ test('blockedPropertyChanges vence en stage_boundary.before al entrar en el sigu
             key: STAGE_KEYS.STAGE_04,
             status: STAGE_STATUSES.ENABLED,
             actorIds: ['alignment_b_attacker-0'],
-            actions: [
-              actionRecipe(setInPlayFalseAction, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY)
+            recipes: [
+              actionRecipe(setInPlayFalseAction, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY)
             ]
           }
         ]
@@ -3614,7 +3702,7 @@ test('blockedPropertyChanges vence en cycle_boundary.after antes de startCycle',
             key: STAGE_KEYS.STAGE_01,
             status: STAGE_STATUSES.ENABLED,
             actorIds: ['role_inspector-0'],
-            actions: [actionRecipe(inspectRoleAction, STAGE_ACTION_KEYS.INSPECT_ROLE)]
+            recipes: [actionRecipe(inspectRoleAction, STAGE_RECIPE_KEYS.INSPECT_ROLE)]
           }
         ],
         [POOL_KEYS.POOL_EXPOSED]: [
@@ -3622,7 +3710,7 @@ test('blockedPropertyChanges vence en cycle_boundary.after antes de startCycle',
             key: STAGE_KEYS.STAGE_02,
             status: STAGE_STATUSES.ENABLED,
             actorIds: ['alignment_a_blocker-0'],
-            actions: [actionRecipe(cycleBlockRecipe, STAGE_ACTION_KEYS.BLOCK_OUT_OF_PLAY)]
+            recipes: [actionRecipe(cycleBlockRecipe, STAGE_RECIPE_KEYS.BLOCK_OUT_OF_PLAY)]
           }
         ]
       }
@@ -3731,8 +3819,8 @@ test('link_targets crea un grupo linked en la sesion', () => {
   );
   assert.equal(linked.result.finalEffects[0].type, EFFECT_TYPES.SET_GROUP);
 
-  const recognition = linked.session.actionHistory.find(
-    (entry) => entry.actionKey === ACTION_IDS.LINKED_TARGET_RECOGNITION
+  const recognition = linked.session.recipeHistory.find(
+    (entry) => entry.recipeKey === ACTION_IDS.LINKED_TARGET_RECOGNITION
   );
   assert.equal(recognition.result, HISTORY_RESULTS.NO_EFFECT);
   assert.deepEqual(recognition.actorIds, ['role_inspector-0']);
@@ -3754,7 +3842,7 @@ test('link_targets crea un grupo linked en la sesion', () => {
     ]
   });
   assert.deepEqual(recognition.metadata.causedBy, {
-    actionKey: RECIPE_KEYS.LINK_TARGETS,
+    recipeKey: RECIPE_KEYS.LINK_TARGETS,
     actionId: ACTION_IDS.LINK_TARGETS,
     actorId: 'role_inspector-0',
     groupId: 'linked_alignment_a_plain_0_alignment_a_target_0'
@@ -3770,8 +3858,8 @@ test('link_targets no registra reconocimiento si no crea group linked', () => {
 
   assert.equal(failedLink.ok, false);
   assert.equal(
-    failedLink.session.actionHistory.some(
-      (entry) => entry.actionKey === ACTION_IDS.LINKED_TARGET_RECOGNITION
+    failedLink.session.recipeHistory.some(
+      (entry) => entry.recipeKey === ACTION_IDS.LINKED_TARGET_RECOGNITION
     ),
     false
   );
@@ -3810,7 +3898,7 @@ test('linked encola specialStage para propagar inPlay=false hacia roles enlazado
   const propagated = completeCurrentStage(specialStarted, {
     requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
   });
-  const propagatedHistory = propagated.session.actionHistory.at(-1);
+  const propagatedHistory = propagated.session.recipeHistory.at(-1);
 
   assert.equal(resolved.ok, true);
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
@@ -3833,7 +3921,7 @@ test('linked encola specialStage para propagar inPlay=false hacia roles enlazado
   );
   assert.equal(propagated.stageAdvance.next.stage.metadata.reveal.roleId, 'alignment_a_plain-0');
   assert.equal(roleById(propagated.session, 'alignment_a_plain-0').inPlay, false);
-  assert.equal(propagatedHistory.actionKey, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
+  assert.equal(propagatedHistory.recipeKey, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
   assert.equal(propagatedHistory.result, HISTORY_RESULTS.APPLIED);
   assert.deepEqual(propagatedHistory.finalEffects[0].causedBy, {
     type: MECHANICAL_ENTITY_TYPES.GROUP,
@@ -3864,13 +3952,13 @@ test('linked no propaga si el role causal fue restaurado antes de la specialStag
   const propagated = completeCurrentStage(startSpecialStages(restored.session), {
     requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
   });
-  const propagatedHistory = propagated.session.actionHistory.at(-1);
+  const propagatedHistory = propagated.session.recipeHistory.at(-1);
 
   assert.equal(setOut.session.specialStages.length, 1);
   assert.equal(restored.ok, true);
   assert.equal(roleById(restored.session, 'alignment_a_target-0').inPlay, true);
   assert.equal(roleById(propagated.session, 'alignment_a_plain-0').inPlay, true);
-  assert.equal(propagatedHistory.actionKey, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
+  assert.equal(propagatedHistory.recipeKey, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
   assert.equal(propagatedHistory.result, HISTORY_RESULTS.NO_EFFECT);
   assert.equal(propagatedHistory.metadata.reason, 'causal_condition_not_met');
 });
@@ -3921,7 +4009,7 @@ test('linked_propagated_effect transporta payload dinamico de set_property', () 
   const propagated = completeCurrentStage(startSpecialStages(setDoubleSelector.session), {
     requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
   });
-  const propagatedHistory = propagated.session.actionHistory.at(-1);
+  const propagatedHistory = propagated.session.recipeHistory.at(-1);
 
   assert.equal(setDoubleSelector.ok, true);
   assert.equal(roleById(setDoubleSelector.session, 'alignment_a_target-0').doubleSelector, true);
@@ -3930,7 +4018,7 @@ test('linked_propagated_effect transporta payload dinamico de set_property', () 
   assert.equal(specialStage.metadata.propagatedEffect.property, 'doubleSelector');
   assert.equal(propagated.ok, true);
   assert.equal(roleById(propagated.session, 'alignment_a_plain-0').doubleSelector, true);
-  assert.equal(propagatedHistory.actionKey, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
+  assert.equal(propagatedHistory.recipeKey, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
   assert.equal(propagatedHistory.actionId, ACTION_IDS.SET_PROPERTY);
   assert.equal(propagatedHistory.finalEffects[0].property, 'doubleSelector');
   assert.equal(propagatedHistory.result, HISTORY_RESULTS.APPLIED);
@@ -4032,7 +4120,7 @@ test('groupRule usa causedBy del group al comprobar bloqueos derivados', () => {
   );
   assert.equal(roleById(blockedPropagation.session, 'alignment_a_target-0').inPlay, false);
   assert.equal(roleById(blockedPropagationSpecial.session, 'alignment_a_plain-0').inPlay, true);
-  assert.deepEqual(blockedPropagationSpecial.session.actionHistory.at(-1).blockedEffects[0].causedBy, {
+  assert.deepEqual(blockedPropagationSpecial.session.recipeHistory.at(-1).blockedEffects[0].causedBy, {
     type: MECHANICAL_ENTITY_TYPES.GROUP,
     id: linkedGroupId
   });
@@ -4222,7 +4310,7 @@ test('canStageInfluenceObjectiveOutcome detecta stage pendiente que puede romper
   const pendingStage = createStage({
     key: STAGE_KEYS.STAGE_08,
     status: STAGE_STATUSES.ENABLED,
-    actions: [setInPlayFalseAction],
+    recipes: [setInPlayFalseAction],
     influences: [
       {
         subject: INFLUENCE_SUBJECTS.ROLE,
@@ -4272,7 +4360,7 @@ test('canStageInfluenceObjectiveOutcome ignora stage pendiente que solo refuerza
   const pendingStage = createStage({
     key: STAGE_KEYS.STAGE_08,
     status: STAGE_STATUSES.ENABLED,
-    actions: [restoreRecentOutOfPlayAction],
+    recipes: [restoreRecentOutOfPlayAction],
     influences: [
       {
         subject: INFLUENCE_SUBJECTS.ROLE,
@@ -4460,10 +4548,10 @@ test('checkObjectives aplica stable parity contra role_in_out_of_play salvo que 
   const bothRecipesAvailable = checkObjectives(createStableParitySession(roles));
   const restoreAlreadyUsed = checkObjectives(
     createStableParitySession(roles, {
-      actionHistory: [
+      recipeHistory: [
         {
           cycleId: 1,
-          actionKey: STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
+          recipeKey: STAGE_RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
           actionId: ACTION_IDS.SET_IN_PLAY,
           actorIds: ['role_in_out_of_play-0'],
           result: HISTORY_RESULTS.APPLIED
@@ -4473,10 +4561,10 @@ test('checkObjectives aplica stable parity contra role_in_out_of_play salvo que 
   );
   const setOutAlreadyUsed = checkObjectives(
     createStableParitySession(roles, {
-      actionHistory: [
+      recipeHistory: [
         {
           cycleId: 1,
-          actionKey: STAGE_ACTION_KEYS.SET_OUT_OF_PLAY,
+          recipeKey: STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY,
           actionId: ACTION_IDS.SET_IN_PLAY,
           actorIds: ['role_in_out_of_play-0'],
           result: HISTORY_RESULTS.APPLIED
@@ -5394,7 +5482,7 @@ test('stage con seleccion y set_out_of_play aplica inPlay=false al chosen de la 
   assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.CHOSEN);
   assert.equal(resolved.result.selection.chosenId, 'alignment_a_target-0');
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
-  assert.deepEqual(resolved.session.actionHistory.at(-1).actorIds, []);
+  assert.deepEqual(resolved.session.recipeHistory.at(-1).actorIds, []);
   assert.deepEqual(resolved.result.proposedEffects, [
     {
       type: EFFECT_TYPES.SET_PROPERTY,
@@ -5688,10 +5776,13 @@ test('stage con seleccion y set_out_of_play encola propagacion linked cuando el 
       })
     })
   );
-  const propagated = completeCurrentStage(startSpecialStages(resolved.session), {
+  const revealCompleted = completeCurrentStage(startSpecialStages(resolved.session), {
     requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
   });
-  const propagatedHistory = propagated.session.actionHistory.at(-1);
+  const propagated = completeCurrentStage(revealCompleted.session, {
+    requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
+  });
+  const propagatedHistory = propagated.session.recipeHistory.at(-1);
 
   assert.equal(resolved.ok, true);
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
@@ -5700,13 +5791,18 @@ test('stage con seleccion y set_out_of_play encola propagacion linked cuando el 
   assert.equal(resolved.session.specialStages.length, 2);
   assert.equal(
     resolved.session.specialStages[0].metadata.catalogId,
-    STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT
+    STAGE_CATALOG_IDS.ROLE_STATE_REVEALED
   );
   assert.equal(
     resolved.session.specialStages[1].metadata.catalogId,
-    STAGE_CATALOG_IDS.ROLE_STATE_REVEALED
+    STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT
   );
-  assert.equal(resolved.session.specialStages[1].metadata.reveal.roleId, 'alignment_a_target-0');
+  assert.equal(resolved.session.specialStages[0].metadata.reveal.roleId, 'alignment_a_target-0');
+  assert.equal(revealCompleted.ok, true);
+  assert.equal(
+    revealCompleted.stageAdvance.next.stage.metadata.catalogId,
+    STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT
+  );
   assert.equal(propagated.ok, true);
   assert.equal(propagated.stageAdvance.next.stage.metadata.catalogId, STAGE_CATALOG_IDS.ROLE_STATE_REVEALED);
   assert.equal(roleById(propagated.session, 'alignment_a_plain-0').inPlay, false);
@@ -5854,8 +5950,8 @@ test('role_peek registra peekAttempt privado durante la stage observada', () => 
   );
 
   assert.equal(resolved.ok, true);
-  const peekAttempt = resolved.session.actionHistory.find(
-    (entry) => entry.actionKey === PEEK_ACTION_KEYS.PEEK_ATTEMPT
+  const peekAttempt = resolved.session.recipeHistory.find(
+    (entry) => entry.recipeKey === PEEK_RECIPE_KEYS.PEEK_ATTEMPT
   );
   assert.equal(peekAttempt.actorIds[0], 'role_peek-0');
   assert.equal(peekAttempt.result, HISTORY_RESULTS.NO_EFFECT);
@@ -5908,7 +6004,7 @@ test('role_peek warning confirmado sustituye el candidate final de set_out_of_pl
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, true);
   assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, false);
   assert.deepEqual(resolved.result.finalEffects[0].causedBy, {
-    type: PEEK_ACTION_KEYS.PEEK_WARNING,
+    type: PEEK_RECIPE_KEYS.PEEK_WARNING,
     id: 'peek-warning-1'
   });
 });
@@ -6305,8 +6401,8 @@ test('buildRuleSet ensambla solo roles mecanicamente listos', () => {
   const inPlayControl = built.ruleSet.roles.baseRoles.find(
     (role) => role.key === ROLE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY
   );
-  assert.equal(inPlayControl.stageDefinitions[0].actions[0].usage.limit, 1);
-  assert.equal(inPlayControl.stageDefinitions[0].actions[1].usage.limit, 1);
+  assert.equal(inPlayControl.stageDefinitions[0].recipes[0].usage.limit, 1);
+  assert.equal(inPlayControl.stageDefinitions[0].recipes[1].usage.limit, 1);
 });
 
 test('buildSession materializa role_in_out_of_play en poolConcealed despues de set_out_of_play colectivo', () => {
@@ -6351,8 +6447,8 @@ test('buildSession materializa role_in_out_of_play en poolConcealed despues de s
   assert.equal(collectiveSetOutStage.order, 30);
   assert.equal(inPlayControlStage.order, 40);
   assert.deepEqual(
-    inPlayControlStage.actions.map((action) => action.key),
-    [STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY, STAGE_ACTION_KEYS.SET_OUT_OF_PLAY]
+    inPlayControlStage.recipes.map((action) => action.key),
+    [STAGE_RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY]
   );
 });
 
@@ -6387,15 +6483,15 @@ test('role_in_out_of_play conserva su stage si el concealed set_out_of_play lo a
     requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
   });
   const privateSetOutWhileOut = resolveCurrentStage(stageReady.session, {
-    actionKey: STAGE_ACTION_KEYS.SET_OUT_OF_PLAY,
+    recipeKey: STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY,
     targetIds: ['role_plain-0']
   });
   const restored = resolveCurrentStage(privateSetOutWhileOut.session, {
-    actionKey: STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
+    recipeKey: STAGE_RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
     targetIds: ['role_in_out_of_play-0']
   });
   const privateSetOutAfterRestore = resolveCurrentStage(restored.session, {
-    actionKey: STAGE_ACTION_KEYS.SET_OUT_OF_PLAY,
+    recipeKey: STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY,
     targetIds: ['role_plain-0']
   });
 
@@ -6441,7 +6537,7 @@ test('role_in_out_of_play fuera de juego solo puede restaurarse a si mismo', () 
       'role_set_out_of_play-0': 'role_in_out_of_play-0'
     })
   });
-  const sessionWithAnotherRecentOut = appendActionHistory(
+  const sessionWithAnotherRecentOut = appendRecipeHistory(
     withInPlayState(concealedSetOut.session, {
       'role_plain-0': false
     }),
@@ -6450,7 +6546,7 @@ test('role_in_out_of_play fuera de juego solo puede restaurarse a si mismo', () 
       poolKey: POOL_KEYS.POOL_CONCEALED,
       stageKey: STAGE_KEYS.STAGE_04,
       stageCatalogId: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY,
-      actionKey: STAGE_ACTION_KEYS.SET_OUT_OF_PLAY,
+      recipeKey: STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY,
       actionId: ACTION_IDS.SET_IN_PLAY,
       actorIds: ['role_set_out_of_play-0'],
       targetIds: ['role_plain-0'],
@@ -6470,7 +6566,7 @@ test('role_in_out_of_play fuera de juego solo puede restaurarse a si mismo', () 
     requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
   });
   const restoreOther = resolveCurrentStage(stageReady.session, {
-    actionKey: STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
+    recipeKey: STAGE_RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
     targetIds: ['role_plain-0']
   });
 
@@ -6546,12 +6642,12 @@ test('role_in_out_of_play no habilita su stage por un set_out_of_play de otro st
   const sessionWithActorOut = withInPlayState(builtSession.session, {
     'role_in_out_of_play-0': false
   });
-  const sessionWithExposedHistory = appendActionHistory(sessionWithActorOut, {
+  const sessionWithExposedHistory = appendRecipeHistory(sessionWithActorOut, {
     cycleId: sessionWithActorOut.cycle.id,
     poolKey: POOL_KEYS.POOL_EXPOSED,
     stageKey: STAGE_KEYS.STAGE_05,
     stageCatalogId: STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY,
-    actionKey: STAGE_ACTION_KEYS.SET_OUT_OF_PLAY,
+    recipeKey: STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY,
     actionId: ACTION_IDS.SET_IN_PLAY,
     actorIds: ['role_set_out_of_play-0'],
     targetIds: ['role_in_out_of_play-0'],
@@ -6630,7 +6726,7 @@ test('role_in_out_of_play restaura el target causal y cancela la propagacion lin
     requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
   });
   const restored = resolveCurrentStage(inOutStageReady.session, {
-    actionKey: STAGE_ACTION_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
+    recipeKey: STAGE_RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
     targetIds: ['role_in_out_of_play-0']
   });
   const completedInOutStage = completeCurrentStage(restored.session, {
@@ -6639,18 +6735,18 @@ test('role_in_out_of_play restaura el target causal y cancela la propagacion lin
   const propagated = completeCurrentStage(completedInOutStage.session, {
     requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
   });
-  const propagatedHistory = propagated.session.actionHistory.at(-1);
+  const propagatedHistory = propagated.session.recipeHistory.at(-1);
 
   assert.equal(linkedSetupClosed.ok, true);
   assert.equal(concealedSetOut.ok, true);
   assert.equal(concealedSetOut.session.specialStages.length, 2);
   assert.equal(
     concealedSetOut.session.specialStages[0].metadata.catalogId,
-    STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT
+    STAGE_CATALOG_IDS.ROLE_STATE_REVEALED
   );
   assert.equal(
     concealedSetOut.session.specialStages[1].metadata.catalogId,
-    STAGE_CATALOG_IDS.ROLE_STATE_REVEALED
+    STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT
   );
   assert.equal(roleById(concealedSetOut.session, 'role_in_out_of_play-0').inPlay, false);
   assert.equal(inOutStageReady.stageAdvance.next.stage.metadata.catalogId, STAGE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY);
@@ -6659,7 +6755,7 @@ test('role_in_out_of_play restaura el target causal y cancela la propagacion lin
   assert.equal(restored.session.specialStages.length, 1);
   assert.equal(completedInOutStage.stageAdvance.next.stage.metadata.catalogId, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
   assert.equal(roleById(propagated.session, 'role_plain-0').inPlay, true);
-  assert.equal(propagatedHistory.actionKey, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
+  assert.equal(propagatedHistory.recipeKey, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
   assert.equal(propagatedHistory.result, HISTORY_RESULTS.NO_EFFECT);
   assert.equal(propagatedHistory.metadata.reason, 'causal_condition_not_met');
 });
@@ -6905,7 +7001,7 @@ test('assume_role fuerza role_set_out_of_play si las dos sobrantes son set_out_o
 
 test('catalogo de mensajes distingue keys implementadas y planificadas con audiencia', () => {
   assert.equal(
-    MESSAGE_CATALOG[MESSAGE_KEYS.ACTION_USAGE_LIMIT_REACHED].status,
+    MESSAGE_CATALOG[MESSAGE_KEYS.RECIPE_USAGE_LIMIT_REACHED].status,
     MESSAGE_IMPLEMENTATION_STATUSES.IMPLEMENTED
   );
   assert.equal(

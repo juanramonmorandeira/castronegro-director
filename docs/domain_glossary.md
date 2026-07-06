@@ -378,7 +378,7 @@ recipe/action. Se guarda para auditoria y depuracion.
 `targetContract` = copia del contrato `recipe.target` usado al resolver una
 recipe/action. Se guarda para auditoria y depuracion.
 
-`actionHistory` = historial de acciones ejecutadas o intentadas. Para acciones
+`recipeHistory` = historial de recipes ejecutadas o intentadas. Para recipes
 colectivas debe poder registrar el actor group, sus miembros activos en ese
 momento, `selectorIds` cuando haya seleccion, `targetIds`, y el contrato
 `actorContract`/`targetContract` usado para resolver la action.

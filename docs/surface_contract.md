@@ -59,7 +59,7 @@ currentStage.stage.actorIds
 currentStage.stage.selectionRules
 currentStage.stage.metadata
 role.inPlay
-actionHistory
+recipeHistory
 ```
 
 El motor no debe escribir flags como `screenBlack=true` o
@@ -162,7 +162,7 @@ superficie:
 
 ```js
 [
-  { type: 'select_target', actionKey, candidateIds },
+  { type: 'select_target', recipeKey, candidateIds },
   { type: 'submit_selection', selectionKey, candidateIds, roundIndex },
   {
     type: 'director_submit_selection',
@@ -764,7 +764,7 @@ Flujo:
 ```js
 {
   type: 'select_target',
-  actionKey: 'link_targets',
+  recipeKey: 'link_targets',
   targetCount: 2,
   targetIds: ['role_a', 'role_b']
 }
@@ -776,7 +776,7 @@ Flujo:
 ```js
 {
   type: 'select_target',
-  actionKey: 'link_targets',
+  recipeKey: 'link_targets',
   targetIds: [],
   reason: 'abstain'
 }
@@ -831,7 +831,7 @@ Flujo:
 ```js
 {
   type: 'select_target',
-  actionKey: 'inspect_role',
+  recipeKey: 'inspect_role',
   targetCount: 1,
   targetIds: ['role_target_id']
 }
@@ -842,7 +842,7 @@ Flujo:
 ```js
 {
   type: 'select_target',
-  actionKey: 'inspect_role',
+  recipeKey: 'inspect_role',
   targetIds: [],
   reason: 'abstain'
 }
@@ -1248,7 +1248,7 @@ Flujo:
 ```js
 {
   type: 'select_target',
-  actionKey: 'restore_recent_out_of_play',
+  recipeKey: 'restore_recent_out_of_play',
   targetCount: 1,
   targetIds: ['role_target_id']
 }
@@ -1260,7 +1260,7 @@ Flujo:
 ```js
 {
   type: 'select_target',
-  actionKey: 'set_out_of_play',
+  recipeKey: 'set_out_of_play',
   targetCount: 1,
   targetIds: ['role_target_id']
 }
