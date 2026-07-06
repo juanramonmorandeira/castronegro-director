@@ -1,6 +1,6 @@
 // actionModel.js
 // -----------------------------------------------------------------------------
-// Este archivo ejecuta acciones genericas del motor.
+// Este archivo resuelve acciones genericas del motor.
 //
 // Acciones implementadas por ahora:
 // - inspect_role: revela informacion.
@@ -14,9 +14,10 @@
 // - No sabe que skin o nombre visible tendra un role.
 // - No sabe que fantasia representa cada alignment.
 // - No pinta nada en pantalla.
-// - No guarda nada en Firebase.
+// - No guarda nada fuera de la session.
 //
-// Solo recibe datos y devuelve un resultado.
+// Recibe datos de session/input/context, aplica efectos aceptados en la session
+// y devuelve un resultado mecanico para que otros modelos puedan derivar eventos.
 // -----------------------------------------------------------------------------
 
 import {
@@ -42,197 +43,15 @@ import {
   SELECTION_ROUND_TYPES,
   resolveSelectionRound
 } from './selectionModel.js';
+import { MECHANICAL_ENTITY_TYPES } from './domainTypes.js';
+import { ACTION_IDS, VISIBILITY } from './actionDefinition.js';
 import {
-  MECHANICAL_ENTITY_TYPES,
-  TARGET_FILTER_TYPES,
-  isTargetFilterType
-} from './domainTypes.js';
-import { LINKED_PROPAGATED_EFFECT_STAGE } from './stageTypes.js';
-import { STAGE_STATUSES } from './sessionModel.js';
-import {
-  SPECIAL_STAGE_EVENT_WINDOWS,
-  appendSpecialStage
-} from './specialStagesModel.js';
+  findRole,
+  getActionActors,
+  validateActionTargets
+} from './targetModel.js';
 
-export const ACTION_IDS = Object.freeze({
-  INSPECT_ROLE: 'inspect_role',
-  SET_PROPERTY: 'set_property',
-  SET_IN_PLAY: 'set_in_play',
-  BLOCK_PROPERTY_CHANGE: 'block_property_change',
-  LINK_TARGETS: 'link_targets',
-  LINKED_TARGET_RECOGNITION: 'linked_target_recognition',
-  SELECT: 'select',
-  REPLACE_ROLE_IDENTITY: 'replace_role_identity',
-  CONCLUDE_PLAY: 'conclude_play'
-});
-
-export const VISIBILITY = Object.freeze({
-  ACTOR_ONLY: 'actor_only',
-  STORYTELLER_ONLY: 'storyteller_only',
-  ALL: 'all',
-  HIDDEN: 'hidden'
-});
-
-// Busca un rol de sesion por id.
-//
-// Un rol de sesion es una carta/personaje concreto en la partida:
-// role_inspector-0, hidden_role-0, enemy-0, etc.
-export function findRole(session, roleId) {
-  return (session?.roles ?? []).find((role) => role.id === roleId) ?? null;
-}
-
-export function getActionActors(session, actorIds = []) {
-  return (actorIds ?? []).map((actorId) => findRole(session, actorId));
-}
-
-// Devuelve true si una accion puede resolverse sin actor individual.
-//
-// Ejemplo: una seleccion all_roles puede derivar un set_in_play(false). Esa
-// accion no tiene un unico actorId. Es valida mientras la propia accion no
-// necesite comparar target contra actor, como ocurre con not_self.
-export function canResolveWithoutActor(action) {
-  const filters = action?.target?.filters ?? [];
-  const needsIndividualActor =
-    filters.includes(TARGET_FILTER_TYPES.NOT_SELF) ||
-    filters.includes(TARGET_FILTER_TYPES.SAME_ALIGNMENT) ||
-    filters.includes(TARGET_FILTER_TYPES.NOT_SAME_ALIGNMENT);
-
-  return !needsIndividualActor;
-}
-
-function wasTargetRecentlyOutOfPlay(session = {}, target = {}) {
-  const currentCycleId = getCurrentCycleId(session);
-
-  return (session.recipeHistory ?? []).some((entry) =>
-    entry.cycleId === currentCycleId &&
-    (entry.finalEffects ?? []).some((effect) =>
-      effect.targetType === MECHANICAL_ENTITY_TYPES.ROLE &&
-      effect.targetId === target?.id &&
-      effect.property === 'inPlay' &&
-      effect.value === false
-    )
-  );
-}
-
-// Comprueba si un objetivo cumple un filtro.
-//
-// Por ahora implementamos solo los filtros que necesitan inspect_role y
-// set_in_play y block_property_change:
-// - in_play: el objetivo debe seguir participando en la partida principal.
-// - not_self: el actor no puede elegirse a si mismo.
-// - not_same_alignment: actor y objetivo no pueden pertenecer al mismo alignment.
-// - distinct: se valida en validateActionTargets porque necesita ver toda la
-//   lista de objetivos, no un objetivo aislado.
-//
-// Iremos anadiendo filtros cuando haya reglas reales que los necesiten.
-export function targetMatchesFilter({ filter, actor, target, session }) {
-  if (filter === TARGET_FILTER_TYPES.IN_PLAY) return target?.inPlay === true;
-  if (filter === TARGET_FILTER_TYPES.NOT_IN_PLAY) return target?.inPlay === false;
-  if (filter === TARGET_FILTER_TYPES.ASSUMABLE) {
-    return (
-      (session?.assumableRoles ?? []).includes(target?.id) &&
-      !target?.playerId &&
-      target?.seat === null
-    );
-  }
-  if (filter === TARGET_FILTER_TYPES.NOT_SELF) return actor?.id !== target?.id;
-  if (filter === TARGET_FILTER_TYPES.SAME_ALIGNMENT) {
-    return !!actor?.alignmentId && actor.alignmentId === target?.alignmentId;
-  }
-  if (filter === TARGET_FILTER_TYPES.NOT_SAME_ALIGNMENT) {
-    return actor?.alignmentId !== target?.alignmentId;
-  }
-  if (filter === TARGET_FILTER_TYPES.RECENTLY_OUT_OF_PLAY) {
-    return target?.inPlay === false && wasTargetRecentlyOutOfPlay(session, target);
-  }
-  if (filter === TARGET_FILTER_TYPES.DISTINCT) return true;
-  return false;
-}
-
-// Valida si una lista de objetivos sirve para una accion.
-//
-// Devuelve:
-// {
-//   ok: true/false,
-//   errors: []
-// }
-//
-// No lanza errores porque queremos poder mostrar problemas de forma clara en UI
-// o en demos.
-export function validateActionTargets({
-  session,
-  action,
-  actor,
-  targets
-}) {
-  const errors = [];
-  const expectedCount = action?.target?.count ?? 0;
-  const filters = action?.target?.filters ?? [];
-  const unknownFilters = filters.filter((filter) => !isTargetFilterType(filter));
-
-  unknownFilters.forEach((filter) => {
-    errors.push({
-      code: 'target/unknown-filter',
-      message: `unknown target filter "${filter}"`,
-      filter
-    });
-  });
-
-  if (!actor && !canResolveWithoutActor(action)) {
-    errors.push({
-      code: 'action/missing-actor',
-      message: 'action has no actor role'
-    });
-  }
-
-  if (!Array.isArray(targets) || targets.length !== expectedCount) {
-    errors.push({
-      code: 'action/invalid-target-count',
-      message: `action expected ${expectedCount} target(s), received ${targets?.length ?? 0}`,
-      expectedCount,
-      receivedCount: targets?.length ?? 0
-    });
-  }
-
-  if (filters.includes(TARGET_FILTER_TYPES.DISTINCT)) {
-    const targetIds = (targets ?? []).filter(Boolean).map((target) => target.id);
-    if (new Set(targetIds).size !== targetIds.length) {
-      errors.push({
-        code: 'target/filter-distinct',
-        message: 'action targets must be distinct',
-        targetIds
-      });
-    }
-  }
-
-  (targets ?? []).forEach((target, index) => {
-    if (!target) {
-      errors.push({
-        code: 'action/missing-target',
-        message: `target at index ${index} does not exist`,
-        index
-      });
-      return;
-    }
-
-    filters.filter(isTargetFilterType).forEach((filter) => {
-      if (!targetMatchesFilter({ filter, actor, target, session })) {
-        errors.push({
-          code: `target/filter-${filter}`,
-          message: `target "${target.id}" does not match filter "${filter}"`,
-          targetId: target.id,
-          filter,
-          index
-        });
-      }
-    });
-  });
-
-  return {
-    ok: errors.length === 0,
-    errors
-  };
-}
+export { ACTION_IDS, VISIBILITY };
 
 // Valida requisitos internos de una accion antes de resolverla.
 //
@@ -403,11 +222,6 @@ export function applyRevealPropertyEffect({ action, actor, targets }) {
   };
 }
 
-// Construye la descripcion de accion que puede ser bloqueada.
-//
-// Para set_in_play guardamos property/value porque queremos distinguir:
-// - set_in_play inPlay=false: deja al objetivo fuera del juego principal.
-// - set_in_play inPlay=true: lo devuelve al juego principal.
 // Traduce efectos/bloqueos a un resultado resumido de historial.
 //
 // El detalle completo queda guardado en proposedEffects, finalEffects y
@@ -467,111 +281,6 @@ function getHistoryContracts(context = {}) {
   };
 }
 
-function appendLinkedPropagatedEffectStages(session = {}, linkedPropagatedEffects = [], context = {}) {
-  return (linkedPropagatedEffects ?? []).reduce((currentSession, effect, index) => {
-    const eventWindow = context.poolKey === 'poolConcealed'
-      ? SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED
-      : context.poolKey === 'poolExposed'
-        ? SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED
-        : null;
-    const stage = {
-      key: LINKED_PROPAGATED_EFFECT_STAGE.KEY,
-      status: STAGE_STATUSES.ENABLED,
-      actorIds: [],
-      recipes: [],
-      metadata: {
-        catalogId: LINKED_PROPAGATED_EFFECT_STAGE.CATALOG_ID,
-        ...(eventWindow ? { eventWindow } : {}),
-        propagatedEffect: effect,
-        sourceContext: {
-          cycleId: context.cycleId ?? currentSession.cycle?.id ?? 0,
-          poolKey: context.poolKey ?? null,
-          stageId: context.stageId ?? null,
-          stageKey: context.stageKey ?? null,
-          stageCatalogId: context.stageCatalogId ?? null,
-          recipeKey: context.recipeKey ?? null
-        }
-      }
-    };
-
-    return appendSpecialStage(currentSession, stage, {
-      reason: LINKED_PROPAGATED_EFFECT_STAGE.RECIPE_KEY,
-      index,
-      causedBy: effect.causedBy ?? null,
-      derivedFrom: effect.derivedFrom ?? null,
-      causalCondition: effect.causalCondition ?? null,
-      targetId: effect.targetId ?? null
-    });
-  }, session);
-}
-
-function sameRoleIdSet(left = [], right = []) {
-  const leftIds = [...new Set(left ?? [])].sort();
-  const rightIds = [...new Set(right ?? [])].sort();
-  return leftIds.length === rightIds.length && leftIds.every((roleId, index) => roleId === rightIds[index]);
-}
-
-function findGroupCreatedBySetGroupEffect(session = {}, effect = {}) {
-  const roleIds = effect.roleIds ?? [];
-  const groupType = effect.groupType ?? null;
-
-  return (session.groups ?? []).find((group) =>
-    group.type === groupType &&
-    sameRoleIdSet(group.roleIds ?? [], roleIds)
-  ) ?? null;
-}
-
-function appendLinkedTargetRecognitionHistory({
-  session = {},
-  action = {},
-  actor = null,
-  context = {},
-  currentCycleId = 0,
-  group = null
-} = {}) {
-  if (!group || (group.roleIds ?? []).length === 0) return session;
-
-  const memberRoleIds = [...(group.roleIds ?? [])];
-
-  return appendRecipeHistory(session, {
-    cycleId: currentCycleId,
-    poolKey: context.poolKey ?? null,
-    stageId: context.stageId ?? null,
-    stageKey: context.stageKey ?? null,
-    stageCatalogId: context.stageCatalogId ?? null,
-    recipeKey: ACTION_IDS.LINKED_TARGET_RECOGNITION,
-    actionId: ACTION_IDS.LINKED_TARGET_RECOGNITION,
-    actionSignature: ACTION_IDS.LINKED_TARGET_RECOGNITION,
-    actorIds: actor ? [actor.id] : [],
-    targetIds: memberRoleIds,
-    proposedEffects: [],
-    finalEffects: [],
-    blockedEffects: [],
-    result: HISTORY_RESULTS.NO_EFFECT,
-    metadata: {
-      visibility: 'linked_members',
-      audienceRoleIds: memberRoleIds,
-      directorVisible: true,
-      causedBy: {
-        recipeKey: context.recipeKey ?? action.key ?? action.id,
-        actionId: action.id ?? null,
-        actorId: actor?.id ?? null,
-        groupId: group.id
-      },
-      derivedFrom: {
-        type: MECHANICAL_ENTITY_TYPES.GROUP,
-        id: group.id,
-        groupType: group.type ?? null,
-        sourceActionId: group.sourceActionId ?? null
-      },
-      reveals: {
-        groupId: group.id,
-        memberRoleIds
-      }
-    }
-  });
-}
-
 // Resuelve la consecuencia principal de set_in_play.
 //
 // Distincion importante:
@@ -604,15 +313,7 @@ export function resolveSetInPlayEffect({ session, action, actor, targets, contex
     preventedPropertyChanges.map((change) => change.targetId)
   );
   const sessionAfterEffects = applyFinalEffects({ session, finalEffects });
-  const sessionWithLinkedPropagationStages = appendLinkedPropagatedEffectStages(
-    sessionAfterEffects,
-    linkedPropagatedEffects,
-    {
-      ...context,
-      cycleId: currentCycleId
-    }
-  );
-  const nextSession = appendRecipeHistory(sessionWithLinkedPropagationStages, {
+  const nextSession = appendRecipeHistory(sessionAfterEffects, {
     cycleId: currentCycleId,
     poolKey: context.poolKey ?? null,
     stageId: context.stageId ?? null,
@@ -737,7 +438,7 @@ export function applyLinkTargets({ session, action, actor, targets, context = {}
   ];
   const effectResolution = resolveProposedEffects({ session, proposedEffects });
   const sessionAfterEffects = applyFinalEffects({ session, finalEffects: effectResolution.finalEffects });
-  const sessionWithLinkHistory = appendRecipeHistory(
+  const nextSession = appendRecipeHistory(
     sessionAfterEffects,
     {
       cycleId: currentCycleId,
@@ -760,18 +461,6 @@ export function applyLinkTargets({ session, action, actor, targets, context = {}
       })
     }
   );
-  const nextSession = effectResolution.finalEffects
-    .filter((effect) => effect.type === EFFECT_TYPES.SET_GROUP)
-    .reduce((currentSession, effect) =>
-      appendLinkedTargetRecognitionHistory({
-        session: currentSession,
-        action,
-        actor,
-        context,
-        currentCycleId,
-        group: findGroupCreatedBySetGroupEffect(sessionAfterEffects, effect)
-      }), sessionWithLinkHistory);
-
   return {
     session: nextSession,
     result: {
@@ -1084,7 +773,7 @@ export function resolveSetProperty(session, action, input = {}, context = {}) {
 // 2. Busca el objetivo.
 // 3. Valida count y filtros. Las restricciones ya las valido recipeModel.
 // 4. Marca al objetivo como prevenido contra la accion indicada.
-// 5. Registra el bloqueo aplicado en session.recipeHistory.
+// 5. Registra el bloqueo aplicado en session.history.recipeHistory.
 export function resolveBlockPropertyChange(session, action, input = {}, context = {}) {
   const actors = getActionActors(session, input.actorIds ?? []);
   const actor = actors[0] ?? null;

@@ -181,7 +181,7 @@ current_or_next_cycle -> combina current_cycle y next_cycle
 session               -> no repetir ese target durante toda la partida
 ```
 
-El motor evalua desde el ciclo actual mirando `session.recipeHistory`. Por eso
+El motor evalua desde el ciclo actual mirando `session.history.recipeHistory`. Por eso
 `next_cycle` significa que una entrada del ciclo anterior bloquea este ciclo:
 este ciclo es el siguiente respecto al uso registrado.
 
@@ -353,7 +353,6 @@ Configuracion principal:
 ```js
 {
   key: 'set_out_of_play',
-  id: 'set_in_play',
   actor: { type: 'group' },
   target: {
     type: 'role',
@@ -361,11 +360,16 @@ Configuracion principal:
     filters: ['in_play', 'not_same_alignment']
   },
   usage: { limit: null, window: 'session' },
-  effect: {
-    type: 'set_property',
-    property: 'inPlay',
-    value: false
-  }
+  actions: [
+    {
+      id: 'set_in_play',
+      effect: {
+        type: 'set_property',
+        property: 'inPlay',
+        value: false
+      }
+    }
+  ]
 }
 ```
 

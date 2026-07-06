@@ -4,15 +4,16 @@
 //
 // Una receta NO es una accion nueva. Es:
 // - recipeKey: nombre mecanico de la receta dentro de un stage;
-// - actionId: accion generica que se ejecutara;
-// - parametros/efecto de esa accion;
+// - actions: lista de acciones genericas que se ejecutaran;
 // - restricciones que limitan cuando puede usarse.
 //
-// recipeModel valida restricciones y entrega a actionModel una accion pura,
-// sin key ni constraints.
+// La implementacion actual ejecuta una unica action por recipe, pero el
+// contrato ya usa lista para permitir recipes multi-action futuras.
 // -----------------------------------------------------------------------------
 
-import { resolveAction, findRole } from './actionModel.js';
+import { resolveAction } from './actionModel.js';
+import { createAction } from './actionDefinition.js';
+import { findRole } from './targetModel.js';
 import {
   CONSTRAINT_TYPES,
   CONSTRAINT_WINDOWS,
@@ -31,7 +32,7 @@ import { createMessagesFromEngineErrors } from '../messages/messageModel.js';
 import { routeMessages } from '../messages/messageLogModel.js';
 
 export function getRecipeKey(recipe = {}) {
-  return normalizeId(recipe.key ?? recipe.recipeKey ?? recipe.id);
+  return normalizeId(recipe.key ?? recipe.recipeKey);
 }
 
 // Constructor generico de receta.
@@ -42,6 +43,7 @@ export function createRecipe(recipe = {}) {
   return {
     ...recipe,
     key: getRecipeKey(recipe),
+    actions: (recipe.actions ?? []).map(createAction),
     optional: recipe.optional !== false,
     usage: normalizeUsage(recipe.usage),
     constraints: [...(recipe.constraints ?? [])]
@@ -59,14 +61,24 @@ function normalizeUsage(usage = {}) {
   };
 }
 
-// Elimina metadatos propios de receta antes de llamar a actionModel.
+export function getPrimaryActionFromRecipe(recipe = {}) {
+  return recipe.actions?.[0] ?? null;
+}
+
+// Prepara la action que actionModel puede resolver.
+//
+// La recipe conserva el contrato publico de actor/target/visibility; la action
+// conserva la primitiva mecanica y su effect.
 export function getActionFromRecipe(recipe = {}) {
-  const action = { ...recipe };
-  delete action.key;
-  delete action.recipeKey;
-  delete action.constraints;
-  delete action.diagnostics;
-  return action;
+  const primaryAction = getPrimaryActionFromRecipe(recipe);
+  if (!primaryAction) return null;
+
+  return createAction({
+    ...primaryAction,
+    target: recipe.target ?? primaryAction.target ?? null,
+    visibility: recipe.visibility ?? primaryAction.visibility,
+    selectionRules: recipe.selectionRules ?? primaryAction.selectionRules ?? null
+  });
 }
 
 export function getRecipeActorAndTargets(session, input = {}) {
@@ -108,6 +120,7 @@ export function validateRecipeContract({ recipe = {}, input = {} } = {}) {
   const targetType = target.type ?? null;
   const targetCount = target.count ?? 0;
   const filters = target.filters ?? [];
+  const actions = Array.isArray(recipe.actions) ? recipe.actions : [];
 
   if (!isRecipeActorType(actorType)) {
     errors.push({
@@ -179,6 +192,24 @@ export function validateRecipeContract({ recipe = {}, input = {} } = {}) {
       });
   }
 
+  if (!Array.isArray(recipe.actions) || actions.length === 0) {
+    errors.push({
+      code: 'recipe/missing-actions',
+      message: `recipe "${getRecipeKey(recipe)}" must declare at least one action`
+    });
+  }
+
+  actions
+    .filter((action) => !action?.id)
+    .forEach((action, index) => {
+      errors.push({
+        code: 'recipe/invalid-action',
+        message: `recipe "${getRecipeKey(recipe)}" has invalid action at index ${index}`,
+        action,
+        index
+      });
+    });
+
   return {
     ok: errors.length === 0,
     errors
@@ -201,13 +232,14 @@ function resolveBlockedForActorIds(session = {}, blockedFor = {}) {
 }
 
 function materializeRecipeForSession(session = {}, recipe = {}, context = {}) {
-  if (recipe.effect?.type !== 'block_property_change') {
+  const primaryAction = getPrimaryActionFromRecipe(recipe);
+  if (primaryAction?.effect?.type !== 'block_property_change') {
     return { ok: true, errors: [], recipe };
   }
 
   const expiration = materializePropertyBlockExpiration(
     session,
-    recipe.effect.duration,
+    primaryAction.effect.duration,
     context
   );
   if (!expiration.ok) {
@@ -219,13 +251,20 @@ function materializeRecipeForSession(session = {}, recipe = {}, context = {}) {
     errors: [],
     recipe: {
       ...recipe,
-      effect: {
-        ...recipe.effect,
-        blockedFor: {
-          actorIds: resolveBlockedForActorIds(session, recipe.effect.blockedFor)
-        },
-        expiresAt: expiration.expiresAt
-      }
+      actions: recipe.actions.map((action, index) =>
+        index === 0
+          ? createAction({
+              ...action,
+              effect: {
+                ...action.effect,
+                blockedFor: {
+                  actorIds: resolveBlockedForActorIds(session, action.effect.blockedFor)
+                },
+                expiresAt: expiration.expiresAt
+              }
+            })
+          : action
+      )
     }
   };
 }
@@ -240,12 +279,17 @@ export function validateRecipeConstraints({ session, recipe, input = {}, context
   }
 
   const { actor, targets } = getRecipeActorAndTargets(session, input);
+  const action = getActionFromRecipe(recipe);
+  const recipeForConstraints = {
+    ...recipe,
+    id: action?.id ?? null,
+    effect: action?.effect ?? null,
+    visibility: action?.visibility ?? recipe.visibility,
+    constraints
+  };
   const errors = evaluateRecipeConstraints({
     session,
-    recipe: {
-      ...recipe,
-      constraints
-    },
+    recipe: recipeForConstraints,
     actor,
     targets,
     context
@@ -279,15 +323,16 @@ export function resolveRecipe(session, recipe, input = {}, context = {}) {
   const contractValidation = validateRecipeContract({ recipe, input });
 
   if (!contractValidation.ok) {
+    const action = getPrimaryActionFromRecipe(recipe);
     const messageState = appendEngineErrorMessages(session, contractValidation.errors, {
       ...context,
-      actionId: recipe?.id ?? null,
+      actionId: action?.id ?? null,
       recipeKey
     });
 
     return {
       ok: false,
-      actionId: recipe?.id ?? null,
+      actionId: action?.id ?? null,
       recipeKey,
       errors: contractValidation.errors,
       session: messageState.session,
@@ -299,15 +344,16 @@ export function resolveRecipe(session, recipe, input = {}, context = {}) {
   const constraintValidation = validateRecipeConstraints({ session, recipe, input, context });
 
   if (!constraintValidation.ok) {
+    const action = getPrimaryActionFromRecipe(recipe);
     const messageState = appendEngineErrorMessages(session, constraintValidation.errors, {
       ...context,
-      actionId: recipe?.id ?? null,
+      actionId: action?.id ?? null,
       recipeKey
     });
 
     return {
       ok: false,
-      actionId: recipe?.id ?? null,
+      actionId: action?.id ?? null,
       recipeKey,
       errors: constraintValidation.errors,
       session: messageState.session,
@@ -318,15 +364,16 @@ export function resolveRecipe(session, recipe, input = {}, context = {}) {
 
   const materialization = materializeRecipeForSession(session, recipe, context);
   if (!materialization.ok) {
+    const action = getPrimaryActionFromRecipe(recipe);
     const messageState = appendEngineErrorMessages(session, materialization.errors, {
       ...context,
-      actionId: recipe?.id ?? null,
+      actionId: action?.id ?? null,
       recipeKey
     });
 
     return {
       ok: false,
-      actionId: recipe?.id ?? null,
+      actionId: action?.id ?? null,
       recipeKey,
       errors: materialization.errors,
       session: messageState.session,

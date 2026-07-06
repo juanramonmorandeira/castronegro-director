@@ -9,7 +9,11 @@
 // - el stage completado se elimina de la cola.
 // -----------------------------------------------------------------------------
 
-import { appendEntry } from './historyModel.js';
+import {
+  HISTORY_COLLECTIONS,
+  appendEntry,
+  getHistoryCollection
+} from './historyModel.js';
 import { assignUniqueStageIds, createStage } from './stageDefinition.js';
 import { CURRENT_STAGE_SOURCES } from './sessionModel.js';
 
@@ -111,21 +115,27 @@ function appendWindowValidationFailures(session = {}, errors = []) {
 export function appendSpecialStagesHistory(session, entry = {}) {
   const normalizedEntry = {
     cycleId: entry.cycleId ?? session?.cycle?.id ?? 0,
+    eventWindow: entry.metadata?.eventWindow ?? entry.eventWindow ?? null,
     stageId: entry.stageId ?? null,
     stageKey: entry.stageKey ?? null,
-    operation: entry.operation ?? null,
+    event: entry.operation ?? entry.event ?? null,
+    payload: {
+      stageId: entry.stageId ?? null,
+      stageKey: entry.stageKey ?? null,
+      operation: entry.operation ?? entry.event ?? null
+    },
     metadata: { ...(entry.metadata ?? {}) }
   };
 
-  return appendEntry(session, 'specialStagesHistory', normalizedEntry, {
+  return appendEntry(session, HISTORY_COLLECTIONS.SPECIAL_STAGE, normalizedEntry, {
     getId: (item, history) =>
-      `special-stage-${item.stageKey ?? 'stage'}-${item.operation ?? 'event'}-${history.length}`
+      `special-stage-${item.payload.stageKey ?? 'stage'}-${item.event ?? 'event'}-${history.length}`
   });
 }
 
 export function appendSpecialStage(session, stage, metadata = {}) {
-  const historicalStageIds = (session?.specialStagesHistory ?? [])
-    .map((entry) => entry.stageId)
+  const historicalStageIds = getHistoryCollection(session, HISTORY_COLLECTIONS.SPECIAL_STAGE)
+    .map((entry) => entry.metadata?.context?.stageId ?? entry.payload?.stageId)
     .filter(Boolean)
     .map((id) => ({ id }));
   const normalizedStage = assignUniqueStageIds([

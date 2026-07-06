@@ -58,7 +58,7 @@ digraph DomainArchitecture {
   ];
 
   specialStages [
-    label="SPECIAL STAGES\n\nsession.specialStages\ncola FIFO dinamica\nspecialStagesHistory",
+    label="SPECIAL STAGES\n\nsession.specialStages\ncola FIFO dinamica\nspecialStageHistory",
     fillcolor="#dff2e3"
   ];
 

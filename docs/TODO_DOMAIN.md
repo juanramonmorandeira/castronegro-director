@@ -16,7 +16,6 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
 - Conectar `messagePresenter` con la UI cuando exista una primera skin real.
 - Revisar y depurar todos los logs/histories antes de persistir mensajes
   tecnicos de director/player:
-  - estructura anidada `session.history`;
   - `stageHistory`;
   - `specialStageHistory`;
   - `poolHistory`;

@@ -22,6 +22,10 @@ import {
   appendSpecialStage,
   removeSpecialStages
 } from './specialStagesModel.js';
+import {
+  HISTORY_COLLECTIONS,
+  getHistoryCollection
+} from './historyModel.js';
 
 export const DOUBLE_SELECTOR_RULE_KEY = 'selection_counts_double';
 
@@ -43,7 +47,7 @@ function isSelectionCountsDoubleEnabled(session = {}) {
 }
 
 function hasInitialDoubleSelectorRequest(session = {}) {
-  return (session.specialStagesHistory ?? []).some(
+  return getHistoryCollection(session, HISTORY_COLLECTIONS.SPECIAL_STAGE).some(
     (entry) =>
       entry.metadata?.ruleKey === DOUBLE_SELECTOR_RULE_KEY &&
       entry.metadata?.requestKey === DOUBLE_SELECTOR_STAGE_KEYS.SELECT_DOUBLE_SELECTOR

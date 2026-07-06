@@ -43,8 +43,12 @@ export {
 } from './sessionValidation.js';
 
 export {
+  HISTORY_COLLECTIONS,
+  HISTORY_EVENTS,
   HISTORY_RESULTS,
+  getHistoryCollection,
   getRecipeHistory,
+  getSessionHistory,
   getRecipeHistorySignature,
   appendEntry,
   appendRecipeHistory,
@@ -211,6 +215,15 @@ export {
   validateCatalogRecipeOverrides
 } from './recipeCatalog.js';
 export {
+  ACTION_CATALOG,
+  getCatalogAction,
+  validateCatalogActionOverrides
+} from './actionCatalog.js';
+export {
+  createAction,
+  defineAction
+} from './actionDefinition.js';
+export {
   getRecipeKey,
   createRecipe,
   getActionFromRecipe,
@@ -269,12 +282,17 @@ export {
 export {
   ACTION_IDS,
   VISIBILITY,
-  findRole,
-  validateActionTargets,
   validateActionDefinition,
   validateActionResolution,
   resolveAction
 } from './actionModel.js';
+export {
+  findRole,
+  getActionActors,
+  canResolveWithoutActor,
+  targetMatchesFilter,
+  validateActionTargets
+} from './targetModel.js';
 
 export {
   OBJECTIVE_EVALUATION_STATUSES,

@@ -21,6 +21,12 @@ export const LINKED_PROPAGATED_EFFECT_STAGE = Object.freeze({
   RECIPE_KEY: 'linked_propagated_effect'
 });
 
+export const LINKED_TARGET_RECOGNITION_STAGE = Object.freeze({
+  KEY: 'stage_linked_target_recognition',
+  CATALOG_ID: 'linked_target_recognition',
+  RECIPE_KEY: 'linked_target_recognition'
+});
+
 export const ROLE_STATE_REVEALED_STAGE = Object.freeze({
   KEY: 'stage_role_state_revealed',
   CATALOG_ID: 'role_state_revealed'

@@ -15,6 +15,7 @@ import { createStage } from './stageDefinition.js';
 import { EFFECT_TYPES } from './effectModel.js';
 import { STAGE_STATUSES, normalizeId } from './sessionModel.js';
 import { MECHANICAL_ENTITY_TYPES } from './domainTypes.js';
+import { GROUP_TYPES } from './groupDefinition.js';
 import { getCatalogRecipe, RECIPE_KEYS } from './recipeCatalog.js';
 import {
   SELECTION_ABSTAIN_RULES,
@@ -27,8 +28,13 @@ import {
   appendSpecialStage,
   removeSpecialStages
 } from './specialStagesModel.js';
-import { STAGE_COMPLETION_REQUESTED_BY } from './stageTypes.js';
-import { ROLE_STATE_REVEALED_STAGE } from './stageTypes.js';
+import {
+  LINKED_PROPAGATED_EFFECT_STAGE,
+  LINKED_TARGET_RECOGNITION_STAGE,
+  ROLE_STATE_REVEALED_STAGE,
+  STAGE_COMPLETION_REQUESTED_BY
+} from './stageTypes.js';
+import { findRole } from './targetModel.js';
 
 const DOUBLE_SELECTOR_RULE_KEY = 'selection_counts_double';
 const PICK_NEXT_DOUBLE_SELECTOR_STAGE_KEY = 'pick_next_double_selector';
@@ -37,7 +43,7 @@ const EVENT_SOURCE_STAGE_CATALOG_IDS = Object.freeze({
   EXPOSED_SET_OUT_OF_PLAY: 'exposed_set_out_of_play',
   ROLE_IN_OUT_OF_PLAY: 'role_in_out_of_play',
   ROLE_REACTIVE_RESPONSE: 'role_reactive_response',
-  LINKED_PROPAGATED_EFFECT: 'linked_propagated_effect'
+  LINKED_PROPAGATED_EFFECT: LINKED_PROPAGATED_EFFECT_STAGE.CATALOG_ID
 });
 
 export const EVENT_TYPES = Object.freeze({
@@ -52,60 +58,9 @@ export const EVENT_RESPONSE_TYPES = Object.freeze({
   CREATE_STAGE: 'create_stage'
 });
 
-function findRole(session = {}, roleId = null) {
-  return (session?.roles ?? []).find((role) => role.id === roleId) ?? null;
-}
-
-function isSelectionCountsDoubleEnabled(session = {}) {
-  return (session.settings?.selectedRuleKeys ?? []).includes(DOUBLE_SELECTOR_RULE_KEY);
-}
-
-function getInPlayCandidateIds(session = {}, excludedRoleIds = []) {
-  const excluded = new Set(excludedRoleIds);
-  return (session.roles ?? [])
-    .filter((role) => role.inPlay === true && !excluded.has(role.id))
-    .map((role) => role.id);
-}
-
-function hasPendingPickNextDoubleSelectorStage(session = {}, holderRoleId = null) {
-  return (session.specialStages ?? []).some(
-    (stage) =>
-      stage.metadata?.ruleKey === DOUBLE_SELECTOR_RULE_KEY &&
-      stage.metadata?.requestKey === PICK_NEXT_DOUBLE_SELECTOR_STAGE_KEY &&
-      stage.metadata?.holderRoleId === holderRoleId
-  );
-}
-
-function createPickNextDoubleSelectorStage({ holderRoleId, candidateIds, eventWindow = null }) {
-  return createStage({
-    key: PICK_NEXT_DOUBLE_SELECTOR_STAGE_KEY,
-    status: STAGE_STATUSES.ENABLED,
-    actorIds: holderRoleId ? [holderRoleId] : [],
-    completion: {
-      mode: 'manual',
-      allowedRequesters: [
-        STAGE_COMPLETION_REQUESTED_BY.DIRECTOR,
-        STAGE_COMPLETION_REQUESTED_BY.SYSTEM
-      ]
-    },
-    selectionRules: createSelectionRules({
-      required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
-      abstain: SELECTION_ABSTAIN_RULES.NOT_ALLOWED,
-      unanimous: SELECTION_UNANIMOUS_RULES.NOT_REQUIRED,
-      candidateIds,
-      selectorEligibility: {
-        requireInPlay: false
-      }
-    }),
-    recipes: [getCatalogRecipe(RECIPE_KEYS.SET_DOUBLE_SELECTOR)],
-    metadata: {
-      ruleKey: DOUBLE_SELECTOR_RULE_KEY,
-      requestKey: PICK_NEXT_DOUBLE_SELECTOR_STAGE_KEY,
-      holderRoleId,
-      ...(eventWindow ? { eventWindow } : {})
-    }
-  });
-}
+// -----------------------------------------------------------------------------
+// Helpers generales
+// -----------------------------------------------------------------------------
 
 function getPropertyChangeEvent({ previousSession, effect, source = {} }) {
   if (
@@ -192,6 +147,41 @@ function getRevealEventWindow(event = {}) {
   return getEventResponseWindow(event);
 }
 
+function getLinkedEventWindow(context = {}) {
+  if (context.eventWindow) return context.eventWindow;
+  if (context.poolKey === 'poolConcealed') return SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED;
+  if (context.poolKey === 'poolExposed') return SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED;
+  return null;
+}
+
+function sameRoleIdSet(left = [], right = []) {
+  const leftIds = [...new Set(left ?? [])].sort();
+  const rightIds = [...new Set(right ?? [])].sort();
+  return leftIds.length === rightIds.length && leftIds.every((roleId, index) => roleId === rightIds[index]);
+}
+
+function findGroupCreatedBySetGroupEffect(session = {}, effect = {}) {
+  const roleIds = effect.roleIds ?? [];
+  const groupType = effect.groupType ?? null;
+
+  return (session.groups ?? []).find((group) =>
+    group.type === groupType &&
+    sameRoleIdSet(group.roleIds ?? [], roleIds)
+  ) ?? null;
+}
+
+function appendCreateStageResponses(session = {}, responses = [], metadata = {}) {
+  return (responses ?? []).reduce((currentSession, response) => {
+    if (response.type !== EVENT_RESPONSE_TYPES.CREATE_STAGE) return currentSession;
+
+    return appendSpecialStage(currentSession, response.stage, {
+      source: 'event_response',
+      ...metadata,
+      ...(response.metadata ?? {})
+    });
+  }, session);
+}
+
 // Convierte efectos finales ya aplicados en eventos mecanicos.
 //
 // Usamos finalEffects, no proposedEffects, porque un cambio impedido no debe
@@ -215,6 +205,10 @@ export function getEventsFromActionResult({
     .map((effect) => getPropertyChangeEvent({ previousSession, effect, source }))
     .filter(Boolean);
 }
+
+// -----------------------------------------------------------------------------
+// role_state_revealed
+// -----------------------------------------------------------------------------
 
 function createRoleStateRevealedStage({ session = {}, event = {} } = {}) {
   const role = findRole(session, event.roleId);
@@ -333,6 +327,10 @@ function applyRoleStateRevealEventResponses({ session = {}, responses = [] } = {
   }, session);
 }
 
+// -----------------------------------------------------------------------------
+// role reactions
+// -----------------------------------------------------------------------------
+
 function eventMatchesTrigger({ event, role, trigger = {} }) {
   if (trigger.eventType && trigger.eventType !== event.type) return false;
   if (trigger.targetType && trigger.targetType !== event.targetType) return false;
@@ -411,15 +409,62 @@ export function resolveEventResponses({ triggeredReactions = [] } = {}) {
 }
 
 export function applyEventResponses({ session = {}, responses = [] } = {}) {
-  if (!responses.length) return session;
+  return appendCreateStageResponses(session, responses);
+}
 
-  return responses.reduce((currentSession, response) => {
-    if (response.type !== EVENT_RESPONSE_TYPES.CREATE_STAGE) return currentSession;
+// -----------------------------------------------------------------------------
+// selection_counts_double
+// -----------------------------------------------------------------------------
 
-    return appendSpecialStage(currentSession, response.stage, {
-      source: 'event_response'
-    });
-  }, session);
+function isSelectionCountsDoubleEnabled(session = {}) {
+  return (session.settings?.selectedRuleKeys ?? []).includes(DOUBLE_SELECTOR_RULE_KEY);
+}
+
+function getInPlayCandidateIds(session = {}, excludedRoleIds = []) {
+  const excluded = new Set(excludedRoleIds);
+  return (session.roles ?? [])
+    .filter((role) => role.inPlay === true && !excluded.has(role.id))
+    .map((role) => role.id);
+}
+
+function hasPendingPickNextDoubleSelectorStage(session = {}, holderRoleId = null) {
+  return (session.specialStages ?? []).some(
+    (stage) =>
+      stage.metadata?.ruleKey === DOUBLE_SELECTOR_RULE_KEY &&
+      stage.metadata?.requestKey === PICK_NEXT_DOUBLE_SELECTOR_STAGE_KEY &&
+      stage.metadata?.holderRoleId === holderRoleId
+  );
+}
+
+function createPickNextDoubleSelectorStage({ holderRoleId, candidateIds, eventWindow = null }) {
+  return createStage({
+    key: PICK_NEXT_DOUBLE_SELECTOR_STAGE_KEY,
+    status: STAGE_STATUSES.ENABLED,
+    actorIds: holderRoleId ? [holderRoleId] : [],
+    completion: {
+      mode: 'manual',
+      allowedRequesters: [
+        STAGE_COMPLETION_REQUESTED_BY.DIRECTOR,
+        STAGE_COMPLETION_REQUESTED_BY.SYSTEM
+      ]
+    },
+    selectionRules: createSelectionRules({
+      required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
+      abstain: SELECTION_ABSTAIN_RULES.NOT_ALLOWED,
+      unanimous: SELECTION_UNANIMOUS_RULES.NOT_REQUIRED,
+      candidateIds,
+      selectorEligibility: {
+        requireInPlay: false
+      }
+    }),
+    recipes: [getCatalogRecipe(RECIPE_KEYS.SET_DOUBLE_SELECTOR)],
+    metadata: {
+      ruleKey: DOUBLE_SELECTOR_RULE_KEY,
+      requestKey: PICK_NEXT_DOUBLE_SELECTOR_STAGE_KEY,
+      holderRoleId,
+      ...(eventWindow ? { eventWindow } : {})
+    }
+  });
 }
 
 function getDoubleSelectorEventResponses({ session = {}, events = [] } = {}) {
@@ -513,46 +558,119 @@ function applyDoubleSelectorEventResponses({ session = {}, responses = [] } = {}
   }, session);
 }
 
-function sameMetadataValue(left, right) {
-  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
-}
+// -----------------------------------------------------------------------------
+// linked
+// -----------------------------------------------------------------------------
 
-function stageMatchesLinkedPropagatedEffect(stage = {}, effect = {}) {
-  const propagatedEffect = stage.metadata?.propagatedEffect ?? null;
-
-  return (
-    stage.metadata?.catalogId === EVENT_SOURCE_STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT &&
-    propagatedEffect?.targetId === effect.targetId &&
-    propagatedEffect?.property === effect.property &&
-    propagatedEffect?.value === effect.value &&
-    sameMetadataValue(propagatedEffect?.causedBy, effect.causedBy) &&
-    sameMetadataValue(propagatedEffect?.derivedFrom, effect.derivedFrom) &&
-    sameMetadataValue(propagatedEffect?.causalCondition, effect.causalCondition)
-  );
-}
-
-function moveCurrentLinkedPropagationStagesAfterRoleResponses({
+function getLinkedPropagatedEffectResponses({
   session = {},
-  linkedPropagatedEffects = []
+  linkedPropagatedEffects = [],
+  context = {}
 } = {}) {
-  if (!linkedPropagatedEffects.length) return session;
+  const eventWindow = getLinkedEventWindow(context);
+  if (!eventWindow) return [];
 
-  const movedStages = [];
-  const remainingStages = (session.specialStages ?? []).filter((stage) => {
-    const matched = linkedPropagatedEffects.some((effect) =>
-      stageMatchesLinkedPropagatedEffect(stage, effect)
-    );
-    if (matched) movedStages.push(stage);
-    return !matched;
-  });
-
-  if (!movedStages.length) return session;
-
-  return {
-    ...session,
-    specialStages: [...remainingStages, ...movedStages]
-  };
+  return (linkedPropagatedEffects ?? []).map((effect, index) => ({
+    type: EVENT_RESPONSE_TYPES.CREATE_STAGE,
+    stage: createStage({
+      key: LINKED_PROPAGATED_EFFECT_STAGE.KEY,
+      status: STAGE_STATUSES.ENABLED,
+      actorIds: [],
+      recipes: [],
+      metadata: {
+        catalogId: LINKED_PROPAGATED_EFFECT_STAGE.CATALOG_ID,
+        eventWindow,
+        propagatedEffect: effect,
+        sourceContext: {
+          cycleId: context.cycleId ?? session.cycle?.id ?? 0,
+          poolKey: context.poolKey ?? null,
+          stageId: context.stageId ?? null,
+          stageKey: context.stageKey ?? null,
+          stageCatalogId: context.stageCatalogId ?? null,
+          recipeKey: context.recipeKey ?? null
+        }
+      }
+    }),
+    metadata: {
+      catalogId: LINKED_PROPAGATED_EFFECT_STAGE.CATALOG_ID,
+      eventWindow,
+      reason: LINKED_PROPAGATED_EFFECT_STAGE.RECIPE_KEY,
+      index,
+      causedBy: effect.causedBy ?? null,
+      derivedFrom: effect.derivedFrom ?? null,
+      causalCondition: effect.causalCondition ?? null,
+      targetId: effect.targetId ?? null
+    }
+  }));
 }
+
+function getLinkedTargetRecognitionResponses({
+  session = {},
+  actionResult = {},
+  context = {}
+} = {}) {
+  const eventWindow = getLinkedEventWindow(context);
+  if (!eventWindow) return [];
+
+  return (actionResult.finalEffects ?? [])
+    .filter((effect) => effect?.type === EFFECT_TYPES.SET_GROUP && effect.groupType === GROUP_TYPES.LINKED)
+    .map((effect) => findGroupCreatedBySetGroupEffect(session, effect))
+    .filter((group) => group && (group.roleIds ?? []).length > 0)
+    .map((group) => {
+      const memberRoleIds = [...(group.roleIds ?? [])];
+
+      return {
+        type: EVENT_RESPONSE_TYPES.CREATE_STAGE,
+        stage: createStage({
+          key: LINKED_TARGET_RECOGNITION_STAGE.KEY,
+          status: STAGE_STATUSES.ENABLED,
+          actorIds: memberRoleIds,
+          completion: {
+            mode: 'manual',
+            allowedRequesters: [STAGE_COMPLETION_REQUESTED_BY.DIRECTOR]
+          },
+          recipes: [],
+          metadata: {
+            catalogId: LINKED_TARGET_RECOGNITION_STAGE.CATALOG_ID,
+            eventWindow,
+            visibility: 'linked_members',
+            audienceRoleIds: memberRoleIds,
+            directorVisible: true,
+            causedBy: {
+              recipeKey: context.recipeKey ?? null,
+              actionId: actionResult.actionId ?? null,
+              actorIds: [...(actionResult.actorIds ?? [])],
+              groupId: group.id
+            },
+            derivedFrom: {
+              type: MECHANICAL_ENTITY_TYPES.GROUP,
+              id: group.id,
+              groupType: group.type ?? null,
+              sourceActionId: group.sourceActionId ?? null
+            },
+            reveals: {
+              groupId: group.id,
+              memberRoleIds
+            }
+          }
+        }),
+        metadata: {
+          catalogId: LINKED_TARGET_RECOGNITION_STAGE.CATALOG_ID,
+          eventWindow,
+          groupId: group.id,
+          audienceRoleIds: memberRoleIds
+        }
+      };
+    });
+}
+
+function applyLinkedEventResponses({ session = {}, responses = [] } = {}) {
+  return appendCreateStageResponses(session, responses);
+}
+
+// -----------------------------------------------------------------------------
+// Public API
+// -----------------------------------------------------------------------------
 
 // Punto de entrada para stageModel.
 //
@@ -581,22 +699,34 @@ export function processActionResultEvents({
     session: sessionWithRevealResponses,
     responses
   });
-  const sessionWithLinkedAfterRoleResponses = moveCurrentLinkedPropagationStagesAfterRoleResponses({
+  const linkedResponses = [
+    ...getLinkedPropagatedEffectResponses({
+      session: sessionWithRoleResponses,
+      linkedPropagatedEffects: actionResult.linkedPropagatedEffects ?? [],
+      context
+    }),
+    ...getLinkedTargetRecognitionResponses({
+      session: sessionWithRoleResponses,
+      actionResult,
+      context
+    })
+  ];
+  const sessionWithLinkedResponses = applyLinkedEventResponses({
     session: sessionWithRoleResponses,
-    linkedPropagatedEffects: actionResult.linkedPropagatedEffects ?? []
+    responses: linkedResponses
   });
   const doubleSelectorResponses = getDoubleSelectorEventResponses({
-    session: sessionWithLinkedAfterRoleResponses,
+    session: sessionWithLinkedResponses,
     events
   });
 
   return {
     session: applyDoubleSelectorEventResponses({
-      session: sessionWithLinkedAfterRoleResponses,
+      session: sessionWithLinkedResponses,
       responses: doubleSelectorResponses
     }),
     events,
     triggeredReactions,
-    responses: [...revealResponses, ...responses, ...doubleSelectorResponses]
+    responses: [...revealResponses, ...responses, ...linkedResponses, ...doubleSelectorResponses]
   };
 }

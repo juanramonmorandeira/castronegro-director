@@ -77,7 +77,7 @@ export function assignUniqueStageIds(stages = []) {
 // Aqui solo garantizamos la key mecanica que stageModel usara para seleccionarla
 // y el valor optional por defecto.
 function prepareRecipe(recipe = {}) {
-  const recipeKey = normalizeId(recipe.key ?? recipe.recipeKey ?? recipe.id);
+  const recipeKey = normalizeId(recipe.key ?? recipe.recipeKey);
 
   return {
     ...recipe,

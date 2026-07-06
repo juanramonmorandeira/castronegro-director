@@ -18,7 +18,7 @@ limpio. No es un documento de ambientacion y evita nombres narrativos.
 | `set_in_play` | implementada | Cambia `inPlay`; no implica muerte narrativa. |
 | `block_property_change` | implementada | Bloquea un cambio `(property, value)` para actores concretos. |
 | `block_out_of_play` | implementada | Receta que bloquea `inPlay=false` frente a los roles materializados de `alignment_b`. |
-| `no_repeat_target` | implementada | Restriccion basada en `session.recipeHistory`. |
+| `no_repeat_target` | implementada | Restriccion basada en `session.history.recipeHistory`. |
 | `startCycle` | implementada | Incrementa `cycle.id`; no limpia estado de roles. |
 | `link_targets` | implementada | Crea un group con miembros, `groupRules`, `selectionRules` y `objectiveRules`. |
 | `propagate_property_change` | implementada | Propaga cambios por regla declarativa; no depende del `group.type`. |

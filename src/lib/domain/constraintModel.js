@@ -1,5 +1,6 @@
 import { getCurrentCycleId } from './effectModel.js';
 import {
+  HISTORY_EVENTS,
   findAppliedSetPropertyHistory,
   getRecipeHistory,
   getRecipeHistorySignature
@@ -40,6 +41,26 @@ export const CONSTRAINT_WINDOWS = Object.freeze({
   SESSION: 'session'
 });
 
+function getHistoryCycleId(entry = {}) {
+  return entry.metadata?.context?.cycleId ?? 0;
+}
+
+function getHistoryPoolKey(entry = {}) {
+  return entry.metadata?.context?.poolKey ?? null;
+}
+
+function getHistoryStageId(entry = {}) {
+  return entry.metadata?.context?.stageId ?? null;
+}
+
+function getHistoryPayload(entry = {}) {
+  return entry.payload ?? {};
+}
+
+function isFinishedRecipeHistory(entry = {}) {
+  return entry.event === HISTORY_EVENTS.FINISHED;
+}
+
 // Crea una restriccion mecanica normalizada.
 //
 // Una restriccion no ejecuta acciones. Solo declara una regla que recipeModel
@@ -63,12 +84,12 @@ export function isEntryInsideConstraintWindow(entry, currentCycleId, window) {
     return true;
   }
   if (window === CONSTRAINT_WINDOWS.CURRENT_CYCLE) {
-    return entry.cycleId === currentCycleId;
+    return getHistoryCycleId(entry) === currentCycleId;
   }
   if (window === CONSTRAINT_WINDOWS.NEXT_CYCLE) {
-    return entry.cycleId === currentCycleId - 1;
+    return getHistoryCycleId(entry) === currentCycleId - 1;
   }
-  return entry.cycleId === currentCycleId || entry.cycleId === currentCycleId - 1;
+  return getHistoryCycleId(entry) === currentCycleId || getHistoryCycleId(entry) === currentCycleId - 1;
 }
 
 // Evalua la restriccion no_repeat_target.
@@ -97,13 +118,14 @@ export function evaluateNoRepeatTargetConstraint({
     if (!actor || !target) return [];
 
     const repeated = getRecipeHistory(session).some((entry) => {
-      const sameActor = (entry.actorIds ?? []).includes(actor.id);
-      const sameTarget = (entry.targetIds ?? []).includes(target.id);
-      const sameAction = entry.actionSignature === actionSignature;
-      const successful = entry.result === 'applied';
+      const payload = getHistoryPayload(entry);
+      const sameActor = (payload.actorIds ?? []).includes(actor.id);
+      const sameTarget = (payload.targetIds ?? []).includes(target.id);
+      const sameAction = entry.metadata?.actionSignature === actionSignature;
+      const successful = payload.result === 'applied';
       const insideWindow = isEntryInsideConstraintWindow(entry, currentCycleId, window);
 
-      return sameActor && sameTarget && sameAction && successful && insideWindow;
+      return isFinishedRecipeHistory(entry) && sameActor && sameTarget && sameAction && successful && insideWindow;
     });
 
     if (!repeated) return [];
@@ -221,23 +243,23 @@ export function isEntryInsideLimitedUseWindow(entry, currentCycleId, window, con
   if (window === CONSTRAINT_WINDOWS.SESSION) return true;
   if (window === CONSTRAINT_WINDOWS.STAGE) {
     return (
-      entry.cycleId === currentCycleId &&
-      entry.poolKey === (context.poolKey ?? null) &&
-      entry.stageId === (context.stageId ?? null)
+      getHistoryCycleId(entry) === currentCycleId &&
+      getHistoryPoolKey(entry) === (context.poolKey ?? null) &&
+      getHistoryStageId(entry) === (context.stageId ?? null)
     );
   }
   if (window === CONSTRAINT_WINDOWS.POOL) {
     return (
-      entry.cycleId === currentCycleId &&
-      entry.poolKey === (context.poolKey ?? null)
+      getHistoryCycleId(entry) === currentCycleId &&
+      getHistoryPoolKey(entry) === (context.poolKey ?? null)
     );
   }
-  if (window === CONSTRAINT_WINDOWS.CYCLE) return entry.cycleId === currentCycleId;
-  if (window === CONSTRAINT_WINDOWS.NEXT_CYCLE) return entry.cycleId === currentCycleId - 1;
+  if (window === CONSTRAINT_WINDOWS.CYCLE) return getHistoryCycleId(entry) === currentCycleId;
+  if (window === CONSTRAINT_WINDOWS.NEXT_CYCLE) return getHistoryCycleId(entry) === currentCycleId - 1;
   if (window === CONSTRAINT_WINDOWS.CURRENT_OR_NEXT_CYCLE) {
-    return entry.cycleId === currentCycleId || entry.cycleId === currentCycleId - 1;
+    return getHistoryCycleId(entry) === currentCycleId || getHistoryCycleId(entry) === currentCycleId - 1;
   }
-  return entry.cycleId === currentCycleId;
+  return getHistoryCycleId(entry) === currentCycleId;
 }
 
 // Indica si una entrada de historial pertenece al contador de limited_uses.
@@ -256,8 +278,9 @@ export function isEntryInsideLimitedUseCounter(entry, { actor, recipe }) {
   return (
     !!actor &&
     !!recipeKey &&
-    (entry.actorIds ?? []).includes(actor.id) &&
-    entry.recipeKey === recipeKey
+    isFinishedRecipeHistory(entry) &&
+    (getHistoryPayload(entry).actorIds ?? []).includes(actor.id) &&
+    getHistoryPayload(entry).recipeKey === recipeKey
   );
 }
 

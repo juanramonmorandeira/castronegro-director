@@ -55,6 +55,7 @@ Ejemplos:
 - `roleCatalog.js`
 - `groupCatalog.js`
 - `stageCatalog.js`
+- `actionCatalog.js`
 - `recipeCatalog.js`
 
 Los catalogos no ejecutan reglas. Devuelven definiciones ya preparadas mediante
@@ -76,7 +77,8 @@ Ejemplos:
 
 - `poolCursorModel.js`: mueve el cursor entre stages.
 - `stageModel.js`: conecta el stage actual con recipe/action y cierre de stage.
-- `recipeModel.js`: valida restricciones y transforma receta en accion pura.
+- `recipeModel.js`: valida restricciones y entrega actions de recipe a
+  `actionModel`.
 - `actionModel.js`: resuelve acciones puras.
 - `resolverModel.js`: deriva o bloquea efectos propuestos.
 - `effectModel.js`: aplica efectos finales a la sesion.
@@ -175,11 +177,11 @@ La sesion guarda:
 - `roles`
 - `groups`
 - `session.cycle.pools` contiene el mapa de pools runtime.
-- `recipeHistory`
-- `cycleHistory`
-- `poolHistory`
-- `stageHistory`
-- `specialStagesHistory`
+- `session.history.recipeHistory`
+- `session.history.cycleHistory`
+- `session.history.poolHistory`
+- `session.history.stageHistory`
+- `session.history.specialStageHistory`
 - `sessionMessageLog`
 - `errorLog`
 - `settings`

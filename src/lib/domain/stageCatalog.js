@@ -15,6 +15,7 @@ import {
 } from './stageModel.js';
 import {
   LINKED_PROPAGATED_EFFECT_STAGE,
+  LINKED_TARGET_RECOGNITION_STAGE,
   ROLE_STATE_REVEALED_STAGE
 } from './stageTypes.js';
 import { getCatalogRecipe, RECIPE_KEYS } from './recipeCatalog.js';
@@ -43,6 +44,7 @@ export const STAGE_CATALOG_IDS = Object.freeze({
   SELECT_DOUBLE_SELECTOR: 'select_double_selector',
   PICK_NEXT_DOUBLE_SELECTOR: 'pick_next_double_selector',
   LINKED_PROPAGATED_EFFECT: LINKED_PROPAGATED_EFFECT_STAGE.CATALOG_ID,
+  LINKED_TARGET_RECOGNITION: LINKED_TARGET_RECOGNITION_STAGE.CATALOG_ID,
   ROLE_STATE_REVEALED: ROLE_STATE_REVEALED_STAGE.CATALOG_ID,
   DELIBERATION: 'deliberation',
   CONCEALED_SET_OUT_OF_PLAY: 'concealed_set_out_of_play',
@@ -211,6 +213,17 @@ export const STAGE_CATALOG = Object.freeze({
     recipes: [],
     metadata: {
       catalogId: STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT
+    }
+  }),
+
+  [STAGE_CATALOG_IDS.LINKED_TARGET_RECOGNITION]: defineStage({
+    key: LINKED_TARGET_RECOGNITION_STAGE.KEY,
+    status: STAGE_STATUSES.ENABLED,
+    actorIds: [],
+    completion: getManualCompletion([STAGE_COMPLETION_REQUESTED_BY.DIRECTOR]),
+    recipes: [],
+    metadata: {
+      catalogId: STAGE_CATALOG_IDS.LINKED_TARGET_RECOGNITION
     }
   }),
 

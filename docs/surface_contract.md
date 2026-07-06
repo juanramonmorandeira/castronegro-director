@@ -463,7 +463,7 @@ Distribucion inicial:
 - `director_pool_started` se persiste en `poolHistory`;
 - mensajes de stage, seleccion, informacion y acknowledgements se persisten en
   `stageHistory`;
-- `director_special_stage_started` se persiste en `specialStagesHistory`;
+- `director_special_stage_started` se persiste en `specialStageHistory`;
 - mensajes de player como `player_action_required`,
   `player_acknowledgement_required` y `player_waiting_for_director` se persisten
   en el log/history de su stage correspondiente.

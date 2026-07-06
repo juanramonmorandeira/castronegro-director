@@ -15,6 +15,10 @@ import { buildRoles, createRole } from './roleDefinition.js';
 import { assignUniqueStageIds, createStage } from './stageDefinition.js';
 import { CURRENT_STAGE_SOURCES, SESSION_STATUSES, normalizeId } from './sessionModel.js';
 import { validateSession } from './sessionValidation.js';
+import {
+  HISTORY_COLLECTIONS,
+  createSessionHistory
+} from './historyModel.js';
 
 function getAssumableRoleIds(roles = []) {
   return (roles ?? [])
@@ -62,11 +66,7 @@ export function createSession({
   assumableRoles = null,
   achievedObjectives = [],
   playOutcome = null,
-  recipeHistory = [],
-  cycleHistory = [],
-  poolHistory = [],
-  stageHistory = [],
-  specialStagesHistory = [],
+  history = {},
   sessionMessageLog = [],
   errorLog = [],
   log = [],
@@ -75,31 +75,64 @@ export function createSession({
   const normalizedSpecialStages = assignUniqueStageIds(
     specialStages.map((stage) => createStage(stage))
   );
-  const normalizedSpecialStagesHistory =
-    specialStagesHistory.length > 0
-      ? [...specialStagesHistory]
+  const normalizedHistory = createSessionHistory(history);
+  const normalizedSpecialStageHistory =
+    normalizedHistory[HISTORY_COLLECTIONS.SPECIAL_STAGE].length > 0
+      ? normalizedHistory[HISTORY_COLLECTIONS.SPECIAL_STAGE]
       : normalizedSpecialStages.flatMap((stage, index) => [
           {
             id: `special-stage-${stage.key ?? 'stage'}-queued-${index}`,
-            cycleId: cycle?.id ?? 0,
-            stageId: stage.id,
-            stageKey: stage.key ?? null,
-            operation: 'queued',
-            metadata: { initial: true }
+            sequence: index,
+            timestamp: new Date().toISOString(),
+            event: 'queued',
+            actor: { authority: 'system' },
+            payload: {
+              stageId: stage.id,
+              stageKey: stage.key ?? null
+            },
+            metadata: {
+              initial: true,
+              context: {
+                cycleId: cycle?.id ?? 0,
+                poolKey: null,
+                stageId: stage.id,
+                stageKey: stage.key ?? null,
+                stageCatalogId: stage.metadata?.catalogId ?? null,
+                eventWindow: stage.metadata?.eventWindow ?? null
+              }
+            }
           },
           ...(currentStageSource === CURRENT_STAGE_SOURCES.SPECIAL_STAGES && index === 0
             ? [
                 {
                   id: `special-stage-${stage.key ?? 'stage'}-started-${index}`,
-                  cycleId: cycle?.id ?? 0,
-                  stageId: stage.id,
-                  stageKey: stage.key ?? null,
-                  operation: 'started',
-                  metadata: { initial: true }
+                  sequence: index + normalizedSpecialStages.length,
+                  timestamp: new Date().toISOString(),
+                  event: 'started',
+                  actor: { authority: 'system' },
+                  payload: {
+                    stageId: stage.id,
+                    stageKey: stage.key ?? null
+                  },
+                  metadata: {
+                    initial: true,
+                    context: {
+                      cycleId: cycle?.id ?? 0,
+                      poolKey: null,
+                      stageId: stage.id,
+                      stageKey: stage.key ?? null,
+                      stageCatalogId: stage.metadata?.catalogId ?? null,
+                      eventWindow: stage.metadata?.eventWindow ?? null
+                    }
+                  }
                 }
               ]
             : [])
         ]);
+  const sessionHistory = {
+    ...normalizedHistory,
+    [HISTORY_COLLECTIONS.SPECIAL_STAGE]: normalizedSpecialStageHistory
+  };
 
   const normalizedRoles = roles.map(createRole);
 
@@ -119,11 +152,7 @@ export function createSession({
     assumableRoles: assumableRoles ? [...assumableRoles] : getAssumableRoleIds(normalizedRoles),
     achievedObjectives: [...achievedObjectives],
     playOutcome,
-    recipeHistory: [...recipeHistory],
-    cycleHistory: [...cycleHistory],
-    poolHistory: [...poolHistory],
-    stageHistory: [...stageHistory],
-    specialStagesHistory: normalizedSpecialStagesHistory,
+    history: sessionHistory,
     sessionMessageLog: [...sessionMessageLog],
     errorLog: [...errorLog],
     log: [...log],

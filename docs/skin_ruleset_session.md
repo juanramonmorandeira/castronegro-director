@@ -235,8 +235,10 @@ session
   objectiveRules: [...]
   achievedObjectives: [...]
   playOutcome: null
-  recipeHistory: [...]
-  stageHistory: [...]
+  history: {
+    recipeHistory: [...]
+    stageHistory: [...]
+  }
   status: in_progress
 ```
 

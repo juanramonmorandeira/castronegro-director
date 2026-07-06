@@ -8,7 +8,7 @@
 // -----------------------------------------------------------------------------
 
 import { getGroupRoles, isGroupActive } from './groupModel.js';
-import { getRecipeHistory } from './historyModel.js';
+import { HISTORY_EVENTS, getRecipeHistory } from './historyModel.js';
 import { STAGE_STATUSES, normalizeId } from './sessionModel.js';
 import { getSpecialStages } from './specialStagesModel.js';
 import { MECHANICAL_ENTITY_TYPES } from './domainTypes.js';
@@ -252,6 +252,10 @@ export function getActionInfluences(action = {}) {
     return action.influences.map(normalizeInfluence).filter((influence) => influence.subject && influence.property);
   }
 
+  if (Array.isArray(action.actions)) {
+    return action.actions.flatMap(getActionInfluences);
+  }
+
   if (action?.effect?.type === 'set_property') {
     return [
       normalizeInfluence({
@@ -458,7 +462,10 @@ function roleHasUsedAction(session = {}, role = {}, recipeKey = null) {
   if (!role?.id || !recipeKey) return false;
 
   return getRecipeHistory(session).some(
-    (entry) => (entry.actorIds ?? []).includes(role.id) && entry.recipeKey === recipeKey
+    (entry) =>
+      entry.event === HISTORY_EVENTS.FINISHED &&
+      (entry.payload?.actorIds ?? []).includes(role.id) &&
+      entry.payload?.recipeKey === recipeKey
   );
 }
 

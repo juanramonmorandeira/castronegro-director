@@ -182,8 +182,8 @@ directamente a `session.specialStages`. No usan una bandera dentro del stage.
 `cycle.pools` o de `session.specialStages`. Sus valores son `pool` y
 `specialStages`.
 
-`specialStagesHistory` = historial propio de altas, inicios, cierres y fallos de
-la cola `specialStages`.
+`specialStageHistory` = historial propio de altas, inicios, cierres y fallos de
+la cola `specialStages`, dentro de `session.history`.
 
 `role_state_revealed` = specialStage informativa generada cuando un role queda
 `inPlay=false` y debe comunicarse publicamente. No tiene actions ni
@@ -215,16 +215,16 @@ recipe. Los tipos base aceptados son:
 { type: 'director' } // accion explicita del director de partida
 ```
 
-`recipe` = receta mecanica reusable que combina action pura, actor, target,
-usage, constraints, effect y visibility. La recipe define la mecanica general;
-no decide por si sola en que momento concreto se ejecuta.
+`recipe` = receta mecanica reusable que combina una lista de actions puras,
+actor, target, usage, constraints y visibility. La recipe define la mecanica
+general; no decide por si sola en que momento concreto se ejecuta.
 
 `recipe.key` = identificador mecanico de la recipe concreta, por ejemplo
 `set_out_of_play`.
 
-`recipe.id` = identificador de la action pura que ejecuta el motor, por ejemplo
-`set_in_play`. Varias recipes pueden compartir `id` si configuran efectos
-distintos.
+`recipe.actions` = lista de actions puras que ejecuta la recipe. La
+implementacion actual ejecuta una unica action por recipe, pero el contrato
+queda preparado para recipes multi-action futuras.
 
 `input` = intencion humana o externa concreta para una ejecucion: seleccion,
 target, confirmacion, requester, acusacion, validacion u otros datos de action.

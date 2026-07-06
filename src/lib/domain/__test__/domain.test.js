@@ -119,8 +119,12 @@ import {
   createConcealedSelectionSubmissionItem,
   createExposedSelectionSubmissionItem,
   getCatalogRecipe,
+  getActionFromRecipe,
   validateCatalogRecipeOverrides,
   getCatalogStage,
+  HISTORY_COLLECTIONS,
+  HISTORY_EVENTS,
+  getHistoryCollection,
   createEffectResultItem,
   createPublicTableStateItem,
   createSelectionTallyItem,
@@ -147,6 +151,68 @@ import {
 } from '../../messages/index.js';
 
 const tests = [];
+
+function history(session, collectionName) {
+  return getHistoryCollection(session, collectionName);
+}
+
+function recipeHistory(session) {
+  return history(session, HISTORY_COLLECTIONS.RECIPE);
+}
+
+function finishedRecipeHistory(session) {
+  return recipeHistory(session).filter((entry) => entry.event === HISTORY_EVENTS.FINISHED);
+}
+
+function lastFinishedRecipeHistory(session) {
+  return finishedRecipeHistory(session).at(-1);
+}
+
+function stageHistory(session) {
+  return history(session, HISTORY_COLLECTIONS.STAGE);
+}
+
+function specialStageHistory(session) {
+  return history(session, HISTORY_COLLECTIONS.SPECIAL_STAGE);
+}
+
+function cycleHistory(session) {
+  return history(session, HISTORY_COLLECTIONS.CYCLE);
+}
+
+function createFinishedRecipeHistoryEntry({
+  cycleId = 0,
+  recipeKey = null,
+  actorIds = [],
+  targetIds = [],
+  result = HISTORY_RESULTS.APPLIED,
+  finalEffects = []
+} = {}) {
+  return {
+    id: `${recipeKey ?? 'recipe'}-fixture-${cycleId}`,
+    sequence: 0,
+    timestamp: new Date().toISOString(),
+    event: HISTORY_EVENTS.FINISHED,
+    actor: { authority: 'system' },
+    payload: {
+      recipeKey,
+      result,
+      actorIds,
+      targetIds,
+      finalEffects
+    },
+    metadata: {
+      context: {
+        cycleId,
+        poolKey: null,
+        stageId: null,
+        stageKey: null,
+        stageCatalogId: null,
+        eventWindow: null
+      }
+    }
+  };
+}
 
 // Runner minimo y explicito.
 //
@@ -430,7 +496,9 @@ function createStableParitySession(roles = [], { recipeHistory = [] } = {}) {
       )
     ],
     objectiveRules: [createStableParityObjectiveRule()],
-    recipeHistory
+    history: {
+      recipeHistory
+    }
   });
 }
 
@@ -447,6 +515,23 @@ function actionRecipe(action, key) {
   return {
     ...action,
     key
+  };
+}
+
+function withPrimaryActionEffect(recipe = {}, effect = {}) {
+  return {
+    ...recipe,
+    actions: (recipe.actions ?? []).map((action, index) =>
+      index === 0
+        ? {
+            ...action,
+            effect: {
+              ...(action.effect ?? {}),
+              ...effect
+            }
+          }
+        : action
+    )
   };
 }
 
@@ -538,7 +623,7 @@ test('validateActionTargets aplica filtro recently_out_of_play en el ciclo actua
 
 test('inspect_role revela roleKey sin modificar la sesion', () => {
   const session = createBaseSession();
-  const resolved = resolveAction(session, inspectRoleAction, {
+  const resolved = resolveAction(session, getActionFromRecipe(inspectRoleAction), {
     actorIds: ['role_inspector-0'],
     targetIds: ['hidden_enemy-0']
   });
@@ -608,12 +693,12 @@ test('resolveCurrentStage ejecuta receta y completeCurrentStage avanza el cursor
   assert.equal(linked.errors[0].code, 'cycle/no-runnable-stages');
   assert.equal(linked.session.specialStages.length, 0);
   assert.deepEqual(
-    linked.session.specialStagesHistory.map((entry) => entry.operation),
+    specialStageHistory(linked.session).map((entry) => entry.event),
     ['queued', 'started', 'queued', 'completed', 'started', 'completed']
   );
-  assert.equal(linked.session.stageHistory.length, 2);
-  assert.equal(linked.session.stageHistory[0].requestedBy, STAGE_COMPLETION_REQUESTED_BY.PLAYER);
-  assert.equal(linked.session.stageHistory[1].requestedBy, STAGE_COMPLETION_REQUESTED_BY.DIRECTOR);
+  assert.equal(stageHistory(linked.session).length, 2);
+  assert.equal(stageHistory(linked.session)[0].payload.requestedBy, STAGE_COMPLETION_REQUESTED_BY.PLAYER);
+  assert.equal(stageHistory(linked.session)[1].payload.requestedBy, STAGE_COMPLETION_REQUESTED_BY.DIRECTOR);
 });
 
 test('resolveCurrentStage rechaza un stage ejecutable sin recipe declarada', () => {
@@ -1249,9 +1334,9 @@ test('specialStages por window rechaza stages sin eventWindow', () => {
 
   assert.equal(started.ok, false);
   assert.equal(started.errors[0].code, SPECIAL_STAGE_ERRORS.MISSING_EVENT_WINDOW);
-  assert.equal(started.session.specialStagesHistory.at(-1).operation, SPECIAL_STAGE_HISTORY_OPERATIONS.FAILED);
+  assert.equal(specialStageHistory(started.session).at(-1).event, SPECIAL_STAGE_HISTORY_OPERATIONS.FAILED);
   assert.equal(
-    started.session.specialStagesHistory.at(-1).metadata.error.code,
+    specialStageHistory(started.session).at(-1).metadata.error.code,
     SPECIAL_STAGE_ERRORS.MISSING_EVENT_WINDOW
   );
 });
@@ -1359,11 +1444,11 @@ test('getCatalogRecipe permite adaptar contexto pero bloquea id y effect', () =>
     }
   });
 
-  assert.equal(recipe.id, ACTION_IDS.SET_IN_PLAY);
+  assert.equal(recipe.actions[0].id, ACTION_IDS.SET_IN_PLAY);
   assert.deepEqual(recipe.actor, { type: RECIPE_ACTOR_TYPES.ROLE });
   assert.deepEqual(recipe.target.filters, [TARGET_FILTER_TYPES.IN_PLAY]);
   assert.equal(recipe.usage.limit, 1);
-  assert.deepEqual(recipe.effect, {
+  assert.deepEqual(recipe.actions[0].effect, {
     type: EFFECT_TYPES.SET_PROPERTY,
     targetType: MECHANICAL_ENTITY_TYPES.ROLE,
     property: 'inPlay',
@@ -2106,7 +2191,7 @@ test('selection_counts_double cancela sucesion pendiente si el holder vuelve inP
       })
     })
   );
-  const restored = resolveAction(setOut.session, restoreRecentOutOfPlayAction, {
+  const restored = resolveAction(setOut.session, getActionFromRecipe(restoreRecentOutOfPlayAction), {
     actorIds: ['alignment_a_blocker-0'],
     targetIds: ['alignment_a_target-0']
   });
@@ -2121,7 +2206,7 @@ test('selection_counts_double cancela sucesion pendiente si el holder vuelve inP
   assert.equal(roleById(restored.session, 'alignment_a_target-0').inPlay, true);
   assert.equal(eventState.session.specialStages.length, 0);
   assert.equal(
-    eventState.session.specialStagesHistory.at(-1).operation,
+    specialStageHistory(eventState.session).at(-1).event,
     'canceled'
   );
 });
@@ -2325,7 +2410,7 @@ test('cycle inicia un nuevo ciclo antes de entrar en poolConcealed', () => {
   );
   assert.equal(completed.lifecycleResults[0].result.status, OBJECTIVE_EVALUATION_STATUSES.ONGOING);
   assert.equal(completed.session.cycle.id, 1);
-  assert.equal(completed.session.cycleHistory.at(-1).operation, 'started');
+  assert.equal(cycleHistory(completed.session).at(-1).event, 'started');
 });
 
 test('buildSession crea roles y cycle desde configuracion', () => {
@@ -2480,9 +2565,9 @@ test('resolveCurrentStage exige recipeKey cuando un stage ofrece varias recipes'
   assert.equal(missingRecipeKey.ok, false);
   assert.equal(missingRecipeKey.errors[0].code, 'stage/missing-recipe-key');
   assert.equal(selectedAction.ok, true);
-  assert.equal(selectedAction.session.recipeHistory.at(-1).stageKey, STAGE_KEYS.STAGE_03);
+  assert.equal(lastFinishedRecipeHistory(selectedAction.session).metadata.context.stageKey, STAGE_KEYS.STAGE_03);
   assert.equal(
-    selectedAction.session.recipeHistory.at(-1).recipeKey,
+    lastFinishedRecipeHistory(selectedAction.session).payload.recipeKey,
     STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY
   );
   assert.equal(roleById(selectedAction.session, 'alignment_a_target-0').inPlay, false);
@@ -2595,7 +2680,7 @@ test('resolveCurrentStage ejecuta stage_02 con receta block_out_of_play', () => 
     actorIds: ['alignment_a_blocker-0'],
     targetIds: ['alignment_a_target-0']
   });
-  const attackAfterBlocking = resolveAction(blocking.session, setInPlayFalseAction, {
+  const attackAfterBlocking = resolveAction(blocking.session, getActionFromRecipe(setInPlayFalseAction), {
     actorIds: ['alignment_b_attacker-0'],
     targetIds: ['alignment_a_target-0']
   });
@@ -2718,9 +2803,9 @@ test('recipeHistory registra stage, efectos finales y cambios impedidos', () => 
 
   assert.equal(resolved.ok, true);
 
-  const historyEntry = resolved.session.recipeHistory.at(-1);
+  const historyEntry = lastFinishedRecipeHistory(resolved.session);
   const appliedEntries = findAppliedSetPropertyHistory(resolved.session, {
-    cycleId: historyEntry.cycleId,
+    cycleId: historyEntry.metadata.context.cycleId,
     property: 'inPlay',
     value: false,
     targetId: 'alignment_a_target-0',
@@ -2728,20 +2813,19 @@ test('recipeHistory registra stage, efectos finales y cambios impedidos', () => 
     recipeKey: STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY
   });
 
-  assert.equal(historyEntry.stageId, resolved.stage.stageId);
-  assert.equal(historyEntry.stageKey, STAGE_KEYS.STAGE_04);
-  assert.equal(historyEntry.stageCatalogId, STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY);
-  assert.equal(historyEntry.recipeKey, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY);
-  assert.equal(historyEntry.actionId, ACTION_IDS.SET_IN_PLAY);
-  assert.equal(historyEntry.result, HISTORY_RESULTS.APPLIED);
-  assert.deepEqual(historyEntry.actorContract, { type: RECIPE_ACTOR_TYPES.GROUP });
-  assert.deepEqual(historyEntry.targetContract, {
+  assert.equal(historyEntry.metadata.context.stageId, resolved.stage.stageId);
+  assert.equal(historyEntry.metadata.context.stageKey, STAGE_KEYS.STAGE_04);
+  assert.equal(historyEntry.metadata.context.stageCatalogId, STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY);
+  assert.equal(historyEntry.payload.recipeKey, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY);
+  assert.equal(historyEntry.payload.result, HISTORY_RESULTS.APPLIED);
+  assert.deepEqual(historyEntry.payload.actorContract, { type: RECIPE_ACTOR_TYPES.GROUP });
+  assert.deepEqual(historyEntry.payload.targetContract, {
     type: MECHANICAL_ENTITY_TYPES.ROLE,
     count: 1,
     filters: [TARGET_FILTER_TYPES.IN_PLAY, TARGET_FILTER_TYPES.NOT_SAME_ALIGNMENT]
   });
-  assert.equal(historyEntry.finalEffects[0].property, 'inPlay');
-  assert.equal(historyEntry.finalEffects[0].value, false);
+  assert.equal(historyEntry.payload.finalEffects[0].property, 'inPlay');
+  assert.equal(historyEntry.payload.finalEffects[0].value, false);
   assert.equal(appliedEntries.length, 1);
 });
 
@@ -2800,12 +2884,12 @@ test('restore_recent_out_of_play ejecuta set_in_play(true) solo sobre un set_out
     restored.session.cycle.pools.poolConcealed.stages[1].status,
     STAGE_STATUSES.ENABLED
   );
-  assert.equal(restored.session.recipeHistory.at(-1).stageKey, STAGE_KEYS.STAGE_03);
+  assert.equal(lastFinishedRecipeHistory(restored.session).metadata.context.stageKey, STAGE_KEYS.STAGE_03);
   assert.equal(
-    restored.session.recipeHistory.at(-1).recipeKey,
+    lastFinishedRecipeHistory(restored.session).payload.recipeKey,
     STAGE_RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY
   );
-  assert.equal(restored.session.recipeHistory.at(-1).finalEffects[0].value, true);
+  assert.equal(lastFinishedRecipeHistory(restored.session).payload.finalEffects[0].value, true);
 });
 
 test('un stage con recetas opcionales permanece abierto hasta cierre explicito', () => {
@@ -2890,7 +2974,7 @@ test('un stage con recetas opcionales permanece abierto hasta cierre explicito',
     completed.session.cycle.pools.poolConcealed.stages[0].status,
     STAGE_STATUSES.DONE
   );
-  assert.equal(completed.completion.requestedBy, STAGE_COMPLETION_REQUESTED_BY.DIRECTOR);
+  assert.equal(completed.completion.payload.requestedBy, STAGE_COMPLETION_REQUESTED_BY.DIRECTOR);
 });
 
 test('completeCurrentStage al terminar poolExposed arranca solo after_exposed', () => {
@@ -3096,7 +3180,7 @@ test('completeCurrentStage respeta allowedRequesters del stage', () => {
   assert.deepEqual(actorClose.errors[0].allowedRequesters, [STAGE_COMPLETION_REQUESTED_BY.DIRECTOR]);
   assert.equal(directorClose.ok, false);
   assert.equal(directorClose.errors[0].code, 'cycle/no-runnable-stages');
-  assert.equal(directorClose.completion.requestedBy, STAGE_COMPLETION_REQUESTED_BY.DIRECTOR);
+  assert.equal(directorClose.completion.payload.requestedBy, STAGE_COMPLETION_REQUESTED_BY.DIRECTOR);
 });
 
 test('restore_recent_out_of_play rechaza targets sin set_out_of_play aplicado este ciclo', () => {
@@ -3498,14 +3582,14 @@ test('limited_uses cuenta una receta aunque su efecto quede bloqueado', () => {
     blockedUse.result.preventedPropertyChanges[0].reason,
     'blocked_property_change'
   );
-  assert.equal(blockedUse.session.recipeHistory.at(-1).result, 'blocked');
+  assert.equal(lastFinishedRecipeHistory(blockedUse.session).payload.result, 'blocked');
   assert.equal(secondUse.ok, false);
   assert.equal(secondUse.errors[0].code, 'constraint/limited_uses');
 });
 
 test('set_in_play(false) cambia inPlay solo en el objetivo directo', () => {
   const session = createBaseSession();
-  const resolved = resolveAction(session, setInPlayFalseAction, {
+  const resolved = resolveAction(session, getActionFromRecipe(setInPlayFalseAction), {
     actorIds: ['alignment_b_attacker-0'],
     targetIds: ['alignment_a_target-0']
   });
@@ -3527,11 +3611,11 @@ test('block_out_of_play bloquea set_in_play(false) solo sobre su target', () => 
     actorIds: ['alignment_a_blocker-0'],
     targetIds: ['alignment_a_target-0']
   });
-  const blockedTarget = resolveAction(blocking.session, setInPlayFalseAction, {
+  const blockedTarget = resolveAction(blocking.session, getActionFromRecipe(setInPlayFalseAction), {
     actorIds: ['alignment_b_attacker-0'],
     targetIds: ['alignment_a_target-0']
   });
-  const unblockedTarget = resolveAction(blocking.session, setInPlayFalseAction, {
+  const unblockedTarget = resolveAction(blocking.session, getActionFromRecipe(setInPlayFalseAction), {
     actorIds: ['alignment_b_attacker-0'],
     targetIds: ['alignment_a_plain-0']
   });
@@ -3559,17 +3643,13 @@ test('block_out_of_play bloquea set_in_play(false) solo sobre su target', () => 
 });
 
 test('blockedPropertyChanges vence en stage_boundary.after antes de avanzar', () => {
-  const stageBlockRecipe = {
-    ...blockOutOfPlayRecipe,
-    effect: {
-      ...blockOutOfPlayRecipe.effect,
-      duration: {
-        unit: PROPERTY_BLOCK_DURATION_UNITS.STAGE,
-        offset: 0,
-        boundary: PROPERTY_BLOCK_BOUNDARIES.AFTER
-      }
+  const stageBlockRecipe = withPrimaryActionEffect(blockOutOfPlayRecipe, {
+    duration: {
+      unit: PROPERTY_BLOCK_DURATION_UNITS.STAGE,
+      offset: 0,
+      boundary: PROPERTY_BLOCK_BOUNDARIES.AFTER
     }
-  };
+  });
   const session = withCycle(
     createBaseSession(),
     createCycle({
@@ -3615,17 +3695,13 @@ test('blockedPropertyChanges vence en stage_boundary.after antes de avanzar', ()
 });
 
 test('blockedPropertyChanges vence en stage_boundary.before al entrar en el siguiente stage', () => {
-  const nextStageBlockRecipe = {
-    ...blockOutOfPlayRecipe,
-    effect: {
-      ...blockOutOfPlayRecipe.effect,
-      duration: {
-        unit: PROPERTY_BLOCK_DURATION_UNITS.STAGE,
-        offset: 1,
-        boundary: PROPERTY_BLOCK_BOUNDARIES.BEFORE
-      }
+  const nextStageBlockRecipe = withPrimaryActionEffect(blockOutOfPlayRecipe, {
+    duration: {
+      unit: PROPERTY_BLOCK_DURATION_UNITS.STAGE,
+      offset: 1,
+      boundary: PROPERTY_BLOCK_BOUNDARIES.BEFORE
     }
-  };
+  });
   const session = withCycle(
     createBaseSession(),
     createCycle({
@@ -3678,17 +3754,13 @@ test('blockedPropertyChanges vence en stage_boundary.before al entrar en el sigu
 });
 
 test('blockedPropertyChanges vence en cycle_boundary.after antes de startCycle', () => {
-  const cycleBlockRecipe = {
-    ...blockOutOfPlayRecipe,
-    effect: {
-      ...blockOutOfPlayRecipe.effect,
-      duration: {
-        unit: PROPERTY_BLOCK_DURATION_UNITS.CYCLE,
-        offset: 0,
-        boundary: PROPERTY_BLOCK_BOUNDARIES.AFTER
-      }
+  const cycleBlockRecipe = withPrimaryActionEffect(blockOutOfPlayRecipe, {
+    duration: {
+      unit: PROPERTY_BLOCK_DURATION_UNITS.CYCLE,
+      offset: 0,
+      boundary: PROPERTY_BLOCK_BOUNDARIES.AFTER
     }
-  };
+  });
   const session = withCycle(
     createBaseSession(),
     createCycle({
@@ -3794,10 +3866,23 @@ test('no_repeat_target con ventana session impide repetir target durante toda la
 
 test('link_targets crea un grupo linked en la sesion', () => {
   const session = createBaseSession();
-  const linked = resolveAction(session, linkTargetsAction, {
+  const linked = resolveAction(session, getActionFromRecipe(linkTargetsAction), {
     actorIds: ['role_inspector-0'],
     targetIds: ['alignment_a_target-0', 'alignment_a_plain-0']
   });
+  const eventProcessing = processActionResultEvents({
+    previousSession: session,
+    session: linked.session,
+    actionResult: linked.result,
+    context: {
+      recipeKey: RECIPE_KEYS.LINK_TARGETS,
+      poolKey: POOL_KEYS.POOL_CONCEALED,
+      stageCatalogId: STAGE_CATALOG_IDS.ROLE_LINKS_TARGETS
+    }
+  });
+  const recognition = eventProcessing.session.specialStages.find(
+    (stage) => stage.metadata?.catalogId === STAGE_CATALOG_IDS.LINKED_TARGET_RECOGNITION
+  );
 
   assert.equal(linked.ok, true);
   assert.equal(linked.session.groups.length, 1);
@@ -3818,18 +3903,14 @@ test('link_targets crea un grupo linked en la sesion', () => {
     OBJECTIVE_CONDITIONS.ALL_HOLDER_MEMBERS_ARE_ONLY_ROLES_IN_PLAY
   );
   assert.equal(linked.result.finalEffects[0].type, EFFECT_TYPES.SET_GROUP);
-
-  const recognition = linked.session.recipeHistory.find(
-    (entry) => entry.recipeKey === ACTION_IDS.LINKED_TARGET_RECOGNITION
-  );
-  assert.equal(recognition.result, HISTORY_RESULTS.NO_EFFECT);
-  assert.deepEqual(recognition.actorIds, ['role_inspector-0']);
-  assert.deepEqual(recognition.targetIds, [
+  assert.equal(recognition.key, 'stage_linked_target_recognition');
+  assert.equal(recognition.metadata.eventWindow, SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED);
+  assert.equal(recognition.metadata.visibility, 'linked_members');
+  assert.equal(recognition.metadata.directorVisible, true);
+  assert.deepEqual(recognition.actorIds, [
     'alignment_a_plain-0',
     'alignment_a_target-0'
   ]);
-  assert.equal(recognition.metadata.visibility, 'linked_members');
-  assert.equal(recognition.metadata.directorVisible, true);
   assert.deepEqual(recognition.metadata.audienceRoleIds, [
     'alignment_a_plain-0',
     'alignment_a_target-0'
@@ -3844,25 +3925,20 @@ test('link_targets crea un grupo linked en la sesion', () => {
   assert.deepEqual(recognition.metadata.causedBy, {
     recipeKey: RECIPE_KEYS.LINK_TARGETS,
     actionId: ACTION_IDS.LINK_TARGETS,
-    actorId: 'role_inspector-0',
+    actorIds: ['role_inspector-0'],
     groupId: 'linked_alignment_a_plain_0_alignment_a_target_0'
   });
 });
 
 test('link_targets no registra reconocimiento si no crea group linked', () => {
   const session = createBaseSession();
-  const failedLink = resolveAction(session, linkTargetsAction, {
+  const failedLink = resolveAction(session, getActionFromRecipe(linkTargetsAction), {
     actorIds: ['role_inspector-0'],
     targetIds: ['alignment_a_target-0']
   });
 
   assert.equal(failedLink.ok, false);
-  assert.equal(
-    failedLink.session.recipeHistory.some(
-      (entry) => entry.recipeKey === ACTION_IDS.LINKED_TARGET_RECOGNITION
-    ),
-    false
-  );
+  assert.equal(failedLink.session.specialStages.length, 0);
 });
 
 test('link_targets consume uso de session aunque la stage solo exista en el primer ciclo', () => {
@@ -3884,50 +3960,67 @@ test('link_targets consume uso de session aunque la stage solo exista en el prim
 
 test('linked encola specialStage para propagar inPlay=false hacia roles enlazados', () => {
   const session = createBaseSession();
-  const linked = resolveAction(session, linkTargetsAction, {
+  const linked = resolveAction(session, getActionFromRecipe(linkTargetsAction), {
     actorIds: ['role_inspector-0'],
     targetIds: ['alignment_a_target-0', 'alignment_a_plain-0']
   });
-  const resolved = resolveAction(linked.session, setInPlayFalseAction, {
+  const resolved = resolveAction(linked.session, getActionFromRecipe(setInPlayFalseAction), {
     actorIds: ['alignment_b_attacker-0'],
     targetIds: ['alignment_a_target-0']
   }, {
     poolKey: POOL_KEYS.POOL_CONCEALED
   });
-  const specialStarted = startSpecialStages(resolved.session);
-  const propagated = completeCurrentStage(specialStarted, {
+  const eventProcessing = processActionResultEvents({
+    previousSession: linked.session,
+    session: resolved.session,
+    actionResult: resolved.result,
+    context: {
+      poolKey: POOL_KEYS.POOL_CONCEALED
+    }
+  });
+  const linkedStage = eventProcessing.session.specialStages.find(
+    (stage) => stage.metadata.catalogId === STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT
+  );
+  const specialStarted = startSpecialStagesForWindow(
+    eventProcessing.session,
+    SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED
+  );
+  const propagated = completeCurrentStage(specialStarted.session, {
     requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
   });
-  const propagatedHistory = propagated.session.recipeHistory.at(-1);
+  const propagatedHistory = lastFinishedRecipeHistory(propagated.session);
 
   assert.equal(resolved.ok, true);
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
   assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, true);
   assert.equal(resolved.result.finalEffects.length, 1);
-  assert.equal(resolved.session.specialStages.length, 1);
+  assert.equal(eventProcessing.session.specialStages.length, 2);
   assert.equal(
-    resolved.session.specialStages[0].metadata.catalogId,
+    linkedStage.metadata.catalogId,
     STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT
   );
   assert.equal(
-    resolved.session.specialStages[0].metadata.eventWindow,
+    linkedStage.metadata.eventWindow,
     SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED
   );
   assert.equal(propagated.ok, true);
-  assert.equal(propagated.stageAdvance.reason, 'next-special-stage');
+  assert.equal(propagated.stageAdvance.reason, 'special-stages-before-next-pool');
   assert.equal(
-    propagated.stageAdvance.next.stage.metadata.catalogId,
-    STAGE_CATALOG_IDS.ROLE_STATE_REVEALED
+    propagated.session.specialStages.some(
+      (stage) =>
+        stage.metadata.catalogId === STAGE_CATALOG_IDS.ROLE_STATE_REVEALED &&
+        stage.metadata.reveal.roleId === 'alignment_a_plain-0'
+    ),
+    true
   );
-  assert.equal(propagated.stageAdvance.next.stage.metadata.reveal.roleId, 'alignment_a_plain-0');
   assert.equal(roleById(propagated.session, 'alignment_a_plain-0').inPlay, false);
-  assert.equal(propagatedHistory.recipeKey, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
-  assert.equal(propagatedHistory.result, HISTORY_RESULTS.APPLIED);
-  assert.deepEqual(propagatedHistory.finalEffects[0].causedBy, {
+  assert.equal(propagatedHistory.payload.recipeKey, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
+  assert.equal(propagatedHistory.payload.result, HISTORY_RESULTS.APPLIED);
+  assert.deepEqual(propagatedHistory.payload.finalEffects[0].causedBy, {
     type: MECHANICAL_ENTITY_TYPES.GROUP,
     id: 'linked_alignment_a_plain_0_alignment_a_target_0'
   });
-  assert.deepEqual(propagatedHistory.finalEffects[0].derivedFrom, {
+  assert.deepEqual(propagatedHistory.payload.finalEffects[0].derivedFrom, {
     type: 'group_rule',
     groupId: 'linked_alignment_a_plain_0_alignment_a_target_0',
     groupRuleType: 'propagate_property_change',
@@ -3937,29 +4030,44 @@ test('linked encola specialStage para propagar inPlay=false hacia roles enlazado
 
 test('linked no propaga si el role causal fue restaurado antes de la specialStage', () => {
   const session = createBaseSession();
-  const linked = resolveAction(session, linkTargetsAction, {
+  const linked = resolveAction(session, getActionFromRecipe(linkTargetsAction), {
     actorIds: ['role_inspector-0'],
     targetIds: ['alignment_a_target-0', 'alignment_a_plain-0']
   });
-  const setOut = resolveAction(linked.session, setInPlayFalseAction, {
+  const setOut = resolveAction(linked.session, getActionFromRecipe(setInPlayFalseAction), {
     actorIds: ['alignment_b_attacker-0'],
     targetIds: ['alignment_a_target-0']
   });
-  const restored = resolveAction(setOut.session, restoreRecentOutOfPlayAction, {
+  const setOutEvents = processActionResultEvents({
+    previousSession: linked.session,
+    session: setOut.session,
+    actionResult: setOut.result,
+    context: {
+      poolKey: POOL_KEYS.POOL_CONCEALED
+    }
+  });
+  const restored = resolveAction(setOutEvents.session, getActionFromRecipe(restoreRecentOutOfPlayAction), {
     actorIds: ['alignment_a_blocker-0'],
     targetIds: ['alignment_a_target-0']
   });
-  const propagated = completeCurrentStage(startSpecialStages(restored.session), {
+  const specialStarted = startSpecialStagesForWindow(
+    restored.session,
+    SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED
+  );
+  const propagated = completeCurrentStage(
+    specialStarted.session,
+    {
     requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
-  });
-  const propagatedHistory = propagated.session.recipeHistory.at(-1);
+    }
+  );
+  const propagatedHistory = lastFinishedRecipeHistory(propagated.session);
 
-  assert.equal(setOut.session.specialStages.length, 1);
+  assert.equal(setOutEvents.session.specialStages.length, 2);
   assert.equal(restored.ok, true);
   assert.equal(roleById(restored.session, 'alignment_a_target-0').inPlay, true);
   assert.equal(roleById(propagated.session, 'alignment_a_plain-0').inPlay, true);
-  assert.equal(propagatedHistory.recipeKey, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
-  assert.equal(propagatedHistory.result, HISTORY_RESULTS.NO_EFFECT);
+  assert.equal(propagatedHistory.payload.recipeKey, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
+  assert.equal(propagatedHistory.payload.result, HISTORY_RESULTS.NO_EFFECT);
   assert.equal(propagatedHistory.metadata.reason, 'causal_condition_not_met');
 });
 
@@ -4005,11 +4113,25 @@ test('linked_propagated_effect transporta payload dinamico de set_property', () 
       targetIds: ['alignment_a_target-0']
     }
   );
-  const specialStage = setDoubleSelector.session.specialStages[0];
-  const propagated = completeCurrentStage(startSpecialStages(setDoubleSelector.session), {
+  const setDoubleSelectorEvents = processActionResultEvents({
+    previousSession: session,
+    session: setDoubleSelector.session,
+    actionResult: setDoubleSelector.result,
+    context: {
+      poolKey: POOL_KEYS.POOL_CONCEALED
+    }
+  });
+  const specialStage = setDoubleSelectorEvents.session.specialStages.find(
+    (stage) => stage.metadata.catalogId === STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT
+  );
+  const specialStarted = startSpecialStagesForWindow(
+    setDoubleSelectorEvents.session,
+    SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED
+  );
+  const propagated = completeCurrentStage(specialStarted.session, {
     requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
   });
-  const propagatedHistory = propagated.session.recipeHistory.at(-1);
+  const propagatedHistory = lastFinishedRecipeHistory(propagated.session);
 
   assert.equal(setDoubleSelector.ok, true);
   assert.equal(roleById(setDoubleSelector.session, 'alignment_a_target-0').doubleSelector, true);
@@ -4018,14 +4140,13 @@ test('linked_propagated_effect transporta payload dinamico de set_property', () 
   assert.equal(specialStage.metadata.propagatedEffect.property, 'doubleSelector');
   assert.equal(propagated.ok, true);
   assert.equal(roleById(propagated.session, 'alignment_a_plain-0').doubleSelector, true);
-  assert.equal(propagatedHistory.recipeKey, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
-  assert.equal(propagatedHistory.actionId, ACTION_IDS.SET_PROPERTY);
-  assert.equal(propagatedHistory.finalEffects[0].property, 'doubleSelector');
-  assert.equal(propagatedHistory.result, HISTORY_RESULTS.APPLIED);
+  assert.equal(propagatedHistory.payload.recipeKey, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
+  assert.equal(propagatedHistory.payload.finalEffects[0].property, 'doubleSelector');
+  assert.equal(propagatedHistory.payload.result, HISTORY_RESULTS.APPLIED);
 });
 
 test('group linked aporta objectiveRule distribuida si sus miembros abarcan varios alignments efectivos', () => {
-  const linked = resolveAction(createBaseSession(), linkTargetsAction, {
+  const linked = resolveAction(createBaseSession(), getActionFromRecipe(linkTargetsAction), {
     actorIds: ['role_inspector-0'],
     targetIds: ['alignment_a_target-0', 'alignment_b_target-0']
   });
@@ -4050,7 +4171,7 @@ test('group linked aporta objectiveRule distribuida si sus miembros abarcan vari
 });
 
 test('groupRule usa causedBy del group al comprobar bloqueos derivados', () => {
-  const linked = resolveAction(createBaseSession(), linkTargetsAction, {
+  const linked = resolveAction(createBaseSession(), getActionFromRecipe(linkTargetsAction), {
     actorIds: ['role_inspector-0'],
     targetIds: ['alignment_a_target-0', 'alignment_a_plain-0']
   });
@@ -4074,12 +4195,23 @@ test('groupRule usa causedBy del group al comprobar bloqueos derivados', () => {
   };
   const propagatedDespiteOriginalActorBlock = resolveAction(
     sessionBlockedForOriginalActor,
-    setInPlayFalseAction,
+    getActionFromRecipe(setInPlayFalseAction),
     {
       actorIds: ['alignment_b_attacker-0'],
       targetIds: ['alignment_a_target-0']
+    },
+    {
+      poolKey: POOL_KEYS.POOL_CONCEALED
     }
   );
+  const propagatedDespiteOriginalActorBlockEvents = processActionResultEvents({
+    previousSession: sessionBlockedForOriginalActor,
+    session: propagatedDespiteOriginalActorBlock.session,
+    actionResult: propagatedDespiteOriginalActorBlock.result,
+    context: {
+      poolKey: POOL_KEYS.POOL_CONCEALED
+    }
+  });
   const sessionBlockedForGroup = {
     ...linked.session,
     roles: linked.session.roles.map((role) =>
@@ -4097,16 +4229,39 @@ test('groupRule usa causedBy del group al comprobar bloqueos derivados', () => {
         : role
     )
   };
-  const blockedPropagation = resolveAction(sessionBlockedForGroup, setInPlayFalseAction, {
-    actorIds: ['alignment_b_attacker-0'],
-    targetIds: ['alignment_a_target-0']
+  const blockedPropagation = resolveAction(
+    sessionBlockedForGroup,
+    getActionFromRecipe(setInPlayFalseAction),
+    {
+      actorIds: ['alignment_b_attacker-0'],
+      targetIds: ['alignment_a_target-0']
+    },
+    {
+      poolKey: POOL_KEYS.POOL_CONCEALED
+    }
+  );
+  const blockedPropagationEvents = processActionResultEvents({
+    previousSession: sessionBlockedForGroup,
+    session: blockedPropagation.session,
+    actionResult: blockedPropagation.result,
+    context: {
+      poolKey: POOL_KEYS.POOL_CONCEALED
+    }
   });
+  const propagatedDespiteOriginalActorBlockStarted = startSpecialStagesForWindow(
+    propagatedDespiteOriginalActorBlockEvents.session,
+    SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED
+  );
+  const blockedPropagationStarted = startSpecialStagesForWindow(
+    blockedPropagationEvents.session,
+    SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED
+  );
   const propagatedDespiteOriginalActorBlockSpecial = completeCurrentStage(
-    startSpecialStages(propagatedDespiteOriginalActorBlock.session),
+    propagatedDespiteOriginalActorBlockStarted.session,
     { requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR }
   );
   const blockedPropagationSpecial = completeCurrentStage(
-    startSpecialStages(blockedPropagation.session),
+    blockedPropagationStarted.session,
     { requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR }
   );
 
@@ -4120,7 +4275,7 @@ test('groupRule usa causedBy del group al comprobar bloqueos derivados', () => {
   );
   assert.equal(roleById(blockedPropagation.session, 'alignment_a_target-0').inPlay, false);
   assert.equal(roleById(blockedPropagationSpecial.session, 'alignment_a_plain-0').inPlay, true);
-  assert.deepEqual(blockedPropagationSpecial.session.recipeHistory.at(-1).blockedEffects[0].causedBy, {
+  assert.deepEqual(lastFinishedRecipeHistory(blockedPropagationSpecial.session).payload.blockedEffects[0].causedBy, {
     type: MECHANICAL_ENTITY_TYPES.GROUP,
     id: linkedGroupId
   });
@@ -4143,7 +4298,7 @@ test('propagate_property_change no depende del type linked', () => {
   const session = createBaseSession({
     groups: [propagationGroup]
   });
-  const resolved = resolveAction(session, setInPlayFalseAction, {
+  const resolved = resolveAction(session, getActionFromRecipe(setInPlayFalseAction), {
     actorIds: ['alignment_b_attacker-0'],
     targetIds: ['alignment_a_target-0']
   });
@@ -4193,7 +4348,7 @@ test('resolver permite otra causa si la primera propagacion queda bloqueada', ()
         : role
     )
   };
-  const resolved = resolveAction(session, setInPlayFalseAction, {
+  const resolved = resolveAction(session, getActionFromRecipe(setInPlayFalseAction), {
     actorIds: ['alignment_b_attacker-0'],
     targetIds: ['alignment_a_target-0']
   });
@@ -4549,26 +4704,24 @@ test('checkObjectives aplica stable parity contra role_in_out_of_play salvo que 
   const restoreAlreadyUsed = checkObjectives(
     createStableParitySession(roles, {
       recipeHistory: [
-        {
+        createFinishedRecipeHistoryEntry({
           cycleId: 1,
           recipeKey: STAGE_RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
-          actionId: ACTION_IDS.SET_IN_PLAY,
           actorIds: ['role_in_out_of_play-0'],
           result: HISTORY_RESULTS.APPLIED
-        }
+        })
       ]
     })
   );
   const setOutAlreadyUsed = checkObjectives(
     createStableParitySession(roles, {
       recipeHistory: [
-        {
+        createFinishedRecipeHistoryEntry({
           cycleId: 1,
           recipeKey: STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY,
-          actionId: ACTION_IDS.SET_IN_PLAY,
           actorIds: ['role_in_out_of_play-0'],
           result: HISTORY_RESULTS.APPLIED
-        }
+        })
       ]
     })
   );
@@ -5482,7 +5635,7 @@ test('stage con seleccion y set_out_of_play aplica inPlay=false al chosen de la 
   assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.CHOSEN);
   assert.equal(resolved.result.selection.chosenId, 'alignment_a_target-0');
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
-  assert.deepEqual(resolved.session.recipeHistory.at(-1).actorIds, []);
+  assert.deepEqual(lastFinishedRecipeHistory(resolved.session).payload.actorIds, []);
   assert.deepEqual(resolved.result.proposedEffects, [
     {
       type: EFFECT_TYPES.SET_PROPERTY,
@@ -5782,7 +5935,7 @@ test('stage con seleccion y set_out_of_play encola propagacion linked cuando el 
   const propagated = completeCurrentStage(revealCompleted.session, {
     requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
   });
-  const propagatedHistory = propagated.session.recipeHistory.at(-1);
+  const propagatedHistory = lastFinishedRecipeHistory(propagated.session);
 
   assert.equal(resolved.ok, true);
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
@@ -5806,11 +5959,11 @@ test('stage con seleccion y set_out_of_play encola propagacion linked cuando el 
   assert.equal(propagated.ok, true);
   assert.equal(propagated.stageAdvance.next.stage.metadata.catalogId, STAGE_CATALOG_IDS.ROLE_STATE_REVEALED);
   assert.equal(roleById(propagated.session, 'alignment_a_plain-0').inPlay, false);
-  assert.deepEqual(propagatedHistory.finalEffects[0].causedBy, {
+  assert.deepEqual(propagatedHistory.payload.finalEffects[0].causedBy, {
     type: MECHANICAL_ENTITY_TYPES.GROUP,
     id: 'linked_selection_target'
   });
-  assert.deepEqual(propagatedHistory.finalEffects[0].derivedFrom, {
+  assert.deepEqual(propagatedHistory.payload.finalEffects[0].derivedFrom, {
     type: 'group_rule',
     groupId: 'linked_selection_target',
     groupRuleType: 'propagate_property_change',
@@ -5891,7 +6044,7 @@ test('stage con seleccion y set_out_of_play no restringe linked sin selectionRul
 });
 
 test('stage con seleccion recoge restricciones aportadas por groups activos', () => {
-  const linked = resolveAction(createBaseSession(), linkTargetsAction, {
+  const linked = resolveAction(createBaseSession(), getActionFromRecipe(linkTargetsAction), {
     actorIds: ['role_inspector-0'],
     targetIds: ['alignment_a_target-0', 'alignment_a_plain-0']
   });
@@ -5950,12 +6103,14 @@ test('role_peek registra peekAttempt privado durante la stage observada', () => 
   );
 
   assert.equal(resolved.ok, true);
-  const peekAttempt = resolved.session.recipeHistory.find(
-    (entry) => entry.recipeKey === PEEK_RECIPE_KEYS.PEEK_ATTEMPT
+  const peekAttempt = recipeHistory(resolved.session).find(
+    (entry) =>
+      entry.event === HISTORY_EVENTS.FINISHED &&
+      entry.payload.recipeKey === PEEK_RECIPE_KEYS.PEEK_ATTEMPT
   );
-  assert.equal(peekAttempt.actorIds[0], 'role_peek-0');
-  assert.equal(peekAttempt.result, HISTORY_RESULTS.NO_EFFECT);
-  assert.deepEqual(peekAttempt.finalEffects, []);
+  assert.equal(peekAttempt.payload.actorIds[0], 'role_peek-0');
+  assert.equal(peekAttempt.payload.result, HISTORY_RESULTS.NO_EFFECT);
+  assert.deepEqual(peekAttempt.payload.finalEffects, []);
   assert.equal(peekAttempt.metadata.visibility, 'private');
   assert.equal(peekAttempt.metadata.stageRuleKey, 'peek_concealed_set_out_of_play');
   assert.equal(peekAttempt.metadata.stageRuleType, 'peek_warning_override');
@@ -6735,7 +6890,7 @@ test('role_in_out_of_play restaura el target causal y cancela la propagacion lin
   const propagated = completeCurrentStage(completedInOutStage.session, {
     requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
   });
-  const propagatedHistory = propagated.session.recipeHistory.at(-1);
+  const propagatedHistory = lastFinishedRecipeHistory(propagated.session);
 
   assert.equal(linkedSetupClosed.ok, true);
   assert.equal(concealedSetOut.ok, true);
@@ -6755,8 +6910,8 @@ test('role_in_out_of_play restaura el target causal y cancela la propagacion lin
   assert.equal(restored.session.specialStages.length, 1);
   assert.equal(completedInOutStage.stageAdvance.next.stage.metadata.catalogId, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
   assert.equal(roleById(propagated.session, 'role_plain-0').inPlay, true);
-  assert.equal(propagatedHistory.recipeKey, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
-  assert.equal(propagatedHistory.result, HISTORY_RESULTS.NO_EFFECT);
+  assert.equal(propagatedHistory.payload.recipeKey, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
+  assert.equal(propagatedHistory.payload.result, HISTORY_RESULTS.NO_EFFECT);
   assert.equal(propagatedHistory.metadata.reason, 'causal_condition_not_met');
 });
 

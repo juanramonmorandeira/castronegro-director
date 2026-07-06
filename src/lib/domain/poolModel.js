@@ -255,8 +255,11 @@ export function createPoolHistoryEntry({
   return {
     cycleId,
     poolKey,
-    operation,
-    stageIndex,
+    event: operation,
+    payload: {
+      poolKey,
+      stageIndex
+    },
     metadata: { ...metadata }
   };
 }

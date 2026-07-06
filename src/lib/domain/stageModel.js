@@ -24,7 +24,13 @@ import {
   startCycle,
   updateCyclePool
 } from './cycleModel.js';
-import { HISTORY_RESULTS, appendRecipeHistory, appendEntry } from './historyModel.js';
+import {
+  HISTORY_COLLECTIONS,
+  HISTORY_RESULTS,
+  appendRecipeHistory,
+  appendEntry,
+  getHistoryCollection
+} from './historyModel.js';
 import { resolveRecipe } from './recipeModel.js';
 import { ACTION_IDS, VISIBILITY, resolveAction } from './actionModel.js';
 import { processActionResultEvents } from './eventModel.js';
@@ -827,9 +833,16 @@ function applyConcludePlayLifecycleOperationIfNeeded({ session, objectiveEvaluat
     };
   }
 
-  const concluded = resolveAction(session, getCatalogRecipe(RECIPE_KEYS.CONCLUDE_PLAY), {
-    playOutcome: objectiveEvaluation.playOutcome
-  });
+  const concluded = resolveRecipe(
+    session,
+    getCatalogRecipe(RECIPE_KEYS.CONCLUDE_PLAY),
+    {
+      playOutcome: objectiveEvaluation.playOutcome
+    },
+    {
+      recipeKey: RECIPE_KEYS.CONCLUDE_PLAY
+    }
+  );
 
   if (!concluded.ok) {
     return {
@@ -1063,17 +1076,21 @@ function startCycleBeforePoolEntry(session = {}, poolKey = null) {
       ...beforeNextCycle,
       cycle: started.cycle
     },
-    'cycleHistory',
+    HISTORY_COLLECTIONS.CYCLE,
     {
       cycleId: started.cycle.id,
-      operation: 'started',
+      event: 'started',
+      payload: {
+        cycleId: started.cycle.id,
+        poolKey
+      },
       metadata: {}
     }
   );
 }
 
 function appendPoolHistory(session = {}, entry = {}) {
-  return appendEntry(session, 'poolHistory', createPoolHistoryEntry(entry));
+  return appendEntry(session, HISTORY_COLLECTIONS.POOL, createPoolHistoryEntry(entry));
 }
 
 function prepareAndValidatePoolEntry(session = {}, poolKey = null) {
@@ -1478,7 +1495,7 @@ function completeCurrentSpecialStage(session, currentStage, input, requestedBy) 
           stage: nextSpecialStage
         }
       },
-      completion: sessionWithCompletion.stageHistory.at(-1),
+      completion: getHistoryCollection(sessionWithCompletion, HISTORY_COLLECTIONS.STAGE).at(-1),
       objectiveEvaluation: null,
       playOutcome: null,
       eventResponses: [],
@@ -1509,7 +1526,7 @@ function completeCurrentSpecialStage(session, currentStage, input, requestedBy) 
         cycle: nextWindowStart.session.cycle,
         next: null
       },
-      completion: nextWindowStart.session.stageHistory.at(-1),
+      completion: getHistoryCollection(nextWindowStart.session, HISTORY_COLLECTIONS.STAGE).at(-1),
       objectiveEvaluation: objectiveState.objectiveEvaluation,
       playOutcome: objectiveState.playOutcome,
       eventResponses: [],
@@ -1540,7 +1557,7 @@ function completeCurrentSpecialStage(session, currentStage, input, requestedBy) 
           stage: nextWindowStart.stage
         }
       },
-      completion: nextWindowStart.session.stageHistory.at(-1),
+      completion: getHistoryCollection(nextWindowStart.session, HISTORY_COLLECTIONS.STAGE).at(-1),
       objectiveEvaluation: objectiveState.objectiveEvaluation,
       playOutcome: objectiveState.playOutcome,
       eventResponses: [],
@@ -1595,7 +1612,7 @@ function completeCurrentSpecialStage(session, currentStage, input, requestedBy) 
     session: nextSession,
     stage: currentStage,
     stageAdvance: poolEntry,
-    completion: nextSession.stageHistory.at(-1),
+    completion: getHistoryCollection(nextSession, HISTORY_COLLECTIONS.STAGE).at(-1),
     objectiveEvaluation: objectiveState.objectiveEvaluation,
     playOutcome: objectiveState.playOutcome,
     eventResponses: [],
@@ -1637,7 +1654,7 @@ function getPostActionEventState({
 // Anade una entrada al historial de stages.
 //
 // Cerrar un stage no es una accion de juego. Por eso no se registra en
-// recipeHistory: vive en stageHistory para poder reconstruir quien decidio pasar
+// recipeHistory: stageHistory conserva la decision de pasar
 // al siguiente stage y por que.
 export function appendStageHistory(session, entry = {}) {
   const requestedBy = isValidStageCompletionRequester(entry.requestedBy)
@@ -1648,15 +1665,21 @@ export function appendStageHistory(session, entry = {}) {
     stageId: entry.stageId ?? null,
     stageKey: entry.stageKey ?? null,
     requestedBy,
-    actorIds: [...(entry.actorIds ?? [])],
-    recipeKey: entry.recipeKey ?? null,
-    reason: entry.reason ?? 'manual_completion',
+    event: 'finished',
+    payload: {
+      stageId: entry.stageId ?? null,
+      stageKey: entry.stageKey ?? null,
+      requestedBy,
+      actorIds: [...(entry.actorIds ?? [])],
+      recipeKey: entry.recipeKey ?? null,
+      reason: entry.reason ?? 'manual_completion'
+    },
     metadata: { ...(entry.metadata ?? {}) }
   };
 
-  return appendEntry(session, 'stageHistory', normalizedEntry, {
+  return appendEntry(session, HISTORY_COLLECTIONS.STAGE, normalizedEntry, {
     getId: (item, history) =>
-      `stage-completion-${item.stageId ?? item.stageKey ?? 'stage'}-${history.length}`
+      `stage-completion-${item.payload.stageId ?? item.payload.stageKey ?? 'stage'}-${history.length}`
   });
 }
 
@@ -1806,7 +1829,7 @@ export function completeCurrentStage(session, input = {}) {
     session: objectiveState.session,
     stage: currentStage,
     stageAdvance: objectiveState.stageAdvance,
-    completion: objectiveState.session.stageHistory.at(-1),
+    completion: getHistoryCollection(objectiveState.session, HISTORY_COLLECTIONS.STAGE).at(-1),
     objectiveEvaluation: objectiveState.objectiveEvaluation,
     playOutcome: objectiveState.playOutcome,
     eventResponses: objectiveState.eventResponses,

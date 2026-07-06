@@ -323,7 +323,7 @@ resolveCurrentStage no marca done.
 completeCurrentStage marca done y avanza.
 ```
 
-El cierre queda registrado en `session.stageHistory` con `requestedBy`
+El cierre queda registrado en `session.history.stageHistory` con `payload.requestedBy`
 para distinguir cierres pedidos por player, director o system.
 
 `poolDefinition.js` prepara arrays ordenados desde las definiciones

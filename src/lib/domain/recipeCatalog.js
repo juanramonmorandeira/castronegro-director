@@ -10,7 +10,8 @@
 // El constructor generico de receta vive en recipeModel.js: createRecipe.
 // -----------------------------------------------------------------------------
 
-import { ACTION_IDS, VISIBILITY } from './actionModel.js';
+import { ACTION_IDS, VISIBILITY } from './actionDefinition.js';
+import { getCatalogAction } from './actionCatalog.js';
 import { CONSTRAINT_TYPES, CONSTRAINT_WINDOWS } from './constraintModel.js';
 import { EFFECT_TYPES } from './effectModel.js';
 import {
@@ -89,17 +90,13 @@ export const RECIPE_CATALOG = Object.freeze({
     key: RECIPE_KEYS.INSPECT_ROLE,
     optional: true,
     usage: { limit: null, window: CONSTRAINT_WINDOWS.SESSION },
-    id: ACTION_IDS.INSPECT_ROLE,
     actor: { type: RECIPE_ACTOR_TYPES.ROLE },
     target: {
       type: MECHANICAL_ENTITY_TYPES.ROLE,
       count: 1,
       filters: [TARGET_FILTER_TYPES.IN_PLAY, TARGET_FILTER_TYPES.NOT_SELF]
     },
-    effect: {
-      type: EFFECT_TYPES.REVEAL_PROPERTY,
-      property: 'roleKey'
-    },
+    actions: [getCatalogAction(ACTION_IDS.INSPECT_ROLE)],
     visibility: VISIBILITY.ACTOR_ONLY
   },
 
@@ -107,7 +104,6 @@ export const RECIPE_CATALOG = Object.freeze({
     key: RECIPE_KEYS.SET_OUT_OF_PLAY,
     optional: true,
     usage: { limit: null, window: CONSTRAINT_WINDOWS.SESSION },
-    id: ACTION_IDS.SET_IN_PLAY,
     actor: { type: RECIPE_ACTOR_TYPES.GROUP },
     target: {
       type: MECHANICAL_ENTITY_TYPES.ROLE,
@@ -115,12 +111,16 @@ export const RECIPE_CATALOG = Object.freeze({
       filters: [TARGET_FILTER_TYPES.IN_PLAY, TARGET_FILTER_TYPES.NOT_SAME_ALIGNMENT]
     },
     constraints: [],
-    effect: {
-      type: EFFECT_TYPES.SET_PROPERTY,
-      targetType: MECHANICAL_ENTITY_TYPES.ROLE,
-      property: 'inPlay',
-      value: false
-    },
+    actions: [
+      getCatalogAction(ACTION_IDS.SET_IN_PLAY, {
+        effect: {
+          type: EFFECT_TYPES.SET_PROPERTY,
+          targetType: MECHANICAL_ENTITY_TYPES.ROLE,
+          property: 'inPlay',
+          value: false
+        }
+      })
+    ],
     influences: [ROLE_IN_PLAY_FALSE_INFLUENCE],
     visibility: VISIBILITY.STORYTELLER_ONLY
   },
@@ -129,7 +129,6 @@ export const RECIPE_CATALOG = Object.freeze({
     key: RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY,
     optional: true,
     usage: { limit: 1, window: CONSTRAINT_WINDOWS.SESSION },
-    id: ACTION_IDS.SET_IN_PLAY,
     actor: { type: RECIPE_ACTOR_TYPES.ROLE },
     target: {
       type: MECHANICAL_ENTITY_TYPES.ROLE,
@@ -145,12 +144,16 @@ export const RECIPE_CATALOG = Object.freeze({
         recipeKey: RECIPE_KEYS.SET_OUT_OF_PLAY
       },
     ],
-    effect: {
-      type: EFFECT_TYPES.SET_PROPERTY,
-      targetType: MECHANICAL_ENTITY_TYPES.ROLE,
-      property: 'inPlay',
-      value: true
-    },
+    actions: [
+      getCatalogAction(ACTION_IDS.SET_IN_PLAY, {
+        effect: {
+          type: EFFECT_TYPES.SET_PROPERTY,
+          targetType: MECHANICAL_ENTITY_TYPES.ROLE,
+          property: 'inPlay',
+          value: true
+        }
+      })
+    ],
     influences: [ROLE_IN_PLAY_TRUE_INFLUENCE],
     visibility: VISIBILITY.STORYTELLER_ONLY
   },
@@ -159,19 +162,22 @@ export const RECIPE_CATALOG = Object.freeze({
     key: RECIPE_KEYS.SET_DOUBLE_SELECTOR,
     optional: false,
     usage: { limit: null, window: CONSTRAINT_WINDOWS.SESSION },
-    id: ACTION_IDS.SET_PROPERTY,
     actor: { type: RECIPE_ACTOR_TYPES.SYSTEM },
     target: {
       type: MECHANICAL_ENTITY_TYPES.ROLE,
       count: 1,
       filters: [TARGET_FILTER_TYPES.IN_PLAY]
     },
-    effect: {
-      type: EFFECT_TYPES.SET_PROPERTY,
-      targetType: MECHANICAL_ENTITY_TYPES.ROLE,
-      property: 'doubleSelector',
-      value: true
-    },
+    actions: [
+      getCatalogAction(ACTION_IDS.SET_PROPERTY, {
+        effect: {
+          type: EFFECT_TYPES.SET_PROPERTY,
+          targetType: MECHANICAL_ENTITY_TYPES.ROLE,
+          property: 'doubleSelector',
+          value: true
+        }
+      })
+    ],
     influences: [ROLE_DOUBLE_SELECTOR_TRUE_INFLUENCE],
     visibility: VISIBILITY.STORYTELLER_ONLY
   },
@@ -180,20 +186,23 @@ export const RECIPE_CATALOG = Object.freeze({
     key: RECIPE_KEYS.ASSUME_ROLE,
     optional: false,
     usage: { limit: 1, window: CONSTRAINT_WINDOWS.SESSION },
-    id: ACTION_IDS.REPLACE_ROLE_IDENTITY,
     actor: { type: RECIPE_ACTOR_TYPES.ROLE },
     target: {
       type: MECHANICAL_ENTITY_TYPES.ROLE,
       count: 1,
       filters: [TARGET_FILTER_TYPES.ASSUMABLE]
     },
-    effect: {
-      type: EFFECT_TYPES.REPLACE_ROLE_IDENTITY,
-      targetType: MECHANICAL_ENTITY_TYPES.ROLE,
-      forcedWhen: {
-        allAssumableRolesHaveRoleKey: 'role_set_out_of_play'
-      }
-    },
+    actions: [
+      getCatalogAction(ACTION_IDS.REPLACE_ROLE_IDENTITY, {
+        effect: {
+          type: EFFECT_TYPES.REPLACE_ROLE_IDENTITY,
+          targetType: MECHANICAL_ENTITY_TYPES.ROLE,
+          forcedWhen: {
+            allAssumableRolesHaveRoleKey: 'role_set_out_of_play'
+          }
+        }
+      })
+    ],
     influences: [ROLE_IDENTITY_INFLUENCE],
     visibility: VISIBILITY.STORYTELLER_ONLY
   },
@@ -202,7 +211,6 @@ export const RECIPE_CATALOG = Object.freeze({
     key: RECIPE_KEYS.BLOCK_OUT_OF_PLAY,
     optional: true,
     usage: { limit: null, window: CONSTRAINT_WINDOWS.SESSION },
-    id: ACTION_IDS.BLOCK_PROPERTY_CHANGE,
     actor: { type: RECIPE_ACTOR_TYPES.ROLE },
     target: {
       type: MECHANICAL_ENTITY_TYPES.ROLE,
@@ -215,22 +223,26 @@ export const RECIPE_CATALOG = Object.freeze({
         window: CONSTRAINT_WINDOWS.CURRENT_OR_NEXT_CYCLE
       }
     ],
-    effect: {
-      type: EFFECT_TYPES.BLOCK_PROPERTY_CHANGE,
-      blockedPropertyChange: {
-        property: 'inPlay',
-        value: false
-      },
-      blockedFor: {
-        groupIds: ['group_concealed_set_out_of_play'],
-        alignmentIds: ['alignment_b']
-      },
-      duration: {
-        unit: 'pool',
-        offset: 0,
-        boundary: 'after'
-      }
-    },
+    actions: [
+      getCatalogAction(ACTION_IDS.BLOCK_PROPERTY_CHANGE, {
+        effect: {
+          type: EFFECT_TYPES.BLOCK_PROPERTY_CHANGE,
+          blockedPropertyChange: {
+            property: 'inPlay',
+            value: false
+          },
+          blockedFor: {
+            groupIds: ['group_concealed_set_out_of_play'],
+            alignmentIds: ['alignment_b']
+          },
+          duration: {
+            unit: 'pool',
+            offset: 0,
+            boundary: 'after'
+          }
+        }
+      })
+    ],
     visibility: VISIBILITY.STORYTELLER_ONLY
   },
 
@@ -238,68 +250,71 @@ export const RECIPE_CATALOG = Object.freeze({
     key: RECIPE_KEYS.LINK_TARGETS,
     optional: true,
     usage: { limit: 1, window: CONSTRAINT_WINDOWS.SESSION },
-    id: ACTION_IDS.LINK_TARGETS,
     actor: { type: RECIPE_ACTOR_TYPES.ROLE },
     target: {
       type: MECHANICAL_ENTITY_TYPES.ROLE,
       count: 2,
       filters: [TARGET_FILTER_TYPES.IN_PLAY, TARGET_FILTER_TYPES.DISTINCT]
     },
-    effect: {
-      type: EFFECT_TYPES.SET_GROUP,
-      targetType: MECHANICAL_ENTITY_TYPES.GROUP,
-      groupType: GROUP_TYPES.LINKED,
-      groupRules: [
-        defineGroupRule({
-          key: 'propagate_out_of_play',
-          type: GROUP_RULE_TYPES.PROPAGATE_PROPERTY_CHANGE,
-          when: {
-            property: 'inPlay',
-            value: false
-          },
-          apply: {
-            property: 'inPlay',
-            value: false
-          },
-          targets: GROUP_RULE_TARGETS.OTHER_MEMBERS
-        })
-      ],
-      selectionRules: [
-        {
-          key: 'members_cannot_vote_other_members_out_of_play',
-          type: GROUP_SELECTION_RULE_TYPES.EXCLUDE_OTHER_GROUP_MEMBERS,
-          scope: {
-            methods: ['vote'],
-            recipeKeys: [RECIPE_KEYS.SET_OUT_OF_PLAY]
-          }
-        }
-      ],
-      objectiveRules: [
-        {
-          key: 'members_complete_exclusive_objective',
-          holder: { type: OBJECTIVE_HOLDER_TYPES.SELF },
-          appliesWhen: {
-            sourceState: 'active',
-            conditions: [
-              {
-                type: OBJECTIVE_CONDITIONS.MEMBERS_SPAN_MULTIPLE_EFFECTIVE_ALIGNMENTS
-              }
-            ]
-          },
-          condition: {
-            type: OBJECTIVE_CONDITIONS.ALL_HOLDER_MEMBERS_ARE_ONLY_ROLES_IN_PLAY
-          },
-          onFulfilled: [
+    actions: [
+      getCatalogAction(ACTION_IDS.LINK_TARGETS, {
+        effect: {
+          type: EFFECT_TYPES.SET_GROUP,
+          targetType: MECHANICAL_ENTITY_TYPES.GROUP,
+          groupType: GROUP_TYPES.LINKED,
+          groupRules: [
+            defineGroupRule({
+              key: 'propagate_out_of_play',
+              type: GROUP_RULE_TYPES.PROPAGATE_PROPERTY_CHANGE,
+              when: {
+                property: 'inPlay',
+                value: false
+              },
+              apply: {
+                property: 'inPlay',
+                value: false
+              },
+              targets: GROUP_RULE_TARGETS.OTHER_MEMBERS
+            })
+          ],
+          selectionRules: [
             {
-              conclusive: true,
-              beneficiaries: { type: OBJECTIVE_BENEFICIARY_TYPES.HOLDER }
+              key: 'members_cannot_vote_other_members_out_of_play',
+              type: GROUP_SELECTION_RULE_TYPES.EXCLUDE_OTHER_GROUP_MEMBERS,
+              scope: {
+                methods: ['vote'],
+                recipeKeys: [RECIPE_KEYS.SET_OUT_OF_PLAY]
+              }
             }
           ],
-          conflictRules: []
+          objectiveRules: [
+            {
+              key: 'members_complete_exclusive_objective',
+              holder: { type: OBJECTIVE_HOLDER_TYPES.SELF },
+              appliesWhen: {
+                sourceState: 'active',
+                conditions: [
+                  {
+                    type: OBJECTIVE_CONDITIONS.MEMBERS_SPAN_MULTIPLE_EFFECTIVE_ALIGNMENTS
+                  }
+                ]
+              },
+              condition: {
+                type: OBJECTIVE_CONDITIONS.ALL_HOLDER_MEMBERS_ARE_ONLY_ROLES_IN_PLAY
+              },
+              onFulfilled: [
+                {
+                  conclusive: true,
+                  beneficiaries: { type: OBJECTIVE_BENEFICIARY_TYPES.HOLDER }
+                }
+              ],
+              conflictRules: []
+            }
+          ],
+          active: true
         }
-      ],
-      active: true
-    },
+      })
+    ],
     influences: [GROUP_MEMBERSHIP_INFLUENCE, OBJECTIVE_RULE_STATE_INFLUENCE],
     visibility: VISIBILITY.STORYTELLER_ONLY
   },
@@ -308,15 +323,12 @@ export const RECIPE_CATALOG = Object.freeze({
     key: RECIPE_KEYS.CONCLUDE_PLAY,
     optional: false,
     usage: { limit: null, window: CONSTRAINT_WINDOWS.SESSION },
-    id: ACTION_IDS.CONCLUDE_PLAY,
     actor: { type: RECIPE_ACTOR_TYPES.SYSTEM },
     target: {
       type: MECHANICAL_ENTITY_TYPES.SESSION,
       count: 0
     },
-    effect: {
-      type: EFFECT_TYPES.CONCLUDE_PLAY
-    },
+    actions: [getCatalogAction(ACTION_IDS.CONCLUDE_PLAY)],
     visibility: VISIBILITY.ALL
   }
 });
@@ -344,7 +356,8 @@ const ALLOWED_RECIPE_OVERRIDE_FIELDS = Object.freeze([
 
 const BLOCKED_RECIPE_OVERRIDE_FIELDS = Object.freeze([
   'id',
-  'effect'
+  'effect',
+  'actions'
 ]);
 
 export function validateCatalogRecipeOverrides(recipeKey, overrides = {}) {
@@ -402,7 +415,7 @@ export function getCatalogRecipe(recipeKey, overrides = {}) {
         }
       : cloneCatalogValue(baseRecipe.target),
     actor: overrides.actor ? { ...overrides.actor } : cloneCatalogValue(baseRecipe.actor),
-    effect: cloneCatalogValue(baseRecipe.effect),
+    actions: cloneCatalogValue(baseRecipe.actions ?? []),
     usage: overrides.usage ? cloneCatalogValue(overrides.usage) : cloneCatalogValue(baseRecipe.usage),
     diagnostics: [
       ...(baseRecipe.diagnostics ?? []),
