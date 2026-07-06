@@ -7,12 +7,17 @@
 // - trigger: condicion declarada por un rol para escuchar ese evento.
 // - reaction: respuesta definida por ese rol cuando el trigger encaja.
 //
-// Este archivo no ejecuta la receta del stage especial. Solo crea el stage que
-// podra ejecutarse mas tarde por stageModel, respetando el cierre manual.
+// Este archivo crea stages especiales derivados y resuelve los stages especiales
+// cuyo comportamiento pertenece al evento que los genero.
 // -----------------------------------------------------------------------------
 
 import { createStage } from './stageDefinition.js';
 import { EFFECT_TYPES } from './effectModel.js';
+import { ACTION_IDS, resolveAction } from './actionModel.js';
+import {
+  HISTORY_RESULTS,
+  appendRecipeHistory
+} from './historyModel.js';
 import { STAGE_STATUSES, normalizeId } from './sessionModel.js';
 import { MECHANICAL_ENTITY_TYPES } from './domainTypes.js';
 import { GROUP_TYPES } from './groupDefinition.js';
@@ -666,6 +671,90 @@ function getLinkedTargetRecognitionResponses({
 
 function applyLinkedEventResponses({ session = {}, responses = [] } = {}) {
   return appendCreateStageResponses(session, responses);
+}
+
+function getRoleProperty(session = {}, roleId = null, property = null) {
+  return findRole(session, roleId)?.[property];
+}
+
+function causalConditionIsMet(session = {}, condition = {}) {
+  if (!condition?.targetId || !condition?.property) return false;
+  return getRoleProperty(session, condition.targetId, condition.property) === condition.value;
+}
+
+export function resolveLinkedPropagatedEffectSpecialStage(session = {}, currentStage = {}) {
+  const stage = currentStage.stage ?? {};
+  if (stage.metadata?.catalogId !== LINKED_PROPAGATED_EFFECT_STAGE.CATALOG_ID) return session;
+
+  const effect = stage.metadata?.propagatedEffect ?? null;
+  const condition = effect?.causalCondition ?? null;
+  const actionId = effect?.property === 'inPlay' ? ACTION_IDS.SET_IN_PLAY : ACTION_IDS.SET_PROPERTY;
+  const cycleId = session.cycle?.id ?? 0;
+  const context = {
+    poolKey: null,
+    stageId: currentStage.stageId,
+    stageKey: currentStage.stageKey,
+    stageCatalogId: stage.metadata.catalogId,
+    eventWindow: stage.metadata.eventWindow ?? null,
+    recipeKey: LINKED_PROPAGATED_EFFECT_STAGE.RECIPE_KEY,
+    causedBy: effect?.causedBy ?? null
+  };
+
+  if (!effect || !causalConditionIsMet(session, condition)) {
+    return appendRecipeHistory(session, {
+      cycleId,
+      poolKey: null,
+      stageId: currentStage.stageId,
+      stageKey: currentStage.stageKey,
+      stageCatalogId: stage.metadata?.catalogId ?? null,
+      recipeKey: LINKED_PROPAGATED_EFFECT_STAGE.RECIPE_KEY,
+      actionId,
+      actionSignature: actionId,
+      actorIds: [],
+      targetIds: effect?.targetId ? [effect.targetId] : [],
+      proposedEffects: effect ? [effect] : [],
+      finalEffects: [],
+      blockedEffects: [],
+      result: HISTORY_RESULTS.NO_EFFECT,
+      metadata: {
+        reason: 'causal_condition_not_met',
+        causalCondition: condition ?? null
+      }
+    });
+  }
+
+  const previousSession = session;
+  const actionResolution = resolveAction(
+    session,
+    {
+      id: actionId,
+      target: {
+        type: effect.targetType,
+        count: 1,
+        filters: []
+      },
+      effect: {
+        type: effect.type,
+        targetType: effect.targetType,
+        property: effect.property,
+        value: effect.value,
+        derivedFrom: effect.derivedFrom ?? null
+      }
+    },
+    {
+      targetIds: [effect.targetId]
+    },
+    context
+  );
+  if (!actionResolution.ok) return actionResolution.session;
+  const eventProcessing = processActionResultEvents({
+    previousSession,
+    session: actionResolution.session,
+    actionResult: actionResolution.result,
+    context
+  });
+
+  return eventProcessing.session;
 }
 
 // -----------------------------------------------------------------------------

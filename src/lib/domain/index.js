@@ -52,6 +52,7 @@ export {
   getRecipeHistorySignature,
   appendEntry,
   appendRecipeHistory,
+  appendStageHistory,
   findAppliedSetPropertyHistory
 } from './historyModel.js';
 
@@ -166,7 +167,6 @@ export {
   isValidStageCompletionRequester,
   getStageCompletionDefinition,
   canRequesterCompleteStage,
-  appendStageHistory,
   completeCurrentStage,
   resolveCurrentStage
 } from './stageModel.js';
@@ -196,7 +196,10 @@ export {
   SURFACE_ITEM_TYPES,
   SURFACE_MESSAGE_EXPIRATIONS,
   SURFACE_EFFECT_REASONS,
+  SURFACE_LIFECYCLE_KEYS,
   getSurfaceFlowOrder,
+  getSurfaceTransitionAfterWindow,
+  createSurfaceTransitionResult,
   createSurfaceMessage,
   createSurfaceItem,
   createPublicTableStateItem,
@@ -332,6 +335,7 @@ export {
   CANDIDATE_RULE_TYPES,
   createSelection,
   createSelectionRules,
+  buildStageSelectionInput,
   getDefaultSelectionCandidateIds,
   resolveCandidateIds,
   validateSelections,

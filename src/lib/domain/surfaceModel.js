@@ -6,6 +6,8 @@
 // constructores de datos que la capa de superficie puede consumir.
 // -----------------------------------------------------------------------------
 
+import { SPECIAL_STAGE_EVENT_WINDOWS } from './specialStagesModel.js';
+
 export const SURFACE_SCREEN_MODES = Object.freeze({
   HIDDEN: 'screenHidden',
   READONLY: 'screenReadonly',
@@ -52,6 +54,10 @@ export const SURFACE_EFFECT_REASONS = Object.freeze({
   REACTIVE_RESPONSE: 'reactive_response'
 });
 
+export const SURFACE_LIFECYCLE_KEYS = Object.freeze({
+  TRANSITION: 'surface_transition'
+});
+
 function clonePayload(value) {
   if (Array.isArray(value)) return value.map(clonePayload);
   if (value && typeof value === 'object') {
@@ -64,6 +70,39 @@ function clonePayload(value) {
 
 export function getSurfaceFlowOrder() {
   return [...SURFACE_FLOW_ORDER];
+}
+
+export function getSurfaceTransitionAfterWindow(eventWindow = null) {
+  if (eventWindow === SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED) {
+    return {
+      step: SURFACE_FLOW_STEPS.PUBLIC_REVEAL,
+      from: SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED,
+      to: SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_EXPOSED
+    };
+  }
+
+  if (eventWindow === SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED) {
+    return {
+      step: SURFACE_FLOW_STEPS.PRIVATE_HIDE,
+      from: SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED,
+      to: SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_CONCEALED
+    };
+  }
+
+  return null;
+}
+
+export function createSurfaceTransitionResult({ step, from = null, to = null } = {}) {
+  return {
+    key: SURFACE_LIFECYCLE_KEYS.TRANSITION,
+    ok: true,
+    result: { step },
+    errors: [],
+    metadata: {
+      ...(from ? { from } : {}),
+      ...(to ? { to } : {})
+    }
+  };
 }
 
 export function createSurfaceMessage({

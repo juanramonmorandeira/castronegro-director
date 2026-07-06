@@ -14,7 +14,10 @@
 // set_property inPlay=false, dar una accion extra, crear una marca, etc.
 // -----------------------------------------------------------------------------
 
-import { getGroupMemberRoleIds } from './groupModel.js';
+import {
+  collectSelectionRules,
+  getGroupMemberRoleIds
+} from './groupModel.js';
 import { normalizeId } from './sessionModel.js';
 
 export const SELECTION_OUTCOME_TYPES = Object.freeze({
@@ -314,6 +317,130 @@ export function getInPlaySelectorIds(session = {}) {
   return (session?.roles ?? [])
     .filter((role) => role?.inPlay === true)
     .map((role) => role.id);
+}
+
+export function getSelectionSelectorIds(session = {}, stage = {}, input = {}, selectionRules = {}) {
+  if ((input.selectorIds ?? []).length > 0) return input.selectorIds;
+  if (selectionRules.selectorSource === SELECTION_SELECTOR_SOURCES.IN_PLAY_ROLES) {
+    return getInPlaySelectorIds(session);
+  }
+  if ((input.actorIds ?? []).length > 0) return input.actorIds;
+  if ((stage.actorIds ?? []).length > 0) return stage.actorIds;
+
+  return [];
+}
+
+function getSelectionRuleSelectorIds(session = {}, stage = {}, input = {}, selectionRules = {}) {
+  const selectorIds = getSelectionSelectorIds(session, stage, input, selectionRules);
+  if (selectorIds.length > 0) return selectorIds;
+
+  return [
+    ...new Set((input.selections ?? []).map((selection) => selection.selectorId).filter(Boolean))
+  ];
+}
+
+function ruleScopeMatchesContext(scope = {}, context = {}) {
+  const poolKeys = (scope.poolKeys ?? []).map(normalizeId);
+  const stageKeys = (scope.stageKeys ?? []).map(normalizeId);
+  const recipeKeys = (scope.recipeKeys ?? []).map(normalizeId);
+  const methods = (scope.methods ?? []).map(normalizeId);
+
+  if (poolKeys.length > 0 && !poolKeys.includes(normalizeId(context.poolKey))) return false;
+  if (stageKeys.length > 0 && !stageKeys.includes(normalizeId(context.stageKey))) return false;
+  if (recipeKeys.length > 0 && !recipeKeys.includes(normalizeId(context.recipeKey))) return false;
+  if (methods.length > 0 && !methods.includes(normalizeId(context.method))) return false;
+
+  return true;
+}
+
+function collectSessionSelectionRules(session = {}, selectionContext = {}) {
+  return (session.selectionRules ?? [])
+    .filter((rule) => ruleScopeMatchesContext(rule.scope ?? {}, selectionContext))
+    .map((rule) => rule.rules ?? rule);
+}
+
+export function mergeSelectionRules(baseRules = {}, additionalRules = []) {
+  return (additionalRules ?? []).reduce((merged, rule) => ({
+    ...merged,
+    ...rule,
+    groupRestrictions: [
+      ...(merged.groupRestrictions ?? []),
+      ...(rule.groupRestrictions ?? [])
+    ],
+    candidateRules: [
+      ...(merged.candidateRules ?? []),
+      ...(rule.candidateRules ?? [])
+    ],
+    selectionWeights: [
+      ...(merged.selectionWeights ?? []),
+      ...(rule.selectionWeights ?? [])
+    ],
+    selectionValueRules: [
+      ...(merged.selectionValueRules ?? []),
+      ...(rule.selectionValueRules ?? [])
+    ],
+    tieBreakers: [
+      ...(merged.tieBreakers ?? []),
+      ...(rule.tieBreakers ?? [])
+    ],
+    selectorEligibility: {
+      ...(merged.selectorEligibility ?? {}),
+      ...(rule.selectorEligibility ?? {})
+    },
+    supportThreshold: {
+      ...(merged.supportThreshold ?? {}),
+      ...(rule.supportThreshold ?? {})
+    },
+    abstainResolution: {
+      ...(merged.abstainResolution ?? {}),
+      ...(rule.abstainResolution ?? {})
+    }
+  }), { ...baseRules });
+}
+
+// Prepara el input que una stage con selectionRules entregara a selectionModel.
+//
+// No resuelve la seleccion. Solo combina:
+// - selectores reales de la stage;
+// - selections recibidas por input;
+// - reglas de seleccion de la stage;
+// - reglas globales de sesion;
+// - restricciones aportadas por groups activos.
+export function buildStageSelectionInput({
+  session = {},
+  stage = {},
+  recipeKey = null,
+  input = {}
+} = {}) {
+  const selectionRules = stage?.selectionRules ?? {};
+  const selectorIds = getSelectionSelectorIds(session, stage, input, selectionRules);
+  const selectionContext = {
+    method: 'vote',
+    poolKey: stage.poolKey ?? null,
+    stageKey: stage.key ?? null,
+    recipeKey
+  };
+  const collectedRules = collectSelectionRules(session, {
+    selectorIds: getSelectionRuleSelectorIds(session, stage, input, selectionRules),
+    selectionContext
+  });
+  const sessionSelectionRules = collectSessionSelectionRules(session, selectionContext);
+  const mergedSelectionRules = mergeSelectionRules(selectionRules, sessionSelectionRules);
+
+  return {
+    selectorIds,
+    selections: input.selections ?? [],
+    selectionRules: {
+      ...mergedSelectionRules,
+      candidateIds: input.candidateIds ?? mergedSelectionRules.candidateIds ?? null,
+      groupRestrictions: [
+        ...(mergedSelectionRules.groupRestrictions ?? []),
+        ...(collectedRules.groupRestrictions ?? [])
+      ]
+    },
+    roundType: input.roundType,
+    roundIndex: input.roundIndex ?? 0
+  };
 }
 
 // Devuelve los candidatos por defecto de una seleccion.

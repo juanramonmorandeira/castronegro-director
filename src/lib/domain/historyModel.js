@@ -1,5 +1,7 @@
 // historyModel.js
 // -----------------------------------------------------------------------------
+
+import { STAGE_COMPLETION_REQUESTED_BY } from './stageTypes.js';
 // Este archivo centraliza la memoria mecanica de la sesion.
 //
 // recipeHistory vive dentro de la sesion porque cada partida tiene su propia
@@ -269,6 +271,42 @@ export function appendRecipeHistory(session, entry = {}) {
         `${item.payload.recipeKey ?? 'recipe'}-finished-${item.metadata.context.cycleId}-${currentHistory.length}`
     }
   );
+}
+
+function isValidStageCompletionRequester(requestedBy) {
+  return Object.values(STAGE_COMPLETION_REQUESTED_BY).includes(requestedBy);
+}
+
+// Anade una entrada al historial de stages.
+//
+// Cerrar un stage no es una accion de juego. Por eso no se registra en
+// recipeHistory: stageHistory conserva la decision de pasar al siguiente stage
+// y por que.
+export function appendStageHistory(session, entry = {}) {
+  const requestedBy = isValidStageCompletionRequester(entry.requestedBy)
+    ? entry.requestedBy
+    : STAGE_COMPLETION_REQUESTED_BY.DIRECTOR;
+  const normalizedEntry = {
+    poolKey: entry.poolKey ?? null,
+    stageId: entry.stageId ?? null,
+    stageKey: entry.stageKey ?? null,
+    requestedBy,
+    event: HISTORY_EVENTS.FINISHED,
+    payload: {
+      stageId: entry.stageId ?? null,
+      stageKey: entry.stageKey ?? null,
+      requestedBy,
+      actorIds: [...(entry.actorIds ?? [])],
+      recipeKey: entry.recipeKey ?? null,
+      reason: entry.reason ?? 'manual_completion'
+    },
+    metadata: { ...(entry.metadata ?? {}) }
+  };
+
+  return appendEntry(session, HISTORY_COLLECTIONS.STAGE, normalizedEntry, {
+    getId: (item, history) =>
+      `stage-completion-${item.payload.stageId ?? item.payload.stageKey ?? 'stage'}-${history.length}`
+  });
 }
 
 // Devuelve entradas que aplicaron un cambio concreto de propiedad en un ciclo.
