@@ -43,6 +43,8 @@ export const RECIPE_KEYS = Object.freeze({
   SET_DOUBLE_SELECTOR: 'set_double_selector',
   ASSUME_ROLE: 'assume_role',
   RESTORE_RECENT_OUT_OF_PLAY: 'restore_recent_out_of_play',
+  LINKED_PROPAGATED_EFFECT: 'linked_propagated_effect',
+  LINKED_TARGET_RECOGNITION: 'linked_target_recognition',
   CONCLUDE_PLAY: 'conclude_play'
 });
 
@@ -179,6 +181,20 @@ export const RECIPE_CATALOG = Object.freeze({
       })
     ],
     influences: [ROLE_DOUBLE_SELECTOR_TRUE_INFLUENCE],
+    visibility: VISIBILITY.STORYTELLER_ONLY
+  },
+
+  [RECIPE_KEYS.LINKED_PROPAGATED_EFFECT]: {
+    key: RECIPE_KEYS.LINKED_PROPAGATED_EFFECT,
+    optional: false,
+    usage: { limit: null, window: CONSTRAINT_WINDOWS.SESSION },
+    actor: { type: RECIPE_ACTOR_TYPES.SYSTEM },
+    target: {
+      type: MECHANICAL_ENTITY_TYPES.ROLE,
+      count: 1,
+      filters: []
+    },
+    actions: [getCatalogAction(ACTION_IDS.SET_PROPERTY)],
     visibility: VISIBILITY.STORYTELLER_ONLY
   },
 

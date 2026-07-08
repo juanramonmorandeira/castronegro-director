@@ -16,7 +16,7 @@ import { STAGE_STATUSES, normalizeId } from './sessionModel.js';
 import {
   STAGE_COMPLETION_MODES,
   STAGE_COMPLETION_REQUESTED_BY
-} from './stageModel.js';
+} from './stageTypes.js';
 import { createSelectionRules } from './selectionModel.js';
 
 export const AVAILABILITY_RULE_TYPES = Object.freeze({
@@ -166,6 +166,7 @@ export function defineStage({
   key,
   poolKey = null,
   status = STAGE_STATUSES.DISABLED,
+  actorIds = [],
   completion = {},
   selectionRules = null,
   availabilityRules = [],
@@ -187,6 +188,7 @@ export function defineStage({
     key: normalizeId(key),
     poolKey: poolKey ?? null,
     status,
+    actorIds: defineActorIds(actorIds),
     completion: validateStageCompletion(completion),
     selectionRules: prepareSelectionRules(selectionRules),
     availabilityRules: normalizeAvailabilityRules(availabilityRules),

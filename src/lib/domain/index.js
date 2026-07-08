@@ -120,10 +120,17 @@ export {
 } from './stageDefinition.js';
 export {
   STAGE_CATALOG_IDS,
+  STAGE_VISIBILITY,
   STAGE_CATALOG,
   getManualCompletion,
   getCatalogStage
 } from './stageCatalog.js';
+export {
+  INTER_POOL_QUEUE_ERRORS,
+  INTER_POOL_QUEUE_EVENT_WINDOWS,
+  INTER_POOL_QUEUE_HISTORY_OPERATIONS,
+  isValidInterPoolQueueEventWindow
+} from './interPoolQueueDefinition.js';
 export {
   getPoolStages,
   getCurrentStageCursor,
@@ -171,23 +178,19 @@ export {
   resolveCurrentStage
 } from './stageModel.js';
 export {
-  SPECIAL_STAGE_ERRORS,
-  SPECIAL_STAGE_EVENT_WINDOWS,
-  SPECIAL_STAGE_HISTORY_OPERATIONS,
-  isValidSpecialStageEventWindow,
-  getSpecialStages,
-  getSpecialStagesForWindow,
-  hasPendingSpecialStages,
-  getCurrentSpecialStage,
-  getCurrentSpecialStageForWindow,
-  appendSpecialStagesHistory,
-  appendSpecialStage,
-  removeSpecialStages,
-  startSpecialStages,
-  startSpecialStagesForWindow,
-  completeSpecialStageForWindow,
-  completeSpecialStage
-} from './specialStagesModel.js';
+  getInterPoolQueue,
+  getInterPoolStagesForWindow,
+  hasPendingInterPoolStages,
+  getCurrentInterPoolStage,
+  getCurrentInterPoolStageForWindow,
+  appendInterPoolQueueHistory,
+  appendInterPoolStage,
+  removeInterPoolStages,
+  startInterPoolQueue,
+  startInterPoolQueueForWindow,
+  completeInterPoolStageForWindow,
+  completeInterPoolStage
+} from './interPoolQueueModel.js';
 
 export {
   SURFACE_SCREEN_MODES,
@@ -222,6 +225,13 @@ export {
   getCatalogAction,
   validateCatalogActionOverrides
 } from './actionCatalog.js';
+export {
+  ACTOR_MODEL_ERRORS,
+  createActorContext,
+  getActionActors,
+  getActorIdsFromInputOrStage,
+  resolveRecipeActor
+} from './actorModel.js';
 export {
   createAction,
   defineAction
@@ -262,16 +272,31 @@ export {
   reviewPropertyBlocks
 } from './roleModel.js';
 export {
-  EVENT_TYPES,
-  EVENT_TRIGGER_TARGETS,
   EVENT_RESPONSE_TYPES,
+  EVENT_TRIGGER_TARGETS,
+  EVENT_TYPES,
+  defineEventRule
+} from './eventDefinition.js';
+export {
+  EVENT_CATALOG,
+  EVENT_RULE_KEYS,
+  EVENT_RULE_KEYS_BY_FEATURE,
+  EVENT_SOURCE_STAGE_CATALOG_IDS,
+  EVENT_WINDOW_BY_SOURCE_STAGE_CATALOG_ID,
+  getEventResponseWindow,
+  getCatalogEventRule
+} from './eventCatalog.js';
+export {
   getEventsFromActionResult,
   getTriggeredReactions,
+  createStageResponseFromRule,
+  createCancelStageResponseFromRule,
+  applyCatalogEventResponses,
   resolveEventResponses,
   applyEventResponses,
   processActionResultEvents
 } from './eventModel.js';
-export { resolveProposedEffects } from './resolverModel.js';
+export { resolveProposedEffects } from './effectResolver.js';
 export {
   DOUBLE_SELECTOR_ERRORS,
   DOUBLE_SELECTOR_RULE_KEY,
@@ -279,6 +304,7 @@ export {
   cancelPendingPickNextDoubleSelectorStage,
   createPickNextDoubleSelectorStage,
   createSelectDoubleSelectorStage,
+  getDoubleSelectorEventResponses,
   queuePickNextDoubleSelectorStage,
   requestSelectDoubleSelectorStage
 } from './doubleSelectorModel.js';
@@ -291,7 +317,6 @@ export {
 } from './actionModel.js';
 export {
   findRole,
-  getActionActors,
   canResolveWithoutActor,
   targetMatchesFilter,
   validateActionTargets

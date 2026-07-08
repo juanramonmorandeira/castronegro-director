@@ -147,7 +147,7 @@ pool dentro del ciclo, por ejemplo `poolConcealed` o `poolExposed`. No existe
 `poolId`: una ejecucion queda identificada por `cycleId + poolKey`.
 
 `cycle` = entidad runtime superior a los pools. Conoce el orden de los pools,
-la iteracion actual y cuando debe resolver `specialStages` antes de continuar
+la iteracion actual y cuando debe resolver `interPoolQueue` antes de continuar
 con `poolConcealed` o `poolExposed`.
 
 `cycleId` = numero de la iteracion actual del ciclo. En codigo vive como
@@ -156,15 +156,15 @@ con `poolConcealed` o `poolExposed`.
 `cycleKey` = concepto no implementado. No se necesita mientras la session solo
 tenga una unica definicion de ciclo repetitivo.
 
-`specialStages` = cola FIFO runtime de stages dinamicos que se resuelven entre
+`interPoolQueue` = cola FIFO runtime de stages dinamicos que se resuelven entre
 pools. No es un pool, no se prepara y cada stage se elimina al completarse.
 Cada elemento tiene `stageId`, `stageKey` y metadatos de origen. Los stages
 generados durante un pool se resuelven despues de completar ese pool y antes
 del siguiente, conservando su relacion causal con el ciclo actual.
 
-`eventWindow` = metadata opcional de una specialStage que indica en que ventana
+`eventWindow` = metadata opcional de una interPoolStage que indica en que ventana
 de superficie debe proyectarse: `before_concealed`, `after_concealed`,
-`before_exposed` o `after_exposed`. No convierte `specialStages` en varios
+`before_exposed` o `after_exposed`. No convierte `interPoolQueue` en varios
 pools ni en varias colas.
 
 `publicReveal` = transicion de superficie entre `after_concealed` y
@@ -175,17 +175,17 @@ resueltos.
 `privateHide` = transicion de superficie posterior a `after_exposed` que devuelve
 la pantalla de roles al modo oculto antes del siguiente tramo privado.
 
-`specialStageDefinitions` = stages iniciales que una definicion aporta
-directamente a `session.specialStages`. No usan una bandera dentro del stage.
+`interPoolStageDefinitions` = stages iniciales que una definicion aporta
+directamente a `session.interPoolQueue`. No usan una bandera dentro del stage.
 
 `currentStageSource` = indica si el cursor ejecuta actualmente un stage de
-`cycle.pools` o de `session.specialStages`. Sus valores son `pool` y
-`specialStages`.
+`cycle.pools` o de `session.interPoolQueue`. Sus valores son `pool` y
+`interPoolQueue`.
 
-`specialStageHistory` = historial propio de altas, inicios, cierres y fallos de
-la cola `specialStages`, dentro de `session.history`.
+`interPoolQueueHistory` = historial propio de altas, inicios, cierres y fallos de
+la cola `interPoolQueue`, dentro de `session.history`.
 
-`role_state_revealed` = specialStage informativa generada cuando un role queda
+`role_state_revealed` = interPoolStage informativa generada cuando un role queda
 `inPlay=false` y debe comunicarse publicamente. No tiene actions ni
 acknowledgements de jugadores; el director la cierra tras comunicar player,
 role revelado, estado y causa.
@@ -230,7 +230,7 @@ queda preparado para recipes multi-action futuras.
 target, confirmacion, requester, acusacion, validacion u otros datos de action.
 
 `session` = partida viva materializada. Aporta los roles, groups, pools,
-specialStages, objectiveRules e historiales reales sobre los que se resuelven
+interPoolQueue, objectiveRules e historiales reales sobre los que se resuelven
 stages y recipes.
 
 `action` = intento de producir un cambio o resultado mecanico.
@@ -244,7 +244,7 @@ stages y recipes.
 `event` = hecho producido por la session que puede disparar reacciones.
 
 `reaction` = definicion que escucha un event y puede crear una respuesta, como
-un stage especial.
+un stage de interPoolQueue.
 
 `objective` = objetivo mecanico que puede cumplirse durante la parte jugable.
 Es el lenguaje interno del nucleo para evaluar logros o conclusiones.

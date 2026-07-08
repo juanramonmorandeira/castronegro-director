@@ -23,7 +23,7 @@ no forman parte del dominio vigente.
 | voto | `selectionModel` con varios `selectorIds` |
 | pool nocturno | `poolConcealed` |
 | pool diurno | `poolExposed` |
-| pool especial | cola FIFO `specialStages` |
+| pool especial | cola FIFO `interPoolQueue` |
 | hidratación | `preparePool` |
 | final de partida | `check_objectives` y `conclude_play` |
 
@@ -31,9 +31,9 @@ no forman parte del dominio vigente.
 
 ```text
 poolConcealed
--> specialStages si existen
+-> interPoolQueue si existen
 -> poolExposed
--> specialStages si existen
+-> interPoolQueue si existen
 -> siguiente ciclo
 ```
 

@@ -1,6 +1,6 @@
-// resolverModel.js
+// effectResolver.js
 // -----------------------------------------------------------------------------
-// Este archivo contiene el resolver del motor.
+// Este archivo contiene el resolver de efectos propuestos.
 //
 // Responsabilidad:
 // - recibe efectos propuestos por una accion;

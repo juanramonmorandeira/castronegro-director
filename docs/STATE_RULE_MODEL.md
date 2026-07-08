@@ -262,7 +262,7 @@ pool completado
 ```
 
 `startCycle` pertenece a `cycleModel`, no a un pool. El ciclo controla el orden
-de pools y comprueba `specialStages` antes de entrar en el siguiente pool.
+de pools y comprueba `interPoolQueue` antes de entrar en el siguiente pool.
 
 ## Availability rules
 
@@ -300,7 +300,7 @@ finished
 
 ## Special stages
 
-`session.specialStages` es una cola FIFO independiente. No es un pool, no se
+`session.interPoolQueue` es una cola FIFO independiente. No es un pool, no se
 prepara y no forma parte de `cycle.poolOrder`.
 
 El cursor usa `session.currentStageSource` para distinguir si esta ejecutando
@@ -313,10 +313,10 @@ Se procesa:
 - despues de completar un pool;
 - antes de entrar en el siguiente pool.
 
-Un stage especial que genera otro stage especial lo añade al final de la misma
+Un stage de interPoolQueue que genera otro stage de interPoolQueue lo añade al final de la misma
 cola. Cada stage completado se elimina.
 
-Las definiciones iniciales de cola viven en `specialStageDefinitions`. Los
+Las definiciones iniciales de cola viven en `interPoolStageDefinitions`. Los
 stages generados por reacciones entran en la cola por la respuesta del evento.
 El objeto stage no contiene una bandera de clasificacion.
 
@@ -334,7 +334,7 @@ No existen condiciones implicitas codificadas en el motor. RuleSet y roles
 aportan las definiciones que se materializan en `session.objectiveRules`.
 
 La evaluacion ocurre al completar cada pool y tambien cuando se vacia
-`specialStages`. `conclude_play` solo se ejecuta cuando existe un
+`interPoolQueue`. `conclude_play` solo se ejecuta cuando existe un
 `playOutcome` concluyente y estable.
 
 ## Construccion
@@ -355,7 +355,7 @@ ruleSet + runMode + match
   -> roles
   -> groups
   -> cycle.pools
-  -> specialStages
+  -> interPoolQueue
   -> session
 ```
 

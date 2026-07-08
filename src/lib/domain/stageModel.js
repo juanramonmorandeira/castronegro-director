@@ -38,24 +38,20 @@ import {
 } from './historyModel.js';
 import { resolveRecipe } from './recipeModel.js';
 import { ACTION_IDS, VISIBILITY, resolveAction } from './actionModel.js';
-import {
-  processActionResultEvents,
-  resolveLinkedPropagatedEffectSpecialStage
-} from './eventModel.js';
+import { processActionResultEvents } from './eventModel.js';
 import { CURRENT_STAGE_SOURCES, normalizeId } from './sessionModel.js';
 import { RECIPE_ACTOR_TYPES } from './domainTypes.js';
+import { RECIPE_KEYS } from './recipeCatalog.js';
 import {
   SELECTION_OUTCOME_TYPES,
   buildStageSelectionInput
 } from './selectionModel.js';
 import {
-  completeSpecialStage,
-  getCurrentSpecialStage
-} from './specialStagesModel.js';
+  completeInterPoolStage,
+  getCurrentInterPoolStage
+} from './interPoolQueueModel.js';
 import { reviewPropertyBlocks } from './roleModel.js';
 import {
-  LINKED_PROPAGATED_EFFECT_STAGE,
-  ROLE_STATE_REVEALED_STAGE,
   STAGE_COMPLETION_MODES,
   STAGE_COMPLETION_REQUESTED_BY
 } from './stageTypes.js';
@@ -120,9 +116,12 @@ export const STAGE_KEYS = Object.freeze({
   STAGE_04: 'stage_04',
   STAGE_05: 'stage_05',
   DELIBERATION: 'stage_deliberation',
-  LINKED_PROPAGATED_EFFECT: LINKED_PROPAGATED_EFFECT_STAGE.KEY,
-  ROLE_STATE_REVEALED: ROLE_STATE_REVEALED_STAGE.KEY,
-  STAGE_07: 'stage_07',
+  ROLE_STATE_REVEALED: 'stage_role_state_revealed',
+  ROLE_REACTIVE_RESPONSE: 'stage_role_reactive_response',
+  LINKED_PROPAGATED_EFFECT: 'stage_linked_propagated_effect',
+  LINKED_TARGET_RECOGNITION: 'stage_linked_target_recognition',
+  SELECT_DOUBLE_SELECTOR: 'select_double_selector',
+  PICK_NEXT_DOUBLE_SELECTOR: 'pick_next_double_selector',
   STAGE_08: 'stage_08',
   STAGE_09: 'stage_09'
 });
@@ -138,6 +137,8 @@ export const STAGE_RECIPE_KEYS = Object.freeze({
   SET_OUT_OF_PLAY: 'set_out_of_play',
   ASSUME_ROLE: 'assume_role',
   RESTORE_RECENT_OUT_OF_PLAY: 'restore_recent_out_of_play',
+  LINKED_PROPAGATED_EFFECT: 'linked_propagated_effect',
+  LINKED_TARGET_RECOGNITION: 'linked_target_recognition',
   CHECK_OBJECTIVES: 'check_objectives',
   CONCLUDE_PLAY: 'conclude_play'
 });
@@ -146,8 +147,8 @@ export const STAGE_RECIPE_KEYS = Object.freeze({
 //
 // Devuelve el stage apuntado por el cursor de pools.
 export function getCurrentStage(session) {
-  if (session?.currentStageSource === CURRENT_STAGE_SOURCES.SPECIAL_STAGES) {
-    const stage = getCurrentSpecialStage(session);
+  if (session?.currentStageSource === CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE) {
+    const stage = getCurrentInterPoolStage(session);
     if (!stage) return null;
     return {
       poolKey: null,
@@ -155,7 +156,7 @@ export function getCurrentStage(session) {
       stageKey: stage.key,
       status: stage.status,
       index: 0,
-      source: CURRENT_STAGE_SOURCES.SPECIAL_STAGES,
+      source: CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE,
       stage
     };
   }
@@ -250,7 +251,7 @@ export function validateCurrentStage(session, { recipeKey = null } = {}) {
     };
   }
 
-  if (!session.cycle && session.currentStageSource !== CURRENT_STAGE_SOURCES.SPECIAL_STAGES) {
+  if (!session.cycle && session.currentStageSource !== CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE) {
     errors.push({
       code: STAGE_ERRORS.MISSING_STAGE_POOLS,
       message: 'session has no cycle'
@@ -552,6 +553,15 @@ function mergeSelectionAndRecipeResult({ selectionResult = null, recipeResult = 
   };
 }
 
+function getRoleProperty(session = {}, roleId = null, property = null) {
+  return (session.roles ?? []).find((role) => role.id === roleId)?.[property];
+}
+
+function causalConditionIsMet(session = {}, condition = {}) {
+  if (!condition?.targetId || !condition?.property) return false;
+  return getRoleProperty(session, condition.targetId, condition.property) === condition.value;
+}
+
 function resolveSelectionStageRecipe(session, stage, recipe, input = {}, context = {}) {
   const activePeekStageRules = collectActiveStageRules(
     session,
@@ -677,13 +687,89 @@ function resolveSelectionStageRecipe(session, stage, recipe, input = {}, context
   };
 }
 
-function completeCurrentSpecialStage(session, currentStage, input, requestedBy) {
+function resolveLinkedPropagatedEffectStageOnCompletion(session = {}, currentStage = {}) {
+  const stage = currentStage.stage ?? {};
+  if (stage.metadata?.catalogId !== 'linked_propagated_effect') return session;
+
+  const effect = stage.metadata?.propagatedEffect ?? null;
+  const recipe = (stage.recipes ?? []).find(
+    (stageRecipe) => stageRecipe.key === RECIPE_KEYS.LINKED_PROPAGATED_EFFECT
+  );
+  const action = recipe?.actions?.[0] ?? null;
+  const actionId = action?.id ?? ACTION_IDS.SET_PROPERTY;
+  const cycleId = session.cycle?.id ?? 0;
+  const context = {
+    poolKey: null,
+    stageId: currentStage.stageId,
+    stageKey: currentStage.stageKey,
+    stageCatalogId: stage.metadata?.catalogId ?? null,
+    eventWindow: stage.metadata?.eventWindow ?? null,
+    recipeKey: RECIPE_KEYS.LINKED_PROPAGATED_EFFECT,
+    causedBy: effect?.causedBy ?? null
+  };
+
+  if (!effect || !recipe || !causalConditionIsMet(session, effect.causalCondition ?? null)) {
+    return appendRecipeHistory(session, {
+      cycleId,
+      poolKey: null,
+      stageId: currentStage.stageId,
+      stageKey: currentStage.stageKey,
+      stageCatalogId: stage.metadata?.catalogId ?? null,
+      recipeKey: RECIPE_KEYS.LINKED_PROPAGATED_EFFECT,
+      actionId,
+      actionSignature: actionId,
+      actorIds: [],
+      targetIds: effect?.targetId ? [effect.targetId] : [],
+      proposedEffects: effect ? [effect] : [],
+      finalEffects: [],
+      blockedEffects: [],
+      result: HISTORY_RESULTS.NO_EFFECT,
+      metadata: {
+        reason: 'causal_condition_not_met',
+        causalCondition: effect?.causalCondition ?? null
+      }
+    });
+  }
+
+  const previousSession = session;
+  const recipeResolution = resolveRecipe(
+    session,
+    {
+      ...recipe,
+      actions: [
+        {
+          ...action,
+          effect: {
+            type: effect.type,
+            targetType: effect.targetType,
+            property: effect.property,
+            value: effect.value,
+            derivedFrom: effect.derivedFrom ?? null
+          }
+        }
+      ]
+    },
+    { targetIds: [effect.targetId] },
+    context
+  );
+
+  if (!recipeResolution.ok) return recipeResolution.session;
+
+  return processActionResultEvents({
+    previousSession,
+    session: recipeResolution.session,
+    actionResult: recipeResolution.result,
+    context
+  }).session;
+}
+
+function completeCurrentInterPoolStage(session, currentStage, input, requestedBy) {
   const completedEventWindow = currentStage.stage?.metadata?.eventWindow ?? null;
-  const sessionAfterSpecialStageEffect = resolveLinkedPropagatedEffectSpecialStage(
+  const sessionAfterInterPoolStageEffect = resolveLinkedPropagatedEffectStageOnCompletion(
     session,
     currentStage
   );
-  const sessionWithoutStage = completeSpecialStage(sessionAfterSpecialStageEffect, {
+  const sessionWithoutStage = completeInterPoolStage(sessionAfterInterPoolStageEffect, {
     requestedBy,
     reason: input.reason ?? 'manual_completion'
   });
@@ -697,15 +783,15 @@ function completeCurrentSpecialStage(session, currentStage, input, requestedBy) 
     reason: input.reason ?? 'manual_completion',
     metadata: {
       ...(input.metadata ?? {}),
-      source: CURRENT_STAGE_SOURCES.SPECIAL_STAGES
+      source: CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE
     }
   });
-  const nextSpecialStage =
-    sessionWithCompletion.currentStageSource === CURRENT_STAGE_SOURCES.SPECIAL_STAGES
-      ? getCurrentSpecialStage(sessionWithCompletion)
+  const nextInterPoolStage =
+    sessionWithCompletion.currentStageSource === CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE
+      ? getCurrentInterPoolStage(sessionWithCompletion)
       : null;
 
-  if (nextSpecialStage) {
+  if (nextInterPoolStage) {
     return {
       ok: true,
       errors: [],
@@ -717,12 +803,12 @@ function completeCurrentSpecialStage(session, currentStage, input, requestedBy) 
         reason: 'next-special-stage',
         next: {
           poolKey: null,
-          stageId: nextSpecialStage.id,
-          stageKey: nextSpecialStage.key,
-          status: nextSpecialStage.status,
+          stageId: nextInterPoolStage.id,
+          stageKey: nextInterPoolStage.key,
+          status: nextInterPoolStage.status,
           index: 0,
-          source: CURRENT_STAGE_SOURCES.SPECIAL_STAGES,
-          stage: nextSpecialStage
+          source: CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE,
+          stage: nextInterPoolStage
         }
       },
       completion: getHistoryCollection(sessionWithCompletion, HISTORY_COLLECTIONS.STAGE).at(-1),
@@ -752,7 +838,7 @@ function completeCurrentSpecialStage(session, currentStage, input, requestedBy) 
       stageAdvance: {
         ok: false,
         errors: nextWindowStart.errors,
-        reason: 'special-stage-window-failed',
+        reason: 'inter-pool-queue-window-failed',
         cycle: nextWindowStart.session.cycle,
         next: null
       },
@@ -783,7 +869,7 @@ function completeCurrentSpecialStage(session, currentStage, input, requestedBy) 
           stageKey: nextWindowStart.stage.key,
           status: nextWindowStart.stage.status,
           index: 0,
-          source: CURRENT_STAGE_SOURCES.SPECIAL_STAGES,
+          source: CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE,
           stage: nextWindowStart.stage
         }
       },
@@ -906,7 +992,7 @@ export function completeCurrentStage(session, input = {}) {
     };
   }
 
-  if (!session.cycle && session.currentStageSource !== CURRENT_STAGE_SOURCES.SPECIAL_STAGES) {
+  if (!session.cycle && session.currentStageSource !== CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE) {
     return {
       ok: false,
       errors: [
@@ -979,8 +1065,8 @@ export function completeCurrentStage(session, input = {}) {
     };
   }
 
-  if (currentStage.source === CURRENT_STAGE_SOURCES.SPECIAL_STAGES) {
-    return completeCurrentSpecialStage(session, currentStage, input, requestedBy);
+  if (currentStage.source === CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE) {
+    return completeCurrentInterPoolStage(session, currentStage, input, requestedBy);
   }
 
   const sessionWithCompletion = appendStageHistory(session, {
@@ -1048,7 +1134,7 @@ export function resolveCurrentStage(session, input = {}) {
   const currentStageBeforeReview = getCurrentStage(session);
   const workingSession =
     currentStageBeforeReview &&
-    currentStageBeforeReview.source !== CURRENT_STAGE_SOURCES.SPECIAL_STAGES
+    currentStageBeforeReview.source !== CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE
       ? reviewPropertyBlocks(session, {
           type: 'stage_boundary',
           cycleId: session.cycle?.id ?? 0,

@@ -6,7 +6,7 @@
 // constructores de datos que la capa de superficie puede consumir.
 // -----------------------------------------------------------------------------
 
-import { SPECIAL_STAGE_EVENT_WINDOWS } from './specialStagesModel.js';
+import { INTER_POOL_QUEUE_EVENT_WINDOWS } from './interPoolQueueDefinition.js';
 
 export const SURFACE_SCREEN_MODES = Object.freeze({
   HIDDEN: 'screenHidden',
@@ -73,19 +73,19 @@ export function getSurfaceFlowOrder() {
 }
 
 export function getSurfaceTransitionAfterWindow(eventWindow = null) {
-  if (eventWindow === SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED) {
+  if (eventWindow === INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_CONCEALED) {
     return {
       step: SURFACE_FLOW_STEPS.PUBLIC_REVEAL,
-      from: SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED,
-      to: SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_EXPOSED
+      from: INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_CONCEALED,
+      to: INTER_POOL_QUEUE_EVENT_WINDOWS.BEFORE_EXPOSED
     };
   }
 
-  if (eventWindow === SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED) {
+  if (eventWindow === INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_EXPOSED) {
     return {
       step: SURFACE_FLOW_STEPS.PRIVATE_HIDE,
-      from: SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED,
-      to: SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_CONCEALED
+      from: INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_EXPOSED,
+      to: INTER_POOL_QUEUE_EVENT_WINDOWS.BEFORE_CONCEALED
     };
   }
 

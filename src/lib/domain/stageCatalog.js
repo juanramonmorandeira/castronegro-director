@@ -10,19 +10,12 @@ import { CONSTRAINT_TYPES, CONSTRAINT_WINDOWS } from './constraintModel.js';
 import { defineStage } from './stageDefinition.js';
 import {
   STAGE_COMPLETION_MODES,
-  STAGE_COMPLETION_REQUESTED_BY,
-  STAGE_KEYS
-} from './stageModel.js';
-import {
-  LINKED_PROPAGATED_EFFECT_STAGE,
-  LINKED_TARGET_RECOGNITION_STAGE,
-  ROLE_STATE_REVEALED_STAGE
+  STAGE_COMPLETION_REQUESTED_BY
 } from './stageTypes.js';
 import { getCatalogRecipe, RECIPE_KEYS } from './recipeCatalog.js';
 import {
   SELECTION_ABSTAIN_RULES,
   SELECTION_REQUIRED_RULES,
-  SELECTION_RUNOFF_RULES,
   SELECTION_SELECTOR_SOURCES,
   SELECTION_TIE_RULES,
   SELECTION_UNANIMOUS_RULES,
@@ -39,16 +32,38 @@ export const STAGE_CATALOG_IDS = Object.freeze({
   ROLE_LINKS_TARGETS: 'role_links_targets',
   ROLE_BLOCKS_OUT_OF_PLAY: 'role_blocks_out_of_play',
   ROLE_IN_OUT_OF_PLAY: 'role_in_out_of_play',
-  ROLE_REACTIVE_RESPONSE: 'role_reactive_response',
   ROLE_ASSUMES_ROLE: 'role_assumes_role',
-  SELECT_DOUBLE_SELECTOR: 'select_double_selector',
-  PICK_NEXT_DOUBLE_SELECTOR: 'pick_next_double_selector',
-  LINKED_PROPAGATED_EFFECT: LINKED_PROPAGATED_EFFECT_STAGE.CATALOG_ID,
-  LINKED_TARGET_RECOGNITION: LINKED_TARGET_RECOGNITION_STAGE.CATALOG_ID,
-  ROLE_STATE_REVEALED: ROLE_STATE_REVEALED_STAGE.CATALOG_ID,
   DELIBERATION: 'deliberation',
   CONCEALED_SET_OUT_OF_PLAY: 'concealed_set_out_of_play',
-  EXPOSED_SET_OUT_OF_PLAY: 'exposed_set_out_of_play'
+  EXPOSED_SET_OUT_OF_PLAY: 'exposed_set_out_of_play',
+  ROLE_STATE_REVEALED: 'role_state_revealed',
+  ROLE_REACTIVE_RESPONSE: 'role_reactive_response',
+  LINKED_PROPAGATED_EFFECT: 'linked_propagated_effect',
+  LINKED_TARGET_RECOGNITION: 'linked_target_recognition',
+  SELECT_DOUBLE_SELECTOR: 'select_double_selector',
+  PICK_NEXT_DOUBLE_SELECTOR: 'pick_next_double_selector'
+});
+
+export const STAGE_VISIBILITY = Object.freeze({
+  PUBLIC: 'public',
+  DIRECTOR: 'director',
+  LINKED_MEMBERS: 'linked_members'
+});
+
+const CATALOG_STAGE_KEYS = Object.freeze({
+  STAGE_01: 'stage_01',
+  STAGE_02: 'stage_02',
+  STAGE_03: 'stage_03',
+  STAGE_04: 'stage_04',
+  STAGE_05: 'stage_05',
+  DELIBERATION: 'stage_deliberation',
+  ROLE_STATE_REVEALED: 'stage_role_state_revealed',
+  ROLE_REACTIVE_RESPONSE: 'stage_role_reactive_response',
+  LINKED_PROPAGATED_EFFECT: 'stage_linked_propagated_effect',
+  LINKED_TARGET_RECOGNITION: 'stage_linked_target_recognition',
+  SELECT_DOUBLE_SELECTOR: 'select_double_selector',
+  PICK_NEXT_DOUBLE_SELECTOR: 'pick_next_double_selector',
+  STAGE_09: 'stage_09'
 });
 
 export function getManualCompletion(allowedRequesters = Object.values(STAGE_COMPLETION_REQUESTED_BY)) {
@@ -60,7 +75,7 @@ export function getManualCompletion(allowedRequesters = Object.values(STAGE_COMP
 
 export const STAGE_CATALOG = Object.freeze({
   [STAGE_CATALOG_IDS.ROLE_INSPECTS]: defineStage({
-    key: STAGE_KEYS.STAGE_01,
+    key: CATALOG_STAGE_KEYS.STAGE_01,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
@@ -71,7 +86,7 @@ export const STAGE_CATALOG = Object.freeze({
   }),
 
   [STAGE_CATALOG_IDS.ROLE_LINKS_TARGETS]: defineStage({
-    key: STAGE_KEYS.STAGE_02,
+    key: CATALOG_STAGE_KEYS.STAGE_02,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
@@ -82,7 +97,7 @@ export const STAGE_CATALOG = Object.freeze({
   }),
 
   [STAGE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY]: defineStage({
-    key: STAGE_KEYS.STAGE_02,
+    key: CATALOG_STAGE_KEYS.STAGE_02,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
@@ -93,7 +108,7 @@ export const STAGE_CATALOG = Object.freeze({
   }),
 
   [STAGE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY]: defineStage({
-    key: STAGE_KEYS.STAGE_03,
+    key: CATALOG_STAGE_KEYS.STAGE_03,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
@@ -136,28 +151,8 @@ export const STAGE_CATALOG = Object.freeze({
     }
   }),
 
-  [STAGE_CATALOG_IDS.ROLE_REACTIVE_RESPONSE]: defineStage({
-    key: STAGE_KEYS.STAGE_07,
-    status: STAGE_STATUSES.ENABLED,
-    actorIds: [],
-    completion: getManualCompletion(),
-    recipes: [
-      getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY, {
-        actor: { type: RECIPE_ACTOR_TYPES.ROLE },
-        target: {
-          type: MECHANICAL_ENTITY_TYPES.ROLE,
-          count: 1,
-          filters: [TARGET_FILTER_TYPES.IN_PLAY, TARGET_FILTER_TYPES.NOT_SELF]
-        }
-      })
-    ],
-    metadata: {
-      catalogId: STAGE_CATALOG_IDS.ROLE_REACTIVE_RESPONSE
-    }
-  }),
-
   [STAGE_CATALOG_IDS.ROLE_ASSUMES_ROLE]: defineStage({
-    key: STAGE_KEYS.STAGE_09,
+    key: CATALOG_STAGE_KEYS.STAGE_09,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
@@ -167,79 +162,8 @@ export const STAGE_CATALOG = Object.freeze({
     }
   }),
 
-  [STAGE_CATALOG_IDS.SELECT_DOUBLE_SELECTOR]: defineStage({
-    key: STAGE_KEYS.STAGE_08,
-    status: STAGE_STATUSES.ENABLED,
-    actorIds: [],
-    completion: getManualCompletion(),
-    selectionRules: createSelectionRules({
-      required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
-      abstain: SELECTION_ABSTAIN_RULES.NOT_ALLOWED,
-      unanimous: SELECTION_UNANIMOUS_RULES.NOT_REQUIRED,
-      tie: SELECTION_TIE_RULES.RUNOFF_ON_TIE,
-      runoff: SELECTION_RUNOFF_RULES.TIED_CANDIDATES,
-      repeatLimit: 1
-    }),
-    recipes: [getCatalogRecipe(RECIPE_KEYS.SET_DOUBLE_SELECTOR)],
-    metadata: {
-      catalogId: STAGE_CATALOG_IDS.SELECT_DOUBLE_SELECTOR
-    }
-  }),
-
-  [STAGE_CATALOG_IDS.PICK_NEXT_DOUBLE_SELECTOR]: defineStage({
-    key: STAGE_KEYS.STAGE_08,
-    status: STAGE_STATUSES.ENABLED,
-    actorIds: [],
-    completion: getManualCompletion(),
-    selectionRules: createSelectionRules({
-      required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
-      abstain: SELECTION_ABSTAIN_RULES.NOT_ALLOWED,
-      unanimous: SELECTION_UNANIMOUS_RULES.NOT_REQUIRED,
-      selectorEligibility: {
-        requireInPlay: false
-      }
-    }),
-    recipes: [getCatalogRecipe(RECIPE_KEYS.SET_DOUBLE_SELECTOR)],
-    metadata: {
-      catalogId: STAGE_CATALOG_IDS.PICK_NEXT_DOUBLE_SELECTOR
-    }
-  }),
-
-  [STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT]: defineStage({
-    key: STAGE_KEYS.LINKED_PROPAGATED_EFFECT,
-    status: STAGE_STATUSES.ENABLED,
-    actorIds: [],
-    completion: getManualCompletion([STAGE_COMPLETION_REQUESTED_BY.DIRECTOR]),
-    recipes: [],
-    metadata: {
-      catalogId: STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT
-    }
-  }),
-
-  [STAGE_CATALOG_IDS.LINKED_TARGET_RECOGNITION]: defineStage({
-    key: LINKED_TARGET_RECOGNITION_STAGE.KEY,
-    status: STAGE_STATUSES.ENABLED,
-    actorIds: [],
-    completion: getManualCompletion([STAGE_COMPLETION_REQUESTED_BY.DIRECTOR]),
-    recipes: [],
-    metadata: {
-      catalogId: STAGE_CATALOG_IDS.LINKED_TARGET_RECOGNITION
-    }
-  }),
-
-  [STAGE_CATALOG_IDS.ROLE_STATE_REVEALED]: defineStage({
-    key: STAGE_KEYS.ROLE_STATE_REVEALED,
-    status: STAGE_STATUSES.ENABLED,
-    actorIds: [],
-    completion: getManualCompletion([STAGE_COMPLETION_REQUESTED_BY.DIRECTOR]),
-    recipes: [],
-    metadata: {
-      catalogId: STAGE_CATALOG_IDS.ROLE_STATE_REVEALED
-    }
-  }),
-
   [STAGE_CATALOG_IDS.DELIBERATION]: defineStage({
-    key: STAGE_KEYS.DELIBERATION,
+    key: CATALOG_STAGE_KEYS.DELIBERATION,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion([STAGE_COMPLETION_REQUESTED_BY.DIRECTOR]),
@@ -254,7 +178,7 @@ export const STAGE_CATALOG = Object.freeze({
   }),
 
   [STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY]: defineStage({
-    key: STAGE_KEYS.STAGE_04,
+    key: CATALOG_STAGE_KEYS.STAGE_04,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
@@ -271,7 +195,7 @@ export const STAGE_CATALOG = Object.freeze({
   }),
 
   [STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY]: defineStage({
-    key: STAGE_KEYS.STAGE_05,
+    key: CATALOG_STAGE_KEYS.STAGE_05,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
@@ -297,6 +221,97 @@ export const STAGE_CATALOG = Object.freeze({
         participants: SELECTION_SELECTOR_SOURCES.IN_PLAY_ROLES,
         selectionMethod: 'vote'
       }
+    }
+  }),
+
+  [STAGE_CATALOG_IDS.ROLE_STATE_REVEALED]: defineStage({
+    key: CATALOG_STAGE_KEYS.ROLE_STATE_REVEALED,
+    status: STAGE_STATUSES.ENABLED,
+    actorIds: [],
+    completion: getManualCompletion([STAGE_COMPLETION_REQUESTED_BY.DIRECTOR]),
+    recipes: [],
+    visibility: STAGE_VISIBILITY.PUBLIC,
+    metadata: {
+      catalogId: STAGE_CATALOG_IDS.ROLE_STATE_REVEALED
+    }
+  }),
+
+  [STAGE_CATALOG_IDS.ROLE_REACTIVE_RESPONSE]: defineStage({
+    key: CATALOG_STAGE_KEYS.ROLE_REACTIVE_RESPONSE,
+    status: STAGE_STATUSES.ENABLED,
+    actorIds: [],
+    completion: getManualCompletion([STAGE_COMPLETION_REQUESTED_BY.DIRECTOR]),
+    recipes: [
+      getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY, {
+        actor: { type: RECIPE_ACTOR_TYPES.ROLE },
+        target: {
+          type: MECHANICAL_ENTITY_TYPES.ROLE,
+          count: 1,
+          filters: [TARGET_FILTER_TYPES.IN_PLAY, TARGET_FILTER_TYPES.NOT_SELF]
+        }
+      })
+    ],
+    visibility: STAGE_VISIBILITY.PUBLIC,
+    metadata: {
+      catalogId: STAGE_CATALOG_IDS.ROLE_REACTIVE_RESPONSE
+    }
+  }),
+
+  [STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT]: defineStage({
+    key: CATALOG_STAGE_KEYS.LINKED_PROPAGATED_EFFECT,
+    status: STAGE_STATUSES.ENABLED,
+    actorIds: [],
+    completion: getManualCompletion([STAGE_COMPLETION_REQUESTED_BY.DIRECTOR]),
+    recipes: [getCatalogRecipe(RECIPE_KEYS.LINKED_PROPAGATED_EFFECT)],
+    visibility: STAGE_VISIBILITY.DIRECTOR,
+    metadata: {
+      catalogId: STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT
+    }
+  }),
+
+  [STAGE_CATALOG_IDS.LINKED_TARGET_RECOGNITION]: defineStage({
+    key: CATALOG_STAGE_KEYS.LINKED_TARGET_RECOGNITION,
+    status: STAGE_STATUSES.ENABLED,
+    actorIds: [],
+    completion: getManualCompletion([STAGE_COMPLETION_REQUESTED_BY.DIRECTOR]),
+    recipes: [],
+    visibility: STAGE_VISIBILITY.LINKED_MEMBERS,
+    metadata: {
+      catalogId: STAGE_CATALOG_IDS.LINKED_TARGET_RECOGNITION,
+      visibility: STAGE_VISIBILITY.LINKED_MEMBERS,
+      directorVisible: true
+    }
+  }),
+
+  [STAGE_CATALOG_IDS.SELECT_DOUBLE_SELECTOR]: defineStage({
+    key: CATALOG_STAGE_KEYS.SELECT_DOUBLE_SELECTOR,
+    status: STAGE_STATUSES.ENABLED,
+    actorIds: [],
+    completion: getManualCompletion([
+      STAGE_COMPLETION_REQUESTED_BY.DIRECTOR,
+      STAGE_COMPLETION_REQUESTED_BY.SYSTEM
+    ]),
+    recipes: [],
+    visibility: STAGE_VISIBILITY.PUBLIC,
+    metadata: {
+      ruleKey: 'selection_counts_double',
+      requestKey: STAGE_CATALOG_IDS.SELECT_DOUBLE_SELECTOR
+    }
+  }),
+
+  [STAGE_CATALOG_IDS.PICK_NEXT_DOUBLE_SELECTOR]: defineStage({
+    key: CATALOG_STAGE_KEYS.PICK_NEXT_DOUBLE_SELECTOR,
+    status: STAGE_STATUSES.ENABLED,
+    actorIds: [],
+    completion: getManualCompletion([
+      STAGE_COMPLETION_REQUESTED_BY.DIRECTOR,
+      STAGE_COMPLETION_REQUESTED_BY.SYSTEM
+    ]),
+    recipes: [],
+    visibility: STAGE_VISIBILITY.PUBLIC,
+    metadata: {
+      ruleKey: 'selection_counts_double',
+      requestKey: STAGE_CATALOG_IDS.PICK_NEXT_DOUBLE_SELECTOR
     }
   })
 });

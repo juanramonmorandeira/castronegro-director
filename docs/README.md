@@ -16,6 +16,7 @@ documentos normativos describen el modelo vigente.
 - `skinDefinition.md`: capa visual y narrativa.
 - `surface_contract.md`: proyeccion de visibilidad/interaccion desde la session.
 - `history_contract.md`: contrato de histories de session.
+- `actor_model.md`: resolucion de autoridad mecanica de actores.
 - `action_recipe_contract.md`: separacion entre actionDefinition, actionCatalog
   y recipeCatalog.
 - `objectiveDefinition.md`: objetivos y conclusion jugable.
@@ -41,7 +42,7 @@ Catalog
                       -> actions
                           -> resolver
                               -> effects
-      -> specialStages
+      -> interPoolQueue
       -> sessionMessageLog
       -> errorLog
 ```
@@ -52,7 +53,7 @@ Conceptos actuales:
 - `selectionModel`.
 - `group`.
 - `objectiveRules`.
-- `specialStages` es una cola FIFO, no un pool.
+- `interPoolQueue` es una cola FIFO, no un pool.
 - `pool.onEnter/onExit`.
 - `blockedPropertyChanges`.
 - las propagaciones viven en `groupRules`.

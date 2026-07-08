@@ -13,6 +13,7 @@
 
 import { resolveAction } from './actionModel.js';
 import { createAction } from './actionDefinition.js';
+import { resolveRecipeActor } from './actorModel.js';
 import { findRole } from './targetModel.js';
 import {
   CONSTRAINT_TYPES,
@@ -81,13 +82,14 @@ export function getActionFromRecipe(recipe = {}) {
   });
 }
 
-export function getRecipeActorAndTargets(session, input = {}) {
-  const actors = (input.actorIds ?? []).map((id) => findRole(session, id));
+export function getRecipeActorAndTargets(session, input = {}, recipe = {}, stage = {}) {
+  const actorContext = resolveRecipeActor({ session, recipe, input, stage });
   const targets = (input.targetIds ?? []).map((id) => findRole(session, id));
 
   return {
-    actor: actors[0] ?? null,
-    actors,
+    actor: actorContext.primaryActor,
+    actors: actorContext.actors,
+    actorContext,
     targets
   };
 }
@@ -278,7 +280,7 @@ export function validateRecipeConstraints({ session, recipe, input = {}, context
     };
   }
 
-  const { actor, targets } = getRecipeActorAndTargets(session, input);
+  const { actor, targets } = getRecipeActorAndTargets(session, input, recipe, context.stage);
   const action = getActionFromRecipe(recipe);
   const recipeForConstraints = {
     ...recipe,

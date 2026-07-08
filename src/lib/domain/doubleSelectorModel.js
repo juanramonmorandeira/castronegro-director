@@ -3,7 +3,7 @@
 // Regla opcional selection_counts_double.
 //
 // No es un role ni un group: es una selectionRule del ruleSet que puede encolar
-// specialStages y setear role.doubleSelector=true.
+// interPoolQueue y setear role.doubleSelector=true.
 // -----------------------------------------------------------------------------
 
 import { getCatalogRecipe, RECIPE_KEYS } from './recipeCatalog.js';
@@ -19,19 +19,33 @@ import { createStage } from './stageDefinition.js';
 import { STAGE_STATUSES } from './sessionModel.js';
 import { STAGE_COMPLETION_REQUESTED_BY } from './stageTypes.js';
 import {
-  appendSpecialStage,
-  removeSpecialStages
-} from './specialStagesModel.js';
+  STAGE_CATALOG_IDS,
+  getCatalogStage
+} from './stageCatalog.js';
+import {
+  appendInterPoolStage,
+  removeInterPoolStages
+} from './interPoolQueueModel.js';
 import {
   HISTORY_COLLECTIONS,
   getHistoryCollection
 } from './historyModel.js';
+import {
+  EVENT_RESPONSE_TYPES,
+  EVENT_TYPES
+} from './eventDefinition.js';
+import {
+  EVENT_RULE_KEYS,
+  getCatalogEventRule,
+  getEventResponseWindow
+} from './eventCatalog.js';
+import { findRole } from './targetModel.js';
 
 export const DOUBLE_SELECTOR_RULE_KEY = 'selection_counts_double';
 
 export const DOUBLE_SELECTOR_STAGE_KEYS = Object.freeze({
-  SELECT_DOUBLE_SELECTOR: 'select_double_selector',
-  PICK_NEXT_DOUBLE_SELECTOR: 'pick_next_double_selector'
+  SELECT_DOUBLE_SELECTOR: STAGE_CATALOG_IDS.SELECT_DOUBLE_SELECTOR,
+  PICK_NEXT_DOUBLE_SELECTOR: STAGE_CATALOG_IDS.PICK_NEXT_DOUBLE_SELECTOR
 });
 
 export const DOUBLE_SELECTOR_ERRORS = Object.freeze({
@@ -47,7 +61,7 @@ function isSelectionCountsDoubleEnabled(session = {}) {
 }
 
 function hasInitialDoubleSelectorRequest(session = {}) {
-  return getHistoryCollection(session, HISTORY_COLLECTIONS.SPECIAL_STAGE).some(
+  return getHistoryCollection(session, HISTORY_COLLECTIONS.INTER_POOL_QUEUE).some(
     (entry) =>
       entry.metadata?.ruleKey === DOUBLE_SELECTOR_RULE_KEY &&
       entry.metadata?.requestKey === DOUBLE_SELECTOR_STAGE_KEYS.SELECT_DOUBLE_SELECTOR
@@ -62,18 +76,11 @@ function getInPlayRoleIds(session = {}, excludedRoleIds = []) {
 }
 
 export function createSelectDoubleSelectorStage(overrides = {}) {
+  const catalogStage = getCatalogStage(STAGE_CATALOG_IDS.SELECT_DOUBLE_SELECTOR, overrides);
+
   return createStage({
-    ...overrides,
-    key: DOUBLE_SELECTOR_STAGE_KEYS.SELECT_DOUBLE_SELECTOR,
+    ...catalogStage,
     status: STAGE_STATUSES.ENABLED,
-    actorIds: [],
-    completion: {
-      mode: 'manual',
-      allowedRequesters: [
-        STAGE_COMPLETION_REQUESTED_BY.DIRECTOR,
-        STAGE_COMPLETION_REQUESTED_BY.SYSTEM
-      ]
-    },
     selectionRules: createSelectionRules({
       required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
       abstain: SELECTION_ABSTAIN_RULES.NOT_ALLOWED,
@@ -84,25 +91,27 @@ export function createSelectDoubleSelectorStage(overrides = {}) {
     }),
     recipes: [getCatalogRecipe(RECIPE_KEYS.SET_DOUBLE_SELECTOR)],
     metadata: {
-      ruleKey: DOUBLE_SELECTOR_RULE_KEY,
-      requestKey: DOUBLE_SELECTOR_STAGE_KEYS.SELECT_DOUBLE_SELECTOR,
-      ...(overrides.metadata ?? {})
+      ...(catalogStage.metadata ?? {})
     }
   });
 }
 
-export function createPickNextDoubleSelectorStage({ holderRoleId, candidateIds = [] } = {}) {
-  return createStage({
-    key: DOUBLE_SELECTOR_STAGE_KEYS.PICK_NEXT_DOUBLE_SELECTOR,
-    status: STAGE_STATUSES.ENABLED,
+export function createPickNextDoubleSelectorStage({
+  holderRoleId,
+  candidateIds = [],
+  eventWindow = null
+} = {}) {
+  const catalogStage = getCatalogStage(STAGE_CATALOG_IDS.PICK_NEXT_DOUBLE_SELECTOR, {
     actorIds: holderRoleId ? [holderRoleId] : [],
-    completion: {
-      mode: 'manual',
-      allowedRequesters: [
-        STAGE_COMPLETION_REQUESTED_BY.DIRECTOR,
-        STAGE_COMPLETION_REQUESTED_BY.SYSTEM
-      ]
-    },
+    metadata: {
+      holderRoleId,
+      ...(eventWindow ? { eventWindow } : {})
+    }
+  });
+
+  return createStage({
+    ...catalogStage,
+    status: STAGE_STATUSES.ENABLED,
     selectionRules: createSelectionRules({
       required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
       abstain: SELECTION_ABSTAIN_RULES.NOT_ALLOWED,
@@ -114,9 +123,7 @@ export function createPickNextDoubleSelectorStage({ holderRoleId, candidateIds =
     }),
     recipes: [getCatalogRecipe(RECIPE_KEYS.SET_DOUBLE_SELECTOR)],
     metadata: {
-      ruleKey: DOUBLE_SELECTOR_RULE_KEY,
-      requestKey: DOUBLE_SELECTOR_STAGE_KEYS.PICK_NEXT_DOUBLE_SELECTOR,
-      holderRoleId
+      ...(catalogStage.metadata ?? {})
     }
   });
 }
@@ -167,7 +174,7 @@ export function requestSelectDoubleSelectorStage(
   return {
     ok: true,
     errors: [],
-    session: appendSpecialStage(
+    session: appendInterPoolStage(
       session,
       createSelectDoubleSelectorStage(),
       {
@@ -217,7 +224,7 @@ export function queuePickNextDoubleSelectorStage(session = {}, { holderRoleId = 
   return {
     ok: true,
     errors: [],
-    session: appendSpecialStage(
+    session: appendInterPoolStage(
       session,
       createPickNextDoubleSelectorStage({ holderRoleId, candidateIds }),
       {
@@ -232,7 +239,7 @@ export function queuePickNextDoubleSelectorStage(session = {}, { holderRoleId = 
 }
 
 export function cancelPendingPickNextDoubleSelectorStage(session = {}, { holderRoleId = null } = {}) {
-  return removeSpecialStages(
+  return removeInterPoolStages(
     session,
     (stage) =>
       stage.metadata?.ruleKey === DOUBLE_SELECTOR_RULE_KEY &&
@@ -246,4 +253,78 @@ export function cancelPendingPickNextDoubleSelectorStage(session = {}, { holderR
       reason: 'holder_returned_in_play'
     }
   );
+}
+
+function hasPendingPickNextDoubleSelectorStage(session = {}, holderRoleId = null) {
+  return (session.interPoolQueue ?? []).some(
+    (stage) =>
+      stage.metadata?.ruleKey === DOUBLE_SELECTOR_RULE_KEY &&
+      stage.metadata?.requestKey === DOUBLE_SELECTOR_STAGE_KEYS.PICK_NEXT_DOUBLE_SELECTOR &&
+      stage.metadata?.holderRoleId === holderRoleId
+  );
+}
+
+export function getDoubleSelectorEventResponses({ session = {}, events = [] } = {}) {
+  if (!isSelectionCountsDoubleEnabled(session)) return [];
+  const rule = getCatalogEventRule(EVENT_RULE_KEYS.PICK_NEXT_DOUBLE_SELECTOR);
+
+  return (events ?? []).flatMap((event) => {
+    if (
+      event.type !== EVENT_TYPES.PROPERTY_CHANGED ||
+      event.targetType !== 'role' ||
+      event.property !== 'inPlay'
+    ) {
+      return [];
+    }
+
+    const role = findRole(session, event.roleId);
+    if (role?.doubleSelector !== true) return [];
+
+    if (event.to === false) {
+      if (hasPendingPickNextDoubleSelectorStage(session, event.roleId)) return [];
+
+      const candidateIds = getInPlayRoleIds(session, [event.roleId]);
+      if (candidateIds.length === 0) return [];
+      const eventWindow = getEventResponseWindow(event);
+
+      return [
+        {
+          type: rule?.response?.type ?? EVENT_RESPONSE_TYPES.CREATE_STAGE,
+          stage: createPickNextDoubleSelectorStage({
+            holderRoleId: event.roleId,
+            candidateIds,
+            eventWindow
+          }),
+          metadata: {
+            catalogId: rule?.response?.stageCatalogId ?? null,
+            ruleKey: rule?.metadata?.ruleKey ?? DOUBLE_SELECTOR_RULE_KEY,
+            requestKey: rule?.key ?? DOUBLE_SELECTOR_STAGE_KEYS.PICK_NEXT_DOUBLE_SELECTOR,
+            holderRoleId: event.roleId,
+            ...(eventWindow ? { eventWindow } : {})
+          }
+        }
+      ];
+    }
+
+    if (event.to === true) {
+      return [
+        {
+          type: EVENT_RESPONSE_TYPES.CANCEL_STAGE,
+          metadata: {
+            catalogId: rule?.response?.stageCatalogId ?? null,
+            ruleKey: rule?.metadata?.ruleKey ?? DOUBLE_SELECTOR_RULE_KEY,
+            requestKey: rule?.key ?? DOUBLE_SELECTOR_STAGE_KEYS.PICK_NEXT_DOUBLE_SELECTOR,
+            holderRoleId: event.roleId,
+            reason: 'holder_returned_in_play'
+          },
+          cancelPredicate: (stage) =>
+            stage.metadata?.ruleKey === (rule?.metadata?.ruleKey ?? DOUBLE_SELECTOR_RULE_KEY) &&
+            stage.metadata?.requestKey === (rule?.key ?? DOUBLE_SELECTOR_STAGE_KEYS.PICK_NEXT_DOUBLE_SELECTOR) &&
+            stage.metadata?.holderRoleId === event.roleId
+        }
+      ];
+    }
+
+    return [];
+  });
 }

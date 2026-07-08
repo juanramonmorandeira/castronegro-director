@@ -80,7 +80,7 @@ Ejemplos:
 - `recipeModel.js`: valida restricciones y entrega actions de recipe a
   `actionModel`.
 - `actionModel.js`: resuelve acciones puras.
-- `resolverModel.js`: deriva o bloquea efectos propuestos.
+- `effectResolver.js`: deriva o bloquea efectos propuestos.
 - `effectModel.js`: aplica efectos finales a la sesion.
 - `eventModel.js`: convierte efectos finales en eventos y crea respuestas
   pendientes.
@@ -105,20 +105,20 @@ Resolver una receta no cierra el stage. El cierre se hace explicitamente con
 Flujo de pools aceptado:
 
 ```text
-specialStages inicial si hay stages pendientes
+interPoolQueue inicial si hay stages pendientes
 -> poolConcealed
--> specialStages si hay interrupciones
+-> interPoolQueue si hay interrupciones
 -> poolExposed
--> specialStages si hay interrupciones
+-> interPoolQueue si hay interrupciones
 -> poolConcealed
 ```
 
-`specialStages` no es un pool. Es una cola FIFO independiente que el ciclo
+`interPoolQueue` no es un pool. Es una cola FIFO independiente que el ciclo
 comprueba después de terminar completamente el pool actual y antes de entrar en
 el siguiente pool normal.
 
 `session.currentStageSource` indica si el cursor esta ejecutando un stage de
-pool o de `specialStages`. Una cola pendiente no interrumpe el pool actual.
+pool o de `interPoolQueue`. Una cola pendiente no interrumpe el pool actual.
 
 `startCycle` pertenece a `cycleModel` y se ejecuta antes de preparar
 `poolConcealed`. `check_objectives` forma parte de `pool.onExit`.
@@ -143,7 +143,7 @@ Un rol no ejecuta recetas directamente. Un rol define que stages puede aportar
 al flujo. Las recetas ejecutables viven dentro de `stage.recipes`.
 
 Los stages iniciales que no pertenecen a pools se declaran por separado en
-`specialStageDefinitions` y se materializan en `session.specialStages`.
+`interPoolStageDefinitions` y se materializan en `session.interPoolQueue`.
 
 Los stages de catalogo son abstractos. Los stages de sesion deben tener actores
 reales en `actorIds`. Si un grupo esta vacio, no puede crear un stage enabled
@@ -153,12 +153,12 @@ Un rol tambien puede declarar `reactions`. Una reaccion no se ejecuta por si
 misma: `eventModel.js` la evalua cuando un efecto final produce un evento. El
 primer caso implementado es `role_reactive`: cuando ese rol recibe un cambio
 real a `inPlay=false` desde `concealed_set_out_of_play` o
-`exposed_set_out_of_play`, se crea un stage en `specialStages` para que pueda
+`exposed_set_out_of_play`, se crea un stage en `interPoolQueue` para que pueda
 ejecutar una respuesta.
 
 El motor debe ejecutar `check_objectives` al final de cada pool. Si se emite un
 `playOutcome` concluyente, primero se comprueba que no haya stages pendientes en
-`specialStages` capaces de modificarlo. Solo entonces se ejecuta
+`interPoolQueue` capaces de modificarlo. Solo entonces se ejecuta
 `conclude_play`.
 `conclude_play` concluye la parte jugable, pero no cierra administrativamente la
 session.
@@ -181,7 +181,7 @@ La sesion guarda:
 - `session.history.cycleHistory`
 - `session.history.poolHistory`
 - `session.history.stageHistory`
-- `session.history.specialStageHistory`
+- `session.history.interPoolQueueHistory`
 - `sessionMessageLog`
 - `errorLog`
 - `settings`

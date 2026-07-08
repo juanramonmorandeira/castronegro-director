@@ -14,7 +14,7 @@ session.history = {
   cycleHistory: [],
   poolHistory: [],
   stageHistory: [],
-  specialStageHistory: [],
+  interPoolQueueHistory: [],
   recipeHistory: []
 }
 ```
@@ -98,7 +98,7 @@ stageCatalogId       -> stage catalogado, si existe
 recipeKey            -> recipe mecanica ejecutada
 actionId             -> action pura ejecutada por actionModel
 recipeHistoryId      -> entrada concreta de recipeHistory
-eventWindow          -> ventana concreta de specialStages
+eventWindow          -> ventana concreta de interPoolQueue
 ```
 
 ## cycleHistory
@@ -220,9 +220,9 @@ Payloads:
 }
 ```
 
-## specialStageHistory
+## interPoolQueueHistory
 
-`specialStageHistory` usa el mismo contrato que `stageHistory`, pero
+`interPoolQueueHistory` usa el mismo contrato que `stageHistory`, pero
 `metadata.context.eventWindow` es obligatorio.
 
 Eventos:

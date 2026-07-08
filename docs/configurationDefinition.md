@@ -161,7 +161,7 @@ La session deberia guardar:
 - `roles`;
 - `groups`;
 - `cycle` y sus `pools`;
-- `specialStages`;
+- `interPoolQueue`;
 - historiales.
 
 Decision pendiente:

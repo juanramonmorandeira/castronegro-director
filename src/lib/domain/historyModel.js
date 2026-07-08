@@ -27,7 +27,7 @@ export const HISTORY_COLLECTIONS = Object.freeze({
   CYCLE: 'cycleHistory',
   POOL: 'poolHistory',
   STAGE: 'stageHistory',
-  SPECIAL_STAGE: 'specialStageHistory',
+  INTER_POOL_QUEUE: 'interPoolQueueHistory',
   RECIPE: 'recipeHistory'
 });
 

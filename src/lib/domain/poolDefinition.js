@@ -104,8 +104,8 @@ function getStageDefinitionsFromSources(sources = []) {
   return sources.flatMap((source = {}) => source.stageDefinitions ?? []);
 }
 
-function getSpecialStageDefinitionsFromSources(sources = []) {
-  return sources.flatMap((source = {}) => source.specialStageDefinitions ?? []);
+function getInterPoolStageDefinitionsFromSources(sources = []) {
+  return sources.flatMap((source = {}) => source.interPoolStageDefinitions ?? []);
 }
 
 function createStageWithActors(stageDefinition = {}, actorIds = [], source = {}) {
@@ -137,14 +137,14 @@ function getRoleDefinitionStages(session = {}, roleDefinitions = []) {
   });
 }
 
-function getRoleDefinitionSpecialStages(session = {}, roleDefinitions = []) {
+function getRoleDefinitionInterPoolStages(session = {}, roleDefinitions = []) {
   const roles = session.roles ?? [];
 
   return getDefinitionList(roleDefinitions).flatMap((roleDefinition = {}) => {
     const matchingRoles = roles.filter((role) => role.roleKey === roleDefinition.key);
 
     return matchingRoles.flatMap((role) =>
-      (roleDefinition.specialStageDefinitions ?? []).map((stageDefinition) =>
+      (roleDefinition.interPoolStageDefinitions ?? []).map((stageDefinition) =>
         createStageWithActors(stageDefinition, [role.id], {
           type: STAGE_SOURCE_TYPES.ROLE,
           id: role.id,
@@ -174,8 +174,8 @@ function getAbstractSourceStages(sources = []) {
   return getStageDefinitionsFromSources(getDefinitionList(sources)).map(createStage);
 }
 
-function getAbstractSourceSpecialStages(sources = []) {
-  return getSpecialStageDefinitionsFromSources(getDefinitionList(sources)).map(createStage);
+function getAbstractSourceInterPoolStages(sources = []) {
+  return getInterPoolStageDefinitionsFromSources(getDefinitionList(sources)).map(createStage);
 }
 
 function getStageDefinitionErrors(stages = [], { requirePoolKey = true } = {}) {
@@ -227,12 +227,12 @@ export function buildPools({
       ? getGroupDefinitionStages(session, groupDefinitions)
       : getAbstractSourceStages(groupDefinitions))
   ];
-  const specialStages = session
-    ? getRoleDefinitionSpecialStages(session, roleDefinitions)
-    : getAbstractSourceSpecialStages(roleDefinitions);
+  const interPoolQueue = session
+    ? getRoleDefinitionInterPoolStages(session, roleDefinitions)
+    : getAbstractSourceInterPoolStages(roleDefinitions);
   const errors = [
     ...getStageDefinitionErrors(poolStages),
-    ...getStageDefinitionErrors(specialStages, { requirePoolKey: false })
+    ...getStageDefinitionErrors(interPoolQueue, { requirePoolKey: false })
   ];
 
   if (errors.length > 0) {
@@ -251,7 +251,7 @@ export function buildPools({
   return organizePoolStages({
     poolOrder,
     pools,
-    specialStages
+    interPoolQueue
   });
 }
 
@@ -370,8 +370,8 @@ export function organizePoolStages(definition = {}) {
         createPool({ key: poolKey, stages })
       ])
     ),
-    specialStages: assignUniqueStageIds(
-      (definition.specialStages ?? []).map((stage) => createStage(stage))
+    interPoolQueue: assignUniqueStageIds(
+      (definition.interPoolQueue ?? []).map((stage) => createStage(stage))
     )
   };
 }

@@ -1,6 +1,6 @@
 // targetModel.js
 // -----------------------------------------------------------------------------
-// Resolucion y validacion de actores/targets mecanicos.
+// Resolucion y validacion de targets mecanicos.
 //
 // Este modelo no ejecuta actions. Solo responde si los roles seleccionados
 // cumplen el contrato de target declarado por una action/recipe.
@@ -23,10 +23,6 @@ import {
 // role_inspector-0, hidden_role-0, enemy-0, etc.
 export function findRole(session, roleId) {
   return (session?.roles ?? []).find((role) => role.id === roleId) ?? null;
-}
-
-export function getActionActors(session, actorIds = []) {
-  return (actorIds ?? []).map((actorId) => findRole(session, actorId));
 }
 
 // Devuelve true si una accion puede resolverse sin actor individual.

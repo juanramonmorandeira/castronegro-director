@@ -14,7 +14,7 @@ El motor mantiene estado mecanico:
 - `pool.currentStageIndex`;
 - `stage.actorIds`;
 - `stage.selectionRules`;
-- `specialStages`;
+- `interPoolQueue`;
 - historiales.
 
 La superficie decide presentacion:
@@ -463,7 +463,7 @@ Distribucion inicial:
 - `director_pool_started` se persiste en `poolHistory`;
 - mensajes de stage, seleccion, informacion y acknowledgements se persisten en
   `stageHistory`;
-- `director_special_stage_started` se persiste en `specialStageHistory`;
+- `director_special_stage_started` se persiste en `interPoolQueueHistory`;
 - mensajes de player como `player_action_required`,
   `player_acknowledgement_required` y `player_waiting_for_director` se persisten
   en el log/history de su stage correspondiente.
@@ -1147,7 +1147,7 @@ Flujo:
     `after_exposed` despues de `role_state_revealed`.
 19. Si el candidate esta linked, la propagacion linked se encola en
     `after_exposed`.
-20. Las specialStages de `after_exposed` mantienen FIFO natural. Cada nuevo
+20. Las interPoolQueue de `after_exposed` mantienen FIFO natural. Cada nuevo
     `set_out_of_play` derivado genera su propio `role_state_revealed` con razon.
 21. No hay acknowledgement publico de resultado; basta el cierre por director.
 22. Despues de `finish_stage`, todos permanecen en `screenReadonly` hasta vaciar
@@ -1416,8 +1416,8 @@ Durante `poolExposed`:
 
 ## Special Stages
 
-La superficie trata `specialStages` como interrupciones causales entre pools. La
-cola runtime sigue siendo `session.specialStages`, y cada specialStage puede
+La superficie trata `interPoolQueue` como interrupciones causales entre pools. La
+cola runtime sigue siendo `session.interPoolQueue`, y cada interPoolStage puede
 declarar `metadata.eventWindow` para proyectarse en el momento de superficie
 correcto:
 
@@ -1426,13 +1426,13 @@ correcto:
 - `before_exposed`;
 - `after_exposed`.
 
-Operativamente, `specialStages` es una unica lista fisica, pero el dominio la
+Operativamente, `interPoolQueue` es una unica lista fisica, pero el dominio la
 proyecta como cuatro colas FIFO virtuales filtradas por `eventWindow`.
 
 Ejemplo:
 
 ```text
-specialStages = [
+interPoolQueue = [
   A before_exposed,
   B after_exposed,
   C before_exposed
@@ -1444,20 +1444,20 @@ bloquea esa window y queda pendiente para `after_exposed`.
 
 Reglas:
 
-- toda specialStage ejecutada por window debe declarar `metadata.eventWindow`;
+- toda interPoolStage ejecutada por window debe declarar `metadata.eventWindow`;
 - si falta `eventWindow` o su valor no pertenece a las ventanas aceptadas, la
   ejecucion por window falla con diagnostic;
-- completar una specialStage de una window arranca la siguiente de esa misma
+- completar una interPoolStage de una window arranca la siguiente de esa misma
   window si existe;
-- cuando no quedan specialStages de esa window, el flujo vuelve a `POOL`;
-- la lista fisica no se reordena; solo se retira la specialStage completada.
+- cuando no quedan interPoolQueue de esa window, el flujo vuelve a `POOL`;
+- la lista fisica no se reordena; solo se retira la interPoolStage completada.
 
-- si una specialStage requiere director, el director queda `screenInteractive`;
-- si una specialStage tiene actores, esos actores quedan `screenInteractive`;
+- si una interPoolStage requiere director, el director queda `screenInteractive`;
+- si una interPoolStage tiene actores, esos actores quedan `screenInteractive`;
 - si es informativa, la UI puede mostrarla como revision/acknowledgement del
   director.
 
-La ejecucion de una specialStage y la comunicacion publica de sus resultados son
+La ejecucion de una interPoolStage y la comunicacion publica de sus resultados son
 momentos distintos.
 
 Ventanas aceptadas inicialmente:
@@ -1589,7 +1589,7 @@ Payload aceptado:
 
 La activacion publica inicial deja a todos los jugadores en `screenReadonly`.
 Durante `before_exposed`, el director queda `screenInteractive`. Si existe una
-specialStage como `role_reactive_response`, sus actores quedan
+interPoolStage como `role_reactive_response`, sus actores quedan
 `screenInteractive`. Al terminar su input, el actor vuelve a `screenReadonly`
 mientras dure la fase publica. Al entrar en `poolExposed`, los roles
 `inPlay=true` pasan a `screenInteractive` cuando deban participar; los roles
@@ -1601,12 +1601,12 @@ solo existe si todavia hay candidates validos o si la partida debe haber pasado
 antes por `conclude_play`.
 
 La revelacion publica de roles que quedan `inPlay=false` debe modelarse como
-evento informativo en `specialStages`. Cada `set_out_of_play` revelable crea una
-specialStage en la ventana que corresponda por caso, normalmente
+evento informativo en `interPoolQueue`. Cada `set_out_of_play` revelable crea una
+interPoolStage en la ventana que corresponda por caso, normalmente
 `before_exposed` o `after_exposed`.
 
 Ejemplo: si un player tiene asignado `role_plain` y ese role queda
-`inPlay=false` durante la zona privada, se crea una specialStage informativa con
+`inPlay=false` durante la zona privada, se crea una interPoolStage informativa con
 `eventWindow: 'before_exposed'`. Esa stage emite un `surfaceMessage` filtrable
 por skin equivalente a:
 
@@ -1626,7 +1626,7 @@ por skin equivalente a:
 ```
 
 No requiere acknowledgement de jugadores. El cierre por director confirma que la
-informacion ya fue comunicada. Despues de vaciar la cola de specialStages de esa
+informacion ya fue comunicada. Despues de vaciar la cola de interPoolQueue de esa
 ventana, el plano publico de players queda actualizado para todos los jugadores.
 
 Tras `after_exposed`, `privateHide` devuelve la superficie de roles al estado

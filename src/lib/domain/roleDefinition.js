@@ -41,7 +41,7 @@ export function defineRole({
   type = ROLE_DEFINITION_TYPES.ROLE,
   alignmentId = null,
   stageDefinitions = [],
-  specialStageDefinitions = [],
+  interPoolStageDefinitions = [],
   stageRules = [],
   reactions = [],
   metadata = {}
@@ -53,7 +53,7 @@ export function defineRole({
     type: normalizeId(type),
     alignmentId: alignmentId ? normalizeId(alignmentId) : null,
     stageDefinitions: (stageDefinitions ?? []).map(defineStage),
-    specialStageDefinitions: (specialStageDefinitions ?? []).map(defineStage),
+    interPoolStageDefinitions: (interPoolStageDefinitions ?? []).map(defineStage),
     // stageRules no crean stages propias: declaran oportunidades contextuales
     // dentro de una stage ajena ya existente.
     stageRules: (stageRules ?? []).map((rule) => ({

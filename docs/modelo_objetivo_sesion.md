@@ -21,7 +21,7 @@ El analisis original establecio decisiones que siguen vigentes:
 | pools de ciclo | `session.cycle.pools` |
 | stage runtime | `stage` |
 | cursor de stage | `pool.currentStageIndex` |
-| cola FIFO excepcional | `session.specialStages` |
+| cola FIFO excepcional | `session.interPoolQueue` |
 | preparacion de pool | `preparePool` |
 | navegacion entre pools | `cycleModel` |
 | bloqueo mecanico | `blockedPropertyChanges` |
@@ -36,7 +36,7 @@ session
           -> pool.onEnter
           -> stages
           -> pool.onExit
-  -> specialStages entre pools cuando la cola no esta vacia
+  -> interPoolQueue entre pools cuando la cola no esta vacia
 ```
 
 Consultar:

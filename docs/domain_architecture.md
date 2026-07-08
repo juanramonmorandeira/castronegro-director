@@ -26,7 +26,7 @@ flowchart TD
   BUILD["buildSession"]
   SESSION["session"]
   CYCLE["cycleModel"]
-  SPECIAL["specialStages FIFO"]
+  SPECIAL["interPoolQueue FIFO"]
   CONCEALED["poolConcealed"]
   EXPOSED["poolExposed"]
   PREPARE["preparePool"]
@@ -75,7 +75,7 @@ flowchart TD
 
 ```text
 session
-├── specialStages
+├── interPoolQueue
 └── cycle
     ├── poolConcealed
     │   ├── pool.onEnter
@@ -94,7 +94,7 @@ otros pools.
 ## Estado materializado
 
 - `session.cycle` administra la navegacion entre pools.
-- `session.specialStages` es una cola FIFO independiente que `cycleModel`
+- `session.interPoolQueue` es una cola FIFO independiente que `cycleModel`
   consulta entre pools; no pasa por `preparePool` ni `validatePool`.
 - `session.currentStageSource` distingue si el cursor ejecuta un stage de pool
   o de la cola sin usar una bandera dentro del stage.

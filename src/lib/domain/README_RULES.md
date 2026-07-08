@@ -22,14 +22,14 @@ defineRole({
   key: 'role_01',
   alignmentId: 'alignment_a',
   stageDefinitions: [],
-  specialStageDefinitions: []
+  interPoolStageDefinitions: []
 })
 ```
 
 Un `Role` no es una carta en partida. Es una plantilla mecanica. Puede definir
 alignment por defecto y los `stageDefinitions` que ese tipo de rol aporta al
-flujo. `specialStageDefinitions` contiene los stages iniciales que aporta a la
-cola `specialStages`.
+flujo. `interPoolStageDefinitions` contiene los stages iniciales que aporta a la
+cola `interPoolQueue`.
 
 ### Session role
 
@@ -99,11 +99,11 @@ Pools actuales:
 
 El orden vive en arrays, no en nombres narrativos.
 
-`specialStages` no es un pool. Es una cola FIFO independiente de stages
-dinamicos administrada por `specialStagesModel.js`.
+`interPoolQueue` no es un pool. Es una cola FIFO independiente de stages
+dinamicos administrada por `interPoolQueueModel.js`.
 
 Un stage no lleva una propiedad de clasificacion especial. Su ubicacion depende
-de si fue materializado en `cycle.pools` o en `session.specialStages`.
+de si fue materializado en `cycle.pools` o en `session.interPoolQueue`.
 
 Identidad:
 

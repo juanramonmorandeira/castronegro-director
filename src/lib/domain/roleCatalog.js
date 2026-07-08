@@ -10,12 +10,7 @@ import { getCatalogStage, STAGE_CATALOG_IDS } from './stageCatalog.js';
 import { RECIPE_KEYS } from './recipeCatalog.js';
 import { AVAILABILITY_RULE_TYPES } from './stageDefinition.js';
 import { defineRole, ROLE_DEFINITION_TYPES } from './roleDefinition.js';
-import {
-  EVENT_RESPONSE_TYPES,
-  EVENT_TRIGGER_TARGETS,
-  EVENT_TYPES
-} from './eventModel.js';
-import { MECHANICAL_ENTITY_TYPES } from './domainTypes.js';
+import { EVENT_RULE_KEYS, getCatalogEventRule } from './eventCatalog.js';
 
 export const ROLE_CATALOG_IDS = Object.freeze({
   ROLE_SET_OUT_OF_PLAY: 'role_set_out_of_play',
@@ -28,6 +23,25 @@ export const ROLE_CATALOG_IDS = Object.freeze({
   ROLE_PEEK: 'role_peek',
   ROLE_PLAIN: 'role_plain'
 });
+
+function getRoleReactiveReaction() {
+  const eventRule = getCatalogEventRule(EVENT_RULE_KEYS.ROLE_REACTIVE_RESPONSE);
+
+  return {
+    ...eventRule,
+    key: 'self_out_of_play_creates_special_stage',
+    response: {
+      ...(eventRule?.response ?? {}),
+      stage: getCatalogStage(STAGE_CATALOG_IDS.ROLE_REACTIVE_RESPONSE, {
+        poolKey: null,
+        metadata: {
+          orderReason:
+            'Created only after this role receives a final inPlay=false effect from a configured set_out_of_play stage.'
+        }
+      })
+    }
+  };
+}
 
 export const ROLE_CATALOG = Object.freeze({
   [ROLE_CATALOG_IDS.ROLE_SET_OUT_OF_PLAY]: defineRole({
@@ -149,30 +163,7 @@ export const ROLE_CATALOG = Object.freeze({
     alignmentId: 'alignment_a',
     stageDefinitions: [],
     reactions: [
-      {
-        key: 'self_out_of_play_creates_special_stage',
-        trigger: {
-          eventType: EVENT_TYPES.PROPERTY_CHANGED,
-          targetType: MECHANICAL_ENTITY_TYPES.ROLE,
-          target: EVENT_TRIGGER_TARGETS.SELF,
-          property: 'inPlay',
-          to: false,
-          stageCatalogIds: [
-            STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY,
-            STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY
-          ]
-        },
-        response: {
-          type: EVENT_RESPONSE_TYPES.CREATE_STAGE,
-          stage: getCatalogStage(STAGE_CATALOG_IDS.ROLE_REACTIVE_RESPONSE, {
-            poolKey: null,
-            metadata: {
-              orderReason:
-                'Created only after this role receives a final inPlay=false effect from a configured set_out_of_play stage.'
-            }
-          })
-        }
-      }
+      getRoleReactiveReaction()
     ],
     metadata: {
       mechanicalFamily: 'reactive'
@@ -272,9 +263,9 @@ export function getCatalogRole(roleCatalogId, overrides = {}) {
     stageDefinitions: overrides.stageDefinitions
       ? cloneCatalogValue(overrides.stageDefinitions)
       : cloneCatalogValue(baseRole.stageDefinitions),
-    specialStageDefinitions: overrides.specialStageDefinitions
-      ? cloneCatalogValue(overrides.specialStageDefinitions)
-      : cloneCatalogValue(baseRole.specialStageDefinitions ?? []),
+    interPoolStageDefinitions: overrides.interPoolStageDefinitions
+      ? cloneCatalogValue(overrides.interPoolStageDefinitions)
+      : cloneCatalogValue(baseRole.interPoolStageDefinitions ?? []),
     stageRules: overrides.stageRules
       ? cloneCatalogValue(overrides.stageRules)
       : cloneCatalogValue(baseRole.stageRules ?? []),

@@ -37,7 +37,7 @@ import {
   appendRecipeHistory,
   getRecipeHistorySignature
 } from './historyModel.js';
-import { resolveProposedEffects } from './resolverModel.js';
+import { resolveProposedEffects } from './effectResolver.js';
 import {
   SELECTION_OUTCOME_TYPES,
   SELECTION_ROUND_TYPES,
@@ -45,9 +45,9 @@ import {
 } from './selectionModel.js';
 import { MECHANICAL_ENTITY_TYPES } from './domainTypes.js';
 import { ACTION_IDS, VISIBILITY } from './actionDefinition.js';
+import { getActionActors } from './actorModel.js';
 import {
   findRole,
-  getActionActors,
   validateActionTargets
 } from './targetModel.js';
 
@@ -239,7 +239,7 @@ export function getHistoryResultFromResolution({
   return HISTORY_RESULTS.NO_EFFECT;
 }
 
-// Aplica efectos finales ya aceptados por resolverModel.
+// Aplica efectos finales ya aceptados por effectResolver.
 //
 // actionModel no decide aqui si un efecto debe existir. Eso ya lo hizo el
 // resolver. Esta funcion solo evita duplicar el mismo reduce en cada accion.
@@ -632,7 +632,7 @@ export function applySelection({ session, action, input = {} }) {
 // Ejecuta conclude_play.
 //
 // Esta accion la dispara una operacion de pool.onExit cuando el playOutcome es
-// estable. No se encola en specialStages.
+// estable. No se encola en interPoolQueue.
 export function applyConcludePlayAction({ session, action, input = {} }) {
   const visibility = action?.visibility ?? VISIBILITY.ALL;
   return applyConcludePlayFromModel({

@@ -173,7 +173,7 @@ function getGroupRuleTargetIds(group = {}, sourceRoleId = null, rule = {}) {
 }
 
 // Interpreta las reglas declaradas por los groups que contienen al objetivo de
-// un efecto. No aplica cambios: devuelve nuevos efectos para que resolverModel
+// un efecto. No aplica cambios: devuelve nuevos efectos para que effectResolver
 // los procese mediante la misma cola y las mismas validaciones.
 export function getGroupRuleEffects({ session = {}, effect = {} } = {}) {
   if (effect?.targetType !== MECHANICAL_ENTITY_TYPES.ROLE || !effect?.targetId) return [];

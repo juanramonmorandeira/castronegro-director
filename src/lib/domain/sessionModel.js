@@ -56,7 +56,7 @@ export const STAGE_STATUSES = Object.freeze({
 
 export const CURRENT_STAGE_SOURCES = Object.freeze({
   POOL: 'pool',
-  SPECIAL_STAGES: 'specialStages'
+  INTER_POOL_QUEUE: 'interPoolQueue'
 });
 
 // Pools mecanicos del flujo.

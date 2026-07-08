@@ -2,6 +2,43 @@
 
 Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
 
+## Arquitectura pendiente de decision
+
+Prioridad alta antes de seguir dividiendo modelos:
+
+- Revisar el modelo de `selection`:
+  - estudiar si `vote` y `pick` deben modelarse como recipes;
+  - estudiar si `selection` debe modelarse como action que devuelve un role o
+    candidate elegido;
+  - estudiar si hacen falta `candidateDefinition/catalog/model` y
+    `selectorDefinition/catalog/model` antes de seguir ampliando selection;
+  - decidir donde viven las reglas que modifican el resultado de una selection:
+    `selectionModel`, `effectResolver`, `effectRules` u otra pieza.
+- Definir jerarquia mecanica estable:
+  `Session -> Cycle -> Pool/interPoolQueue -> Stage -> Recipe -> Action -> Effect`.
+  Confirmar si existe alguna entidad mecanica menor que `Effect`; si existe,
+  documentarla antes de implementarla.
+- Diseñar la comunicacion entre entidades del dominio:
+  - decidir si basta con llamadas directas entre modelos;
+  - o si hace falta un canal formal de comunicacion/commands/events entre
+    `Session`, `Cycle`, `Pool`, queue inter-pools, `Stage`, `Recipe`, `Action`
+    y `Effect`;
+  - evitar crear un `communicatorModel` generico hasta tener casos concretos y
+    contratos claros.
+- Definir contrato surface/skin/UI antes de conectar la UI:
+  - responsabilidades exactas de `surfaceModel.js`;
+  - si hacen falta `surfaceDefinition.js` y `surfaceCatalog.js`;
+  - como se proyectan cambios public/private, mapas de jugadores,
+    `surfaceMessages` y `surfaceItems`;
+  - si cada objeto necesita una capa `objectSurface.js` o si surface debe
+    seguir siendo una capa centralizada.
+- Revisar convencion de ficheros:
+  - confirmar cuando un objeto necesita `Definition`, `Catalog`, `Model`;
+  - estudiar si `Rules` debe vivir dentro de `Definition` o como fichero
+    separado solo cuando haya un evaluador reutilizable;
+  - evitar crear ficheros pequeños por encaje local si la responsabilidad real
+    pertenece a un objeto existente.
+
 ## Mensajes y skin
 
 - Tras cerrar el bloque de flujos por stage, definir como encaja la skin en el
@@ -17,7 +54,7 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
 - Revisar y depurar todos los logs/histories antes de persistir mensajes
   tecnicos de director/player:
   - `stageHistory`;
-  - `specialStageHistory`;
+  - `interPoolQueueHistory`;
   - `poolHistory`;
   - `cycleHistory`;
   - `recipeHistory`;
@@ -69,8 +106,8 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
   - los players ejecutan accion o acknowledgement durante su stage;
   - documentar excepciones de cierre automatico si alguna mecanica futura lo exige.
 - Redisenar efectos propagados:
-  - todo efecto derivado de otro efecto debe pasar por una specialStage;
-  - la specialStage debe estar condicionada al estado que la causo;
+  - todo efecto derivado de otro efecto debe pasar por una interPoolStage;
+  - la interPoolStage debe estar condicionada al estado que la causo;
   - si el estado causal cambia antes de resolverla, no produce efecto.
 - Revisar configuracion avanzada de `selection_counts_double`:
   - abstencion configurable para vote expuesta;
@@ -162,7 +199,7 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
 
 - Mantener sin offsets negativos hasta que exista una mecanica real que los
   justifique.
-- No aplicar duraciones de stage a `specialStages` hasta que exista un caso
+- No aplicar duraciones de stage a `interPoolQueue` hasta que exista un caso
   real.
 - Anadir nuevas `groupRules` solo cuando aparezcan mecanicas reales; la primera
   implementada es `propagate_property_change`.
@@ -174,8 +211,8 @@ Lista de decisiones pendientes antes de conectar el nucleo anonimo a la UI.
 - Completar `poolHistory` segun `docs/history_contract.md` durante la ejecucion
   incremental.
 - Aplicar pausa administrativa en session cuando un error ascienda desde pool.
-- No crear `cycleSpecialStages` hasta que exista una mecanica real ejecutada
-  entre ciclos. Mantener mientras tanto una unica cola `session.specialStages`.
+- No crear `cycleInterPoolStages` hasta que exista una mecanica real ejecutada
+  entre ciclos. Mantener mientras tanto una unica cola `session.interPoolQueue`.
 
 ## Futuro editor de catalog
 

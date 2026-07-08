@@ -10,7 +10,7 @@
 import { getGroupRoles, isGroupActive } from './groupModel.js';
 import { HISTORY_EVENTS, getRecipeHistory } from './historyModel.js';
 import { STAGE_STATUSES, normalizeId } from './sessionModel.js';
-import { getSpecialStages } from './specialStagesModel.js';
+import { getInterPoolQueue } from './interPoolQueueModel.js';
 import { MECHANICAL_ENTITY_TYPES } from './domainTypes.js';
 
 export const OBJECTIVE_EVALUATION_STATUSES = Object.freeze({
@@ -412,7 +412,7 @@ export function getPendingObjectiveInfluenceStages({
   session = {},
   objectiveRules = getSessionObjectiveRules(session)
 } = {}) {
-  const stages = getSpecialStages(session);
+  const stages = getInterPoolQueue(session);
 
   return stages.filter((stage) =>
     (objectiveRules ?? []).some((objectiveRule) =>

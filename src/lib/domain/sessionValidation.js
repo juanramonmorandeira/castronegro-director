@@ -220,12 +220,12 @@ export function validateSession(session = {}, options = {}) {
   }
 
   if (
-    session.currentStageSource === CURRENT_STAGE_SOURCES.SPECIAL_STAGES &&
-    (session.specialStages ?? []).length === 0
+    session.currentStageSource === CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE &&
+    (session.interPoolQueue ?? []).length === 0
   ) {
     errors.push({
       code: 'session/missing-current-special-stage',
-      message: 'session points to specialStages but the queue is empty'
+      message: 'session points to interPoolQueue but the queue is empty'
     });
   }
 

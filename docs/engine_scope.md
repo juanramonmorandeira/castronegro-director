@@ -123,18 +123,18 @@ Stage actual
 El loop normal de la parte jugable es:
 
 ```text
-specialStages inicial si hay stages pendientes
+interPoolQueue inicial si hay stages pendientes
 -> cycle.startCycle
 -> poolConcealed
 -> pool.onExit: review_property_blocks, check_objectives
--> specialStages si hay stages pendientes
+-> interPoolQueue si hay stages pendientes
 -> poolExposed
 -> pool.onExit: review_property_blocks, check_objectives
--> specialStages si hay stages pendientes
+-> interPoolQueue si hay stages pendientes
 ```
 
-Los stages especiales se registran en `specialStages`. `conclude_play` no se
-registra como stage especial: se ejecuta como operacion final cuando existe
+Los stages de interPoolQueue se registran en `interPoolQueue`. `conclude_play` no se
+registra como stage de interPoolQueue: se ejecuta como operacion final cuando existe
 un playOutcome estable. Si aun hay stages pendientes capaces de alterar ese
 outcome, `conclude_play` no debe ejecutarse todavia.
 

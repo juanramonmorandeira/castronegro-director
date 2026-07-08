@@ -41,7 +41,7 @@ digraph DomainArchitecture {
   ];
 
   session [
-    label="SESSION VIVA\n\nroles\ngroups\ncycle\nspecialStages\ncurrentStageSource\nobjectiveRules\nhistoriales\nachievedObjectives\nplayOutcome",
+    label="SESSION VIVA\n\nroles\ngroups\ncycle\ninterPoolQueue\ncurrentStageSource\nobjectiveRules\nhistoriales\nachievedObjectives\nplayOutcome",
     fillcolor="#dcecf5",
     penwidth=1.5
   ];
@@ -57,8 +57,8 @@ digraph DomainArchitecture {
     fillcolor="#dff2e3"
   ];
 
-  specialStages [
-    label="SPECIAL STAGES\n\nsession.specialStages\ncola FIFO dinamica\nspecialStageHistory",
+  interPoolQueue [
+    label="SPECIAL STAGES\n\nsession.interPoolQueue\ncola FIFO dinamica\ninterPoolQueueHistory",
     fillcolor="#dff2e3"
   ];
 
@@ -68,12 +68,12 @@ digraph DomainArchitecture {
   ];
 
   stagePipeline [
-    label="PIPELINE DE UN STAGE\n\nstageModel\nselectionModel\nrecipeModel\nconstraintModel\nactionModel\nresolverModel\neffectModel",
+    label="PIPELINE DE UN STAGE\n\nstageModel\nselectionModel\nrecipeModel\nconstraintModel\nactionModel\neffectResolver\neffectModel",
     fillcolor="#dff2e3"
   ];
 
   reactions [
-    label="REACCIONES Y OBJETIVOS\n\neventModel\ncrea specialStages\n\nobjectiveModel\ncheck_objectives\nconclude_play",
+    label="REACCIONES Y OBJETIVOS\n\neventModel\ncrea interPoolQueue\n\nobjectiveModel\ncheck_objectives\nconclude_play",
     fillcolor="#dff2e3"
   ];
 
@@ -88,11 +88,11 @@ digraph DomainArchitecture {
   ];
 
   inputs -> assembly -> session -> cycle -> pools -> poolRuntime -> stagePipeline -> reactions;
-  session -> specialStages [label="cola FIFO"];
-  cycle -> specialStages [label="consulta entre pools"];
-  specialStages -> stagePipeline [label="ejecuta stage"];
+  session -> interPoolQueue [label="cola FIFO"];
+  cycle -> interPoolQueue [label="consulta entre pools"];
+  interPoolQueue -> stagePipeline [label="ejecuta stage"];
   reactions -> session [label="actualiza estado", constraint=false];
-  reactions -> specialStages [label="encola stage especial", constraint=false];
+  reactions -> interPoolQueue [label="encola stage de interPoolQueue", constraint=false];
   reactions -> messages [label="emite mensajes", constraint=false];
   session -> messages [label="guarda logs", constraint=false];
   inputs -> messages [label="skin", style=dashed, constraint=false];

@@ -1,7 +1,7 @@
 // cycleModel.js
 // -----------------------------------------------------------------------------
 // Administra el ciclo runtime, la navegacion entre pools y las transiciones
-// entre ventanas de specialStages.
+// entre ventanas de interPoolQueue.
 // Cada pool conserva su propio cursor de stages; cycle decide que bloque del
 // flujo corresponde ejecutar despues.
 // -----------------------------------------------------------------------------
@@ -27,13 +27,13 @@ import {
   validatePool
 } from './poolModel.js';
 import { reviewPropertyBlocks } from './roleModel.js';
+import { INTER_POOL_QUEUE_EVENT_WINDOWS } from './interPoolQueueDefinition.js';
 import {
-  SPECIAL_STAGE_EVENT_WINDOWS,
-  startSpecialStages,
-  startSpecialStagesForWindow,
-  getCurrentSpecialStage,
-  hasPendingSpecialStages
-} from './specialStagesModel.js';
+  startInterPoolQueue,
+  startInterPoolQueueForWindow,
+  getCurrentInterPoolStage,
+  hasPendingInterPoolStages
+} from './interPoolQueueModel.js';
 import {
   createSurfaceTransitionResult,
   getSurfaceTransitionAfterWindow
@@ -125,8 +125,8 @@ export function getCurrentCycleStage(cycle = {}) {
 }
 
 function getCurrentSessionStage(session = {}) {
-  if (session.currentStageSource === CURRENT_STAGE_SOURCES.SPECIAL_STAGES) {
-    const stage = getCurrentSpecialStage(session);
+  if (session.currentStageSource === CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE) {
+    const stage = getCurrentInterPoolStage(session);
     if (!stage) return null;
     return {
       poolKey: null,
@@ -134,7 +134,7 @@ function getCurrentSessionStage(session = {}) {
       stageKey: stage.key,
       status: stage.status,
       index: 0,
-      source: CURRENT_STAGE_SOURCES.SPECIAL_STAGES,
+      source: CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE,
       stage
     };
   }
@@ -237,7 +237,7 @@ export function continueAfterWindow({ session = {}, eventWindow = null } = {}) {
   }
 
   const transitionResult = createSurfaceTransitionResult(transition);
-  const nextWindowStart = startSpecialStagesForWindow(session, transition.to);
+  const nextWindowStart = startInterPoolQueueForWindow(session, transition.to);
 
   return {
     ...nextWindowStart,
@@ -562,16 +562,16 @@ export function prepareAndValidatePoolEntry(session = {}, poolKey = null) {
   };
 }
 
-export function startSpecialStagesAfterPoolExit({ session = {}, poolKey = null } = {}) {
+export function startInterPoolQueueAfterPoolExit({ session = {}, poolKey = null } = {}) {
   const eventWindow =
     poolKey === 'poolConcealed'
-      ? SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED
+      ? INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_CONCEALED
       : poolKey === 'poolExposed'
-        ? SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED
+        ? INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_EXPOSED
         : null;
 
   if (eventWindow) {
-    const windowStart = startSpecialStagesForWindow(session, eventWindow);
+    const windowStart = startInterPoolQueueForWindow(session, eventWindow);
     if (!windowStart.ok || windowStart.stage) {
       return {
         ...windowStart,
@@ -588,7 +588,7 @@ export function startSpecialStagesAfterPoolExit({ session = {}, poolKey = null }
   return {
     ok: true,
     errors: [],
-    session: hasPendingSpecialStages(session) ? startSpecialStages(session) : session,
+    session: hasPendingInterPoolStages(session) ? startInterPoolQueue(session) : session,
     stage: null,
     lifecycleResults: []
   };
@@ -614,21 +614,21 @@ export function getPostCompletionLifecycleOperationState({ session, stageAdvance
     session,
     poolKey: stageAdvance.current?.poolKey
   });
-  const afterPoolSpecialStageStart = exitState.session.playOutcome
+  const afterPoolInterPoolStageStart = exitState.session.playOutcome
     ? { ok: true, errors: [], session: exitState.session, stage: null, lifecycleResults: [] }
-    : startSpecialStagesAfterPoolExit({
+    : startInterPoolQueueAfterPoolExit({
         session: exitState.session,
         poolKey: stageAdvance.current?.poolKey
       });
-  if (!afterPoolSpecialStageStart.ok) {
+  if (!afterPoolInterPoolStageStart.ok) {
     return {
-      session: afterPoolSpecialStageStart.session,
+      session: afterPoolInterPoolStageStart.session,
       stageAdvance: {
         ...stageAdvance,
         ok: false,
-        errors: afterPoolSpecialStageStart.errors,
-        reason: 'special-stage-window-failed',
-        cycle: afterPoolSpecialStageStart.session.cycle,
+        errors: afterPoolInterPoolStageStart.errors,
+        reason: 'inter-pool-queue-window-failed',
+        cycle: afterPoolInterPoolStageStart.session.cycle,
         next: null
       },
       objectiveEvaluation: exitState.objectiveEvaluation,
@@ -636,12 +636,12 @@ export function getPostCompletionLifecycleOperationState({ session, stageAdvance
       eventResponses: [],
       lifecycleResults: [
         ...exitState.lifecycleResults,
-        ...(afterPoolSpecialStageStart.lifecycleResults ?? [])
+        ...(afterPoolInterPoolStageStart.lifecycleResults ?? [])
       ]
     };
   }
-  const sessionBeforePoolEntry = afterPoolSpecialStageStart.session;
-  const specialStage = getCurrentSpecialStage(sessionBeforePoolEntry);
+  const sessionBeforePoolEntry = afterPoolInterPoolStageStart.session;
+  const interPoolStage = getCurrentInterPoolStage(sessionBeforePoolEntry);
   const poolEntry = exitState.session.playOutcome
     ? {
         ok: true,
@@ -650,7 +650,7 @@ export function getPostCompletionLifecycleOperationState({ session, stageAdvance
         cycle: exitState.session.cycle,
         next: null
       }
-    : specialStage
+    : interPoolStage
       ? {
           ok: true,
           errors: [],
@@ -658,12 +658,12 @@ export function getPostCompletionLifecycleOperationState({ session, stageAdvance
           cycle: sessionBeforePoolEntry.cycle,
           next: {
             poolKey: null,
-            stageId: specialStage.id,
-            stageKey: specialStage.key,
-            status: specialStage.status,
+            stageId: interPoolStage.id,
+            stageKey: interPoolStage.key,
+            status: interPoolStage.status,
             index: 0,
-            source: CURRENT_STAGE_SOURCES.SPECIAL_STAGES,
-            stage: specialStage
+            source: CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE,
+            stage: interPoolStage
           }
         }
       : enterNextPool(
@@ -711,7 +711,7 @@ export function getPostCompletionLifecycleOperationState({ session, stageAdvance
       eventResponses: [],
       lifecycleResults: [
         ...exitState.lifecycleResults,
-        ...(afterPoolSpecialStageStart.lifecycleResults ?? [])
+        ...(afterPoolInterPoolStageStart.lifecycleResults ?? [])
       ]
     };
   }
@@ -742,7 +742,7 @@ export function getPostCompletionLifecycleOperationState({ session, stageAdvance
     eventResponses: [],
     lifecycleResults: [
       ...exitState.lifecycleResults,
-      ...(afterPoolSpecialStageStart.lifecycleResults ?? []),
+      ...(afterPoolInterPoolStageStart.lifecycleResults ?? []),
       ...enterState.lifecycleResults
     ]
   };

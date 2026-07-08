@@ -30,13 +30,13 @@ flowchart TD
   Recipe[Recipe]
   Constraint[constraintModel]
   Action[actionModel]
-  Resolver[resolverModel]
+  Resolver[effectResolver]
   Effect[effectModel]
   Session[Session]
   Objectives[objectiveModel]
   PlayOutcome{playOutcome}
   Event[eventModel]
-  SpecialStage[specialStages stage]
+  InterPoolStage[interPoolQueue stage]
   Result[Result]
 
   Skin --> RoleCatalog
@@ -62,18 +62,18 @@ flowchart TD
   Resolver --> Effect
   Effect --> Session
   Session --> Event
-  Event -->|reaccion crea stage| SpecialStage
-  SpecialStage --> CurrentStage
+  Event -->|reaccion crea stage| InterPoolStage
+  InterPoolStage --> CurrentStage
   Event --> Objectives
   Objectives --> PlayOutcome
   PlayOutcome -->|No concluyente| CurrentStage
-  PlayOutcome -->|Concluyente| SpecialStage
+  PlayOutcome -->|Concluyente| InterPoolStage
 ```
 
 Lectura corta:
 
 ```text
-skin/setup -> buildSession -> roles + groups + cycle.pools -> stage actual -> receta -> restricciones -> accion pura -> resolver -> aplicar efectos -> eventos/reacciones -> pool.onExit -> check_objectives -> specialStages
+skin/setup -> buildSession -> roles + groups + cycle.pools -> stage actual -> receta -> restricciones -> accion pura -> resolver -> aplicar efectos -> eventos/reacciones -> pool.onExit -> check_objectives -> interPoolQueue
 ```
 
 ## Capas del motor
@@ -99,9 +99,9 @@ skin/setup -> buildSession -> roles + groups + cycle.pools -> stage actual -> re
 | Recetas | `recipeModel.js` | Validar restricciones y convertir receta en accion pura | Aplicar efectos o avanzar stages |
 | Restricciones | `constraintModel.js` | Validar restricciones propias de una receta | Cambiar estado directamente |
 | Acciones | `actionModel.js` | Validar y resolver acciones puras | Evaluar restricciones de receta |
-| Resolver | `resolverModel.js` | Procesar efectos, bloqueos, deduplicacion y consecuencias solicitadas por groupRules | Conocer tipos narrativos de group |
+| Resolver | `effectResolver.js` | Procesar efectos, bloqueos, deduplicacion y consecuencias solicitadas por groupRules | Conocer tipos narrativos de group |
 | Efectos | `effectModel.js` | Escribir efectos finales sobre la sesion | Decidir si un efecto debe existir |
-| Eventos | `eventModel.js` | Convertir efectos finales en eventos y activar reacciones declaradas por roles | Ejecutar la receta del stage especial |
+| Eventos | `eventModel.js` | Convertir efectos finales en eventos y activar reacciones declaradas por roles | Ejecutar la receta del stage de interPoolQueue |
 | Objectives | `objectiveModel.js` | Evaluar objetivos y playOutcome | Cerrar administrativamente la session |
 | Seleccion | `selectionModel.js` | Contar elecciones y resolver chosen/empate | Aplicar el efecto de la seleccion |
 
@@ -122,7 +122,7 @@ flowchart TD
   L[session.roles]
   M[session.groups]
   N[session.cycle.pools]
-  P[session.specialStages inicial]
+  P[session.interPoolQueue inicial]
   O[Session lista para ejecucion]
 
   A --> E
@@ -241,7 +241,7 @@ poolOrder -> orden entre pools
 pools[poolKey] -> orden de stages dentro de ese pool
 ```
 
-`session.specialStages` es una cola FIFO independiente de `pools`. Antes de
+`session.interPoolQueue` es una cola FIFO independiente de `pools`. Antes de
 entrar en cualquier pool normal, el ciclo comprueba si contiene stages
 pendientes y, si los tiene, los resuelve primero. Cada stage dinamico puede
 declarar `metadata.eventWindow` (`before_concealed`, `after_concealed`,
@@ -290,7 +290,7 @@ createCycle({
   }
 })
 
-session.specialStages = [
+session.interPoolQueue = [
   { id: 'stage-special-stage_01-role-0', key: 'stage_01' },
   { id: 'stage-special-stage_02-role-1', key: 'stage_02' }
 ]
@@ -330,7 +330,7 @@ para distinguir cierres pedidos por player, director o system.
 seleccionadas. Los pools configurables aceptan `order`; `poolCursorModel.js`
 ejecuta los arrays ya materializados.
 
-`specialStages` conserva siempre el orden FIFO de insercion.
+`interPoolQueue` conserva siempre el orden FIFO de insercion.
 
 ## Flujo de una accion
 
@@ -386,7 +386,7 @@ aplicador:
 | Los objetivos existen y cumplen filtros? | `actionModel.js` | `in_play`, `not_in_play`, `not_self`, `same_alignment`, `not_same_alignment`, `recently_out_of_play`, `assumable`, `distinct` |
 | Esta receta tiene una restriccion propia? | `constraintModel.js` | no repetir mismo objetivo en ciclos consecutivos |
 | Un cambio de propiedad queda bloqueado? | `roleModel.js` | `block_property_change` bloquea `inPlay=false` frente a actores concretos |
-| Un efecto genera consecuencias de group? | `groupModel.js` + `resolverModel.js` | `propagate_property_change` genera efectos derivados |
+| Un efecto genera consecuencias de group? | `groupModel.js` + `effectResolver.js` | `propagate_property_change` genera efectos derivados |
 | Como se escribe un cambio final? | `effectModel.js` | `set_property`, `set_group` |
 | La parte jugable ha concluido? | `objectiveModel.js` | `holder_reaches_in_play_parity`, `holder_reaches_stable_in_play_parity`, `only_holder_group_remains_in_play`, `no_roles_in_play` |
 
@@ -401,7 +401,7 @@ graph LR
   E --> F[Sesion actualizada]
   F --> G[eventModel crea eventos]
   G --> H{Hay reacciones}
-  H -->|Si| I[Crear stages especiales FIFO]
+  H -->|Si| I[Crear stages de interPoolQueue FIFO]
   H -->|No| J[check_objectives]
   I --> J
   J --> K{playOutcome concluyente}
@@ -409,7 +409,7 @@ graph LR
   O -->|Si| L[Ejecutar conclude_play]
   O -->|No| N
   K -->|No| M[Continuar]
-  L --> N[specialStages]
+  L --> N[interPoolQueue]
   I --> N
 ```
 
@@ -420,10 +420,10 @@ Una accion no deberia escribir directamente cualquier cosa en la sesion.
 Debe proponer efectos, resolverlos y aplicar solo efectos finales.
 ```
 
-Regla de `specialStages`:
+Regla de `interPoolQueue`:
 
 ```text
-Los eventos especiales se registran como stages pendientes en specialStages. Si
+Los eventos especiales se registran como stages pendientes en interPoolQueue. Si
 check_objectives emite un playOutcome concluyente, primero se comprueba si algun
 stage pendiente puede alterar ese outcome. conclude_play se ejecuta como
 operacion final cuando el outcome es estable.
@@ -437,7 +437,7 @@ evaluar objetivos.
 
 Estas dos capas pueden parecer parecidas, pero su pregunta central es distinta.
 
-### `resolverModel.js`
+### `effectResolver.js`
 
 Pregunta:
 
@@ -479,7 +479,7 @@ correcto. Si recibe un efecto final valido, lo escribe.
 Resumen:
 
 ```text
-resolverModel decide consecuencias.
+effectResolver decide consecuencias.
 effectModel aplica cambios.
 ```
 
@@ -493,7 +493,7 @@ graph TD
   C --> D{Grupo activo}
   D -->|No| E[No ocurre nada mas]
   D -->|Si| F[groupModel interpreta groupRules]
-  F --> G[resolverModel procesa efectos derivados]
+  F --> G[effectResolver procesa efectos derivados]
   G --> H[effectModel aplica cambios]
 ```
 
@@ -504,7 +504,7 @@ link_targets no elimina a nadie.
 link_targets solo crea un grupo.
 Si el grupo se crea, `linked_target_recognition` registra en `recipeHistory`
 que los miembros del group linked conocen al resto de miembros. No es una
-`specialStage` y no cambia estado mecanico.
+`interPoolStage` y no cambia estado mecanico.
 El group linked declara `propagate_property_change`. Su `type` no activa
 ninguna logica especial por si solo.
 ```
@@ -520,8 +520,8 @@ graph TD
   D -->|Si| F[objectiveResolution]
   F --> G{playOutcome concluyente}
   G -->|No| H[Registrar achievedObjectives]
-  G -->|Si| I{SpecialStages puede alterar outcome}
-  I -->|Si| J[Resolver specialStages antes]
+  G -->|Si| I{InterPoolStages puede alterar outcome}
+  I -->|Si| J[Resolver interPoolQueue antes]
   I -->|No| K[Ejecutar conclude_play]
 ```
 
@@ -532,7 +532,7 @@ Orden objetivo:
 3. Resolver conflictos entre objectives concluyentes.
 4. Emitir `playOutcome` si la parte jugable queda concluida.
 5. Cruzar `objectiveRule.dependencies` con `stage.influences` de stages
-   pendientes en `specialStages`.
+   pendientes en `interPoolQueue`.
 6. Ejecutar `conclude_play` como operacion final si hay `playOutcome`
    concluyente y estable.
 
@@ -591,7 +591,7 @@ Cuando aparezca una mecanica nueva, seguir este orden:
 | Un role bloquea un cambio de estado antes de otra accion | accion `block_property_change` | `actionModel.js` + `roleModel.js` |
 | No puede bloquear al mismo objetivo dos ciclos seguidos | restriccion `no_repeat_target` | `constraintModel.js` |
 | Un role enlaza dos targets | accion `link_targets` + group con reglas | `groupModel.js` |
-| Si un miembro sale de juego, el otro tambien | `propagate_property_change` | `groupModel.js` + `resolverModel.js` |
+| Si un miembro sale de juego, el otro tambien | `propagate_property_change` | `groupModel.js` + `effectResolver.js` |
 | Si solo quedan linked de alignments distintos, cumplen objective especial | objectiveRule sobre group linked | `session.objectiveRules` |
 | Un group de alignment alcanza al resto | `holder_reaches_in_play_parity` | `session.objectiveRules` |
 | `alignment_b` alcanza paridad estable en `basic_ruleset` | `holder_reaches_stable_in_play_parity` | `session.objectiveRules` |
@@ -615,7 +615,7 @@ flowchart TD
   C -->|chosen| D[target chosen]
   C -->|tie/null| E[sin accion posterior]
   D --> F[Ejecutar accion configurada]
-  F --> G[resolverModel]
+  F --> G[effectResolver]
   G --> H[effectModel]
 ```
 
@@ -780,7 +780,7 @@ Interacciones relevantes:
   `linked_propagated_effect`.
 - `role_reactive`: si el target final es ese role y queda `inPlay=false` desde
   `concealed_set_out_of_play` o `exposed_set_out_of_play`, `eventModel` puede
-  encolar su specialStage de respuesta.
+  encolar su interPoolStage de respuesta.
 - `role_in_out_of_play`: su ventana especial de self-restore pertenece al
   concealed set_out_of_play. En exposed, si queda `inPlay=false`, no abre esa
   excepcion.
@@ -807,7 +807,7 @@ flowchart TD
   R --> S[Stage sigue abierto para otra ronda]
   E --> F[recipe set_out_of_play]
   F --> G[actionModel resuelve accion pura]
-  G --> H[resolverModel deriva consecuencias]
+  G --> H[effectResolver deriva consecuencias]
   H --> I[effectModel aplica cambios]
 ```
 
@@ -891,7 +891,7 @@ Si responde a:
 que consecuencias tiene este efecto aceptado?
 ```
 
-probablemente pertenece a `resolverModel.js`.
+probablemente pertenece a `effectResolver.js`.
 
 Si responde a:
 

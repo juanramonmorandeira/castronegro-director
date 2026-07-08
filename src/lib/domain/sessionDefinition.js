@@ -57,9 +57,9 @@ export function createSession({
   roles = [],
   groups = [],
   cycle = createCycle(),
-  specialStages = [],
-  currentStageSource = specialStages.length > 0
-    ? CURRENT_STAGE_SOURCES.SPECIAL_STAGES
+  interPoolQueue = [],
+  currentStageSource = interPoolQueue.length > 0
+    ? CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE
     : CURRENT_STAGE_SOURCES.POOL,
   objectiveRules = [],
   selectionRules = [],
@@ -72,16 +72,16 @@ export function createSession({
   log = [],
   metadata = {}
 } = {}) {
-  const normalizedSpecialStages = assignUniqueStageIds(
-    specialStages.map((stage) => createStage(stage))
+  const normalizedInterPoolStages = assignUniqueStageIds(
+    interPoolQueue.map((stage) => createStage(stage))
   );
   const normalizedHistory = createSessionHistory(history);
-  const normalizedSpecialStageHistory =
-    normalizedHistory[HISTORY_COLLECTIONS.SPECIAL_STAGE].length > 0
-      ? normalizedHistory[HISTORY_COLLECTIONS.SPECIAL_STAGE]
-      : normalizedSpecialStages.flatMap((stage, index) => [
+  const normalizedInterPoolStageHistory =
+    normalizedHistory[HISTORY_COLLECTIONS.INTER_POOL_QUEUE].length > 0
+      ? normalizedHistory[HISTORY_COLLECTIONS.INTER_POOL_QUEUE]
+      : normalizedInterPoolStages.flatMap((stage, index) => [
           {
-            id: `special-stage-${stage.key ?? 'stage'}-queued-${index}`,
+            id: `inter-pool-queue-${stage.key ?? 'stage'}-queued-${index}`,
             sequence: index,
             timestamp: new Date().toISOString(),
             event: 'queued',
@@ -102,11 +102,11 @@ export function createSession({
               }
             }
           },
-          ...(currentStageSource === CURRENT_STAGE_SOURCES.SPECIAL_STAGES && index === 0
+          ...(currentStageSource === CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE && index === 0
             ? [
                 {
-                  id: `special-stage-${stage.key ?? 'stage'}-started-${index}`,
-                  sequence: index + normalizedSpecialStages.length,
+                  id: `inter-pool-queue-${stage.key ?? 'stage'}-started-${index}`,
+                  sequence: index + normalizedInterPoolStages.length,
                   timestamp: new Date().toISOString(),
                   event: 'started',
                   actor: { authority: 'system' },
@@ -131,7 +131,7 @@ export function createSession({
         ]);
   const sessionHistory = {
     ...normalizedHistory,
-    [HISTORY_COLLECTIONS.SPECIAL_STAGE]: normalizedSpecialStageHistory
+    [HISTORY_COLLECTIONS.INTER_POOL_QUEUE]: normalizedInterPoolStageHistory
   };
 
   const normalizedRoles = roles.map(createRole);
@@ -145,7 +145,7 @@ export function createSession({
     roles: normalizedRoles,
     groups: groups.map(createSessionGroup),
     cycle: createCycle(cycle),
-    specialStages: normalizedSpecialStages,
+    interPoolQueue: normalizedInterPoolStages,
     currentStageSource,
     objectiveRules: [...objectiveRules],
     selectionRules: [...selectionRules],
@@ -341,7 +341,7 @@ export function buildSession({
     groups
   };
   const poolBuild = cycle?.pools
-    ? { ok: true, errors: [], pools: cycle.pools, specialStages: sessionInput.specialStages ?? [] }
+    ? { ok: true, errors: [], pools: cycle.pools, interPoolQueue: sessionInput.interPoolQueue ?? [] }
     : buildPools({
         session: sessionWithGroups,
         roleDefinitions: Object.values(roleDefinitionMap),
@@ -366,9 +366,9 @@ export function buildSession({
         sessionWithGroups.cycle?.poolOrder,
       pools: poolBuild.pools
     }),
-    specialStages: [...(poolBuild.specialStages ?? [])],
-    currentStageSource: (poolBuild.specialStages ?? []).length > 0
-      ? CURRENT_STAGE_SOURCES.SPECIAL_STAGES
+    interPoolQueue: [...(poolBuild.interPoolQueue ?? [])],
+    currentStageSource: (poolBuild.interPoolQueue ?? []).length > 0
+      ? CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE
       : CURRENT_STAGE_SOURCES.POOL
   };
   const validation = validate

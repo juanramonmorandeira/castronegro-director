@@ -47,9 +47,9 @@ import {
   createPool,
   preparePool,
   startCycle,
-  startSpecialStages,
-  startSpecialStagesForWindow,
-  completeSpecialStageForWindow,
+  startInterPoolQueue,
+  startInterPoolQueueForWindow,
+  completeInterPoolStageForWindow,
   validatePool,
   organizePoolStages,
   createSelectionRules,
@@ -60,7 +60,7 @@ import {
   addRoleToGroup,
   addBlockedPropertyChange,
   appendRecipeHistory,
-  appendSpecialStage,
+  appendInterPoolStage,
   getCoreGroupCatalog,
   getCurrentStage,
   getGroupRoles,
@@ -74,9 +74,9 @@ import {
   findAppliedSetPropertyHistory,
   STAGE_STATUSES,
   CURRENT_STAGE_SOURCES,
-  SPECIAL_STAGE_ERRORS,
-  SPECIAL_STAGE_HISTORY_OPERATIONS,
-  SPECIAL_STAGE_EVENT_WINDOWS,
+  INTER_POOL_QUEUE_ERRORS,
+  INTER_POOL_QUEUE_HISTORY_OPERATIONS,
+  INTER_POOL_QUEUE_EVENT_WINDOWS,
   SURFACE_FLOW_STEPS,
   SURFACE_EFFECT_REASONS,
   SURFACE_ITEM_TYPES,
@@ -106,9 +106,9 @@ import {
   PEEK_RECIPE_KEYS,
   STAGE_RECIPE_KEYS,
   STAGE_CATALOG_IDS,
+  STAGE_KEYS,
   STAGE_COMPLETION_MODES,
   STAGE_COMPLETION_REQUESTED_BY,
-  STAGE_KEYS,
   POOL_LIFECYCLE_OPERATION_TYPES,
   PROPERTY_BLOCK_BOUNDARIES,
   PROPERTY_BLOCK_DURATION_UNITS,
@@ -119,9 +119,11 @@ import {
   createConcealedSelectionSubmissionItem,
   createExposedSelectionSubmissionItem,
   getCatalogRecipe,
-  getActionFromRecipe,
-  validateCatalogRecipeOverrides,
   getCatalogStage,
+  getActionFromRecipe,
+  getActionActors,
+  resolveRecipeActor,
+  validateCatalogRecipeOverrides,
   HISTORY_COLLECTIONS,
   HISTORY_EVENTS,
   getHistoryCollection,
@@ -172,8 +174,8 @@ function stageHistory(session) {
   return history(session, HISTORY_COLLECTIONS.STAGE);
 }
 
-function specialStageHistory(session) {
-  return history(session, HISTORY_COLLECTIONS.SPECIAL_STAGE);
+function interPoolQueueHistory(session) {
+  return history(session, HISTORY_COLLECTIONS.INTER_POOL_QUEUE);
 }
 
 function cycleHistory(session) {
@@ -240,6 +242,79 @@ function test(name, fn) {
 //
 // No usan Svelte, Firebase, i18n ni navegador.
 // ---------------------------------------------------------------------------
+
+test('actorModel resuelve un actor role desde input.actorIds', () => {
+  const session = createSession({
+    roles: [
+      createRole({ id: 'role_inspects-0', roleKey: ROLE_CATALOG_IDS.ROLE_INSPECTS })
+    ]
+  });
+  const actorContext = resolveRecipeActor({
+    session,
+    recipe: { actor: { type: RECIPE_ACTOR_TYPES.ROLE } },
+    input: { actorIds: ['role_inspects-0'] }
+  });
+
+  assert.equal(actorContext.ok, true);
+  assert.equal(actorContext.actorType, RECIPE_ACTOR_TYPES.ROLE);
+  assert.deepEqual(actorContext.actorIds, ['role_inspects-0']);
+  assert.equal(actorContext.primaryActor.id, 'role_inspects-0');
+});
+
+test('actorModel resuelve actores group desde stage.actorIds si input no los declara', () => {
+  const session = createSession({
+    roles: [
+      createRole({ id: 'role_set_out_of_play-0', roleKey: ROLE_CATALOG_IDS.ROLE_SET_OUT_OF_PLAY }),
+      createRole({ id: 'role_set_out_of_play-1', roleKey: ROLE_CATALOG_IDS.ROLE_SET_OUT_OF_PLAY })
+    ]
+  });
+  const actorContext = resolveRecipeActor({
+    session,
+    recipe: { actor: { type: RECIPE_ACTOR_TYPES.GROUP } },
+    stage: {
+      actorIds: ['role_set_out_of_play-0', 'role_set_out_of_play-1']
+    }
+  });
+
+  assert.equal(actorContext.ok, true);
+  assert.equal(actorContext.actorType, RECIPE_ACTOR_TYPES.GROUP);
+  assert.deepEqual(actorContext.actorIds, ['role_set_out_of_play-0', 'role_set_out_of_play-1']);
+  assert.equal(actorContext.actors.length, 2);
+  assert.equal(actorContext.primaryActor.id, 'role_set_out_of_play-0');
+});
+
+test('actorModel no materializa role actors para system', () => {
+  const session = createSession({
+    roles: [
+      createRole({ id: 'role_plain-0', roleKey: ROLE_CATALOG_IDS.ROLE_PLAIN })
+    ]
+  });
+  const actorContext = resolveRecipeActor({
+    session,
+    recipe: { actor: { type: RECIPE_ACTOR_TYPES.SYSTEM } },
+    input: { actorIds: ['role_plain-0'] }
+  });
+
+  assert.equal(actorContext.ok, true);
+  assert.equal(actorContext.actorType, RECIPE_ACTOR_TYPES.SYSTEM);
+  assert.deepEqual(actorContext.actorIds, []);
+  assert.deepEqual(actorContext.actors, []);
+  assert.equal(actorContext.primaryActor, null);
+});
+
+test('getActionActors conserva el orden de actorIds unicos', () => {
+  const session = createSession({
+    roles: [
+      createRole({ id: 'role_plain-0', roleKey: ROLE_CATALOG_IDS.ROLE_PLAIN }),
+      createRole({ id: 'role_plain-1', roleKey: ROLE_CATALOG_IDS.ROLE_PLAIN })
+    ]
+  });
+
+  assert.deepEqual(
+    getActionActors(session, ['role_plain-1', 'role_plain-1', 'role_plain-0']).map((role) => role.id),
+    ['role_plain-1', 'role_plain-0']
+  );
+});
 
 const inspectRoleAction = getCatalogRecipe(RECIPE_KEYS.INSPECT_ROLE);
 const setInPlayFalseAction = getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY);
@@ -642,8 +717,8 @@ test('inspect_role revela roleKey sin modificar la sesion', () => {
 test('resolveCurrentStage ejecuta receta y completeCurrentStage avanza el cursor', () => {
   const session = createSession({
     ...createBaseSession(),
-    currentStageSource: CURRENT_STAGE_SOURCES.SPECIAL_STAGES,
-    specialStages: [
+    currentStageSource: CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE,
+    interPoolQueue: [
       createStage({
         key: STAGE_KEYS.STAGE_01,
         status: STAGE_STATUSES.ENABLED,
@@ -680,7 +755,7 @@ test('resolveCurrentStage ejecuta receta y completeCurrentStage avanza el cursor
   assert.equal(inspectedAction.stageAdvance, null);
   assert.equal(inspected.ok, true);
   assert.equal(
-    inspected.session.specialStages[0].key,
+    inspected.session.interPoolQueue[0].key,
     STAGE_KEYS.STAGE_02
   );
   assert.equal(inspected.stageAdvance.reason, 'next-special-stage');
@@ -691,9 +766,9 @@ test('resolveCurrentStage ejecuta receta y completeCurrentStage avanza el cursor
   assert.equal(linked.ok, false);
   assert.equal(linked.stageAdvance.reason, 'next-pool-not-runnable');
   assert.equal(linked.errors[0].code, 'cycle/no-runnable-stages');
-  assert.equal(linked.session.specialStages.length, 0);
+  assert.equal(linked.session.interPoolQueue.length, 0);
   assert.deepEqual(
-    specialStageHistory(linked.session).map((entry) => entry.event),
+    interPoolQueueHistory(linked.session).map((entry) => entry.event),
     ['queued', 'started', 'queued', 'completed', 'started', 'completed']
   );
   assert.equal(stageHistory(linked.session).length, 2);
@@ -704,8 +779,8 @@ test('resolveCurrentStage ejecuta receta y completeCurrentStage avanza el cursor
 test('resolveCurrentStage rechaza un stage ejecutable sin recipe declarada', () => {
   const session = createSession({
     ...createBaseSession(),
-    currentStageSource: CURRENT_STAGE_SOURCES.SPECIAL_STAGES,
-    specialStages: [
+    currentStageSource: CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE,
+    interPoolQueue: [
       createStage({
         key: 'stageMissingAction',
         status: STAGE_STATUSES.ENABLED
@@ -717,7 +792,7 @@ test('resolveCurrentStage rechaza un stage ejecutable sin recipe declarada', () 
   assert.equal(resolved.ok, false);
   assert.equal(resolved.errors[0].code, 'stage/missing-recipe');
   assert.equal(
-    resolved.session.specialStages[0].status,
+    resolved.session.interPoolQueue[0].status,
     STAGE_STATUSES.ENABLED
   );
   assert.equal(resolved.messages[0].key, MESSAGE_KEYS.INVALID_STAGE);
@@ -1200,10 +1275,10 @@ test('validatePool rechaza pools sin stages ejecutables', () => {
   assert.equal(validation.errors[0].code, 'pool/no-runnable-stages');
 });
 
-test('specialStages tiene prioridad inicial sin formar parte de pools', () => {
+test('interPoolQueue tiene prioridad inicial sin formar parte de pools', () => {
   const session = createSession({
-    currentStageSource: CURRENT_STAGE_SOURCES.SPECIAL_STAGES,
-    specialStages: [
+    currentStageSource: CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE,
+    interPoolQueue: [
       createStage({
         key: STAGE_KEYS.STAGE_01,
         status: STAGE_STATUSES.ENABLED,
@@ -1227,11 +1302,11 @@ test('specialStages tiene prioridad inicial sin formar parte de pools', () => {
     POOL_KEYS.POOL_CONCEALED,
     POOL_KEYS.POOL_EXPOSED
   ]);
-  assert.equal(session.currentStageSource, CURRENT_STAGE_SOURCES.SPECIAL_STAGES);
+  assert.equal(session.currentStageSource, CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE);
   assert.equal(getCurrentStage(session).stageKey, STAGE_KEYS.STAGE_01);
 });
 
-test('specialStages pendientes no interrumpen el pool hasta cambiar currentStageSource', () => {
+test('interPoolQueue pendientes no interrumpen el pool hasta cambiar currentStageSource', () => {
   const session = createSession({
     cycle: createCycle({
       pools: {
@@ -1245,10 +1320,10 @@ test('specialStages pendientes no interrumpen el pool hasta cambiar currentStage
       }
     })
   });
-  const queued = appendSpecialStage(
+  const queued = appendInterPoolStage(
     session,
     createStage({
-      key: STAGE_KEYS.STAGE_07,
+      key: STAGE_KEYS.ROLE_STATE_REVEALED,
       status: STAGE_STATUSES.ENABLED,
       recipes: [actionRecipe(inspectRoleAction, STAGE_RECIPE_KEYS.INSPECT_ROLE)]
     })
@@ -1257,53 +1332,53 @@ test('specialStages pendientes no interrumpen el pool hasta cambiar currentStage
   assert.equal(queued.currentStageSource, CURRENT_STAGE_SOURCES.POOL);
   assert.equal(getCurrentStage(queued).stageKey, STAGE_KEYS.STAGE_02);
 
-  const started = startSpecialStages(queued);
+  const started = startInterPoolQueue(queued);
 
-  assert.equal(started.currentStageSource, CURRENT_STAGE_SOURCES.SPECIAL_STAGES);
-  assert.equal(getCurrentStage(started).stageKey, STAGE_KEYS.STAGE_07);
+  assert.equal(started.currentStageSource, CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE);
+  assert.equal(getCurrentStage(started).stageKey, STAGE_KEYS.ROLE_STATE_REVEALED);
 });
 
-test('specialStages por window se comporta como colas FIFO virtuales', () => {
+test('interPoolQueue por window se comporta como colas FIFO virtuales', () => {
   const session = createSession();
-  const queuedBeforeA = appendSpecialStage(
+  const queuedBeforeA = appendInterPoolStage(
     session,
     createStage({
       key: 'stage_before_a',
       status: STAGE_STATUSES.ENABLED,
-      metadata: { eventWindow: SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_EXPOSED }
+      metadata: { eventWindow: INTER_POOL_QUEUE_EVENT_WINDOWS.BEFORE_EXPOSED }
     })
   );
-  const queuedAfter = appendSpecialStage(
+  const queuedAfter = appendInterPoolStage(
     queuedBeforeA,
     createStage({
       key: 'stage_after',
       status: STAGE_STATUSES.ENABLED,
-      metadata: { eventWindow: SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED }
+      metadata: { eventWindow: INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_EXPOSED }
     })
   );
-  const queuedBeforeC = appendSpecialStage(
+  const queuedBeforeC = appendInterPoolStage(
     queuedAfter,
     createStage({
       key: 'stage_before_c',
       status: STAGE_STATUSES.ENABLED,
-      metadata: { eventWindow: SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_EXPOSED }
+      metadata: { eventWindow: INTER_POOL_QUEUE_EVENT_WINDOWS.BEFORE_EXPOSED }
     })
   );
-  const startedBefore = startSpecialStagesForWindow(
+  const startedBefore = startInterPoolQueueForWindow(
     queuedBeforeC,
-    SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_EXPOSED
+    INTER_POOL_QUEUE_EVENT_WINDOWS.BEFORE_EXPOSED
   );
-  const completedBeforeA = completeSpecialStageForWindow(
+  const completedBeforeA = completeInterPoolStageForWindow(
     startedBefore.session,
-    SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_EXPOSED
+    INTER_POOL_QUEUE_EVENT_WINDOWS.BEFORE_EXPOSED
   );
-  const completedBeforeC = completeSpecialStageForWindow(
+  const completedBeforeC = completeInterPoolStageForWindow(
     completedBeforeA.session,
-    SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_EXPOSED
+    INTER_POOL_QUEUE_EVENT_WINDOWS.BEFORE_EXPOSED
   );
-  const startedAfter = startSpecialStagesForWindow(
+  const startedAfter = startInterPoolQueueForWindow(
     completedBeforeC.session,
-    SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED
+    INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_EXPOSED
   );
 
   assert.equal(startedBefore.ok, true);
@@ -1312,36 +1387,36 @@ test('specialStages por window se comporta como colas FIFO virtuales', () => {
   assert.equal(completedBeforeA.nextStage.key, 'stage_before_c');
   assert.equal(getCurrentStage(completedBeforeA.session).stageKey, 'stage_before_c');
   assert.deepEqual(
-    completedBeforeC.session.specialStages.map((stage) => stage.key),
+    completedBeforeC.session.interPoolQueue.map((stage) => stage.key),
     ['stage_after']
   );
   assert.equal(completedBeforeC.session.currentStageSource, CURRENT_STAGE_SOURCES.POOL);
   assert.equal(startedAfter.stage.key, 'stage_after');
 });
 
-test('specialStages por window rechaza stages sin eventWindow', () => {
-  const session = appendSpecialStage(
+test('interPoolQueue por window rechaza stages sin eventWindow', () => {
+  const session = appendInterPoolStage(
     createSession(),
     createStage({
       key: 'stage_without_window',
       status: STAGE_STATUSES.ENABLED
     })
   );
-  const started = startSpecialStagesForWindow(
+  const started = startInterPoolQueueForWindow(
     session,
-    SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED
+    INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_EXPOSED
   );
 
   assert.equal(started.ok, false);
-  assert.equal(started.errors[0].code, SPECIAL_STAGE_ERRORS.MISSING_EVENT_WINDOW);
-  assert.equal(specialStageHistory(started.session).at(-1).event, SPECIAL_STAGE_HISTORY_OPERATIONS.FAILED);
+  assert.equal(started.errors[0].code, INTER_POOL_QUEUE_ERRORS.MISSING_EVENT_WINDOW);
+  assert.equal(interPoolQueueHistory(started.session).at(-1).event, INTER_POOL_QUEUE_HISTORY_OPERATIONS.FAILED);
   assert.equal(
-    specialStageHistory(started.session).at(-1).metadata.error.code,
-    SPECIAL_STAGE_ERRORS.MISSING_EVENT_WINDOW
+    interPoolQueueHistory(started.session).at(-1).metadata.error.code,
+    INTER_POOL_QUEUE_ERRORS.MISSING_EVENT_WINDOW
   );
 });
 
-test('selection_counts_double permite al director encolar la specialStage inicial una sola vez', () => {
+test('selection_counts_double permite al director encolar la interPoolStage inicial una sola vez', () => {
   const disabledSession = createBaseSession();
   const rejected = requestSelectDoubleSelectorStage(disabledSession);
   const enabledSession = createBaseSession({
@@ -1355,9 +1430,9 @@ test('selection_counts_double permite al director encolar la specialStage inicia
   assert.equal(rejected.ok, false);
   assert.equal(rejected.errors[0].code, DOUBLE_SELECTOR_ERRORS.RULE_NOT_ENABLED);
   assert.equal(requested.ok, true);
-  assert.equal(requested.session.specialStages.length, 1);
+  assert.equal(requested.session.interPoolQueue.length, 1);
   assert.equal(
-    requested.session.specialStages[0].metadata.requestKey,
+    requested.session.interPoolQueue[0].metadata.requestKey,
     DOUBLE_SELECTOR_STAGE_KEYS.SELECT_DOUBLE_SELECTOR
   );
   assert.equal(repeated.ok, false);
@@ -1372,7 +1447,7 @@ test('select_double_selector setea doubleSelector=true en el chosen', () => {
       }
     })
   );
-  const started = startSpecialStages(requested.session);
+  const started = startInterPoolQueue(requested.session);
   const resolved = resolveCurrentStage(started, {
     selections: createSelections({
       'alignment_b_attacker-0': 'alignment_a_target-0',
@@ -1630,7 +1705,6 @@ test('stageCatalog expone los stages mecanicos ya definidos', () => {
     getCatalogStage(STAGE_CATALOG_IDS.ROLE_LINKS_TARGETS, { key: STAGE_KEYS.STAGE_02 }),
     getCatalogStage(STAGE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY, { key: STAGE_KEYS.STAGE_02 }),
     getCatalogStage(STAGE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY, { key: STAGE_KEYS.STAGE_03 }),
-    getCatalogStage(STAGE_CATALOG_IDS.ROLE_REACTIVE_RESPONSE, { key: STAGE_KEYS.STAGE_07 }),
     getCatalogStage(STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY, { key: STAGE_KEYS.STAGE_04 }),
     getCatalogStage(STAGE_CATALOG_IDS.DELIBERATION, { key: STAGE_KEYS.DELIBERATION }),
     getCatalogStage(STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY, { key: STAGE_KEYS.STAGE_05 })
@@ -1644,12 +1718,11 @@ test('stageCatalog expone los stages mecanicos ya definidos', () => {
       [STAGE_RECIPE_KEYS.BLOCK_OUT_OF_PLAY],
       [STAGE_RECIPE_KEYS.RESTORE_RECENT_OUT_OF_PLAY, STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY],
       [STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY],
-      [STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY],
       [],
       [STAGE_RECIPE_KEYS.SET_OUT_OF_PLAY]
     ]
   );
-  assert.equal(stages.every((stage) => stage.actorIds === undefined), true);
+  assert.equal(stages.every((stage) => Array.isArray(stage.actorIds)), true);
 });
 
 test('stageCatalog deja exposed_set_out_of_play sin restricciones linked implicitas', () => {
@@ -1685,7 +1758,7 @@ test('stageCatalog define concealed_set_out_of_play como seleccion unanime del g
   assert.equal(stage.selectionRules.tie, SELECTION_TIE_RULES.NULL_ON_TIE);
 });
 
-test('stageCatalog define role_state_revealed como specialStage informativa', () => {
+test('stageCatalog define role_state_revealed como stage informativa de interPoolQueue', () => {
   const stage = getCatalogStage(STAGE_CATALOG_IDS.ROLE_STATE_REVEALED);
 
   assert.equal(stage.key, STAGE_KEYS.ROLE_STATE_REVEALED);
@@ -1820,7 +1893,7 @@ test('buildPools ensambla stages desde roles y grupos', () => {
   });
 
   assert.equal(built.ok, true);
-  assert.equal(built.specialStages.length, 0);
+  assert.equal(built.interPoolQueue.length, 0);
   assert.equal(built.pools.poolConcealed.stages.length, 5);
   assert.deepEqual(
     built.pools.poolConcealed.stages.map((stage) => stage.order),
@@ -1834,7 +1907,7 @@ test('buildPools ensambla stages desde roles y grupos', () => {
   ]);
 });
 
-test('role reactive crea un stage especial al recibir inPlay=false desde concealed_set_out_of_play', () => {
+test('role reactive crea un stage de interPoolQueue al recibir inPlay=false desde concealed_set_out_of_play', () => {
   const roleDefinitions = getCoreRoleCatalog();
   const roleDefinitionMap = Object.fromEntries(roleDefinitions.map((role) => [role.key, role]));
   const session = withCycle(
@@ -1890,33 +1963,33 @@ test('role reactive crea un stage especial al recibir inPlay=false desde conceal
   assert.equal(roleById(firstResolution.session, `${ROLE_CATALOG_IDS.ROLE_REACTIVE}-0`).inPlay, false);
   assert.equal(firstResolution.result.events.length, 1);
   assert.equal(firstResolution.result.eventResponses.length, 2);
-  assert.equal(firstResolution.session.specialStages.length, 2);
+  assert.equal(firstResolution.session.interPoolQueue.length, 2);
   assert.equal(
-    firstResolution.session.specialStages[0].metadata.catalogId,
+    firstResolution.session.interPoolQueue[0].metadata.catalogId,
     STAGE_CATALOG_IDS.ROLE_STATE_REVEALED
   );
   assert.equal(
-    firstResolution.session.specialStages[0].metadata.eventWindow,
-    SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_EXPOSED
+    firstResolution.session.interPoolQueue[0].metadata.eventWindow,
+    INTER_POOL_QUEUE_EVENT_WINDOWS.BEFORE_EXPOSED
   );
-  assert.equal(firstResolution.session.specialStages[0].metadata.reveal.roleId, `${ROLE_CATALOG_IDS.ROLE_REACTIVE}-0`);
-  assert.deepEqual(firstResolution.session.specialStages[1].actorIds, [
+  assert.equal(firstResolution.session.interPoolQueue[0].metadata.reveal.roleId, `${ROLE_CATALOG_IDS.ROLE_REACTIVE}-0`);
+  assert.deepEqual(firstResolution.session.interPoolQueue[1].actorIds, [
     `${ROLE_CATALOG_IDS.ROLE_REACTIVE}-0`
   ]);
   assert.equal(
-    firstResolution.session.specialStages[1].metadata.eventWindow,
-    SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_EXPOSED
+    firstResolution.session.interPoolQueue[1].metadata.eventWindow,
+    INTER_POOL_QUEUE_EVENT_WINDOWS.BEFORE_EXPOSED
   );
   assert.equal(completed.stageAdvance.reason, 'special-stages-before-next-pool');
-  assert.equal(completed.stageAdvance.next.source, CURRENT_STAGE_SOURCES.SPECIAL_STAGES);
+  assert.equal(completed.stageAdvance.next.source, CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE);
   assert.equal(reactiveRevealCompleted.stageAdvance.reason, 'next-special-stage');
   assert.equal(specialResolution.ok, true);
   assert.equal(roleById(specialResolution.session, `${ROLE_CATALOG_IDS.ROLE_INSPECTS}-0`).inPlay, false);
-  assert.equal(specialResolution.session.specialStages.at(-1).metadata.catalogId, STAGE_CATALOG_IDS.ROLE_STATE_REVEALED);
-  assert.equal(specialResolution.session.specialStages.at(-1).metadata.reveal.roleId, `${ROLE_CATALOG_IDS.ROLE_INSPECTS}-0`);
+  assert.equal(specialResolution.session.interPoolQueue.at(-1).metadata.catalogId, STAGE_CATALOG_IDS.ROLE_STATE_REVEALED);
+  assert.equal(specialResolution.session.interPoolQueue.at(-1).metadata.reveal.roleId, `${ROLE_CATALOG_IDS.ROLE_INSPECTS}-0`);
 });
 
-test('role reactive crea un stage especial al recibir inPlay=false desde exposed_set_out_of_play', () => {
+test('role reactive crea un stage de interPoolQueue al recibir inPlay=false desde exposed_set_out_of_play', () => {
   const roleDefinitions = getCoreRoleCatalog();
   const roleDefinitionMap = Object.fromEntries(roleDefinitions.map((role) => [role.key, role]));
   const session = withCycle(
@@ -1962,15 +2035,15 @@ test('role reactive crea un stage especial al recibir inPlay=false desde exposed
   assert.equal(roleById(resolved.session, `${ROLE_CATALOG_IDS.ROLE_REACTIVE}-0`).inPlay, false);
   assert.equal(resolved.result.events.length, 1);
   assert.equal(resolved.result.eventResponses.length, 2);
-  assert.equal(resolved.session.specialStages.length, 2);
-  assert.equal(resolved.session.specialStages[0].metadata.catalogId, STAGE_CATALOG_IDS.ROLE_STATE_REVEALED);
-  assert.equal(resolved.session.specialStages[0].metadata.reveal.roleId, `${ROLE_CATALOG_IDS.ROLE_REACTIVE}-0`);
-  assert.deepEqual(resolved.session.specialStages[1].actorIds, [
+  assert.equal(resolved.session.interPoolQueue.length, 2);
+  assert.equal(resolved.session.interPoolQueue[0].metadata.catalogId, STAGE_CATALOG_IDS.ROLE_STATE_REVEALED);
+  assert.equal(resolved.session.interPoolQueue[0].metadata.reveal.roleId, `${ROLE_CATALOG_IDS.ROLE_REACTIVE}-0`);
+  assert.deepEqual(resolved.session.interPoolQueue[1].actorIds, [
     `${ROLE_CATALOG_IDS.ROLE_REACTIVE}-0`
   ]);
   assert.equal(
-    resolved.session.specialStages[1].metadata.eventWindow,
-    SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED
+    resolved.session.interPoolQueue[1].metadata.eventWindow,
+    INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_EXPOSED
   );
 });
 
@@ -2018,9 +2091,9 @@ test('role reactive no reacciona a inPlay=false desde otra stage catalogada', ()
   assert.equal(roleById(resolved.session, `${ROLE_CATALOG_IDS.ROLE_REACTIVE}-0`).inPlay, false);
   assert.equal(resolved.result.events.length, 1);
   assert.equal(resolved.result.eventResponses.length, 1);
-  assert.equal(resolved.session.specialStages.length, 1);
-  assert.equal(resolved.session.specialStages[0].metadata.catalogId, STAGE_CATALOG_IDS.ROLE_STATE_REVEALED);
-  assert.equal(resolved.session.specialStages[0].metadata.reveal.roleId, `${ROLE_CATALOG_IDS.ROLE_REACTIVE}-0`);
+  assert.equal(resolved.session.interPoolQueue.length, 1);
+  assert.equal(resolved.session.interPoolQueue[0].metadata.catalogId, STAGE_CATALOG_IDS.ROLE_STATE_REVEALED);
+  assert.equal(resolved.session.interPoolQueue[0].metadata.reveal.roleId, `${ROLE_CATALOG_IDS.ROLE_REACTIVE}-0`);
 });
 
 test('selection_counts_double encola sucesion cuando el holder queda out_of_play', () => {
@@ -2054,23 +2127,23 @@ test('selection_counts_double encola sucesion cuando el holder queda out_of_play
 
   assert.equal(resolved.ok, true);
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
-  assert.equal(resolved.session.specialStages.length, 2);
+  assert.equal(resolved.session.interPoolQueue.length, 2);
   assert.equal(
-    resolved.session.specialStages[0].metadata.catalogId,
+    resolved.session.interPoolQueue[0].metadata.catalogId,
     STAGE_CATALOG_IDS.ROLE_STATE_REVEALED
   );
-  assert.equal(resolved.session.specialStages[0].metadata.reveal.roleId, 'alignment_a_target-0');
+  assert.equal(resolved.session.interPoolQueue[0].metadata.reveal.roleId, 'alignment_a_target-0');
   assert.equal(
-    resolved.session.specialStages[1].metadata.requestKey,
+    resolved.session.interPoolQueue[1].metadata.requestKey,
     DOUBLE_SELECTOR_STAGE_KEYS.PICK_NEXT_DOUBLE_SELECTOR
   );
   assert.equal(
-    resolved.session.specialStages[1].metadata.eventWindow,
-    SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED
+    resolved.session.interPoolQueue[1].metadata.eventWindow,
+    INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_EXPOSED
   );
-  assert.deepEqual(resolved.session.specialStages[1].actorIds, ['alignment_a_target-0']);
+  assert.deepEqual(resolved.session.interPoolQueue[1].actorIds, ['alignment_a_target-0']);
   assert.equal(
-    resolved.session.specialStages[1].selectionRules.selectorEligibility.requireInPlay,
+    resolved.session.interPoolQueue[1].selectionRules.selectorEligibility.requireInPlay,
     false
   );
 });
@@ -2137,7 +2210,7 @@ test('after_exposed ordena reveal reactive linked y sucesion doubleSelector', ()
 
   assert.equal(resolved.ok, true);
   assert.deepEqual(
-    resolved.session.specialStages.map((stage) => stage.metadata.catalogId ?? stage.metadata.requestKey),
+    resolved.session.interPoolQueue.map((stage) => stage.metadata.catalogId ?? stage.metadata.requestKey),
     [
       STAGE_CATALOG_IDS.ROLE_STATE_REVEALED,
       STAGE_CATALOG_IDS.ROLE_REACTIVE_RESPONSE,
@@ -2146,20 +2219,20 @@ test('after_exposed ordena reveal reactive linked y sucesion doubleSelector', ()
     ]
   );
   assert.equal(
-    resolved.session.specialStages[0].metadata.eventWindow,
-    SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED
+    resolved.session.interPoolQueue[0].metadata.eventWindow,
+    INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_EXPOSED
   );
   assert.equal(
-    resolved.session.specialStages[1].metadata.eventWindow,
-    SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED
+    resolved.session.interPoolQueue[1].metadata.eventWindow,
+    INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_EXPOSED
   );
   assert.equal(
-    resolved.session.specialStages[2].metadata.eventWindow,
-    SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED
+    resolved.session.interPoolQueue[2].metadata.eventWindow,
+    INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_EXPOSED
   );
   assert.equal(
-    resolved.session.specialStages[3].metadata.eventWindow,
-    SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED
+    resolved.session.interPoolQueue[3].metadata.eventWindow,
+    INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_EXPOSED
   );
 });
 
@@ -2201,17 +2274,17 @@ test('selection_counts_double cancela sucesion pendiente si el holder vuelve inP
     actionResult: restored.result
   });
 
-  assert.equal(setOut.session.specialStages.length, 2);
+  assert.equal(setOut.session.interPoolQueue.length, 2);
   assert.equal(restored.ok, true);
   assert.equal(roleById(restored.session, 'alignment_a_target-0').inPlay, true);
-  assert.equal(eventState.session.specialStages.length, 0);
+  assert.equal(eventState.session.interPoolQueue.length, 0);
   assert.equal(
-    specialStageHistory(eventState.session).at(-1).event,
+    interPoolQueueHistory(eventState.session).at(-1).event,
     'canceled'
   );
 });
 
-test('specialStages resuelve stages pendientes antes de conclude_play si pueden alterar outcome', () => {
+test('interPoolQueue resuelve stages pendientes antes de conclude_play si pueden alterar outcome', () => {
   const roleDefinitions = getCoreRoleCatalog();
   const roleDefinitionMap = Object.fromEntries(roleDefinitions.map((role) => [role.key, role]));
   const session = withCycle(
@@ -2269,13 +2342,13 @@ test('specialStages resuelve stages pendientes antes de conclude_play si pueden 
   assert.equal(resolved.ok, true);
   assert.equal(resolved.session.status, SESSION_STATUSES.DRAFT);
   assert.equal(resolved.result.objectiveEvaluation, undefined);
-  assert.equal(resolved.session.specialStages.length, 2);
+  assert.equal(resolved.session.interPoolQueue.length, 2);
   assert.equal(
-    resolved.session.specialStages[0].metadata.catalogId,
+    resolved.session.interPoolQueue[0].metadata.catalogId,
     STAGE_CATALOG_IDS.ROLE_STATE_REVEALED
   );
   assert.equal(
-    resolved.session.specialStages[1].metadata.source.metadata.reactionKey,
+    resolved.session.interPoolQueue[1].metadata.source.metadata.reactionKey,
     'self_out_of_play_creates_special_stage'
   );
   assert.equal(completed.objectiveEvaluation.status, OBJECTIVE_EVALUATION_STATUSES.FULFILLED);
@@ -2283,10 +2356,10 @@ test('specialStages resuelve stages pendientes antes de conclude_play si pueden 
   assert.equal(completed.objectiveEvaluation.playOutcome, null);
   assert.equal(completed.objectiveEvaluation.playOutcomeCandidate.conclusive, true);
   assert.deepEqual(completed.objectiveEvaluation.pendingObjectiveInfluenceStageKeys, [
-    STAGE_KEYS.STAGE_07
+    STAGE_KEYS.ROLE_REACTIVE_RESPONSE
   ]);
-  assert.equal(completed.session.specialStages.length, 2);
-  assert.equal(completed.stageAdvance.next.source, CURRENT_STAGE_SOURCES.SPECIAL_STAGES);
+  assert.equal(completed.session.interPoolQueue.length, 2);
+  assert.equal(completed.stageAdvance.next.source, CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE);
   assert.equal(
     completed.stageAdvance.next.stage.metadata.catalogId,
     STAGE_CATALOG_IDS.ROLE_STATE_REVEALED
@@ -2350,7 +2423,7 @@ test('conclude_play se aplica como lifecycleOperation cuando el outcome es estab
   assert.equal(completed.objectiveEvaluation.reason, 'single_conclusive_objective');
   assert.equal(completed.session.playOutcome.conclusive, true);
   assert.equal(completed.stageAdvance.next, null);
-  assert.equal(completed.session.specialStages.length, 0);
+  assert.equal(completed.session.interPoolQueue.length, 0);
   assert.deepEqual(
     completed.lifecycleResults.map((entry) => entry.key),
     [
@@ -2365,8 +2438,8 @@ test('conclude_play se aplica como lifecycleOperation cuando el outcome es estab
 test('cycle inicia un nuevo ciclo antes de entrar en poolConcealed', () => {
   const session = createSession({
     ...createBaseSession(),
-    currentStageSource: CURRENT_STAGE_SOURCES.SPECIAL_STAGES,
-    specialStages: [
+    currentStageSource: CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE,
+    interPoolQueue: [
       createStage({
         key: STAGE_KEYS.STAGE_01,
         status: STAGE_STATUSES.ENABLED,
@@ -2436,7 +2509,7 @@ test('buildSession crea roles y cycle desde configuracion', () => {
   assert.equal(built.session.roles.length, 2);
   assert.equal(built.session.roles[0].roleKey, ROLE_CATALOG_IDS.ROLE_INSPECTS);
   assert.equal(built.session.groups.length, 0);
-  assert.equal(built.session.specialStages.length, 0);
+  assert.equal(built.session.interPoolQueue.length, 0);
   assert.equal(built.session.cycle.pools.poolConcealed.stages.length, 2);
 });
 
@@ -2620,7 +2693,7 @@ test('resolveCurrentStage ejecuta stage_05 con seleccion y receta set_out_of_pla
     STAGE_STATUSES.DONE
   );
   assert.equal(completed.stageAdvance.reason, 'special-stages-before-next-pool');
-  assert.equal(completed.stageAdvance.next.source, CURRENT_STAGE_SOURCES.SPECIAL_STAGES);
+  assert.equal(completed.stageAdvance.next.source, CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE);
   assert.equal(
     completed.stageAdvance.next.stage.metadata.catalogId,
     STAGE_CATALOG_IDS.ROLE_STATE_REVEALED
@@ -2965,7 +3038,7 @@ test('un stage con recetas opcionales permanece abierto hasta cierre explicito',
   assert.equal(setOut.stageAdvance, null);
   assert.equal(completed.ok, true);
   assert.equal(completed.stageAdvance.reason, 'special-stages-before-next-pool');
-  assert.equal(completed.stageAdvance.next.source, CURRENT_STAGE_SOURCES.SPECIAL_STAGES);
+  assert.equal(completed.stageAdvance.next.source, CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE);
   assert.equal(
     completed.stageAdvance.next.stage.metadata.catalogId,
     STAGE_CATALOG_IDS.ROLE_STATE_REVEALED
@@ -3002,20 +3075,20 @@ test('completeCurrentStage al terminar poolExposed arranca solo after_exposed', 
       }
     })
   );
-  const queuedBeforeConcealed = appendSpecialStage(
+  const queuedBeforeConcealed = appendInterPoolStage(
     session,
     createStage({
       key: 'stage_before_concealed_test',
       status: STAGE_STATUSES.ENABLED,
-      metadata: { eventWindow: SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_CONCEALED }
+      metadata: { eventWindow: INTER_POOL_QUEUE_EVENT_WINDOWS.BEFORE_CONCEALED }
     })
   );
-  const queuedAfterExposed = appendSpecialStage(
+  const queuedAfterExposed = appendInterPoolStage(
     queuedBeforeConcealed,
     createStage({
       key: 'stage_after_exposed_test',
       status: STAGE_STATUSES.ENABLED,
-      metadata: { eventWindow: SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED }
+      metadata: { eventWindow: INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_EXPOSED }
     })
   );
   const completed = completeCurrentStage(queuedAfterExposed, {
@@ -3024,11 +3097,11 @@ test('completeCurrentStage al terminar poolExposed arranca solo after_exposed', 
 
   assert.equal(completed.ok, true);
   assert.equal(completed.stageAdvance.reason, 'special-stages-before-next-pool');
-  assert.equal(completed.stageAdvance.next.source, CURRENT_STAGE_SOURCES.SPECIAL_STAGES);
+  assert.equal(completed.stageAdvance.next.source, CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE);
   assert.equal(completed.stageAdvance.next.stage.key, 'stage_after_exposed_test');
-  assert.equal(completed.session.currentSpecialStageWindow, SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED);
+  assert.equal(completed.session.currentInterPoolWindow, INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_EXPOSED);
   assert.deepEqual(
-    completed.session.specialStages.map((stage) => stage.key),
+    completed.session.interPoolQueue.map((stage) => stage.key),
     ['stage_before_concealed_test', 'stage_after_exposed_test']
   );
 
@@ -3040,11 +3113,11 @@ test('completeCurrentStage al terminar poolExposed arranca solo after_exposed', 
   assert.equal(afterExposedCompleted.stageAdvance.reason, 'special-stages-before-next-pool');
   assert.equal(afterExposedCompleted.stageAdvance.next.stage.key, 'stage_before_concealed_test');
   assert.equal(
-    afterExposedCompleted.session.currentSpecialStageWindow,
-    SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_CONCEALED
+    afterExposedCompleted.session.currentInterPoolWindow,
+    INTER_POOL_QUEUE_EVENT_WINDOWS.BEFORE_CONCEALED
   );
   assert.deepEqual(
-    afterExposedCompleted.session.specialStages.map((stage) => stage.key),
+    afterExposedCompleted.session.interPoolQueue.map((stage) => stage.key),
     ['stage_before_concealed_test']
   );
   assert.deepEqual(
@@ -3055,8 +3128,8 @@ test('completeCurrentStage al terminar poolExposed arranca solo after_exposed', 
       result: { step: 'privateHide' },
       errors: [],
       metadata: {
-        from: SPECIAL_STAGE_EVENT_WINDOWS.AFTER_EXPOSED,
-        to: SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_CONCEALED
+        from: INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_EXPOSED,
+        to: INTER_POOL_QUEUE_EVENT_WINDOWS.BEFORE_CONCEALED
       }
     }
   );
@@ -3087,20 +3160,20 @@ test('completeCurrentStage al terminar poolConcealed encadena after_concealed pu
       }
     })
   );
-  const queuedBeforeExposed = appendSpecialStage(
+  const queuedBeforeExposed = appendInterPoolStage(
     session,
     createStage({
       key: 'stage_before_exposed_test',
       status: STAGE_STATUSES.ENABLED,
-      metadata: { eventWindow: SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_EXPOSED }
+      metadata: { eventWindow: INTER_POOL_QUEUE_EVENT_WINDOWS.BEFORE_EXPOSED }
     })
   );
-  const queuedAfterConcealed = appendSpecialStage(
+  const queuedAfterConcealed = appendInterPoolStage(
     queuedBeforeExposed,
     createStage({
       key: 'stage_after_concealed_test',
       status: STAGE_STATUSES.ENABLED,
-      metadata: { eventWindow: SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED }
+      metadata: { eventWindow: INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_CONCEALED }
     })
   );
   const completed = completeCurrentStage(queuedAfterConcealed, {
@@ -3110,9 +3183,9 @@ test('completeCurrentStage al terminar poolConcealed encadena after_concealed pu
   assert.equal(completed.ok, true);
   assert.equal(completed.stageAdvance.reason, 'special-stages-before-next-pool');
   assert.equal(completed.stageAdvance.next.stage.key, 'stage_after_concealed_test');
-  assert.equal(completed.session.currentSpecialStageWindow, SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED);
+  assert.equal(completed.session.currentInterPoolWindow, INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_CONCEALED);
   assert.deepEqual(
-    completed.session.specialStages.map((stage) => stage.key),
+    completed.session.interPoolQueue.map((stage) => stage.key),
     ['stage_before_exposed_test', 'stage_after_concealed_test']
   );
 
@@ -3124,11 +3197,11 @@ test('completeCurrentStage al terminar poolConcealed encadena after_concealed pu
   assert.equal(afterConcealedCompleted.stageAdvance.reason, 'special-stages-before-next-pool');
   assert.equal(afterConcealedCompleted.stageAdvance.next.stage.key, 'stage_before_exposed_test');
   assert.equal(
-    afterConcealedCompleted.session.currentSpecialStageWindow,
-    SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_EXPOSED
+    afterConcealedCompleted.session.currentInterPoolWindow,
+    INTER_POOL_QUEUE_EVENT_WINDOWS.BEFORE_EXPOSED
   );
   assert.deepEqual(
-    afterConcealedCompleted.session.specialStages.map((stage) => stage.key),
+    afterConcealedCompleted.session.interPoolQueue.map((stage) => stage.key),
     ['stage_before_exposed_test']
   );
   assert.deepEqual(
@@ -3139,8 +3212,8 @@ test('completeCurrentStage al terminar poolConcealed encadena after_concealed pu
       result: { step: 'publicReveal' },
       errors: [],
       metadata: {
-        from: SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED,
-        to: SPECIAL_STAGE_EVENT_WINDOWS.BEFORE_EXPOSED
+        from: INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_CONCEALED,
+        to: INTER_POOL_QUEUE_EVENT_WINDOWS.BEFORE_EXPOSED
       }
     }
   );
@@ -3880,7 +3953,7 @@ test('link_targets crea un grupo linked en la sesion', () => {
       stageCatalogId: STAGE_CATALOG_IDS.ROLE_LINKS_TARGETS
     }
   });
-  const recognition = eventProcessing.session.specialStages.find(
+  const recognition = eventProcessing.session.interPoolQueue.find(
     (stage) => stage.metadata?.catalogId === STAGE_CATALOG_IDS.LINKED_TARGET_RECOGNITION
   );
 
@@ -3904,7 +3977,7 @@ test('link_targets crea un grupo linked en la sesion', () => {
   );
   assert.equal(linked.result.finalEffects[0].type, EFFECT_TYPES.SET_GROUP);
   assert.equal(recognition.key, 'stage_linked_target_recognition');
-  assert.equal(recognition.metadata.eventWindow, SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED);
+  assert.equal(recognition.metadata.eventWindow, INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_CONCEALED);
   assert.equal(recognition.metadata.visibility, 'linked_members');
   assert.equal(recognition.metadata.directorVisible, true);
   assert.deepEqual(recognition.actorIds, [
@@ -3938,7 +4011,7 @@ test('link_targets no registra reconocimiento si no crea group linked', () => {
   });
 
   assert.equal(failedLink.ok, false);
-  assert.equal(failedLink.session.specialStages.length, 0);
+  assert.equal(failedLink.session.interPoolQueue.length, 0);
 });
 
 test('link_targets consume uso de session aunque la stage solo exista en el primer ciclo', () => {
@@ -3958,7 +4031,7 @@ test('link_targets consume uso de session aunque la stage solo exista en el prim
   assert.equal(secondLink.errors[0].window, CONSTRAINT_WINDOWS.SESSION);
 });
 
-test('linked encola specialStage para propagar inPlay=false hacia roles enlazados', () => {
+test('linked encola interPoolStage para propagar inPlay=false hacia roles enlazados', () => {
   const session = createBaseSession();
   const linked = resolveAction(session, getActionFromRecipe(linkTargetsAction), {
     actorIds: ['role_inspector-0'],
@@ -3978,12 +4051,12 @@ test('linked encola specialStage para propagar inPlay=false hacia roles enlazado
       poolKey: POOL_KEYS.POOL_CONCEALED
     }
   });
-  const linkedStage = eventProcessing.session.specialStages.find(
+  const linkedStage = eventProcessing.session.interPoolQueue.find(
     (stage) => stage.metadata.catalogId === STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT
   );
-  const specialStarted = startSpecialStagesForWindow(
+  const specialStarted = startInterPoolQueueForWindow(
     eventProcessing.session,
-    SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED
+    INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_CONCEALED
   );
   const propagated = completeCurrentStage(specialStarted.session, {
     requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
@@ -3994,19 +4067,19 @@ test('linked encola specialStage para propagar inPlay=false hacia roles enlazado
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
   assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, true);
   assert.equal(resolved.result.finalEffects.length, 1);
-  assert.equal(eventProcessing.session.specialStages.length, 2);
+  assert.equal(eventProcessing.session.interPoolQueue.length, 2);
   assert.equal(
     linkedStage.metadata.catalogId,
     STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT
   );
   assert.equal(
     linkedStage.metadata.eventWindow,
-    SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED
+    INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_CONCEALED
   );
   assert.equal(propagated.ok, true);
   assert.equal(propagated.stageAdvance.reason, 'special-stages-before-next-pool');
   assert.equal(
-    propagated.session.specialStages.some(
+    propagated.session.interPoolQueue.some(
       (stage) =>
         stage.metadata.catalogId === STAGE_CATALOG_IDS.ROLE_STATE_REVEALED &&
         stage.metadata.reveal.roleId === 'alignment_a_plain-0'
@@ -4028,7 +4101,7 @@ test('linked encola specialStage para propagar inPlay=false hacia roles enlazado
   });
 });
 
-test('linked no propaga si el role causal fue restaurado antes de la specialStage', () => {
+test('linked no propaga si el role causal fue restaurado antes de la interPoolStage', () => {
   const session = createBaseSession();
   const linked = resolveAction(session, getActionFromRecipe(linkTargetsAction), {
     actorIds: ['role_inspector-0'],
@@ -4050,9 +4123,9 @@ test('linked no propaga si el role causal fue restaurado antes de la specialStag
     actorIds: ['alignment_a_blocker-0'],
     targetIds: ['alignment_a_target-0']
   });
-  const specialStarted = startSpecialStagesForWindow(
+  const specialStarted = startInterPoolQueueForWindow(
     restored.session,
-    SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED
+    INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_CONCEALED
   );
   const propagated = completeCurrentStage(
     specialStarted.session,
@@ -4062,7 +4135,7 @@ test('linked no propaga si el role causal fue restaurado antes de la specialStag
   );
   const propagatedHistory = lastFinishedRecipeHistory(propagated.session);
 
-  assert.equal(setOutEvents.session.specialStages.length, 2);
+  assert.equal(setOutEvents.session.interPoolQueue.length, 2);
   assert.equal(restored.ok, true);
   assert.equal(roleById(restored.session, 'alignment_a_target-0').inPlay, true);
   assert.equal(roleById(propagated.session, 'alignment_a_plain-0').inPlay, true);
@@ -4121,12 +4194,12 @@ test('linked_propagated_effect transporta payload dinamico de set_property', () 
       poolKey: POOL_KEYS.POOL_CONCEALED
     }
   });
-  const specialStage = setDoubleSelectorEvents.session.specialStages.find(
+  const interPoolStage = setDoubleSelectorEvents.session.interPoolQueue.find(
     (stage) => stage.metadata.catalogId === STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT
   );
-  const specialStarted = startSpecialStagesForWindow(
+  const specialStarted = startInterPoolQueueForWindow(
     setDoubleSelectorEvents.session,
-    SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED
+    INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_CONCEALED
   );
   const propagated = completeCurrentStage(specialStarted.session, {
     requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
@@ -4136,8 +4209,8 @@ test('linked_propagated_effect transporta payload dinamico de set_property', () 
   assert.equal(setDoubleSelector.ok, true);
   assert.equal(roleById(setDoubleSelector.session, 'alignment_a_target-0').doubleSelector, true);
   assert.notEqual(roleById(setDoubleSelector.session, 'alignment_a_plain-0').doubleSelector, true);
-  assert.equal(specialStage.metadata.catalogId, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
-  assert.equal(specialStage.metadata.propagatedEffect.property, 'doubleSelector');
+  assert.equal(interPoolStage.metadata.catalogId, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
+  assert.equal(interPoolStage.metadata.propagatedEffect.property, 'doubleSelector');
   assert.equal(propagated.ok, true);
   assert.equal(roleById(propagated.session, 'alignment_a_plain-0').doubleSelector, true);
   assert.equal(propagatedHistory.payload.recipeKey, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
@@ -4248,13 +4321,13 @@ test('groupRule usa causedBy del group al comprobar bloqueos derivados', () => {
       poolKey: POOL_KEYS.POOL_CONCEALED
     }
   });
-  const propagatedDespiteOriginalActorBlockStarted = startSpecialStagesForWindow(
+  const propagatedDespiteOriginalActorBlockStarted = startInterPoolQueueForWindow(
     propagatedDespiteOriginalActorBlockEvents.session,
-    SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED
+    INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_CONCEALED
   );
-  const blockedPropagationStarted = startSpecialStagesForWindow(
+  const blockedPropagationStarted = startInterPoolQueueForWindow(
     blockedPropagationEvents.session,
-    SPECIAL_STAGE_EVENT_WINDOWS.AFTER_CONCEALED
+    INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_CONCEALED
   );
   const propagatedDespiteOriginalActorBlockSpecial = completeCurrentStage(
     propagatedDespiteOriginalActorBlockStarted.session,
@@ -5929,7 +6002,7 @@ test('stage con seleccion y set_out_of_play encola propagacion linked cuando el 
       })
     })
   );
-  const revealCompleted = completeCurrentStage(startSpecialStages(resolved.session), {
+  const revealCompleted = completeCurrentStage(startInterPoolQueue(resolved.session), {
     requestedBy: STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
   });
   const propagated = completeCurrentStage(revealCompleted.session, {
@@ -5941,16 +6014,16 @@ test('stage con seleccion y set_out_of_play encola propagacion linked cuando el 
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
   assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, true);
   assert.equal(resolved.result.finalEffects.length, 1);
-  assert.equal(resolved.session.specialStages.length, 2);
+  assert.equal(resolved.session.interPoolQueue.length, 2);
   assert.equal(
-    resolved.session.specialStages[0].metadata.catalogId,
+    resolved.session.interPoolQueue[0].metadata.catalogId,
     STAGE_CATALOG_IDS.ROLE_STATE_REVEALED
   );
   assert.equal(
-    resolved.session.specialStages[1].metadata.catalogId,
+    resolved.session.interPoolQueue[1].metadata.catalogId,
     STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT
   );
-  assert.equal(resolved.session.specialStages[0].metadata.reveal.roleId, 'alignment_a_target-0');
+  assert.equal(resolved.session.interPoolQueue[0].metadata.reveal.roleId, 'alignment_a_target-0');
   assert.equal(revealCompleted.ok, true);
   assert.equal(
     revealCompleted.stageAdvance.next.stage.metadata.catalogId,
@@ -6894,20 +6967,20 @@ test('role_in_out_of_play restaura el target causal y cancela la propagacion lin
 
   assert.equal(linkedSetupClosed.ok, true);
   assert.equal(concealedSetOut.ok, true);
-  assert.equal(concealedSetOut.session.specialStages.length, 2);
+  assert.equal(concealedSetOut.session.interPoolQueue.length, 2);
   assert.equal(
-    concealedSetOut.session.specialStages[0].metadata.catalogId,
+    concealedSetOut.session.interPoolQueue[0].metadata.catalogId,
     STAGE_CATALOG_IDS.ROLE_STATE_REVEALED
   );
   assert.equal(
-    concealedSetOut.session.specialStages[1].metadata.catalogId,
+    concealedSetOut.session.interPoolQueue[1].metadata.catalogId,
     STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT
   );
   assert.equal(roleById(concealedSetOut.session, 'role_in_out_of_play-0').inPlay, false);
   assert.equal(inOutStageReady.stageAdvance.next.stage.metadata.catalogId, STAGE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY);
   assert.equal(restored.ok, true);
   assert.equal(roleById(restored.session, 'role_in_out_of_play-0').inPlay, true);
-  assert.equal(restored.session.specialStages.length, 1);
+  assert.equal(restored.session.interPoolQueue.length, 1);
   assert.equal(completedInOutStage.stageAdvance.next.stage.metadata.catalogId, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);
   assert.equal(roleById(propagated.session, 'role_plain-0').inPlay, true);
   assert.equal(propagatedHistory.payload.recipeKey, STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT);

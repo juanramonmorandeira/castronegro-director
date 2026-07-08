@@ -11,7 +11,7 @@ vieja. Los nombres de la columna izquierda no deben reutilizarse en el dominio.
 | enlace de targets | stage con recipe `link_targets` |
 | protección temporal | stage con recipe `block_out_of_play` |
 | decisión grupal para sacar de juego | stage con `selectionRules` y recipe `set_out_of_play` |
-| reacción al cambio `inPlay=false` | stage dinámico en `specialStages` |
+| reacción al cambio `inPlay=false` | stage dinámico en `interPoolQueue` |
 | comprobación de final | lifecycle operation `check_objectives` |
 
 ## Familias pendientes de estudiar

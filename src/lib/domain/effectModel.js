@@ -26,7 +26,7 @@ export const EFFECT_TYPES = Object.freeze({
 // Devuelve el ciclo actual de la sesion.
 //
 // cycle es el propietario del contador. La sesion inicial vive en ciclo 0
-// mientras resuelve posibles specialStages previos al primer ciclo normal.
+// mientras resuelve posibles interPoolQueue previos al primer ciclo normal.
 export function getCurrentCycleId(session) {
   const rawCycleId = session?.cycle?.id ?? 0;
   const numericCycleId = Number(rawCycleId);
@@ -190,7 +190,7 @@ export function applyConcludePlay({ session, playOutcome = null, visibility = 'a
         playOutcome
       },
       playOutcome,
-      specialStages: []
+      interPoolQueue: []
     },
     result: {
       type: EFFECT_TYPES.CONCLUDE_PLAY,
