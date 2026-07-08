@@ -17,7 +17,7 @@ import { RECIPE_KEYS } from './recipeCatalog.js';
 import {
   SELECTION_TIE_BREAKER_TYPES,
   SELECTION_VALUE_RULE_TYPES
-} from './selectionModel.js';
+} from './actionModel.js';
 import { POOL_KEYS } from './sessionModel.js';
 import { MESSAGE_KEYS } from '../messages/messageCatalog.js';
 import {

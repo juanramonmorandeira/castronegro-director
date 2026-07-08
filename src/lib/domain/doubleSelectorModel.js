@@ -14,7 +14,7 @@ import {
   SELECTION_TIE_RULES,
   SELECTION_UNANIMOUS_RULES,
   createSelectionRules
-} from './selectionModel.js';
+} from './actionModel.js';
 import { createStage } from './stageDefinition.js';
 import { STAGE_STATUSES } from './sessionModel.js';
 import { STAGE_COMPLETION_REQUESTED_BY } from './stageTypes.js';

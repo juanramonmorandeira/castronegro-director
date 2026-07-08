@@ -13,7 +13,7 @@ Prioridad alta antes de seguir dividiendo modelos:
   - estudiar si hacen falta `candidateDefinition/catalog/model` y
     `selectorDefinition/catalog/model` antes de seguir ampliando selection;
   - decidir donde viven las reglas que modifican el resultado de una selection:
-    `selectionModel`, `effectModel`, `effectRules` u otra pieza.
+    `actionModel`, `effectModel`, `effectRules` u otra pieza.
 - Definir jerarquia mecanica estable:
   `Session -> Cycle -> Pool/interPoolQueue -> Stage -> Recipe -> Action -> Effect`.
   Confirmar si existe alguna entidad mecanica menor que `Effect`; si existe,

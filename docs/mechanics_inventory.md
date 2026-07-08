@@ -24,7 +24,7 @@ limpio. No es un documento de ambientacion y evita nombres narrativos.
 | `propagate_property_change` | implementada | Propaga cambios por regla declarativa; no depende del `group.type`. |
 | `linked_objective` | implementada | El group aporta objectiveRule y `objectiveModel` la recopila si aplica. |
 | `group_objective_rule` | implementada | `holder_reaches_in_play_parity`, `holder_reaches_stable_in_play_parity`, `only_holder_group_remains_in_play` y `all_holder_members_are_only_roles_in_play`. |
-| `selection_count` | implementada | `selectionModel.js` valida selecciones, suma unidades y resuelve chosen/empate. |
+| `selection_count` | implementada | `actionModel.js` valida selecciones, suma unidades y resuelve chosen/empate. |
 | `deliberation` | implementada | Stage publica sin recipes, previa a `exposed_set_out_of_play`. |
 | `exposed_set_out_of_play` | implementada | El stage vota para elegir `chosenId`; despues aplica la receta `set_out_of_play`. |
 | `assume_role` | implementada | `replace_role_identity` asigna un role de `assumableRoles` al asiento/player del actor. |

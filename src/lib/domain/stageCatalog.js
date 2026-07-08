@@ -20,7 +20,7 @@ import {
   SELECTION_TIE_RULES,
   SELECTION_UNANIMOUS_RULES,
   createSelectionRules
-} from './selectionModel.js';
+} from './actionModel.js';
 import {
   MECHANICAL_ENTITY_TYPES,
   RECIPE_ACTOR_TYPES,

@@ -85,7 +85,7 @@ Ejemplos:
 - `eventModel.js`: convierte efectos finales en eventos y crea respuestas
   pendientes.
 - `objectiveModel.js`: evalua objetivos y conclusion de la parte jugable.
-- `selectionModel.js`: seleccion mecanica; resuelve chosen/empate/nulo.
+- `actionModel.js`: seleccion mecanica; resuelve chosen/empate/nulo.
 
 ## Flujo principal
 
@@ -167,7 +167,7 @@ El modelo objetivo de decision es `select`:
 
 - `candidateRules` construyen o acotan `candidateIds`;
 - `selectionRules` gobiernan como `selectorIds` eligen entre esos candidates;
-- `selectionModel.js` cubre la decision mecanica reusable.
+- `actionModel.js` cubre la decision mecanica reusable.
 
 ## Estado vivo
 

@@ -103,7 +103,7 @@ skin/setup -> buildSession -> roles + groups + cycle.pools -> stage actual -> re
 | Efectos | `effectModel.js` | Escribir efectos finales sobre la sesion | Decidir si un efecto debe existir |
 | Eventos | `eventModel.js` | Convertir efectos finales en eventos y activar reacciones declaradas por roles | Ejecutar la receta del stage de interPoolQueue |
 | Objectives | `objectiveModel.js` | Evaluar objetivos y playOutcome | Cerrar administrativamente la session |
-| Seleccion | `selectionModel.js` | Contar elecciones y resolver chosen/empate | Aplicar el efecto de la seleccion |
+| Seleccion | `actionModel.js` | Contar elecciones y resolver chosen/empate | Aplicar el efecto de la seleccion |
 
 ## Construccion de sesion
 
@@ -610,7 +610,7 @@ Despues otra capa decide que accion se aplica al target chosen.
 
 ```mermaid
 flowchart TD
-  A[Receta de seleccion] --> B[selectionModel - recuento puro]
+  A[Receta de seleccion] --> B[actionModel - recuento puro]
   B --> C{Resultado}
   C -->|chosen| D[target chosen]
   C -->|tie/null| E[sin accion posterior]
@@ -679,7 +679,7 @@ Ejemplo conceptual:
 Lectura:
 
 ```text
-selectionModel solo dice que roleId ha sido chosen.
+actionModel solo dice que roleId ha sido chosen.
 stageModel convierte chosenId en targetIds.
 recipeModel/actionModel aplican la receta configurada sobre ese target.
 ```
@@ -705,7 +705,7 @@ cambiado.
 
 ## Selection Model
 
-`selectionModel.js` modela la parte de recuento:
+`actionModel.js` modela la parte de recuento:
 
 ```mermaid
 flowchart TD
@@ -789,7 +789,7 @@ La deuda tecnica anterior era mezclar recuento de seleccion y consecuencia en un
 receta compuesta. Eso ya queda separado:
 
 ```text
-selectionModel cuenta selecciones.
+actionModel cuenta selecciones.
 stageModel aplica la receta declarada si hay chosen.
 actionModel resuelve la accion pura configurada.
 ```
@@ -815,7 +815,7 @@ Contrato del stage con seleccion:
 
 ```text
 chosen:
-  - selectionModel devuelve chosenId.
+  - actionModel devuelve chosenId.
   - stageModel ejecuta la receta del stage usando chosenId como targetIds.
 
 null:
@@ -826,7 +826,7 @@ null:
 
 tie:
   - Si selectionRules.tie no define otra cosa, se trata como null.
-  - Si selectionRules.tie = runoff_on_tie, selectionModel devuelve nextRound con
+  - Si selectionRules.tie = runoff_on_tie, actionModel devuelve nextRound con
     candidateIds definido por selectionRules.runoff.
   - La receta no se ejecuta hasta que una ronda posterior produzca chosen.
 ```
@@ -852,7 +852,7 @@ nullResult:
     permite.
 
 repeatLimit:
-  - Numero maximo de rondas adicionales que puede pedir selectionModel.
+  - Numero maximo de rondas adicionales que puede pedir actionModel.
   - Por defecto es 1: una seleccion inicial puede pedir una segunda ronda, pero
     si esa segunda ronda vuelve a empatar o quedar nula, termina como null.
 

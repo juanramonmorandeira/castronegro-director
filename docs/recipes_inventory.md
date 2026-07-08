@@ -449,7 +449,7 @@ active por un `set_out_of_play` de otra stage catalogada.
 `select` ya no es una receta de catalogo. Es un mecanismo de stage:
 
 ```text
-stage.selectionRules -> selectionModel -> chosenId / empate / nulo
+stage.selectionRules -> actionModel -> chosenId / empate / nulo
 ```
 
 Si hay `chosenId`, `stageModel` ejecuta la receta normal declarada en

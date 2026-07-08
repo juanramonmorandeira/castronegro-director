@@ -50,7 +50,7 @@ Catalog
 Conceptos actuales:
 
 - `stage`.
-- `selectionModel`.
+- `actionModel`.
 - `group`.
 - `objectiveRules`.
 - `interPoolQueue` es una cola FIFO, no un pool.

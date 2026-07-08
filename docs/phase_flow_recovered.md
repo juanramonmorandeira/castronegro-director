@@ -20,7 +20,7 @@ no forman parte del dominio vigente.
 |---|---|
 | fase | definición antigua que puede convertirse en stage o lifecycle operation |
 | paso | `stage` |
-| voto | `selectionModel` con varios `selectorIds` |
+| voto | `actionModel` con varios `selectorIds` |
 | pool nocturno | `poolConcealed` |
 | pool diurno | `poolExposed` |
 | pool especial | cola FIFO `interPoolQueue` |

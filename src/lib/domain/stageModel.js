@@ -37,15 +37,17 @@ import {
   getHistoryCollection
 } from './historyModel.js';
 import { resolveRecipe } from './recipeModel.js';
-import { ACTION_IDS, VISIBILITY, resolveAction } from './actionModel.js';
+import {
+  ACTION_IDS,
+  SELECTION_OUTCOME_TYPES,
+  VISIBILITY,
+  buildStageSelectionInput,
+  resolveAction
+} from './actionModel.js';
 import { processActionResultEvents } from './eventModel.js';
 import { CURRENT_STAGE_SOURCES, normalizeId } from './sessionModel.js';
 import { RECIPE_ACTOR_TYPES } from './domainTypes.js';
 import { RECIPE_KEYS } from './recipeCatalog.js';
-import {
-  SELECTION_OUTCOME_TYPES,
-  buildStageSelectionInput
-} from './selectionModel.js';
 import {
   completeInterPoolStage,
   getCurrentInterPoolStage

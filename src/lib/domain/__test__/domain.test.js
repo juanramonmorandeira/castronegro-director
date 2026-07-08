@@ -237,7 +237,7 @@ function test(name, fn) {
 // - linked deriva inPlay=false hacia roles relacionados.
 // - no_repeat_target impide repetir bloqueo sobre el mismo target.
 // - objectiveModel detecta objetivos concluyentes genericos y linked.
-// - selectionModel cuenta selecciones y resuelve empates configurables.
+// - actionModel cuenta selecciones y resuelve empates configurables.
 // - stageModel conecta el stage actual con actionModel y avanza el cursor.
 //
 // No usan Svelte, Firebase, i18n ni navegador.

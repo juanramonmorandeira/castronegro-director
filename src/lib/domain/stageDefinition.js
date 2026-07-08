@@ -17,7 +17,7 @@ import {
   STAGE_COMPLETION_MODES,
   STAGE_COMPLETION_REQUESTED_BY
 } from './stageTypes.js';
-import { createSelectionRules } from './selectionModel.js';
+import { createSelectionRules } from './actionModel.js';
 
 export const AVAILABILITY_RULE_TYPES = Object.freeze({
   ACTOR_IN_PLAY: 'actor_in_play',
@@ -89,7 +89,7 @@ function prepareRecipe(recipe = {}) {
 // Normaliza las reglas de seleccion asociadas al stage.
 //
 // El seleccion no es una receta: es un mecanismo del stage para elegir target. Estas
-// reglas le dicen a selectionModel como contar decisiones antes de ejecutar la receta
+// reglas le dicen a actionModel como contar decisiones antes de ejecutar la receta
 // declarada en stage.recipes sobre el chosenId resultante.
 function prepareSelectionRules(selectionRules = null) {
   if (!selectionRules) return null;
