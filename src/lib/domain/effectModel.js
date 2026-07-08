@@ -1,98 +1,59 @@
 // effectModel.js
 // -----------------------------------------------------------------------------
-// Este archivo contiene utilidades del lado "Effect" del motor.
+// Este archivo resuelve y aplica effects genericos del motor.
 //
 // Diferencia importante:
-// - actionModel decide que una accion es valida y que efectos propone.
-// - effectModel aplica o prepara efectos ya definidos.
+// - El runtime superior decide que effects propone.
+// - effectModel valida, resuelve y aplica effects ya definidos.
 //
 // Aqui no deberian aparecer nombres de skins, componentes Svelte, Firebase,
 // traducciones ni logica visual.
 // -----------------------------------------------------------------------------
 
 import { createGroup } from './groupDefinition.js';
-import { normalizeId } from './sessionModel.js';
+import { getCurrentCycleId, normalizeId } from './sessionModel.js';
 import { MECHANICAL_ENTITY_TYPES } from './domainTypes.js';
 import { getGroupRuleEffects, getLinkedPropagatedEffects } from './groupModel.js';
-import { isPropertyChangeBlocked } from './roleModel.js';
+import {
+  addBlockedPropertyChange,
+  isPropertyChangeBlocked
+} from './roleModel.js';
+import {
+  EFFECT_TYPES,
+  validateEffect as validateEffectShape
+} from './effectDefinition.js';
 
-export const EFFECT_TYPES = Object.freeze({
-  REVEAL_PROPERTY: 'reveal_property',
-  SET_PROPERTY: 'set_property',
-  BLOCK_PROPERTY_CHANGE: 'block_property_change',
-  SET_GROUP: 'set_group',
-  REPLACE_ROLE_IDENTITY: 'replace_role_identity',
-  CONCLUDE_PLAY: 'conclude_play'
-});
+export { EFFECT_TYPES };
 
-// Resuelve los efectos propuestos por una action.
-//
-// Esta funcion pertenece al rol de Effect Resolver:
-// - acepta efectos propuestos como finales si no estan bloqueados;
-// - deduplica intentos y estados finales;
-// - calcula efectos derivados por groupRules;
-// - separa propagaciones linked que deben encolarse en interPoolQueue.
-//
-// No aplica cambios en la sesion. La escritura final vive en applyEffect(s).
-export function resolveEffect({ session, proposedEffects = [] } = {}) {
-  const finalEffects = [];
-  const blockedEffects = [];
-  const linkedPropagatedEffects = [];
-  const queuedEffects = [...(proposedEffects ?? [])];
-  const seenAttemptKeys = new Set();
-  const acceptedEffectKeys = new Set();
-
-  while (queuedEffects.length > 0) {
-    const effect = queuedEffects.shift();
-    const attemptKey = getEffectKey(effect);
-    if (seenAttemptKeys.has(attemptKey)) continue;
-    seenAttemptKeys.add(attemptKey);
-
-    const target = findEffectTarget(session, effect);
-    const responsibleActorId = effect.causedBy?.id ?? null;
-    if (
-      effect.type === EFFECT_TYPES.SET_PROPERTY &&
-      target &&
-      isPropertyChangeBlocked(target, {
-        property: effect.property,
-        value: effect.value,
-        actorIds: responsibleActorId ? [responsibleActorId] : []
-      })
-    ) {
-      blockedEffects.push({
-        ...effect,
-        reason: 'blocked_property_change'
-      });
-      continue;
-    }
-
-    const acceptedEffectKey = getEffectStateKey(effect);
-    if (acceptedEffectKeys.has(acceptedEffectKey)) continue;
-    acceptedEffectKeys.add(acceptedEffectKey);
-    finalEffects.push(effect);
-    linkedPropagatedEffects.push(...getLinkedPropagatedEffects({ session, effect }));
-
-    getGroupRuleEffects({ session, effect }).forEach((derivedEffect) => {
-      if (!seenAttemptKeys.has(getEffectKey(derivedEffect))) {
-        queuedEffects.push(derivedEffect);
-      }
-    });
-  }
-
+function startEffect({ session, effect, runtime = {} } = {}) {
   return {
-    proposedEffects: [...(proposedEffects ?? [])],
-    finalEffects,
-    blockedEffects,
-    linkedPropagatedEffects
+    session,
+    effect,
+    runtime,
+    errors: [],
+    finalEffect: null,
+    blockedEffect: null,
+    linkedPropagatedEffects: [],
+    derivedEffects: [],
+    skipped: false
   };
 }
 
-export function findEffectTarget(session, effect) {
+function validateEffect(effectState) {
+  const validation = validateEffectShape(effectState.effect);
+
+  return {
+    ...effectState,
+    errors: [...effectState.errors, ...validation.errors]
+  };
+}
+
+function findEffectTarget(session, effect) {
   if (effect?.targetType !== MECHANICAL_ENTITY_TYPES.ROLE) return null;
   return (session?.roles ?? []).find((role) => role.id === effect.targetId) ?? null;
 }
 
-export function getEffectKey(effect = {}) {
+function getEffectKey(effect = {}) {
   return [
     effect.type ?? '',
     effect.targetType ?? '',
@@ -106,7 +67,7 @@ export function getEffectKey(effect = {}) {
   ].join(':');
 }
 
-export function getEffectStateKey(effect = {}) {
+function getEffectStateKey(effect = {}) {
   return [
     effect.type ?? '',
     effect.targetType ?? '',
@@ -118,21 +79,115 @@ export function getEffectStateKey(effect = {}) {
   ].join(':');
 }
 
-// Devuelve el ciclo actual de la sesion.
+function resolveEffect(effectState) {
+  if (effectState.errors.length > 0) return effectState;
+
+  const { session, effect, runtime } = effectState;
+  const attemptKey = getEffectKey(effect);
+  if (runtime.seenAttemptKeys?.has(attemptKey)) {
+    return {
+      ...effectState,
+      skipped: true
+    };
+  }
+  runtime.seenAttemptKeys?.add(attemptKey);
+
+  const target = findEffectTarget(session, effect);
+  const responsibleActorId = effect.causedBy?.id ?? null;
+  if (
+    effect.type === EFFECT_TYPES.SET_PROPERTY &&
+    target &&
+    isPropertyChangeBlocked(target, {
+      property: effect.property,
+      value: effect.value,
+      actorIds: responsibleActorId ? [responsibleActorId] : []
+    })
+  ) {
+    return {
+      ...effectState,
+      blockedEffect: {
+        ...effect,
+        reason: 'blocked_property_change'
+      }
+    };
+  }
+
+  const acceptedEffectKey = getEffectStateKey(effect);
+  if (runtime.acceptedEffectKeys?.has(acceptedEffectKey)) {
+    return {
+      ...effectState,
+      skipped: true
+    };
+  }
+  runtime.acceptedEffectKeys?.add(acceptedEffectKey);
+
+  return {
+    ...effectState,
+    finalEffect: effect,
+    linkedPropagatedEffects: getLinkedPropagatedEffects({ session, effect }),
+    derivedEffects: getGroupRuleEffects({ session, effect })
+  };
+}
+
+function finishEffect(effectState) {
+  return effectState;
+}
+
+// Resuelve effects propuestos por el runtime superior.
 //
-// cycle es el propietario del contador. La sesion inicial vive en ciclo 0
-// mientras resuelve posibles interPoolQueue previos al primer ciclo normal.
-export function getCurrentCycleId(session) {
-  const rawCycleId = session?.cycle?.id ?? 0;
-  const numericCycleId = Number(rawCycleId);
-  return Number.isFinite(numericCycleId) && numericCycleId >= 0 ? numericCycleId : 0;
+// No aplica cambios en la sesion. La escritura final vive en applyEffect(s).
+export function resolveEffects({ session, proposedEffects = [] } = {}) {
+  const finalEffects = [];
+  const blockedEffects = [];
+  const linkedPropagatedEffects = [];
+  const errors = [];
+  const queuedEffects = [...(proposedEffects ?? [])];
+  const runtime = {
+    seenAttemptKeys: new Set(),
+    acceptedEffectKeys: new Set()
+  };
+
+  while (queuedEffects.length > 0) {
+    const effect = queuedEffects.shift();
+    const finishedEffect = finishEffect(
+      resolveEffect(
+        validateEffect(
+          startEffect({ session, effect, runtime })
+        )
+      )
+    );
+
+    errors.push(...finishedEffect.errors);
+    if (finishedEffect.blockedEffect) {
+      blockedEffects.push(finishedEffect.blockedEffect);
+      continue;
+    }
+    if (!finishedEffect.finalEffect) continue;
+
+    finalEffects.push(finishedEffect.finalEffect);
+    linkedPropagatedEffects.push(...finishedEffect.linkedPropagatedEffects);
+
+    finishedEffect.derivedEffects.forEach((derivedEffect) => {
+      if (!runtime.seenAttemptKeys.has(getEffectKey(derivedEffect))) {
+        queuedEffects.push(derivedEffect);
+      }
+    });
+  }
+
+  return {
+    proposedEffects: [...(proposedEffects ?? [])],
+    finalEffects,
+    blockedEffects,
+    linkedPropagatedEffects,
+    errors
+  };
 }
 
 // Aplica un efecto final de tipo set_property.
 //
 // Esta funcion pertenece al rol de Effect Applier: no decide si el efecto debe
 // ocurrir. Solo cambia el dato indicado porque otra parte ya lo decidio.
-export function applySetPropertyEffect({ session, effect }) {
+function applySetPropertyEffect({ session, effect }) {
   if (effect?.targetType !== MECHANICAL_ENTITY_TYPES.ROLE) return session;
 
   return {
@@ -148,17 +203,25 @@ export function applySetPropertyEffect({ session, effect }) {
   };
 }
 
+const EFFECT_APPLIERS = Object.freeze({
+  [EFFECT_TYPES.SET_PROPERTY]: applySetPropertyEffect,
+  [EFFECT_TYPES.BLOCK_PROPERTY_CHANGE]: applyBlockPropertyChangeEffect,
+  [EFFECT_TYPES.SET_GROUP]: applySetGroupEffect,
+  [EFFECT_TYPES.REPLACE_ROLE_IDENTITY]: applyReplaceRoleIdentityEffect,
+  [EFFECT_TYPES.CONCLUDE_PLAY]: applyConcludePlayEffect
+});
+
 export function applyEffect({ session, effect }) {
-  if (effect?.type === EFFECT_TYPES.SET_PROPERTY) {
-    return applySetPropertyEffect({ session, effect });
-  }
-  if (effect?.type === EFFECT_TYPES.SET_GROUP) {
-    return applySetGroupEffect({ session, effect });
-  }
-  if (effect?.type === EFFECT_TYPES.REPLACE_ROLE_IDENTITY) {
-    return applyReplaceRoleIdentityEffect({ session, effect });
-  }
-  return session;
+  const validatedEffect = validateEffect(startEffect({ session, effect }));
+  if (validatedEffect.errors.length > 0) return session;
+
+  const applyToSession = EFFECT_APPLIERS[effect.type];
+  if (!applyToSession) return session;
+
+  return finishEffect({
+    ...validatedEffect,
+    session: applyToSession({ session, effect })
+  }).session;
 }
 
 export function applyEffects({ session, effects = [] } = {}) {
@@ -168,12 +231,38 @@ export function applyEffects({ session, effects = [] } = {}) {
   );
 }
 
+function applyBlockPropertyChangeEffect({ session, effect }) {
+  if (effect?.targetType !== MECHANICAL_ENTITY_TYPES.ROLE) return session;
+
+  const targetIds = new Set([
+    ...(effect.targetIds ?? []),
+    ...(effect.targetId ? [effect.targetId] : [])
+  ]);
+  if (targetIds.size === 0) return session;
+
+  const blockedPropertyChange = effect.blockedPropertyChange ?? {};
+
+  return {
+    ...session,
+    roles: (session.roles ?? []).map((role) => {
+      if (!targetIds.has(role.id)) return role;
+      return addBlockedPropertyChange(role, {
+        property: blockedPropertyChange.property,
+        value: blockedPropertyChange.value,
+        blockedFor: effect.blockedFor ?? { actorIds: [] },
+        expiresAt: effect.expiresAt,
+        metadata: effect.metadata ?? {}
+      });
+    })
+  };
+}
+
 // Crea o actualiza un grupo de sesion.
 //
-// set_group es el efecto anonimo que usa una accion como link_targets.
+// set_group es el effect que escribe o actualiza un grupo mecanico.
 // No guarda "amor", "hermandad", "maldicion" ni ningun texto narrativo.
 // Solo registra que varios roles de sesion comparten un grupo mecanico.
-export function applySetGroupEffect({ session, effect }) {
+function applySetGroupEffect({ session, effect }) {
   if (effect?.targetType !== MECHANICAL_ENTITY_TYPES.GROUP) return session;
 
   const groupType = normalizeId(effect.groupType);
@@ -220,7 +309,7 @@ export function applySetGroupEffect({ session, effect }) {
   };
 }
 
-export function applyReplaceRoleIdentityEffect({ session, effect }) {
+function applyReplaceRoleIdentityEffect({ session, effect }) {
   if (effect?.targetType !== MECHANICAL_ENTITY_TYPES.ROLE) return session;
 
   const actorRoleId = effect.actorRoleId ?? null;
@@ -269,8 +358,20 @@ export function applyReplaceRoleIdentityEffect({ session, effect }) {
   };
 }
 
+function applyConcludePlayEffect({ session, effect }) {
+  return {
+    ...session,
+    metadata: {
+      ...(session?.metadata ?? {}),
+      playOutcome: effect.playOutcome ?? null
+    },
+    playOutcome: effect.playOutcome ?? null,
+    interPoolQueue: []
+  };
+}
+
 // Normaliza miembros de un grupo de vinculo para que A+B y B+A sean el mismo grupo.
-export function normalizeGroupMemberIds(roleIds = []) {
+function normalizeGroupMemberIds(roleIds = []) {
   return [...new Set((roleIds ?? []).filter(Boolean))].sort();
 }
 
@@ -279,39 +380,6 @@ export function normalizeGroupMemberIds(roleIds = []) {
 // La id visible puede venir de fuera, pero para evitar duplicados nos importa:
 // - tipo de grupo;
 // - conjunto de miembros.
-export function getGroupKey(group = {}) {
+function getGroupKey(group = {}) {
   return [normalizeId(group.type), ...normalizeGroupMemberIds(group.roleIds)].join(':');
-}
-
-// Prepara el inicio de un nuevo ciclo.
-//
-// En esta version todavia no tenemos una cola real de efectos pendientes. Las
-// acciones actuales resuelven y aplican sus efectos inmediatamente. Aun asi,
-// mantenemos esta funcion para limpiar bloqueos temporales y avanzar
-// cycle.id antes del siguiente poolConcealed.
-// Concluye la parte jugable con un playOutcome ya calculado.
-//
-// Esta escritura vive como efecto para que la conclusion jugable pase por la
-// misma ruta de aplicacion que el resto de cambios mecanicos.
-//
-// No cerramos administrativamente la session: esa decision pertenece al creador
-// o al flujo de aplicacion. Guardamos playOutcome como estado mecanico.
-export function applyConcludePlay({ session, playOutcome = null, visibility = 'all' } = {}) {
-  return {
-    session: {
-      ...session,
-      metadata: {
-        ...(session?.metadata ?? {}),
-        playOutcome
-      },
-      playOutcome,
-      interPoolQueue: []
-    },
-    result: {
-      type: EFFECT_TYPES.CONCLUDE_PLAY,
-      visibility,
-      finalEffects: [],
-      playOutcome
-    }
-  };
 }

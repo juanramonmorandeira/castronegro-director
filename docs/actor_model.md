@@ -21,7 +21,7 @@ flowchart TD
   actorModel["actorModel.js<br/>Resuelve autoridad/actor mecanico"]
   targetModel["targetModel.js<br/>Resuelve y valida targets"]
   actionModel["actionModel.js<br/>Ejecuta action concreta"]
-  effectModel["effectModel.js<br/>resolveEffect + applyEffect(s)"]
+  effectModel["effectModel.js<br/>resolveEffects + applyEffect(s)"]
   historyModel["historyModel.js<br/>Registra histories"]
   eventModel["eventModel.js<br/>Crea/resuelve eventos derivados"]
   roleModel["roleModel.js<br/>Estado runtime de roles"]
@@ -38,8 +38,8 @@ flowchart TD
   actionModel --> effectModel
   effectModel --> groupModel
   effectModel --> roleModel
-  actionModel --> historyModel
-  actionModel --> eventModel
+  recipeModel --> historyModel
+  stageModel --> eventModel
 ```
 
 ## Flujo mecanico
@@ -61,11 +61,11 @@ sequenceDiagram
   Recipe->>Action: resolveAction(session, action, input, context)
   Action->>Actor: getActionActors(session, actorIds)
   Action->>Target: validateActionTargets(...)
-  Action->>Effect: resolveEffect(...)
+  Action->>Effect: resolveEffects(...)
   Effect-->>Action: finalEffects, blockedEffects, derivedEffects
   Action->>Effect: applyEffects(finalEffects)
-  Action->>History: appendRecipeHistory(...)
   Action-->>Recipe: action result
+  Recipe->>History: appendRecipeHistory(...)
   Recipe-->>Stage: recipe result
   Stage->>Event: processActionResultEvents(...)
 ```

@@ -1,4 +1,4 @@
-import { getCurrentCycleId } from './effectModel.js';
+import { getCurrentCycleId } from './sessionModel.js';
 import {
   HISTORY_EVENTS,
   findAppliedSetPropertyHistory,

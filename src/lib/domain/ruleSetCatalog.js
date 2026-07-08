@@ -15,8 +15,8 @@ import {
 import { ROLE_CATALOG_IDS } from './roleCatalog.js';
 import { RECIPE_KEYS } from './recipeCatalog.js';
 import {
-  SELECTION_TIE_BREAKER_TYPES,
-  SELECTION_VALUE_RULE_TYPES
+  SELECT_TIE_BREAKER_TYPES,
+  SELECT_VALUE_RULE_TYPES
 } from './actionModel.js';
 import { POOL_KEYS } from './sessionModel.js';
 import { MESSAGE_KEYS } from '../messages/messageCatalog.js';
@@ -197,7 +197,7 @@ export const RULE_SET_CATALOG = Object.freeze({
               rules: {
                 selectionValueRules: [
                   {
-                    type: SELECTION_VALUE_RULE_TYPES.SELECTOR_PROPERTY,
+                    type: SELECT_VALUE_RULE_TYPES.SELECTOR_PROPERTY,
                     property: 'doubleSelector',
                     value: true,
                     selectionValue: 2
@@ -205,7 +205,7 @@ export const RULE_SET_CATALOG = Object.freeze({
                 ],
                 tieBreakers: [
                   {
-                    type: SELECTION_TIE_BREAKER_TYPES.SELECTOR_PROPERTY,
+                    type: SELECT_TIE_BREAKER_TYPES.SELECTOR_PROPERTY,
                     property: 'doubleSelector',
                     value: true
                   }

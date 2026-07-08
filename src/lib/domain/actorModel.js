@@ -13,7 +13,7 @@ export const ACTOR_MODEL_ERRORS = Object.freeze({
   INVALID_ACTOR_TYPE: 'actor/invalid-actor-type'
 });
 
-export const SELECTION_SELECTOR_SOURCES = Object.freeze({
+export const SELECT_SELECTOR_SOURCES = Object.freeze({
   STAGE_ACTORS: 'stage_actors',
   IN_PLAY_ROLES: 'in_play_roles'
 });
@@ -44,9 +44,9 @@ export function getInPlaySelectorIds(session = {}) {
     .map((role) => role.id);
 }
 
-export function getSelectionSelectorIds(session = {}, stage = {}, input = {}, selectionRules = {}) {
+export function getSelectSelectorIds(session = {}, stage = {}, input = {}, selectionRules = {}) {
   if ((input.selectorIds ?? []).length > 0) return input.selectorIds;
-  if (selectionRules.selectorSource === SELECTION_SELECTOR_SOURCES.IN_PLAY_ROLES) {
+  if (selectionRules.selectorSource === SELECT_SELECTOR_SOURCES.IN_PLAY_ROLES) {
     return getInPlaySelectorIds(session);
   }
   if ((input.actorIds ?? []).length > 0) return input.actorIds;
@@ -55,8 +55,8 @@ export function getSelectionSelectorIds(session = {}, stage = {}, input = {}, se
   return [];
 }
 
-export function getSelectionRuleSelectorIds(session = {}, stage = {}, input = {}, selectionRules = {}) {
-  const selectorIds = getSelectionSelectorIds(session, stage, input, selectionRules);
+export function getSelectRuleSelectorIds(session = {}, stage = {}, input = {}, selectionRules = {}) {
+  const selectorIds = getSelectSelectorIds(session, stage, input, selectionRules);
   if (selectorIds.length > 0) return selectorIds;
 
   return [

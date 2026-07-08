@@ -14,6 +14,13 @@ export const SURFACE_SCREEN_MODES = Object.freeze({
   INTERACTIVE: 'screenInteractive'
 });
 
+export const VISIBILITY = Object.freeze({
+  ACTOR_ONLY: 'actor_only',
+  STORYTELLER_ONLY: 'storyteller_only',
+  ALL: 'all',
+  HIDDEN: 'hidden'
+});
+
 export const SURFACE_FLOW_STEPS = Object.freeze({
   BEFORE_CONCEALED: 'before_concealed',
   POOL_CONCEALED: 'poolConcealed',

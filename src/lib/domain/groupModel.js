@@ -22,7 +22,7 @@ import {
 } from './groupDefinition.js';
 import { normalizeId } from './sessionModel.js';
 import { MECHANICAL_ENTITY_TYPES } from './domainTypes.js';
-import { EFFECT_TYPES } from './effectModel.js';
+import { EFFECT_TYPES } from './effectDefinition.js';
 
 function uniqueIds(ids = []) {
   return [...new Set((ids ?? []).filter(Boolean))];

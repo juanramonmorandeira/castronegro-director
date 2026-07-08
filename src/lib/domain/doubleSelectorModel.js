@@ -8,12 +8,12 @@
 
 import { getCatalogRecipe, RECIPE_KEYS } from './recipeCatalog.js';
 import {
-  SELECTION_ABSTAIN_RULES,
-  SELECTION_REQUIRED_RULES,
-  SELECTION_RUNOFF_RULES,
-  SELECTION_TIE_RULES,
-  SELECTION_UNANIMOUS_RULES,
-  createSelectionRules
+  SELECT_ABSTAIN_RULES,
+  SELECT_REQUIRED_RULES,
+  SELECT_RUNOFF_RULES,
+  SELECT_TIE_RULES,
+  SELECT_UNANIMOUS_RULES,
+  createSelectRules
 } from './actionModel.js';
 import { createStage } from './stageDefinition.js';
 import { STAGE_STATUSES } from './sessionModel.js';
@@ -81,12 +81,12 @@ export function createSelectDoubleSelectorStage(overrides = {}) {
   return createStage({
     ...catalogStage,
     status: STAGE_STATUSES.ENABLED,
-    selectionRules: createSelectionRules({
-      required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
-      abstain: SELECTION_ABSTAIN_RULES.NOT_ALLOWED,
-      unanimous: SELECTION_UNANIMOUS_RULES.NOT_REQUIRED,
-      tie: SELECTION_TIE_RULES.RUNOFF_ON_TIE,
-      runoff: SELECTION_RUNOFF_RULES.TIED_CANDIDATES,
+    selectionRules: createSelectRules({
+      required: SELECT_REQUIRED_RULES.ALL_SELECTORS,
+      abstain: SELECT_ABSTAIN_RULES.NOT_ALLOWED,
+      unanimous: SELECT_UNANIMOUS_RULES.NOT_REQUIRED,
+      tie: SELECT_TIE_RULES.RUNOFF_ON_TIE,
+      runoff: SELECT_RUNOFF_RULES.TIED_CANDIDATES,
       repeatLimit: 1
     }),
     recipes: [getCatalogRecipe(RECIPE_KEYS.SET_DOUBLE_SELECTOR)],
@@ -112,10 +112,10 @@ export function createPickNextDoubleSelectorStage({
   return createStage({
     ...catalogStage,
     status: STAGE_STATUSES.ENABLED,
-    selectionRules: createSelectionRules({
-      required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
-      abstain: SELECTION_ABSTAIN_RULES.NOT_ALLOWED,
-      unanimous: SELECTION_UNANIMOUS_RULES.NOT_REQUIRED,
+    selectionRules: createSelectRules({
+      required: SELECT_REQUIRED_RULES.ALL_SELECTORS,
+      abstain: SELECT_ABSTAIN_RULES.NOT_ALLOWED,
+      unanimous: SELECT_UNANIMOUS_RULES.NOT_REQUIRED,
       candidateIds,
       selectorEligibility: {
         requireInPlay: false

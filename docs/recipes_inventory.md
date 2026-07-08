@@ -128,7 +128,7 @@ El catalogo de filtros es cerrado: el motor rechaza filtros desconocidos. Se
 pueden anadir filtros nuevos, pero no usarlos como strings libres sin soporte
 del dominio.
 
-Overrides permitidos desde una stage:
+Campos materializables desde una stage:
 
 ```text
 actor
@@ -141,19 +141,16 @@ metadata
 influences
 ```
 
-Overrides bloqueados desde una stage:
+Campos fijados por el catalogo:
 
 ```text
 id
-effect
+actions
 ```
 
-Cambiar `effect` cambia la naturaleza de la recipe. Cambiar `id` cambia la
-action pura que ejecuta el motor; por tanto, tambien debe tratarse como otra
-recipe o como una factory explicita futura, no como un override casual. Si un
-override intenta cambiar `id` o `effect`, el dominio genera un diagnosticError
-`recipe/blocked-override`. Si usa un campo no permitido, genera
-`recipe/unknown-override`.
+El catalogo fija la identidad y las actions de cada recipe. `getCatalogRecipe`
+solo materializa los campos publicos anteriores; los campos ajenos al contrato
+publico no forman parte de la recipe catalogada.
 
 ## Restricciones disponibles
 

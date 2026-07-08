@@ -21,21 +21,21 @@ import {
   OBJECTIVE_HOLDER_TYPES,
   INFLUENCE_OPERATIONS,
   INFLUENCE_SUBJECTS,
-  SELECTION_ABSTAIN_RESOLUTION_TYPES,
-  SELECTION_ABSTAIN_RULES,
-  SELECTION_UNANIMOUS_RULES,
-  SELECTION_NULL_RULES,
-  SELECTION_OUTCOME_TYPES,
-  SELECTION_REQUIRED_RULES,
-  SELECTION_RESTRICTION_TYPES,
-  SELECTION_RUNOFF_RULES,
-  SELECTION_ROUND_TYPES,
-  SELECTION_SELECTOR_SOURCES,
-  SELECTION_SUPPORT_BASES,
-  SELECTION_SUPPORT_THRESHOLD_TYPES,
-  SELECTION_TIE_RULES,
-  SELECTION_TIE_BREAKER_TYPES,
-  SELECTION_VALUE_RULE_TYPES,
+  SELECT_ABSTAIN_RESOLUTION_TYPES,
+  SELECT_ABSTAIN_RULES,
+  SELECT_UNANIMOUS_RULES,
+  SELECT_NULL_RULES,
+  SELECT_OUTCOME_TYPES,
+  SELECT_REQUIRED_RULES,
+  SELECT_RESTRICTION_TYPES,
+  SELECT_RUNOFF_RULES,
+  SELECT_ROUND_TYPES,
+  SELECT_SELECTOR_SOURCES,
+  SELECT_SUPPORT_BASES,
+  SELECT_SUPPORT_THRESHOLD_TYPES,
+  SELECT_TIE_RULES,
+  SELECT_TIE_BREAKER_TYPES,
+  SELECT_VALUE_RULE_TYPES,
   buildPools,
   buildGroups,
   buildRoles,
@@ -52,7 +52,7 @@ import {
   completeInterPoolStageForWindow,
   validatePool,
   organizePoolStages,
-  createSelectionRules,
+  createSelectRules,
   createSession,
   createRole,
   createGroup,
@@ -94,7 +94,7 @@ import {
   RECIPE_ACTOR_TYPES,
   TARGET_FILTER_TYPES,
   validateActionTargets,
-  resolveSelectionRound,
+  resolveSelectRound,
   resolveAction,
   resolveCurrentStage,
   resolveRecipe,
@@ -123,7 +123,6 @@ import {
   getActionFromRecipe,
   getActionActors,
   resolveRecipeActor,
-  validateCatalogRecipeOverrides,
   HISTORY_COLLECTIONS,
   HISTORY_EVENTS,
   getHistoryCollection,
@@ -134,7 +133,10 @@ import {
   createSurfaceMessage,
   getSurfaceFlowOrder,
   validateRecipeContract,
-  validateSession
+  validateSession,
+  validateEffect,
+  resolveEffects,
+  applyEffects
 } from '../index.js';
 import {
   MESSAGE_AUDIENCE_TYPES,
@@ -243,6 +245,46 @@ function test(name, fn) {
 // No usan Svelte, Firebase, i18n ni navegador.
 // ---------------------------------------------------------------------------
 
+test('validateEffect exige forma minima para set_property', () => {
+  const validation = validateEffect({
+    type: EFFECT_TYPES.SET_PROPERTY,
+    targetType: MECHANICAL_ENTITY_TYPES.ROLE,
+    property: 'inPlay',
+    value: false
+  });
+
+  assert.equal(validation.ok, false);
+  assert.equal(validation.errors[0].code, 'effect/missing-target-id');
+});
+
+test('resolveEffects y applyEffects resuelven y aplican un set_property final', () => {
+  const session = createSession({
+    roles: [
+      createRole({
+        id: 'role_plain-0',
+        roleKey: 'role_plain',
+        inPlay: true
+      })
+    ]
+  });
+  const proposedEffects = [
+    {
+      type: EFFECT_TYPES.SET_PROPERTY,
+      targetType: MECHANICAL_ENTITY_TYPES.ROLE,
+      targetId: 'role_plain-0',
+      property: 'inPlay',
+      value: false
+    }
+  ];
+
+  const resolution = resolveEffects({ session, proposedEffects });
+  const applied = applyEffects({ session, effects: resolution.finalEffects });
+
+  assert.deepEqual(resolution.errors, []);
+  assert.equal(resolution.finalEffects.length, 1);
+  assert.equal(applied.roles[0].inPlay, false);
+});
+
 test('actorModel resuelve un actor role desde input.actorIds', () => {
   const session = createSession({
     roles: [
@@ -329,11 +371,11 @@ const setOutOfPlayAfterSelectionRecipe = getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF
   },
   visibility: VISIBILITY.ALL
 });
-const selectionOutOfPlayRules = createSelectionRules({
-  required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
-  abstain: SELECTION_ABSTAIN_RULES.NOT_ALLOWED,
-  unanimous: SELECTION_UNANIMOUS_RULES.NOT_REQUIRED,
-  tie: SELECTION_TIE_RULES.NULL_ON_TIE
+const selectionOutOfPlayRules = createSelectRules({
+  required: SELECT_REQUIRED_RULES.ALL_SELECTORS,
+  abstain: SELECT_ABSTAIN_RULES.NOT_ALLOWED,
+  unanimous: SELECT_UNANIMOUS_RULES.NOT_REQUIRED,
+  tie: SELECT_TIE_RULES.NULL_ON_TIE
 });
 
 function createBaseSession({
@@ -1498,7 +1540,7 @@ test('stageDefinition define completion y recetas opcionales', () => {
   assert.equal(stage.recipes[1].optional, true);
 });
 
-test('getCatalogRecipe permite adaptar contexto pero bloquea id y effect', () => {
+test('getCatalogRecipe materializa solo campos publicos de recipe catalogada', () => {
   const recipe = getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY, {
     id: ACTION_IDS.INSPECT_ROLE,
     actor: { type: RECIPE_ACTOR_TYPES.ROLE },
@@ -1516,7 +1558,8 @@ test('getCatalogRecipe permite adaptar contexto pero bloquea id y effect', () =>
       targetType: MECHANICAL_ENTITY_TYPES.ROLE,
       property: 'inPlay',
       value: true
-    }
+    },
+    unexpected: true
   });
 
   assert.equal(recipe.actions[0].id, ACTION_IDS.SET_IN_PLAY);
@@ -1529,10 +1572,10 @@ test('getCatalogRecipe permite adaptar contexto pero bloquea id y effect', () =>
     property: 'inPlay',
     value: false
   });
-  assert.deepEqual(
-    recipe.diagnostics.map((error) => error.code),
-    ['recipe/blocked-override', 'recipe/blocked-override']
-  );
+  assert.equal(recipe.key, RECIPE_KEYS.SET_OUT_OF_PLAY);
+  assert.equal(recipe.effect, undefined);
+  assert.equal(recipe.unexpected, undefined);
+  assert.deepEqual(recipe.diagnostics, []);
 });
 
 test('validateRecipeContract acepta una recipe valida', () => {
@@ -1615,30 +1658,23 @@ test('validateRecipeContract exige count 0 para target session', () => {
   assert.equal(validation.errors[0].code, 'recipe/invalid-session-target-count');
 });
 
-test('getCatalogRecipe expone diagnosticos para overrides bloqueados o desconocidos', () => {
-  const validation = validateCatalogRecipeOverrides(RECIPE_KEYS.SET_OUT_OF_PLAY, {
+test('getCatalogRecipe ignora campos ajenos sin alterar la recipe catalogada', () => {
+  const recipe = getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY, {
     id: ACTION_IDS.INSPECT_ROLE,
     effect: { type: EFFECT_TYPES.REVEAL_PROPERTY },
+    actions: [getCatalogRecipe(RECIPE_KEYS.INSPECT_ROLE)?.actions?.[0]],
     unexpected: true
-  });
-  const recipe = getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY, {
-    id: ACTION_IDS.INSPECT_ROLE
   });
   const resolved = resolveRecipe(createBaseSession(), recipe, {
     actorIds: ['alignment_b_attacker-0'],
     targetIds: ['alignment_a_target-0']
   });
 
-  assert.equal(validation.ok, false);
-  assert.deepEqual(
-    validation.errors.map((error) => error.code),
-    ['recipe/blocked-override', 'recipe/blocked-override', 'recipe/unknown-override']
-  );
-  assert.equal(resolved.ok, false);
-  assert.equal(resolved.errors[0].code, 'recipe/blocked-override');
-  assert.equal(resolved.messages[0].type, MESSAGE_TYPES.DIAGNOSTIC);
-  assert.equal(resolved.messages[0].key, MESSAGE_KEYS.DOMAIN_OPERATION_FAILED);
-  assert.equal(resolved.session.errorLog.length, 1);
+  assert.equal(recipe.actions[0].id, ACTION_IDS.SET_IN_PLAY);
+  assert.equal(recipe.effect, undefined);
+  assert.equal(recipe.unexpected, undefined);
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.result.finalEffects[0].type, EFFECT_TYPES.SET_PROPERTY);
 });
 
 test('stageCatalog define y createStage materializa un stage de in-out-of-play', () => {
@@ -1728,8 +1764,8 @@ test('stageCatalog expone los stages mecanicos ya definidos', () => {
 test('stageCatalog deja exposed_set_out_of_play sin restricciones linked implicitas', () => {
   const stage = getCatalogStage(STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY, { key: STAGE_KEYS.STAGE_05 });
 
-  assert.equal(stage.selectionRules.selectorSource, SELECTION_SELECTOR_SOURCES.IN_PLAY_ROLES);
-  assert.equal(stage.metadata.interaction.participants, SELECTION_SELECTOR_SOURCES.IN_PLAY_ROLES);
+  assert.equal(stage.selectionRules.selectorSource, SELECT_SELECTOR_SOURCES.IN_PLAY_ROLES);
+  assert.equal(stage.metadata.interaction.participants, SELECT_SELECTOR_SOURCES.IN_PLAY_ROLES);
   assert.equal(stage.metadata.interaction.selectionMethod, 'vote');
   assert.deepEqual(stage.selectionRules.groupRestrictions, []);
 });
@@ -1740,7 +1776,7 @@ test('stageCatalog define deliberation como stage publica sin recetas', () => {
   assert.equal(stage.key, STAGE_KEYS.DELIBERATION);
   assert.deepEqual(stage.recipes, []);
   assert.equal(stage.metadata.catalogId, STAGE_CATALOG_IDS.DELIBERATION);
-  assert.equal(stage.metadata.interaction.participants, SELECTION_SELECTOR_SOURCES.IN_PLAY_ROLES);
+  assert.equal(stage.metadata.interaction.participants, SELECT_SELECTOR_SOURCES.IN_PLAY_ROLES);
   assert.equal(stage.metadata.interaction.mode, 'deliberation');
   assert.deepEqual(stage.completion.allowedRequesters, [
     STAGE_COMPLETION_REQUESTED_BY.DIRECTOR
@@ -1752,10 +1788,10 @@ test('stageCatalog define concealed_set_out_of_play como seleccion unanime del g
     key: STAGE_KEYS.STAGE_04
   });
 
-  assert.equal(stage.selectionRules.required, SELECTION_REQUIRED_RULES.ALL_SELECTORS);
-  assert.equal(stage.selectionRules.abstain, SELECTION_ABSTAIN_RULES.NOT_ALLOWED);
-  assert.equal(stage.selectionRules.unanimous, SELECTION_UNANIMOUS_RULES.REQUIRED);
-  assert.equal(stage.selectionRules.tie, SELECTION_TIE_RULES.NULL_ON_TIE);
+  assert.equal(stage.selectionRules.required, SELECT_REQUIRED_RULES.ALL_SELECTORS);
+  assert.equal(stage.selectionRules.abstain, SELECT_ABSTAIN_RULES.NOT_ALLOWED);
+  assert.equal(stage.selectionRules.unanimous, SELECT_UNANIMOUS_RULES.REQUIRED);
+  assert.equal(stage.selectionRules.tie, SELECT_TIE_RULES.NULL_ON_TIE);
 });
 
 test('stageCatalog define role_state_revealed como stage informativa de interPoolQueue', () => {
@@ -2684,7 +2720,7 @@ test('resolveCurrentStage ejecuta stage_05 con seleccion y receta set_out_of_pla
 
   assert.equal(resolved.ok, true);
   assert.equal(resolved.stage.stageKey, STAGE_KEYS.STAGE_05);
-  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.selection.type, SELECT_OUTCOME_TYPES.CHOSEN);
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
   assert.equal(resolved.stageAdvance, null);
   assert.equal(completed.ok, true);
@@ -4912,9 +4948,9 @@ test('checkObjectives no activa only_holder_group_remains_in_play si queda un te
   assert.deepEqual(objectiveEvaluation.fulfilledRules, []);
 });
 
-test('resolveSelectionRound detecta chosen unico por mayoria simple', () => {
+test('resolveSelectRound detecta chosen unico por mayoria simple', () => {
   const session = createBaseSession();
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
     selections: [
       { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
@@ -4924,7 +4960,7 @@ test('resolveSelectionRound detecta chosen unico por mayoria simple', () => {
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.type, SELECT_OUTCOME_TYPES.CHOSEN);
   assert.equal(resolved.result.chosenId, 'alignment_a_target-0');
   assert.deepEqual(resolved.result.selectionTally, [
     { candidateId: 'alignment_a_target-0', selectionCount: 2 },
@@ -4932,9 +4968,9 @@ test('resolveSelectionRound detecta chosen unico por mayoria simple', () => {
   ]);
 });
 
-test('resolveSelectionRound rechaza selectores que seleccionan mas de una vez', () => {
+test('resolveSelectRound rechaza selectores que seleccionan mas de una vez', () => {
   const session = createBaseSession();
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
     selections: [
       { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
@@ -4946,11 +4982,11 @@ test('resolveSelectionRound rechaza selectores que seleccionan mas de una vez', 
   assert.equal(resolved.errors[0].code, 'selection/duplicate-selector');
 });
 
-test('resolveSelectionRound declara nula una seleccion empatada con null_on_tie', () => {
+test('resolveSelectRound declara nula una seleccion empatada con null_on_tie', () => {
   const session = createBaseSession();
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
-    selectionRules: { tie: SELECTION_TIE_RULES.NULL_ON_TIE },
+    selectionRules: { tie: SELECT_TIE_RULES.NULL_ON_TIE },
     selections: [
       { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
       { selectorId: 'alignment_a_blocker-0', candidateId: 'alignment_a_plain-0' }
@@ -4958,7 +4994,7 @@ test('resolveSelectionRound declara nula una seleccion empatada con null_on_tie'
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.type, SELECT_OUTCOME_TYPES.NULL);
   assert.equal(resolved.result.reason, 'tied_selection');
   assert.deepEqual(resolved.result.tiedCandidateIds, [
     'alignment_a_plain-0',
@@ -4966,9 +5002,9 @@ test('resolveSelectionRound declara nula una seleccion empatada con null_on_tie'
   ]);
 });
 
-test('resolveSelectionRound aplica peso de selection derivado por selector', () => {
+test('resolveSelectRound aplica peso de selection derivado por selector', () => {
   const session = createBaseSession();
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
     selectionRules: {
       selectionWeights: [
@@ -4985,7 +5021,7 @@ test('resolveSelectionRound aplica peso de selection derivado por selector', () 
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.type, SELECT_OUTCOME_TYPES.CHOSEN);
   assert.equal(resolved.result.chosenId, 'alignment_a_target-0');
   assert.deepEqual(resolved.result.selectionTally, [
     { candidateId: 'alignment_a_target-0', selectionCount: 2 },
@@ -4993,9 +5029,9 @@ test('resolveSelectionRound aplica peso de selection derivado por selector', () 
   ]);
 });
 
-test('resolveSelectionRound calcula supportThreshold con peso efectivo', () => {
+test('resolveSelectRound calcula supportThreshold con peso efectivo', () => {
   const session = createBaseSession();
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
     selectorIds: ['alignment_b_attacker-0', 'alignment_a_blocker-0', 'alignment_a_plain-0'],
     selectionRules: {
@@ -5006,8 +5042,8 @@ test('resolveSelectionRound calcula supportThreshold con peso efectivo', () => {
         }
       ],
       supportThreshold: {
-        type: SELECTION_SUPPORT_THRESHOLD_TYPES.MAJORITY,
-        base: SELECTION_SUPPORT_BASES.SELECTOR_COUNT
+        type: SELECT_SUPPORT_THRESHOLD_TYPES.MAJORITY,
+        base: SELECT_SUPPORT_BASES.SELECTOR_COUNT
       }
     },
     selections: [
@@ -5018,7 +5054,7 @@ test('resolveSelectionRound calcula supportThreshold con peso efectivo', () => {
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.type, SELECT_OUTCOME_TYPES.CHOSEN);
   assert.equal(resolved.result.chosenId, 'alignment_a_target-0');
   assert.deepEqual(resolved.result.support, {
     ok: true,
@@ -5027,7 +5063,7 @@ test('resolveSelectionRound calcula supportThreshold con peso efectivo', () => {
   });
 });
 
-test('resolveSelectionRound desempata por propiedad del selector si eligio un candidate empatado', () => {
+test('resolveSelectRound desempata por propiedad del selector si eligio un candidate empatado', () => {
   const baseSession = createBaseSession();
   const session = {
     ...baseSession,
@@ -5037,12 +5073,12 @@ test('resolveSelectionRound desempata por propiedad del selector si eligio un ca
         : role
     )
   };
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
     selectionRules: {
       tieBreakers: [
         {
-          type: SELECTION_TIE_BREAKER_TYPES.SELECTOR_PROPERTY,
+          type: SELECT_TIE_BREAKER_TYPES.SELECTOR_PROPERTY,
           property: 'doubleSelector',
           value: true
         }
@@ -5055,11 +5091,11 @@ test('resolveSelectionRound desempata por propiedad del selector si eligio un ca
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.type, SELECT_OUTCOME_TYPES.CHOSEN);
   assert.equal(resolved.result.reason, 'tie_break_selector_property');
   assert.equal(resolved.result.chosenId, 'alignment_a_plain-0');
   assert.deepEqual(resolved.result.tieBreaker, {
-    type: SELECTION_TIE_BREAKER_TYPES.SELECTOR_PROPERTY,
+    type: SELECT_TIE_BREAKER_TYPES.SELECTOR_PROPERTY,
     selectorId: 'alignment_a_blocker-0',
     candidateId: 'alignment_a_plain-0',
     property: 'doubleSelector',
@@ -5071,7 +5107,7 @@ test('resolveSelectionRound desempata por propiedad del selector si eligio un ca
   ]);
 });
 
-test('resolveSelectionRound aplica valor de selection derivado de propiedad del selector', () => {
+test('resolveSelectRound aplica valor de selection derivado de propiedad del selector', () => {
   const baseSession = createBaseSession();
   const session = {
     ...baseSession,
@@ -5081,12 +5117,12 @@ test('resolveSelectionRound aplica valor de selection derivado de propiedad del 
         : role
     )
   };
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
     selectionRules: {
       selectionValueRules: [
         {
-          type: SELECTION_VALUE_RULE_TYPES.SELECTOR_PROPERTY,
+          type: SELECT_VALUE_RULE_TYPES.SELECTOR_PROPERTY,
           property: 'doubleSelector',
           value: true,
           selectionValue: 2
@@ -5100,7 +5136,7 @@ test('resolveSelectionRound aplica valor de selection derivado de propiedad del 
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.type, SELECT_OUTCOME_TYPES.CHOSEN);
   assert.equal(resolved.result.chosenId, 'alignment_a_target-0');
   assert.deepEqual(resolved.result.selectionTally, [
     { candidateId: 'alignment_a_target-0', selectionCount: 2 },
@@ -5108,14 +5144,14 @@ test('resolveSelectionRound aplica valor de selection derivado de propiedad del 
   ]);
 });
 
-test('resolveSelectionRound acepta chosen si alcanza mayoria sobre selecciones emitidas', () => {
+test('resolveSelectRound acepta chosen si alcanza mayoria sobre selecciones emitidas', () => {
   const session = createBaseSession();
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
     selectionRules: {
       supportThreshold: {
-        type: SELECTION_SUPPORT_THRESHOLD_TYPES.MAJORITY,
-        base: SELECTION_SUPPORT_BASES.CAST_SELECTIONS
+        type: SELECT_SUPPORT_THRESHOLD_TYPES.MAJORITY,
+        base: SELECT_SUPPORT_BASES.CAST_SELECTIONS
       }
     },
     selections: [
@@ -5128,13 +5164,13 @@ test('resolveSelectionRound acepta chosen si alcanza mayoria sobre selecciones e
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.type, SELECT_OUTCOME_TYPES.CHOSEN);
   assert.equal(resolved.result.chosenId, 'alignment_a_target-0');
 });
 
-test('resolveSelectionRound declara null si chosen no alcanza mayoria sobre selectores', () => {
+test('resolveSelectRound declara null si chosen no alcanza mayoria sobre selectores', () => {
   const session = createBaseSession();
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
     selectorIds: [
       'alignment_b_attacker-0',
@@ -5147,8 +5183,8 @@ test('resolveSelectionRound declara null si chosen no alcanza mayoria sobre sele
     ],
     selectionRules: {
       supportThreshold: {
-        type: SELECTION_SUPPORT_THRESHOLD_TYPES.MAJORITY,
-        base: SELECTION_SUPPORT_BASES.SELECTOR_COUNT
+        type: SELECT_SUPPORT_THRESHOLD_TYPES.MAJORITY,
+        base: SELECT_SUPPORT_BASES.SELECTOR_COUNT
       }
     },
     selections: [
@@ -5161,7 +5197,7 @@ test('resolveSelectionRound declara null si chosen no alcanza mayoria sobre sele
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.type, SELECT_OUTCOME_TYPES.NULL);
   assert.equal(resolved.result.reason, 'insufficient_support');
   assert.deepEqual(resolved.result.support, {
     ok: false,
@@ -5170,16 +5206,16 @@ test('resolveSelectionRound declara null si chosen no alcanza mayoria sobre sele
   });
 });
 
-test('resolveSelectionRound declara null si chosen no alcanza fraccion exigida', () => {
+test('resolveSelectRound declara null si chosen no alcanza fraccion exigida', () => {
   const session = createBaseSession();
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
     selectionRules: {
       supportThreshold: {
-        type: SELECTION_SUPPORT_THRESHOLD_TYPES.FRACTION,
+        type: SELECT_SUPPORT_THRESHOLD_TYPES.FRACTION,
         numerator: 2,
         denominator: 3,
-        base: SELECTION_SUPPORT_BASES.CAST_SELECTIONS
+        base: SELECT_SUPPORT_BASES.CAST_SELECTIONS
       }
     },
     selections: [
@@ -5193,22 +5229,22 @@ test('resolveSelectionRound declara null si chosen no alcanza fraccion exigida',
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.type, SELECT_OUTCOME_TYPES.NULL);
   assert.equal(resolved.result.reason, 'insufficient_support');
   assert.equal(resolved.result.support.requiredSupportCount, 4);
   assert.equal(resolved.result.support.supportBaseCount, 6);
 });
 
-test('resolveSelectionRound acepta chosen si alcanza fraccion exigida', () => {
+test('resolveSelectRound acepta chosen si alcanza fraccion exigida', () => {
   const session = createBaseSession();
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
     selectionRules: {
       supportThreshold: {
-        type: SELECTION_SUPPORT_THRESHOLD_TYPES.FRACTION,
+        type: SELECT_SUPPORT_THRESHOLD_TYPES.FRACTION,
         numerator: 2,
         denominator: 3,
-        base: SELECTION_SUPPORT_BASES.CAST_SELECTIONS
+        base: SELECT_SUPPORT_BASES.CAST_SELECTIONS
       }
     },
     selections: [
@@ -5222,15 +5258,15 @@ test('resolveSelectionRound acepta chosen si alcanza fraccion exigida', () => {
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.type, SELECT_OUTCOME_TYPES.CHOSEN);
   assert.equal(resolved.result.chosenId, 'alignment_a_target-0');
 });
 
-test('resolveSelectionRound pide runoff cuando la politica de empate lo permite', () => {
+test('resolveSelectRound pide runoff cuando la politica de empate lo permite', () => {
   const session = createBaseSession();
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
-    selectionRules: { tie: SELECTION_TIE_RULES.RUNOFF_ON_TIE },
+    selectionRules: { tie: SELECT_TIE_RULES.RUNOFF_ON_TIE },
     selections: [
       { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
       { selectorId: 'alignment_a_blocker-0', candidateId: 'alignment_a_plain-0' }
@@ -5238,22 +5274,22 @@ test('resolveSelectionRound pide runoff cuando la politica de empate lo permite'
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.TIE);
+  assert.equal(resolved.result.type, SELECT_OUTCOME_TYPES.TIE);
   assert.equal(resolved.result.reason, 'runoff_required');
   assert.deepEqual(resolved.result.nextRound, {
-    roundType: SELECTION_ROUND_TYPES.RUNOFF,
+    roundType: SELECT_ROUND_TYPES.RUNOFF,
     roundIndex: 1,
     candidateIds: ['alignment_a_plain-0', 'alignment_a_target-0']
   });
 });
 
-test('resolveSelectionRound crea runoff con candidatos empatados por defecto', () => {
+test('resolveSelectRound crea runoff con candidatos empatados por defecto', () => {
   const session = createBaseSession();
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
     selectionRules: {
-      tie: SELECTION_TIE_RULES.RUNOFF_ON_TIE,
-      runoff: SELECTION_RUNOFF_RULES.TIED_CANDIDATES
+      tie: SELECT_TIE_RULES.RUNOFF_ON_TIE,
+      runoff: SELECT_RUNOFF_RULES.TIED_CANDIDATES
     },
     selections: [
       { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
@@ -5265,20 +5301,20 @@ test('resolveSelectionRound crea runoff con candidatos empatados por defecto', (
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.TIE);
+  assert.equal(resolved.result.type, SELECT_OUTCOME_TYPES.TIE);
   assert.deepEqual(resolved.result.nextRound.candidateIds, [
     'alignment_a_plain-0',
     'alignment_a_target-0'
   ]);
 });
 
-test('resolveSelectionRound crea runoff con todos los candidatos seleccionados si asi se define', () => {
+test('resolveSelectRound crea runoff con todos los candidatos seleccionados si asi se define', () => {
   const session = createBaseSession();
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
     selectionRules: {
-      tie: SELECTION_TIE_RULES.RUNOFF_ON_TIE,
-      runoff: SELECTION_RUNOFF_RULES.SELECTED_CANDIDATES
+      tie: SELECT_TIE_RULES.RUNOFF_ON_TIE,
+      runoff: SELECT_RUNOFF_RULES.SELECTED_CANDIDATES
     },
     selections: [
       { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
@@ -5290,7 +5326,7 @@ test('resolveSelectionRound crea runoff con todos los candidatos seleccionados s
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.TIE);
+  assert.equal(resolved.result.type, SELECT_OUTCOME_TYPES.TIE);
   assert.deepEqual(resolved.result.nextRound.candidateIds, [
     'alignment_a_plain-0',
     'alignment_a_target-0',
@@ -5298,14 +5334,14 @@ test('resolveSelectionRound crea runoff con todos los candidatos seleccionados s
   ]);
 });
 
-test('resolveSelectionRound crea runoff con los mismos candidatos si asi se define', () => {
+test('resolveSelectRound crea runoff con los mismos candidatos si asi se define', () => {
   const session = createBaseSession();
   const candidateIds = ['alignment_a_plain-0', 'alignment_a_target-0', 'alignment_b_target-0'];
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
     selectionRules: {
-      tie: SELECTION_TIE_RULES.RUNOFF_ON_TIE,
-      runoff: SELECTION_RUNOFF_RULES.SAME_CANDIDATES,
+      tie: SELECT_TIE_RULES.RUNOFF_ON_TIE,
+      runoff: SELECT_RUNOFF_RULES.SAME_CANDIDATES,
       candidateIds
     },
     selections: [
@@ -5315,15 +5351,15 @@ test('resolveSelectionRound crea runoff con los mismos candidatos si asi se defi
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.TIE);
+  assert.equal(resolved.result.type, SELECT_OUTCOME_TYPES.TIE);
   assert.deepEqual(resolved.result.nextRound.candidateIds, candidateIds);
 });
 
-test('resolveSelectionRound limita runoff a los objetivos empatados', () => {
+test('resolveSelectRound limita runoff a los objetivos empatados', () => {
   const session = createBaseSession();
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
-    roundType: SELECTION_ROUND_TYPES.RUNOFF,
+    roundType: SELECT_ROUND_TYPES.RUNOFF,
     selectionRules: {
       candidateIds: ['alignment_a_plain-0', 'alignment_a_target-0']
     },
@@ -5336,13 +5372,13 @@ test('resolveSelectionRound limita runoff a los objetivos empatados', () => {
   assert.equal(resolved.errors[0].code, 'selection/candidate-not-candidate');
 });
 
-test('resolveSelectionRound declara nulo un runoff que vuelve a empatar', () => {
+test('resolveSelectRound declara nulo un runoff que vuelve a empatar', () => {
   const session = createBaseSession();
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
-    roundType: SELECTION_ROUND_TYPES.RUNOFF,
+    roundType: SELECT_ROUND_TYPES.RUNOFF,
     selectionRules: {
-      tie: SELECTION_TIE_RULES.RUNOFF_ON_TIE,
+      tie: SELECT_TIE_RULES.RUNOFF_ON_TIE,
       candidateIds: ['alignment_a_plain-0', 'alignment_a_target-0']
     },
     selections: [
@@ -5352,18 +5388,18 @@ test('resolveSelectionRound declara nulo un runoff que vuelve a empatar', () => 
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.type, SELECT_OUTCOME_TYPES.NULL);
   assert.equal(resolved.result.reason, 'runoff_tied');
 });
 
-test('resolveSelectionRound no pide otra ronda si ya alcanzo repeatLimit', () => {
+test('resolveSelectRound no pide otra ronda si ya alcanzo repeatLimit', () => {
   const session = createBaseSession();
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
-    roundType: SELECTION_ROUND_TYPES.RUNOFF,
+    roundType: SELECT_ROUND_TYPES.RUNOFF,
     roundIndex: 1,
     selectionRules: {
-      tie: SELECTION_TIE_RULES.RUNOFF_ON_TIE,
+      tie: SELECT_TIE_RULES.RUNOFF_ON_TIE,
       repeatLimit: 1,
       candidateIds: ['alignment_a_plain-0', 'alignment_a_target-0']
     },
@@ -5374,18 +5410,18 @@ test('resolveSelectionRound no pide otra ronda si ya alcanzo repeatLimit', () =>
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.type, SELECT_OUTCOME_TYPES.NULL);
   assert.equal(resolved.result.reason, 'runoff_tied');
   assert.equal(resolved.result.nextRound, undefined);
 });
 
-test('resolveSelectionRound puede repetir una seleccion nula si selectionRules lo permite', () => {
+test('resolveSelectRound puede repetir una seleccion nula si selectionRules lo permite', () => {
   const session = createBaseSession();
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
     selectionRules: {
-      abstain: SELECTION_ABSTAIN_RULES.ALLOWED,
-      nullResult: SELECTION_NULL_RULES.REPEAT_ON_NULL,
+      abstain: SELECT_ABSTAIN_RULES.ALLOWED,
+      nullResult: SELECT_NULL_RULES.REPEAT_ON_NULL,
       repeatLimit: 1
     },
     selections: [
@@ -5394,10 +5430,10 @@ test('resolveSelectionRound puede repetir una seleccion nula si selectionRules l
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.type, SELECT_OUTCOME_TYPES.NULL);
   assert.equal(resolved.result.reason, 'all_abstained');
   assert.deepEqual(resolved.result.nextRound, {
-    roundType: SELECTION_ROUND_TYPES.INITIAL,
+    roundType: SELECT_ROUND_TYPES.INITIAL,
     roundIndex: 1,
     candidateIds: [
       'alignment_b_attacker-0',
@@ -5411,11 +5447,11 @@ test('resolveSelectionRound puede repetir una seleccion nula si selectionRules l
   });
 });
 
-test('resolveSelectionRound exige seleccion de todos los roles inPlay cuando selectionRules.required es all_selectors', () => {
+test('resolveSelectRound exige seleccion de todos los roles inPlay cuando selectionRules.required es all_selectors', () => {
   const session = createBaseSession();
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
-    selectionRules: { required: SELECTION_REQUIRED_RULES.ALL_SELECTORS },
+    selectionRules: { required: SELECT_REQUIRED_RULES.ALL_SELECTORS },
     selections: [
       { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' }
     ]
@@ -5433,14 +5469,14 @@ test('resolveSelectionRound exige seleccion de todos los roles inPlay cuando sel
   ]);
 });
 
-test('resolveSelectionRound permite abstencion explicita cuando la politica lo permite', () => {
+test('resolveSelectRound permite abstencion explicita cuando la politica lo permite', () => {
   const session = createBaseSession();
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
     selectorIds: ['alignment_b_attacker-0', 'alignment_a_blocker-0'],
     selectionRules: {
-      required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
-      abstain: SELECTION_ABSTAIN_RULES.ALLOWED
+      required: SELECT_REQUIRED_RULES.ALL_SELECTORS,
+      abstain: SELECT_ABSTAIN_RULES.ALLOWED
     },
     selections: [
       { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
@@ -5449,7 +5485,7 @@ test('resolveSelectionRound permite abstencion explicita cuando la politica lo p
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.type, SELECT_OUTCOME_TYPES.CHOSEN);
   assert.equal(resolved.result.chosenId, 'alignment_a_target-0');
   assert.deepEqual(resolved.result.abstainedSelections, [
     {
@@ -5457,18 +5493,18 @@ test('resolveSelectionRound permite abstencion explicita cuando la politica lo p
       candidateId: null,
       abstain: true,
       value: 1,
-      roundId: SELECTION_ROUND_TYPES.INITIAL,
+      roundId: SELECT_ROUND_TYPES.INITIAL,
       metadata: {}
     }
   ]);
 });
 
-test('resolveSelectionRound rechaza abstencion cuando la politica no la permite', () => {
+test('resolveSelectRound rechaza abstencion cuando la politica no la permite', () => {
   const session = createBaseSession();
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
     selectorIds: ['alignment_b_attacker-0'],
-    selectionRules: { required: SELECTION_REQUIRED_RULES.ALL_SELECTORS },
+    selectionRules: { required: SELECT_REQUIRED_RULES.ALL_SELECTORS },
     selections: [{ selectorId: 'alignment_b_attacker-0', abstain: true }]
   });
 
@@ -5476,14 +5512,14 @@ test('resolveSelectionRound rechaza abstencion cuando la politica no la permite'
   assert.equal(resolved.errors[0].code, 'selection/abstain-not-allowed');
 });
 
-test('resolveSelectionRound declara nula la seleccion si todos se abstienen', () => {
+test('resolveSelectRound declara nula la seleccion si todos se abstienen', () => {
   const session = createBaseSession();
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
     selectorIds: ['alignment_b_attacker-0', 'alignment_a_blocker-0'],
     selectionRules: {
-      required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
-      abstain: SELECTION_ABSTAIN_RULES.ALLOWED
+      required: SELECT_REQUIRED_RULES.ALL_SELECTORS,
+      abstain: SELECT_ABSTAIN_RULES.ALLOWED
     },
     selections: [
       { selectorId: 'alignment_b_attacker-0', abstain: true },
@@ -5492,17 +5528,17 @@ test('resolveSelectionRound declara nula la seleccion si todos se abstienen', ()
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.type, SELECT_OUTCOME_TYPES.NULL);
   assert.equal(resolved.result.reason, 'all_abstained');
   assert.deepEqual(resolved.result.selectionTally, []);
 });
 
-test('resolveSelectionRound ignora abstenciones por defecto aunque superen al target elegido', () => {
+test('resolveSelectRound ignora abstenciones por defecto aunque superen al target elegido', () => {
   const session = createBaseSession();
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
     selectionRules: {
-      abstain: SELECTION_ABSTAIN_RULES.ALLOWED
+      abstain: SELECT_ABSTAIN_RULES.ALLOWED
     },
     selections: [
       { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
@@ -5512,18 +5548,18 @@ test('resolveSelectionRound ignora abstenciones por defecto aunque superen al ta
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.type, SELECT_OUTCOME_TYPES.CHOSEN);
   assert.equal(resolved.result.chosenId, 'alignment_a_target-0');
 });
 
-test('resolveSelectionRound declara null si la abstencion supera a cualquier target', () => {
+test('resolveSelectRound declara null si la abstencion supera a cualquier target', () => {
   const session = createBaseSession();
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
     selectionRules: {
-      abstain: SELECTION_ABSTAIN_RULES.ALLOWED,
+      abstain: SELECT_ABSTAIN_RULES.ALLOWED,
       abstainResolution: {
-        type: SELECTION_ABSTAIN_RESOLUTION_TYPES.NULL_IF_HIGHEST
+        type: SELECT_ABSTAIN_RESOLUTION_TYPES.NULL_IF_HIGHEST
       }
     },
     selections: [
@@ -5534,20 +5570,20 @@ test('resolveSelectionRound declara null si la abstencion supera a cualquier tar
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.type, SELECT_OUTCOME_TYPES.NULL);
   assert.equal(resolved.result.reason, 'abstention_highest');
   assert.equal(resolved.result.abstainSelectionCount, 2);
   assert.deepEqual(resolved.result.finalEffects ?? [], []);
 });
 
-test('resolveSelectionRound exige unanimidad cuando selectionRules.unanimous es required', () => {
+test('resolveSelectRound exige unanimidad cuando selectionRules.unanimous es required', () => {
   const session = createBaseSession();
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
     selectorIds: ['alignment_b_attacker-0', 'alignment_a_blocker-0'],
     selectionRules: {
-      required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
-      unanimous: SELECTION_UNANIMOUS_RULES.REQUIRED
+      required: SELECT_REQUIRED_RULES.ALL_SELECTORS,
+      unanimous: SELECT_UNANIMOUS_RULES.REQUIRED
     },
     selections: [
       { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
@@ -5556,20 +5592,20 @@ test('resolveSelectionRound exige unanimidad cuando selectionRules.unanimous es 
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.type, SELECT_OUTCOME_TYPES.CHOSEN);
   assert.equal(resolved.result.reason, 'unanimous_candidate');
   assert.equal(resolved.result.chosenId, 'alignment_a_target-0');
 });
 
-test('resolveSelectionRound declara nula una decision no unanime', () => {
+test('resolveSelectRound declara nula una decision no unanime', () => {
   const session = createBaseSession();
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
     selectorIds: ['alignment_b_attacker-0', 'alignment_a_blocker-0'],
     selectionRules: {
-      required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
-      unanimous: SELECTION_UNANIMOUS_RULES.REQUIRED,
-      abstain: SELECTION_ABSTAIN_RULES.ALLOWED
+      required: SELECT_REQUIRED_RULES.ALL_SELECTORS,
+      unanimous: SELECT_UNANIMOUS_RULES.REQUIRED,
+      abstain: SELECT_ABSTAIN_RULES.ALLOWED
     },
     selections: [
       { selectorId: 'alignment_b_attacker-0', candidateId: 'alignment_a_target-0' },
@@ -5578,23 +5614,23 @@ test('resolveSelectionRound declara nula una decision no unanime', () => {
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.type, SELECT_OUTCOME_TYPES.NULL);
   assert.equal(resolved.result.reason, 'not_unanimous');
   assert.equal(resolved.result.chosenId, null);
 });
 
-test('resolveSelectionRound rechaza elegir a un member del group linked por linked si la restriccion esta activa', () => {
+test('resolveSelectRound rechaza elegir a un member del group linked por linked si la restriccion esta activa', () => {
   const session = createBaseSession({
     groups: [
       createLinkedGroup({ id: 'linked-selection-restriction' })
     ]
   });
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
     selectionRules: {
       groupRestrictions: [
         {
-          type: SELECTION_RESTRICTION_TYPES.EXCLUDE_GROUP_MEMBER_CANDIDATE,
+          type: SELECT_RESTRICTION_TYPES.EXCLUDE_GROUP_MEMBER_CANDIDATE,
           groupType: GROUP_TYPES.LINKED
         }
       ]
@@ -5610,18 +5646,18 @@ test('resolveSelectionRound rechaza elegir a un member del group linked por link
   assert.equal(resolved.errors[0].candidateId, 'alignment_a_target-0');
 });
 
-test('resolveSelectionRound ignora restricciones de grupo incompletas', () => {
+test('resolveSelectRound ignora restricciones de grupo incompletas', () => {
   const session = createBaseSession({
     groups: [
       createLinkedGroup({ id: 'linked-incomplete-restriction' })
     ]
   });
-  const resolved = resolveSelectionRound({
+  const resolved = resolveSelectRound({
     session,
     selectionRules: {
       groupRestrictions: [
         {
-          type: SELECTION_RESTRICTION_TYPES.EXCLUDE_GROUP_MEMBER_CANDIDATE
+          type: SELECT_RESTRICTION_TYPES.EXCLUDE_GROUP_MEMBER_CANDIDATE
         }
       ]
     },
@@ -5631,7 +5667,7 @@ test('resolveSelectionRound ignora restricciones de grupo incompletas', () => {
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.type, SELECT_OUTCOME_TYPES.CHOSEN);
 });
 
 test('selection pura devuelve chosen sin aplicar efectos', () => {
@@ -5639,8 +5675,8 @@ test('selection pura devuelve chosen sin aplicar efectos', () => {
   const resolved = resolveAction(session, {
     id: ACTION_IDS.SELECT,
     selectionRules: {
-      tie: SELECTION_TIE_RULES.NULL_ON_TIE,
-      required: SELECTION_REQUIRED_RULES.ALL_SELECTORS
+      tie: SELECT_TIE_RULES.NULL_ON_TIE,
+      required: SELECT_REQUIRED_RULES.ALL_SELECTORS
     },
     visibility: VISIBILITY.ALL
   }, {
@@ -5656,7 +5692,7 @@ test('selection pura devuelve chosen sin aplicar efectos', () => {
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.selection.type, SELECT_OUTCOME_TYPES.CHOSEN);
   assert.equal(resolved.result.selection.chosenId, 'alignment_a_target-0');
   assert.deepEqual(resolved.result.proposedEffects, []);
   assert.deepEqual(resolved.result.finalEffects, []);
@@ -5671,7 +5707,7 @@ test('selection pura no aplica restricciones linked por defecto', () => {
   });
   const resolved = resolveAction(session, {
     id: ACTION_IDS.SELECT,
-    selectionRules: { tie: SELECTION_TIE_RULES.NULL_ON_TIE },
+    selectionRules: { tie: SELECT_TIE_RULES.NULL_ON_TIE },
     visibility: VISIBILITY.ALL
   }, {
     selections: [
@@ -5683,7 +5719,7 @@ test('selection pura no aplica restricciones linked por defecto', () => {
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.selection.type, SELECT_OUTCOME_TYPES.CHOSEN);
   assert.equal(resolved.result.selection.chosenId, 'alignment_a_target-0');
 });
 
@@ -5705,7 +5741,7 @@ test('stage con seleccion y set_out_of_play aplica inPlay=false al chosen de la 
   );
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.selection.type, SELECT_OUTCOME_TYPES.CHOSEN);
   assert.equal(resolved.result.selection.chosenId, 'alignment_a_target-0');
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
   assert.deepEqual(lastFinishedRecipeHistory(resolved.session).payload.actorIds, []);
@@ -5741,15 +5777,15 @@ test('stage exposed_set_out_of_play usa roles inPlay como selectors aunque el gr
     {
       actorIds: allRoleIds,
       metadata: { catalogId: STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY },
-      selectionRules: createSelectionRules({
+      selectionRules: createSelectRules({
         ...selectionOutOfPlayRules,
-        selectorSource: SELECTION_SELECTOR_SOURCES.IN_PLAY_ROLES
+        selectorSource: SELECT_SELECTOR_SOURCES.IN_PLAY_ROLES
       })
     }
   );
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.selection.type, SELECT_OUTCOME_TYPES.CHOSEN);
   assert.equal(resolved.result.selection.chosenId, 'alignment_a_target-0');
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
 });
@@ -5770,18 +5806,18 @@ test('stage con seleccion y set_out_of_play no ejecuta receta si chosen no alcan
       })
     }),
     {
-      selectionRules: createSelectionRules({
+      selectionRules: createSelectRules({
         ...selectionOutOfPlayRules,
         supportThreshold: {
-          type: SELECTION_SUPPORT_THRESHOLD_TYPES.MAJORITY,
-          base: SELECTION_SUPPORT_BASES.SELECTOR_COUNT
+          type: SELECT_SUPPORT_THRESHOLD_TYPES.MAJORITY,
+          base: SELECT_SUPPORT_BASES.SELECTOR_COUNT
         }
       })
     }
   );
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.selection.type, SELECT_OUTCOME_TYPES.NULL);
   assert.equal(resolved.result.selection.reason, 'insufficient_support');
   assert.deepEqual(resolved.result.proposedEffects, []);
   assert.deepEqual(resolved.result.finalEffects, []);
@@ -5804,18 +5840,18 @@ test('stage con seleccion y set_out_of_play no ejecuta receta si la abstencion s
       ]
     }),
     {
-      selectionRules: createSelectionRules({
+      selectionRules: createSelectRules({
         ...selectionOutOfPlayRules,
-        abstain: SELECTION_ABSTAIN_RULES.ALLOWED,
+        abstain: SELECT_ABSTAIN_RULES.ALLOWED,
         abstainResolution: {
-          type: SELECTION_ABSTAIN_RESOLUTION_TYPES.NULL_IF_HIGHEST
+          type: SELECT_ABSTAIN_RESOLUTION_TYPES.NULL_IF_HIGHEST
         }
       })
     }
   );
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.selection.type, SELECT_OUTCOME_TYPES.NULL);
   assert.equal(resolved.result.selection.reason, 'abstention_highest');
   assert.deepEqual(resolved.result.proposedEffects, []);
   assert.deepEqual(resolved.result.finalEffects, []);
@@ -5841,7 +5877,7 @@ test('stage con seleccion y set_out_of_play empatado no aplica efecto con null_o
   );
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.selection.type, SELECT_OUTCOME_TYPES.NULL);
   assert.deepEqual(resolved.result.proposedEffects, []);
   assert.deepEqual(resolved.result.finalEffects, []);
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, true);
@@ -5864,9 +5900,9 @@ test('stage con seleccion y set_out_of_play permite cerrar el stage cuando todos
       ]
     }),
     {
-      selectionRules: createSelectionRules({
+      selectionRules: createSelectRules({
         ...selectionOutOfPlayRules,
-        abstain: SELECTION_ABSTAIN_RULES.ALLOWED
+        abstain: SELECT_ABSTAIN_RULES.ALLOWED
       })
     }
   );
@@ -5876,7 +5912,7 @@ test('stage con seleccion y set_out_of_play permite cerrar el stage cuando todos
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.selection.type, SELECT_OUTCOME_TYPES.NULL);
   assert.equal(resolved.result.selection.reason, 'all_abstained');
   assert.equal(resolved.result.selection.chosenId, null);
   assert.deepEqual(resolved.result.proposedEffects, []);
@@ -5904,14 +5940,14 @@ test('stage con seleccion y set_out_of_play trata un empate sin regla especial c
       })
     }),
     {
-      selectionRules: createSelectionRules({
-        required: SELECTION_REQUIRED_RULES.ALL_SELECTORS
+      selectionRules: createSelectRules({
+        required: SELECT_REQUIRED_RULES.ALL_SELECTORS
       })
     }
   );
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.selection.type, SELECT_OUTCOME_TYPES.NULL);
   assert.equal(resolved.result.selection.reason, 'tied_selection');
   assert.equal(resolved.result.selection.chosenId, null);
   assert.deepEqual(resolved.result.proposedEffects, []);
@@ -5937,19 +5973,19 @@ test('stage con seleccion y set_out_of_play puede pedir runoff limitado por empa
       })
     }),
     {
-      selectionRules: createSelectionRules({
+      selectionRules: createSelectRules({
         ...selectionOutOfPlayRules,
-        tie: SELECTION_TIE_RULES.RUNOFF_ON_TIE
+        tie: SELECT_TIE_RULES.RUNOFF_ON_TIE
       })
     }
   );
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.TIE);
+  assert.equal(resolved.result.selection.type, SELECT_OUTCOME_TYPES.TIE);
   assert.equal(resolved.result.selection.reason, 'runoff_required');
   assert.equal(resolved.result.selection.chosenId, null);
   assert.deepEqual(resolved.result.selection.nextRound, {
-    roundType: SELECTION_ROUND_TYPES.RUNOFF,
+    roundType: SELECT_ROUND_TYPES.RUNOFF,
     roundIndex: 1,
     candidateIds: ['alignment_a_plain-0', 'alignment_a_target-0']
   });
@@ -5962,7 +5998,7 @@ test('stage con seleccion y set_out_of_play puede pedir runoff limitado por empa
 test('stage con seleccion y set_out_of_play ejecuta receta si el runoff produce chosen', () => {
   const session = createBaseSession();
   const resolved = resolveSelectionOutOfPlayStage(session, {
-    roundType: SELECTION_ROUND_TYPES.RUNOFF,
+    roundType: SELECT_ROUND_TYPES.RUNOFF,
     roundIndex: 1,
     candidateIds: ['alignment_a_plain-0', 'alignment_a_target-0'],
     selections: createSelections({
@@ -5977,7 +6013,7 @@ test('stage con seleccion y set_out_of_play ejecuta receta si el runoff produce 
   });
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.selection.type, SELECT_OUTCOME_TYPES.CHOSEN);
   assert.equal(resolved.result.selection.chosenId, 'alignment_a_target-0');
   assert.equal(roleById(resolved.session, 'alignment_a_target-0').inPlay, false);
 });
@@ -6112,7 +6148,7 @@ test('stage con seleccion y set_out_of_play no restringe linked sin selectionRul
   );
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.CHOSEN);
+  assert.equal(resolved.result.selection.type, SELECT_OUTCOME_TYPES.CHOSEN);
   assert.equal(resolved.result.selection.chosenId, 'alignment_a_target-0');
 });
 
@@ -6261,13 +6297,13 @@ test('role_peek warning confirmado fuerza candidate aunque la seleccion sea nula
       metadata: { catalogId: STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY },
       selectionRules: {
         ...selectionOutOfPlayRules,
-        required: SELECTION_REQUIRED_RULES.OPTIONAL
+        required: SELECT_REQUIRED_RULES.OPTIONAL
       }
     }
   );
 
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.result.selection.type, SELECTION_OUTCOME_TYPES.NULL);
+  assert.equal(resolved.result.selection.type, SELECT_OUTCOME_TYPES.NULL);
   assert.equal(resolved.result.selectedCandidateOverride.candidateRoleId, 'alignment_a_plain-0');
   assert.equal(roleById(resolved.session, 'alignment_a_plain-0').inPlay, false);
 });

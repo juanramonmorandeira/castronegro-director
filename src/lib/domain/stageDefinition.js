@@ -17,7 +17,7 @@ import {
   STAGE_COMPLETION_MODES,
   STAGE_COMPLETION_REQUESTED_BY
 } from './stageTypes.js';
-import { createSelectionRules } from './actionModel.js';
+import { createSelectRules } from './actionModel.js';
 
 export const AVAILABILITY_RULE_TYPES = Object.freeze({
   ACTOR_IN_PLAY: 'actor_in_play',
@@ -93,7 +93,7 @@ function prepareRecipe(recipe = {}) {
 // declarada en stage.recipes sobre el chosenId resultante.
 function prepareSelectionRules(selectionRules = null) {
   if (!selectionRules) return null;
-  return createSelectionRules(selectionRules);
+  return createSelectRules(selectionRules);
 }
 
 function prepareInfluences(influences = []) {

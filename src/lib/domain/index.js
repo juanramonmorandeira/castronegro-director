@@ -20,7 +20,8 @@ export {
   CURRENT_STAGE_SOURCES,
   POOL_KEYS,
   DEFAULT_POOL_ORDER,
-  normalizeId
+  normalizeId,
+  getCurrentCycleId
 } from './sessionModel.js';
 
 export { createPlayer } from './playerDefinition.js';
@@ -193,6 +194,7 @@ export {
 } from './interPoolQueueModel.js';
 
 export {
+  VISIBILITY,
   SURFACE_SCREEN_MODES,
   SURFACE_FLOW_STEPS,
   SURFACE_FLOW_ORDER,
@@ -217,13 +219,11 @@ export {
 export {
   RECIPE_KEYS,
   RECIPE_CATALOG,
-  getCatalogRecipe,
-  validateCatalogRecipeOverrides
+  getCatalogRecipe
 } from './recipeCatalog.js';
 export {
   ACTION_CATALOG,
-  getCatalogAction,
-  validateCatalogActionOverrides
+  getCatalogAction
 } from './actionCatalog.js';
 export {
   ACTOR_MODEL_ERRORS,
@@ -234,7 +234,7 @@ export {
 } from './actorModel.js';
 export {
   createAction,
-  defineAction
+  validateAction
 } from './actionDefinition.js';
 export {
   getRecipeKey,
@@ -255,14 +255,13 @@ export {
 
 export {
   EFFECT_TYPES,
-  getCurrentCycleId,
-  resolveEffect,
+  createEffect,
+  validateEffect
+} from './effectDefinition.js';
+export {
+  resolveEffects,
   applyEffect,
-  applyEffects,
-  applySetPropertyEffect,
-  applySetGroupEffect,
-  applyReplaceRoleIdentityEffect,
-  applyConcludePlay
+  applyEffects
 } from './effectModel.js';
 export {
   PROPERTY_BLOCK_BOUNDARIES,
@@ -312,9 +311,6 @@ export {
 } from './doubleSelectorModel.js';
 export {
   ACTION_IDS,
-  VISIBILITY,
-  validateActionDefinition,
-  validateActionResolution,
   resolveAction
 } from './actionModel.js';
 export {
@@ -344,28 +340,28 @@ export {
   checkObjectives
 } from './objectiveModel.js';
 export {
-  SELECTION_OUTCOME_TYPES,
-  SELECTION_ABSTAIN_RESOLUTION_TYPES,
-  SELECTION_ABSTAIN_RULES,
-  SELECTION_UNANIMOUS_RULES,
-  SELECTION_NULL_RULES,
-  SELECTION_RUNOFF_RULES,
-  SELECTION_SUPPORT_BASES,
-  SELECTION_SUPPORT_THRESHOLD_TYPES,
-  SELECTION_TIE_RULES,
-  SELECTION_TIE_BREAKER_TYPES,
-  SELECTION_VALUE_RULE_TYPES,
-  SELECTION_ROUND_TYPES,
-  SELECTION_REQUIRED_RULES,
-  SELECTION_RESTRICTION_TYPES,
-  SELECTION_SELECTOR_SOURCES,
+  SELECT_OUTCOME_TYPES,
+  SELECT_ABSTAIN_RESOLUTION_TYPES,
+  SELECT_ABSTAIN_RULES,
+  SELECT_UNANIMOUS_RULES,
+  SELECT_NULL_RULES,
+  SELECT_RUNOFF_RULES,
+  SELECT_SUPPORT_BASES,
+  SELECT_SUPPORT_THRESHOLD_TYPES,
+  SELECT_TIE_RULES,
+  SELECT_TIE_BREAKER_TYPES,
+  SELECT_VALUE_RULE_TYPES,
+  SELECT_ROUND_TYPES,
+  SELECT_REQUIRED_RULES,
+  SELECT_RESTRICTION_TYPES,
+  SELECT_SELECTOR_SOURCES,
   CANDIDATE_RULE_TYPES,
-  createSelection,
-  createSelectionRules,
-  buildStageSelectionInput,
-  getDefaultSelectionCandidateIds,
+  createSelectDecision,
+  createSelectRules,
+  buildSelectActionInput,
+  getDefaultSelectCandidateIds,
   resolveCandidateIds,
-  validateSelections,
-  tallySelections,
-  resolveSelectionRound
+  validateSelectDecisions,
+  tallySelectDecisions,
+  resolveSelectRound
 } from './actionModel.js';

@@ -8,7 +8,7 @@
 // - block_property_change: bloquea un cambio concreto contra un objetivo.
 // - link_targets: crea un grupo mecanico entre varios objetivos.
 // - select: resuelve una seleccion y devuelve chosen/empate/nulo.
-// - conclude_play: concluye la parte jugable desde pool.onExit.
+// - conclude_play: concluye la parte jugable cuando el ciclo ya tiene outcome.
 //
 // Importante:
 // - No sabe que skin o nombre visible tendra un role.
@@ -16,133 +16,132 @@
 // - No pinta nada en pantalla.
 // - No guarda nada fuera de la session.
 //
-// Recibe datos de session/input/context, aplica efectos aceptados en la session
-// y devuelve un resultado mecanico para que otros modelos puedan derivar eventos.
+// Recibe datos de session/input/context, coordina la resolucion/aplicacion de
+// efectos con effectModel y devuelve una resolucion mecanica para otros modelos.
 // -----------------------------------------------------------------------------
 
 import {
-  EFFECT_TYPES,
   applyEffects,
-  applyConcludePlay as applyConcludePlayFromModel,
-  getCurrentCycleId,
-  resolveEffect
+  resolveEffects
 } from './effectModel.js';
-import {
-  PROPERTY_BLOCK_EXPIRATION_TYPES,
-  addBlockedPropertyChange
-} from './roleModel.js';
+import { EFFECT_TYPES, validateEffect } from './effectDefinition.js';
+import { PROPERTY_BLOCK_EXPIRATION_TYPES } from './roleModel.js';
 import {
   collectSelectionRules,
   getGroupMemberRoleIds
 } from './groupModel.js';
 import { MECHANICAL_ENTITY_TYPES } from './domainTypes.js';
-import { normalizeId } from './sessionModel.js';
-import { ACTION_IDS, VISIBILITY } from './actionDefinition.js';
+import { getCurrentCycleId, normalizeId } from './sessionModel.js';
 import {
-  SELECTION_SELECTOR_SOURCES,
+  ACTION_IDS,
+  validateAction as validateActionShape
+} from './actionDefinition.js';
+import { VISIBILITY } from './surfaceModel.js';
+import {
+  SELECT_SELECTOR_SOURCES,
   getActionActors,
   getRequiredSelectorIds,
-  getSelectionRuleSelectorIds,
-  getSelectionSelectorIds
+  getSelectRuleSelectorIds,
+  getSelectSelectorIds
 } from './actorModel.js';
 import {
   findRole,
-  getDefaultSelectionCandidateIds,
+  getDefaultSelectCandidateIds,
   hasRolePropertyValue,
   resolveCandidateIds,
   validateActionTargets
 } from './targetModel.js';
 
-export { ACTION_IDS, VISIBILITY };
+export { ACTION_IDS };
 export {
-  SELECTION_SELECTOR_SOURCES,
+  SELECT_SELECTOR_SOURCES,
   getRequiredSelectorIds,
-  getSelectionSelectorIds
+  getSelectSelectorIds
 } from './actorModel.js';
 export {
   CANDIDATE_RULE_TYPES,
-  getDefaultSelectionCandidateIds,
+  getDefaultSelectCandidateIds,
   resolveCandidateIds
 } from './targetModel.js';
 
-export const SELECTION_OUTCOME_TYPES = Object.freeze({
+export const SELECT_OUTCOME_TYPES = Object.freeze({
   CHOSEN: 'chosen',
   TIE: 'tie',
   NULL: 'null'
 });
 
-export const SELECTION_TIE_RULES = Object.freeze({
+export const SELECT_TIE_RULES = Object.freeze({
   NULL_ON_TIE: 'null_on_tie',
   RUNOFF_ON_TIE: 'runoff_on_tie'
 });
 
-export const SELECTION_TIE_BREAKER_TYPES = Object.freeze({
+export const SELECT_TIE_BREAKER_TYPES = Object.freeze({
   SELECTOR_AUTHORITY: 'selector_authority',
   SELECTOR_PROPERTY: 'selector_property'
 });
 
-export const SELECTION_RUNOFF_RULES = Object.freeze({
+export const SELECT_RUNOFF_RULES = Object.freeze({
   TIED_CANDIDATES: 'tied_candidates',
   SELECTED_CANDIDATES: 'selected_candidates',
   SAME_CANDIDATES: 'same_candidates'
 });
 
-export const SELECTION_NULL_RULES = Object.freeze({
+export const SELECT_NULL_RULES = Object.freeze({
   END_AS_NULL: 'end_as_null',
   REPEAT_ON_NULL: 'repeat_on_null'
 });
 
-export const SELECTION_SUPPORT_THRESHOLD_TYPES = Object.freeze({
+export const SELECT_SUPPORT_THRESHOLD_TYPES = Object.freeze({
   NONE: 'none',
   MAJORITY: 'majority',
   FRACTION: 'fraction'
 });
 
-export const SELECTION_SUPPORT_BASES = Object.freeze({
+export const SELECT_SUPPORT_BASES = Object.freeze({
   CAST_SELECTIONS: 'cast_selections',
   SELECTOR_COUNT: 'selector_count'
 });
 
-export const SELECTION_ROUND_TYPES = Object.freeze({
+export const SELECT_ROUND_TYPES = Object.freeze({
   INITIAL: 'initial',
   RUNOFF: 'runoff'
 });
 
-export const SELECTION_REQUIRED_RULES = Object.freeze({
+export const SELECT_REQUIRED_RULES = Object.freeze({
   OPTIONAL: 'optional',
   ALL_SELECTORS: 'all_selectors'
 });
 
-export const SELECTION_ABSTAIN_RULES = Object.freeze({
+export const SELECT_ABSTAIN_RULES = Object.freeze({
   NOT_ALLOWED: 'not_allowed',
   ALLOWED: 'allowed'
 });
 
-export const SELECTION_ABSTAIN_RESOLUTION_TYPES = Object.freeze({
+export const SELECT_ABSTAIN_RESOLUTION_TYPES = Object.freeze({
   IGNORE: 'ignore',
   NULL_IF_HIGHEST: 'null_if_highest'
 });
 
-export const SELECTION_UNANIMOUS_RULES = Object.freeze({
+export const SELECT_UNANIMOUS_RULES = Object.freeze({
   NOT_REQUIRED: 'not_required',
   REQUIRED: 'required'
 });
 
-export const SELECTION_RESTRICTION_TYPES = Object.freeze({
+export const SELECT_RESTRICTION_TYPES = Object.freeze({
   EXCLUDE_GROUP_MEMBER_CANDIDATE: 'exclude_group_member_candidate'
 });
 
-export const SELECTION_VALUE_RULE_TYPES = Object.freeze({
+export const SELECT_VALUE_RULE_TYPES = Object.freeze({
   SELECTOR_PROPERTY: 'selector_property'
 });
 
-export function createSelectionRules({
-  required = SELECTION_REQUIRED_RULES.OPTIONAL,
-  abstain = SELECTION_ABSTAIN_RULES.NOT_ALLOWED,
-  unanimous = SELECTION_UNANIMOUS_RULES.NOT_REQUIRED,
-  tie = SELECTION_TIE_RULES.NULL_ON_TIE,
-  runoff = SELECTION_RUNOFF_RULES.TIED_CANDIDATES,
-  nullResult = SELECTION_NULL_RULES.END_AS_NULL,
+export function createSelectRules({
+  required = SELECT_REQUIRED_RULES.OPTIONAL,
+  abstain = SELECT_ABSTAIN_RULES.NOT_ALLOWED,
+  unanimous = SELECT_UNANIMOUS_RULES.NOT_REQUIRED,
+  tie = SELECT_TIE_RULES.NULL_ON_TIE,
+  runoff = SELECT_RUNOFF_RULES.TIED_CANDIDATES,
+  nullResult = SELECT_NULL_RULES.END_AS_NULL,
   repeatLimit = 1,
   supportThreshold = {},
   abstainResolution = {},
@@ -153,7 +152,7 @@ export function createSelectionRules({
   selectionValueRules = [],
   tieBreakers = [],
   selectorEligibility = {},
-  selectorSource = SELECTION_SELECTOR_SOURCES.STAGE_ACTORS
+  selectorSource = SELECT_SELECTOR_SOURCES.STAGE_ACTORS
 } = {}) {
   return {
     required,
@@ -168,28 +167,28 @@ export function createSelectionRules({
     groupRestrictions: (groupRestrictions ?? []).map((restriction) => ({ ...restriction })),
     candidateIds: Array.isArray(candidateIds) ? [...candidateIds] : null,
     candidateRules: (candidateRules ?? []).map((rule) => ({ ...rule })),
-    selectionWeights: normalizeSelectionWeights(selectionWeights),
-    selectionValueRules: normalizeSelectionValueRules(selectionValueRules),
+    selectionWeights: normalizeSelectWeights(selectionWeights),
+    selectionValueRules: normalizeSelectValueRules(selectionValueRules),
     tieBreakers: normalizeTieBreakers(tieBreakers),
     selectorEligibility: normalizeSelectorEligibility(selectorEligibility),
-    selectorSource: Object.values(SELECTION_SELECTOR_SOURCES).includes(selectorSource)
+    selectorSource: Object.values(SELECT_SELECTOR_SOURCES).includes(selectorSource)
       ? selectorSource
-      : SELECTION_SELECTOR_SOURCES.STAGE_ACTORS
+      : SELECT_SELECTOR_SOURCES.STAGE_ACTORS
   };
 }
 
 function normalizeSupportThreshold({
-  type = SELECTION_SUPPORT_THRESHOLD_TYPES.NONE,
-  base = SELECTION_SUPPORT_BASES.CAST_SELECTIONS,
+  type = SELECT_SUPPORT_THRESHOLD_TYPES.NONE,
+  base = SELECT_SUPPORT_BASES.CAST_SELECTIONS,
   numerator = 1,
   denominator = 2
 } = {}) {
-  const normalizedType = Object.values(SELECTION_SUPPORT_THRESHOLD_TYPES).includes(type)
+  const normalizedType = Object.values(SELECT_SUPPORT_THRESHOLD_TYPES).includes(type)
     ? type
-    : SELECTION_SUPPORT_THRESHOLD_TYPES.NONE;
-  const normalizedBase = Object.values(SELECTION_SUPPORT_BASES).includes(base)
+    : SELECT_SUPPORT_THRESHOLD_TYPES.NONE;
+  const normalizedBase = Object.values(SELECT_SUPPORT_BASES).includes(base)
     ? base
-    : SELECTION_SUPPORT_BASES.CAST_SELECTIONS;
+    : SELECT_SUPPORT_BASES.CAST_SELECTIONS;
 
   return {
     type: normalizedType,
@@ -200,16 +199,16 @@ function normalizeSupportThreshold({
 }
 
 function normalizeAbstainResolution({
-  type = SELECTION_ABSTAIN_RESOLUTION_TYPES.IGNORE
+  type = SELECT_ABSTAIN_RESOLUTION_TYPES.IGNORE
 } = {}) {
   return {
-    type: Object.values(SELECTION_ABSTAIN_RESOLUTION_TYPES).includes(type)
+    type: Object.values(SELECT_ABSTAIN_RESOLUTION_TYPES).includes(type)
       ? type
-      : SELECTION_ABSTAIN_RESOLUTION_TYPES.IGNORE
+      : SELECT_ABSTAIN_RESOLUTION_TYPES.IGNORE
   };
 }
 
-function normalizeSelectionWeights(selectionWeights = []) {
+function normalizeSelectWeights(selectionWeights = []) {
   return (selectionWeights ?? [])
     .map((rule) => ({
       selectorId: rule?.selectorId ?? null,
@@ -219,10 +218,10 @@ function normalizeSelectionWeights(selectionWeights = []) {
     .filter((rule) => rule.selectorId);
 }
 
-function normalizeSelectionValueRules(selectionValueRules = []) {
+function normalizeSelectValueRules(selectionValueRules = []) {
   return (selectionValueRules ?? [])
     .map((rule) => ({
-      type: Object.values(SELECTION_VALUE_RULE_TYPES).includes(rule?.type)
+      type: Object.values(SELECT_VALUE_RULE_TYPES).includes(rule?.type)
         ? rule.type
         : null,
       property: rule?.property ?? null,
@@ -238,7 +237,7 @@ function normalizeSelectionValueRules(selectionValueRules = []) {
 function normalizeTieBreakers(tieBreakers = []) {
   return (tieBreakers ?? [])
     .map((rule) => ({
-      type: Object.values(SELECTION_TIE_BREAKER_TYPES).includes(rule?.type)
+      type: Object.values(SELECT_TIE_BREAKER_TYPES).includes(rule?.type)
         ? rule.type
         : null,
       selectorIds: [...(rule?.selectorIds ?? [])].filter(Boolean),
@@ -247,7 +246,7 @@ function normalizeTieBreakers(tieBreakers = []) {
       metadata: { ...(rule?.metadata ?? {}) }
     }))
     .filter((rule) =>
-      rule.type === SELECTION_TIE_BREAKER_TYPES.SELECTOR_PROPERTY
+      rule.type === SELECT_TIE_BREAKER_TYPES.SELECTOR_PROPERTY
         ? !!rule.property
         : rule.type && rule.selectorIds.length > 0
     );
@@ -263,12 +262,12 @@ function normalizeSelectorEligibility({ requireInPlay = true } = {}) {
 //
 // Guardamos selectorId y candidateId porque el motor trabaja
 // sobre roles, no sobre nombres visuales ni tokens de tablero.
-export function createSelection({
+export function createSelectDecision({
   selectorId,
   candidateId = null,
   abstain = false,
   value = 1,
-  roundId = SELECTION_ROUND_TYPES.INITIAL,
+  roundId = SELECT_ROUND_TYPES.INITIAL,
   metadata = {}
 } = {}) {
   const isAbstention = abstain === true;
@@ -283,7 +282,7 @@ export function createSelection({
   };
 }
 
-function getSelectionWeightForSelector(selectorId = null, selectionWeights = []) {
+function getSelectWeightForSelector(selectorId = null, selectionWeights = []) {
   return (
     (selectionWeights ?? []).find((rule) => rule.selectorId === selectorId)?.value ??
     null
@@ -291,32 +290,32 @@ function getSelectionWeightForSelector(selectorId = null, selectionWeights = [])
 }
 
 function selectorMatchesValueRule(selector = null, rule = {}) {
-  if (rule.type !== SELECTION_VALUE_RULE_TYPES.SELECTOR_PROPERTY) return false;
+  if (rule.type !== SELECT_VALUE_RULE_TYPES.SELECTOR_PROPERTY) return false;
   return hasRolePropertyValue(selector, rule.property, rule.value);
 }
 
-function getSelectionValueRuleForSelector(session = {}, selectorId = null, selectionValueRules = []) {
+function getSelectValueRuleForSelector(session = {}, selectorId = null, selectionValueRules = []) {
   const selector = findRole(session, selectorId);
   return (selectionValueRules ?? []).find((rule) => selectorMatchesValueRule(selector, rule)) ?? null;
 }
 
-function getSelectionValueForSelector({
+function getSelectValueForSelector({
   session = {},
   selectorId = null,
   selectionWeights = [],
   selectionValueRules = []
 } = {}) {
   return (
-    getSelectionValueRuleForSelector(session, selectorId, selectionValueRules)?.selectionValue ??
-    getSelectionWeightForSelector(selectorId, selectionWeights) ??
+    getSelectValueRuleForSelector(session, selectorId, selectionValueRules)?.selectionValue ??
+    getSelectWeightForSelector(selectorId, selectionWeights) ??
     1
   );
 }
 
-function applySelectionRuleWeights(session = {}, selections = [], rules = {}) {
+function resolveSelectDecisionValues(session = {}, selections = [], rules = {}) {
   return (selections ?? []).map((rawSelection) => {
-    const selection = createSelection(rawSelection);
-    const ruleWeight = getSelectionValueForSelector({
+    const selection = createSelectDecision(rawSelection);
+    const ruleWeight = getSelectValueForSelector({
       session,
       selectorId: selection.selectorId,
       selectionWeights: rules.selectionWeights,
@@ -351,13 +350,13 @@ function ruleScopeMatchesContext(scope = {}, context = {}) {
   return true;
 }
 
-function collectSessionSelectionRules(session = {}, selectionContext = {}) {
+function collectSessionSelectRules(session = {}, selectionContext = {}) {
   return (session.selectionRules ?? [])
     .filter((rule) => ruleScopeMatchesContext(rule.scope ?? {}, selectionContext))
     .map((rule) => rule.rules ?? rule);
 }
 
-export function mergeSelectionRules(baseRules = {}, additionalRules = []) {
+export function mergeSelectRules(baseRules = {}, additionalRules = []) {
   return (additionalRules ?? []).reduce((merged, rule) => ({
     ...merged,
     ...rule,
@@ -396,34 +395,34 @@ export function mergeSelectionRules(baseRules = {}, additionalRules = []) {
   }), { ...baseRules });
 }
 
-// Prepara el input que una stage con selectionRules entregara a actionModel.
+// Prepara el input para la action select.
 //
 // No resuelve la seleccion. Solo combina:
-// - selectores reales de la stage;
+// - selectores reales de la fuente de seleccion;
 // - selections recibidas por input;
-// - reglas de seleccion de la stage;
+// - reglas de seleccion de la fuente;
 // - reglas globales de sesion;
 // - restricciones aportadas por groups activos.
-export function buildStageSelectionInput({
+export function buildSelectActionInput({
   session = {},
-  stage = {},
+  selectionSource = {},
   recipeKey = null,
   input = {}
 } = {}) {
-  const selectionRules = stage?.selectionRules ?? {};
-  const selectorIds = getSelectionSelectorIds(session, stage, input, selectionRules);
+  const selectionRules = selectionSource?.selectionRules ?? {};
+  const selectorIds = getSelectSelectorIds(session, selectionSource, input, selectionRules);
   const selectionContext = {
     method: 'vote',
-    poolKey: stage.poolKey ?? null,
-    stageKey: stage.key ?? null,
+    poolKey: selectionSource.poolKey ?? null,
+    stageKey: selectionSource.key ?? null,
     recipeKey
   };
   const collectedRules = collectSelectionRules(session, {
-    selectorIds: getSelectionRuleSelectorIds(session, stage, input, selectionRules),
+    selectorIds: getSelectRuleSelectorIds(session, selectionSource, input, selectionRules),
     selectionContext
   });
-  const sessionSelectionRules = collectSessionSelectionRules(session, selectionContext);
-  const mergedSelectionRules = mergeSelectionRules(selectionRules, sessionSelectionRules);
+  const sessionSelectionRules = collectSessionSelectRules(session, selectionContext);
+  const mergedSelectionRules = mergeSelectRules(selectionRules, sessionSelectionRules);
 
   return {
     selectorIds,
@@ -442,8 +441,8 @@ export function buildStageSelectionInput({
 }
 
 // Crea errores de selecciones obligatorias faltantes.
-export function getRequiredSelectionErrors({ session, selectorIds = [], seenSelectors, selectionRules = {} }) {
-  if (selectionRules.required !== SELECTION_REQUIRED_RULES.ALL_SELECTORS) return [];
+export function getRequiredSelectDecisionErrors({ session, selectorIds = [], seenSelectors, selectionRules = {} }) {
+  if (selectionRules.required !== SELECT_REQUIRED_RULES.ALL_SELECTORS) return [];
 
   const missingSelectorIds = getRequiredSelectorIds(session, selectorIds).filter((id) => !seenSelectors.has(id));
   if (missingSelectorIds.length === 0) return [];
@@ -469,13 +468,13 @@ export function getRequiredSelectionErrors({ session, selectorIds = [], seenSele
 // - si selectionRules.required=all_selectors, todos los selectorIds del stage deben decidir;
 // - abstenerse solo es valido si selectionRules.abstain lo permite;
 // - si hay restricciones de grupo, selector y candidate no pueden incumplirlas.
-export function validateSelections({
+export function validateSelectDecisions({
   session,
   selectorIds = [],
   selections = [],
-  selectionRules = createSelectionRules()
+  selectionRules = createSelectRules()
 } = {}) {
-  const rules = createSelectionRules(selectionRules);
+  const rules = createSelectRules(selectionRules);
   const errors = [];
   const seenSelectors = new Set();
   const allowedSelectors = Array.isArray(selectorIds) && selectorIds.length > 0 ? new Set(selectorIds) : null;
@@ -488,7 +487,7 @@ export function validateSelections({
   const candidates = new Set(candidateIds);
 
   (selections ?? []).forEach((rawSelection, index) => {
-    const selection = createSelection(rawSelection);
+    const selection = createSelectDecision(rawSelection);
     const selector = findRole(session, selection.selectorId);
     const candidate = selection.abstain ? null : findRole(session, selection.candidateId);
 
@@ -518,7 +517,7 @@ export function validateSelections({
       });
     }
 
-    if (selection.abstain && rules.abstain !== SELECTION_ABSTAIN_RULES.ALLOWED) {
+    if (selection.abstain && rules.abstain !== SELECT_ABSTAIN_RULES.ALLOWED) {
       errors.push({
         code: 'selection/abstain-not-allowed',
         message: `selector "${selection.selectorId}" cannot abstain in this selection round`,
@@ -575,7 +574,7 @@ export function validateSelections({
     seenSelectors.add(selection.selectorId);
   });
 
-  errors.push(...getRequiredSelectionErrors({ session, selectorIds, seenSelectors, selectionRules: rules }));
+  errors.push(...getRequiredSelectDecisionErrors({ session, selectorIds, seenSelectors, selectionRules: rules }));
 
   return {
     ok: errors.length === 0,
@@ -594,7 +593,7 @@ export function getGroupRestrictionErrors({
   groupRestrictions = []
 } = {}) {
   return (groupRestrictions ?? []).flatMap((restriction) => {
-    if (restriction?.type !== SELECTION_RESTRICTION_TYPES.EXCLUDE_GROUP_MEMBER_CANDIDATE) return [];
+    if (restriction?.type !== SELECT_RESTRICTION_TYPES.EXCLUDE_GROUP_MEMBER_CANDIDATE) return [];
 
     const groupType = restriction.groupType ? normalizeId(restriction.groupType) : null;
     const groupId = restriction.groupId ? normalizeId(restriction.groupId) : null;
@@ -630,11 +629,11 @@ export function getGroupRestrictionErrors({
 }
 
 // Agrupa selecciones no abstenidas por candidateId y suma sus unidades.
-export function tallySelections(selections = []) {
+export function tallySelectDecisions(selections = []) {
   const totals = new Map();
 
   (selections ?? []).forEach((rawSelection) => {
-    const selection = createSelection(rawSelection);
+    const selection = createSelectDecision(rawSelection);
     if (selection.abstain) return;
 
     const currentTotal = totals.get(selection.candidateId) ?? 0;
@@ -655,7 +654,7 @@ export function tallySelections(selections = []) {
 function getCurrentCandidateIds(session, rules) {
   return Array.isArray(rules.candidateIds)
     ? [...rules.candidateIds]
-    : getDefaultSelectionCandidateIds(session);
+    : getDefaultSelectCandidateIds(session);
 }
 
 function getSelectedCandidateIds(selectionTally = []) {
@@ -663,10 +662,10 @@ function getSelectedCandidateIds(selectionTally = []) {
 }
 
 function getRunoffCandidateIds({ session, rules, selectionTally, tiedCandidates }) {
-  if (rules.runoff === SELECTION_RUNOFF_RULES.SELECTED_CANDIDATES) {
+  if (rules.runoff === SELECT_RUNOFF_RULES.SELECTED_CANDIDATES) {
     return getSelectedCandidateIds(selectionTally);
   }
-  if (rules.runoff === SELECTION_RUNOFF_RULES.SAME_CANDIDATES) {
+  if (rules.runoff === SELECT_RUNOFF_RULES.SAME_CANDIDATES) {
     return getCurrentCandidateIds(session, rules);
   }
   return [...tiedCandidates];
@@ -684,7 +683,7 @@ function createNextRound({ roundType, roundIndex, candidateIds }) {
   };
 }
 
-function createNullSelectionResult({
+function createNullSelectResolution({
   reason,
   selectionTally,
   abstainedSelections,
@@ -693,7 +692,7 @@ function createNullSelectionResult({
   metadata = {}
 }) {
   return {
-    type: SELECTION_OUTCOME_TYPES.NULL,
+    type: SELECT_OUTCOME_TYPES.NULL,
     reason,
     selectionTally,
     abstainedSelections,
@@ -704,7 +703,7 @@ function createNullSelectionResult({
   };
 }
 
-function createChosenSelectionResult({
+function createChosenSelectResolution({
   reason,
   selectionTally,
   abstainedSelections,
@@ -712,7 +711,7 @@ function createChosenSelectionResult({
   metadata = {}
 }) {
   return {
-    type: SELECTION_OUTCOME_TYPES.CHOSEN,
+    type: SELECT_OUTCOME_TYPES.CHOSEN,
     reason,
     selectionTally,
     abstainedSelections,
@@ -722,9 +721,9 @@ function createChosenSelectionResult({
   };
 }
 
-function createTieSelectionResult({ selectionTally, abstainedSelections, tiedCandidateIds, nextRound }) {
+function createTieSelectResolution({ selectionTally, abstainedSelections, tiedCandidateIds, nextRound }) {
   return {
-    type: SELECTION_OUTCOME_TYPES.TIE,
+    type: SELECT_OUTCOME_TYPES.TIE,
     reason: 'runoff_required',
     selectionTally,
     abstainedSelections,
@@ -734,7 +733,7 @@ function createTieSelectionResult({ selectionTally, abstainedSelections, tiedCan
   };
 }
 
-function createSelectionResolution(result) {
+function createSelectResolution(result) {
   return {
     ok: true,
     errors: [],
@@ -744,7 +743,7 @@ function createSelectionResolution(result) {
 
 function getRepeatOnNullNextRound({ session, rules, roundType, roundIndex }) {
   if (
-    rules.nullResult !== SELECTION_NULL_RULES.REPEAT_ON_NULL ||
+    rules.nullResult !== SELECT_NULL_RULES.REPEAT_ON_NULL ||
     !canRequestAnotherRound({ roundIndex, rules })
   ) {
     return null;
@@ -765,10 +764,10 @@ function getSupportBaseCount({
   selectionWeights = [],
   selectionValueRules = []
 }) {
-  if (supportThreshold.base === SELECTION_SUPPORT_BASES.SELECTOR_COUNT) {
+  if (supportThreshold.base === SELECT_SUPPORT_BASES.SELECTOR_COUNT) {
     return getRequiredSelectorIds(session, selectorIds).reduce(
       (total, selectorId) =>
-        total + getSelectionValueForSelector({
+        total + getSelectValueForSelector({
           session,
           selectorId,
           selectionWeights,
@@ -778,16 +777,16 @@ function getSupportBaseCount({
     );
   }
   return (selections ?? [])
-    .map(createSelection)
+    .map(createSelectDecision)
     .filter((selection) => !selection.abstain)
     .reduce((total, selection) => total + selection.value, 0);
 }
 
 function getRequiredSupportCount({ baseCount, supportThreshold }) {
-  if (supportThreshold.type === SELECTION_SUPPORT_THRESHOLD_TYPES.MAJORITY) {
+  if (supportThreshold.type === SELECT_SUPPORT_THRESHOLD_TYPES.MAJORITY) {
     return Math.floor(baseCount / 2) + 1;
   }
-  if (supportThreshold.type === SELECTION_SUPPORT_THRESHOLD_TYPES.FRACTION) {
+  if (supportThreshold.type === SELECT_SUPPORT_THRESHOLD_TYPES.FRACTION) {
     return Math.ceil((baseCount * supportThreshold.numerator) / supportThreshold.denominator);
   }
   return 0;
@@ -802,7 +801,7 @@ function evaluateSupportThreshold({
   selectionWeights = [],
   selectionValueRules = []
 }) {
-  if (supportThreshold.type === SELECTION_SUPPORT_THRESHOLD_TYPES.NONE) {
+  if (supportThreshold.type === SELECT_SUPPORT_THRESHOLD_TYPES.NONE) {
     return {
       ok: true,
       requiredSupportCount: 0,
@@ -831,7 +830,7 @@ function resolveTieByAuthority({ decisions = [], tiedCandidates = [], tieBreaker
   const tiedCandidateIds = new Set(tiedCandidates);
 
   for (const rule of tieBreakers ?? []) {
-    if (rule.type !== SELECTION_TIE_BREAKER_TYPES.SELECTOR_AUTHORITY) continue;
+    if (rule.type !== SELECT_TIE_BREAKER_TYPES.SELECTOR_AUTHORITY) continue;
 
     for (const selectorId of rule.selectorIds ?? []) {
       const selection = decisions.find(
@@ -861,7 +860,7 @@ function resolveTieBySelectorProperty({ session = {}, decisions = [], tiedCandid
   const tiedCandidateIds = new Set(tiedCandidates);
 
   for (const rule of tieBreakers ?? []) {
-    if (rule.type !== SELECTION_TIE_BREAKER_TYPES.SELECTOR_PROPERTY) continue;
+    if (rule.type !== SELECT_TIE_BREAKER_TYPES.SELECTOR_PROPERTY) continue;
 
     const selection = decisions.find((decision) => {
       const selector = findRole(session, decision.selectorId);
@@ -889,18 +888,18 @@ function resolveTieBySelectorProperty({ session = {}, decisions = [], tiedCandid
   return null;
 }
 
-function getAbstainSelectionCount(abstainedSelections = []) {
+function getAbstainSelectCount(abstainedSelections = []) {
   return (abstainedSelections ?? []).reduce((total, selection) => total + selection.value, 0);
 }
 
 function shouldNullifyByAbstention({ abstainedSelections = [], highestSelectionCount = 0, rules }) {
-  if (rules.abstainResolution.type !== SELECTION_ABSTAIN_RESOLUTION_TYPES.NULL_IF_HIGHEST) {
+  if (rules.abstainResolution.type !== SELECT_ABSTAIN_RESOLUTION_TYPES.NULL_IF_HIGHEST) {
     return false;
   }
-  return getAbstainSelectionCount(abstainedSelections) > highestSelectionCount;
+  return getAbstainSelectCount(abstainedSelections) > highestSelectionCount;
 }
 
-function evaluateUnanimousSelection({ session, selectorIds = [], selectionTally = [], abstainedSelections = [] }) {
+function evaluateUnanimousSelect({ session, selectorIds = [], selectionTally = [], abstainedSelections = [] }) {
   const requiredSelectorCount = getRequiredSelectorIds(session, selectorIds).length;
   const hasUnanimousTarget =
     selectionTally.length === 1 &&
@@ -922,22 +921,22 @@ function evaluateUnanimousSelection({ session, selectorIds = [], selectionTally 
 // 4. Aplicar abstainResolution si la abstencion domina.
 // 5. Aceptar chosen provisional solo si supera supportThreshold.
 // 6. Resolver empate con tie/runoff/repeatLimit.
-export function resolveSelectionRound({
+export function resolveSelectRound({
   session,
   selectorIds = [],
   selections = [],
-  selectionRules = createSelectionRules(),
-  roundType = SELECTION_ROUND_TYPES.INITIAL,
+  selectionRules = createSelectRules(),
+  roundType = SELECT_ROUND_TYPES.INITIAL,
   roundIndex = null
 } = {}) {
-  const rules = createSelectionRules(selectionRules);
+  const rules = createSelectRules(selectionRules);
   const currentRoundIndex =
     Number.isInteger(roundIndex)
       ? roundIndex
-      : roundType === SELECTION_ROUND_TYPES.RUNOFF
+      : roundType === SELECT_ROUND_TYPES.RUNOFF
         ? 1
         : 0;
-  const validation = validateSelections({
+  const validation = validateSelectDecisions({
     session,
     selectorIds,
     selections,
@@ -951,9 +950,9 @@ export function resolveSelectionRound({
     };
   }
 
-  const decisions = applySelectionRuleWeights(session, selections, rules);
+  const decisions = resolveSelectDecisionValues(session, selections, rules);
   const abstainedSelections = decisions.filter((selection) => selection.abstain);
-  const selectionTally = tallySelections(decisions);
+  const selectionTally = tallySelectDecisions(decisions);
   const highestSelectionCount = selectionTally[0]?.selectionCount ?? 0;
   const tiedCandidates = selectionTally
     .filter((entry) => entry.selectionCount === highestSelectionCount)
@@ -962,8 +961,8 @@ export function resolveSelectionRound({
   if (selectionTally.length === 0) {
     const reason =
       decisions.length > 0 && decisions.length === abstainedSelections.length ? 'all_abstained' : 'no_selections';
-    return createSelectionResolution(
-      createNullSelectionResult({
+    return createSelectResolution(
+      createNullSelectResolution({
         reason,
         selectionTally,
         abstainedSelections,
@@ -977,18 +976,18 @@ export function resolveSelectionRound({
     );
   }
 
-  if (rules.unanimous === SELECTION_UNANIMOUS_RULES.REQUIRED) {
-    const unanimous = evaluateUnanimousSelection({ session, selectorIds, selectionTally, abstainedSelections });
+  if (rules.unanimous === SELECT_UNANIMOUS_RULES.REQUIRED) {
+    const unanimous = evaluateUnanimousSelect({ session, selectorIds, selectionTally, abstainedSelections });
 
-    return createSelectionResolution(
+    return createSelectResolution(
       unanimous.hasUnanimousTarget
-        ? createChosenSelectionResult({
+        ? createChosenSelectResolution({
             reason: 'unanimous_candidate',
             selectionTally,
             abstainedSelections,
             chosenId: unanimous.chosenId
           })
-        : createNullSelectionResult({
+        : createNullSelectResolution({
             reason: 'not_unanimous',
             selectionTally,
             abstainedSelections,
@@ -1003,8 +1002,8 @@ export function resolveSelectionRound({
   }
 
   if (shouldNullifyByAbstention({ abstainedSelections, highestSelectionCount, rules })) {
-    return createSelectionResolution(
-      createNullSelectionResult({
+    return createSelectResolution(
+      createNullSelectResolution({
         reason: 'abstention_highest',
         selectionTally,
         abstainedSelections,
@@ -1016,7 +1015,7 @@ export function resolveSelectionRound({
           roundIndex: currentRoundIndex
         }),
         metadata: {
-          abstainSelectionCount: getAbstainSelectionCount(abstainedSelections)
+          abstainSelectionCount: getAbstainSelectCount(abstainedSelections)
         }
       })
     );
@@ -1035,8 +1034,8 @@ export function resolveSelectionRound({
     });
 
     if (!support.ok) {
-      return createSelectionResolution(
-        createNullSelectionResult({
+      return createSelectResolution(
+        createNullSelectResolution({
           reason: 'insufficient_support',
           selectionTally,
           abstainedSelections,
@@ -1053,8 +1052,8 @@ export function resolveSelectionRound({
       );
     }
 
-    return createSelectionResolution(
-      createChosenSelectionResult({
+    return createSelectResolution(
+      createChosenSelectResolution({
         reason: 'single_highest_selection_count',
         selectionTally,
         abstainedSelections,
@@ -1073,8 +1072,8 @@ export function resolveSelectionRound({
   });
 
   if (authorityTieBreak) {
-    return createSelectionResolution(
-      createChosenSelectionResult({
+    return createSelectResolution(
+      createChosenSelectResolution({
         reason: 'tie_break_authority',
         selectionTally,
         abstainedSelections,
@@ -1095,8 +1094,8 @@ export function resolveSelectionRound({
   });
 
   if (selectorPropertyTieBreak) {
-    return createSelectionResolution(
-      createChosenSelectionResult({
+    return createSelectResolution(
+      createChosenSelectResolution({
         reason: 'tie_break_selector_property',
         selectionTally,
         abstainedSelections,
@@ -1110,16 +1109,16 @@ export function resolveSelectionRound({
   }
 
   if (
-    rules.tie === SELECTION_TIE_RULES.RUNOFF_ON_TIE &&
+    rules.tie === SELECT_TIE_RULES.RUNOFF_ON_TIE &&
     canRequestAnotherRound({ roundIndex: currentRoundIndex, rules })
   ) {
-    return createSelectionResolution(
-      createTieSelectionResult({
+    return createSelectResolution(
+      createTieSelectResolution({
         selectionTally,
         abstainedSelections,
         tiedCandidateIds: tiedCandidates,
         nextRound: createNextRound({
-          roundType: SELECTION_ROUND_TYPES.RUNOFF,
+          roundType: SELECT_ROUND_TYPES.RUNOFF,
           roundIndex: currentRoundIndex,
           candidateIds: getRunoffCandidateIds({ session, rules, selectionTally, tiedCandidates })
         })
@@ -1127,9 +1126,9 @@ export function resolveSelectionRound({
     );
   }
 
-  return createSelectionResolution(
-    createNullSelectionResult({
-      reason: roundType === SELECTION_ROUND_TYPES.RUNOFF ? 'runoff_tied' : 'tied_selection',
+  return createSelectResolution(
+    createNullSelectResolution({
+      reason: roundType === SELECT_ROUND_TYPES.RUNOFF ? 'runoff_tied' : 'tied_selection',
       selectionTally,
       abstainedSelections,
       tiedCandidateIds: tiedCandidates
@@ -1138,160 +1137,14 @@ export function resolveSelectionRound({
 }
 
 
-// Valida requisitos internos de una accion antes de resolverla.
-//
-// Esta validacion es distinta de validateActionTargets:
-// - validateActionTargets comprueba actor + objetivos + filtros.
-// - validateActionDefinition comprueba que la accion trae los datos mecanicos
-//   necesarios para que el motor no cree resultados incompletos.
-export function validateActionDefinition(action) {
-  const errors = [];
-
-  if (!action?.id) {
-    errors.push({
-      code: 'action/missing-id',
-      message: 'action has no id'
-    });
-  }
-
-  if (action?.id === ACTION_IDS.SET_PROPERTY || action?.id === ACTION_IDS.SET_IN_PLAY) {
-    const effect = action?.effect ?? {};
-    if (effect.type !== EFFECT_TYPES.SET_PROPERTY) {
-      errors.push({
-        code: 'action/invalid-effect-type',
-        message: `${action.id} requires a set_property effect`
-      });
-    }
-    if (effect.targetType !== MECHANICAL_ENTITY_TYPES.ROLE) {
-      errors.push({
-        code: 'action/invalid-effect-target-type',
-        message: `${action.id} currently requires targetType "role"`
-      });
-    }
-    if (action?.id === ACTION_IDS.SET_IN_PLAY && effect.property !== 'inPlay') {
-      errors.push({
-        code: 'action/invalid-effect-property',
-        message: 'set_in_play requires effect.property "inPlay"'
-      });
-    }
-    if (action?.id === ACTION_IDS.SET_IN_PLAY && typeof effect.value !== 'boolean') {
-      errors.push({
-        code: 'action/invalid-effect-value',
-        message: 'set_in_play requires a boolean effect.value'
-      });
-    }
-  }
-
-  if (action?.id === ACTION_IDS.BLOCK_PROPERTY_CHANGE) {
-    const blockedPropertyChange = action?.effect?.blockedPropertyChange;
-    if (action?.effect?.type !== EFFECT_TYPES.BLOCK_PROPERTY_CHANGE) {
-      errors.push({
-        code: 'action/invalid-effect-type',
-        message: `${action.id} requires a block_property_change effect`
-      });
-    }
-    if (!blockedPropertyChange?.property) {
-      errors.push({
-        code: 'action/missing-blocked-property',
-        message: `${action.id} requires effect.blockedPropertyChange.property`
-      });
-    }
-    if ((action?.effect?.blockedFor?.actorIds ?? []).length === 0) {
-      errors.push({
-        code: 'action/missing-blocked-actors',
-        message: `${action.id} requires effect.blockedFor.actorIds`
-      });
-    }
-  }
-
-  if (action?.id === ACTION_IDS.LINK_TARGETS) {
-    const effect = action?.effect ?? {};
-    if (effect.type !== EFFECT_TYPES.SET_GROUP) {
-      errors.push({
-        code: 'action/invalid-effect-type',
-        message: 'link_targets requires a set_group effect'
-      });
-    }
-    if (effect.targetType !== MECHANICAL_ENTITY_TYPES.GROUP) {
-      errors.push({
-        code: 'action/invalid-effect-target-type',
-        message: 'link_targets requires targetType "group"'
-      });
-    }
-    if (!effect.groupType) {
-      errors.push({
-        code: 'action/missing-group-type',
-        message: 'link_targets requires effect.groupType'
-      });
-    }
-  }
-
-  if (action?.id === ACTION_IDS.CONCLUDE_PLAY) {
-    if (action?.effect?.type !== EFFECT_TYPES.CONCLUDE_PLAY) {
-      errors.push({
-        code: 'action/invalid-effect-type',
-        message: 'conclude_play requires a conclude_play effect'
-      });
-    }
-  }
-
-  if (action?.id === ACTION_IDS.REPLACE_ROLE_IDENTITY) {
-    const effect = action?.effect ?? {};
-    if (effect.type !== EFFECT_TYPES.REPLACE_ROLE_IDENTITY) {
-      errors.push({
-        code: 'action/invalid-effect-type',
-        message: 'replace_role_identity requires a replace_role_identity effect'
-      });
-    }
-    if (effect.targetType !== MECHANICAL_ENTITY_TYPES.ROLE) {
-      errors.push({
-        code: 'action/invalid-effect-target-type',
-        message: 'replace_role_identity requires targetType "role"'
-      });
-    }
-  }
-
-  return {
-    ok: errors.length === 0,
-    errors
-  };
-}
-
-// Une la validacion de definicion con la validacion de objetivos.
-//
-// Mantenerlo en una funcion evita repetir el mismo patron en cada resolver.
-//
-// Las restricciones no se validan aqui. Pertenecen a recipeModel porque son
-// condiciones de uso de una receta, no de la accion pura.
-export function validateActionResolution({
-  session,
-  action,
-  actor,
-  targets
-}) {
-  const definitionValidation = validateActionDefinition(action);
-  const targetValidation = validateActionTargets({
-    session,
-    action,
-    actor,
-    targets
-  });
-  const errors = [...definitionValidation.errors, ...targetValidation.errors];
-
-  return {
-    ok: errors.length === 0,
-    errors
-  };
-}
-
-// Aplica un efecto de tipo reveal_property.
+// Construye la salida de una action que revela informacion.
 //
 // Esto no cambia el estado de la partida. Solo produce informacion visible para
 // alguien.
 //
 // Ejemplo:
 // reveal_property roleKey sobre hidden_role-0 devuelve que su roleKey es enemy.
-export function applyRevealPropertyEffect({ action, actor, targets }) {
+function buildRevealPropertyActionResolution({ action, actor, targets }) {
   const property = action?.effect?.property;
   const visibility = action?.visibility ?? VISIBILITY.ACTOR_ONLY;
 
@@ -1323,15 +1176,15 @@ function getImmediateCause(actor = null, context = {}) {
     : null;
 }
 
-// Resuelve la consecuencia principal de set_in_play.
+// Evalua una action que cambia una propiedad de roles.
 //
 // Distincion importante:
 // - La accion SI se produce como intento.
 // - Si el objetivo ya tenia bloqueada esta accion, el intento falla para ese
 //   objetivo.
 // - En ese caso NO se propone set_property.
-// - Si no estaba bloqueada, propone y aplica set_property inPlay=value.
-export function resolveSetInPlayEffect({ session, action, actor, targets, context = {} }) {
+// - Si no estaba bloqueada, propone set_property para que effectModel lo aplique.
+function evaluateRolePropertyChangeAction({ action, actor, targets, context = {} }) {
   const visibility = action?.visibility ?? VISIBILITY.STORYTELLER_ONLY;
   const causedBy = getImmediateCause(actor, context);
   const proposedEffects = targets.map((target) => ({
@@ -1339,24 +1192,8 @@ export function resolveSetInPlayEffect({ session, action, actor, targets, contex
     causedBy,
     targetId: target.id
   }));
-  const effectResolution = resolveEffect({ session, proposedEffects });
-  const { finalEffects, blockedEffects, linkedPropagatedEffects } = effectResolution;
-  const preventedPropertyChanges = blockedEffects
-    .filter((effect) => effect.type === EFFECT_TYPES.SET_PROPERTY)
-    .map((effect) => ({
-      property: effect.property,
-      value: effect.value,
-      reason: effect.reason,
-      targetId: effect.targetId,
-      causedBy: effect.causedBy ?? null
-    }));
-  const blockedTargetIds = new Set(
-    preventedPropertyChanges.map((change) => change.targetId)
-  );
-  const sessionAfterEffects = applyEffects({ session, effects: finalEffects });
 
   return {
-    session: sessionAfterEffects,
     result: {
       type: 'action_resolution',
       visibility,
@@ -1366,49 +1203,48 @@ export function resolveSetInPlayEffect({ session, action, actor, targets, contex
       targets: targets.map((target) => ({
         targetId: target.id,
         actionAttempted: true,
-        propertyChangePrevented: blockedTargetIds.has(target.id),
-        failureReason: blockedTargetIds.has(target.id) ? 'blocked_property_change' : null
+        propertyChangePrevented: false,
+        failureReason: null
       })),
       proposedEffects,
-      finalEffects,
+      finalEffects: [],
       causedBy,
-      preventedPropertyChanges,
-      blockedEffects,
-      linkedPropagatedEffects
+      preventedPropertyChanges: [],
+      blockedEffects: [],
+      linkedPropagatedEffects: [],
+      effectResolutionMode: 'role_property_change'
     }
   };
 }
 
-export function applyPropertyBlock({ session, action, actor, targets, context = {} }) {
+function buildPropertyBlockActionResolution({ session, action, actor, targets, context = {} }) {
   const blockedPropertyChange = action.effect?.blockedPropertyChange ?? {};
   const visibility = action?.visibility ?? VISIBILITY.STORYTELLER_ONLY;
   const currentCycleId = getCurrentCycleId(session);
   const causedBy = getImmediateCause(actor, context);
-  const targetIds = new Set(targets.map((target) => target.id));
   const blockedFor = action.effect?.blockedFor ?? { actorIds: [] };
   const expiresAt = action.effect?.expiresAt ?? {
     type: PROPERTY_BLOCK_EXPIRATION_TYPES.SESSION
   };
-
-  const sessionWithBlock = {
-    ...session,
-    roles: (session.roles ?? []).map((role) => {
-      if (!targetIds.has(role.id)) return role;
-      return addBlockedPropertyChange(role, {
-        property: blockedPropertyChange.property,
-        value: blockedPropertyChange.value,
-        blockedFor,
-        expiresAt,
-        metadata: {
-          createdByRoleId: actor?.id ?? null,
-          recipeKey: context.recipeKey ?? action.key ?? action.id
-        }
-      });
-    })
-  };
+  const proposedEffects = [
+    {
+      ...action.effect,
+      causedBy,
+      targetType: MECHANICAL_ENTITY_TYPES.ROLE,
+      targetIds: targets.map((target) => target.id),
+      blockedPropertyChange,
+      blockedFor,
+      expiresAt,
+      metadata: {
+        ...(action.effect?.metadata ?? {}),
+        createdByRoleId: actor?.id ?? null,
+        recipeKey: context.recipeKey ?? action.key ?? action.id
+      }
+    }
+  ];
 
   return {
-    session: sessionWithBlock,
+    session,
     result: {
       type: EFFECT_TYPES.BLOCK_PROPERTY_CHANGE,
       visibility,
@@ -1420,11 +1256,10 @@ export function applyPropertyBlock({ session, action, actor, targets, context = 
       expiresAt,
       causedBy,
       cycleId: currentCycleId,
-      proposedEffects: [],
+      proposedEffects,
       finalEffects: [],
       blockedEffects: [],
       preventedPropertyChanges: [],
-      mechanicalChangeApplied: true,
       targets: targets.map((target) => ({
         targetId: target.id,
         blockedPropertyChange
@@ -1433,13 +1268,13 @@ export function applyPropertyBlock({ session, action, actor, targets, context = 
   };
 }
 
-// Aplica un grupo creado por link_targets.
+// Resuelve los efectos de link_targets.
 //
 // Separacion conceptual:
 // - link_targets es la accion: alguien intenta enlazar objetivos.
 // - set_group es el efecto final: se escribe un grupo en la sesion.
 // - las groupRules materializadas deciden despues si un cambio se propaga.
-export function applyLinkTargets({ session, action, actor, targets }) {
+function buildLinkTargetsActionResolution({ session, action, actor, targets }) {
   const visibility = action?.visibility ?? VISIBILITY.STORYTELLER_ONLY;
   const currentCycleId = getCurrentCycleId(session);
   const proposedEffects = [
@@ -1450,10 +1285,8 @@ export function applyLinkTargets({ session, action, actor, targets }) {
       sourceActionId: action.id
     }
   ];
-  const effectResolution = resolveEffect({ session, proposedEffects });
-  const sessionAfterEffects = applyEffects({ session, effects: effectResolution.finalEffects });
   return {
-    session: sessionAfterEffects,
+    session,
     result: {
       type: 'action_resolution',
       visibility,
@@ -1464,9 +1297,10 @@ export function applyLinkTargets({ session, action, actor, targets }) {
       targets: targets.map((target) => ({
         targetId: target.id
       })),
-      proposedEffects: effectResolution.proposedEffects,
-      finalEffects: effectResolution.finalEffects,
-      blockedEffects: effectResolution.blockedEffects
+      proposedEffects,
+      finalEffects: [],
+      blockedEffects: [],
+      effectResolutionMode: 'standard'
     }
   };
 }
@@ -1504,7 +1338,7 @@ function getReplaceRoleIdentityTargetIds(session = {}, action = {}, input = {}) 
   };
 }
 
-export function applyReplaceRoleIdentity({ session, action, actor, targets, context = {} }) {
+function buildReplaceRoleIdentityActionResolution({ session, action, actor, targets, context = {} }) {
   const visibility = action?.visibility ?? VISIBILITY.STORYTELLER_ONLY;
   const target = targets[0] ?? null;
   const proposedEffects = [
@@ -1516,11 +1350,9 @@ export function applyReplaceRoleIdentity({ session, action, actor, targets, cont
       causedBy: actor?.id ? { type: MECHANICAL_ENTITY_TYPES.ROLE, id: actor.id } : null
     }
   ];
-  const finalEffects = proposedEffects;
-  const sessionAfterEffects = applyEffects({ session, effects: finalEffects });
 
   return {
-    session: sessionAfterEffects,
+    session,
     result: {
       type: 'action_resolution',
       visibility,
@@ -1528,8 +1360,9 @@ export function applyReplaceRoleIdentity({ session, action, actor, targets, cont
       actorIds: [actor.id],
       targetIds: [target.id],
       proposedEffects,
-      finalEffects,
-      blockedEffects: []
+      finalEffects: [],
+      blockedEffects: [],
+      effectResolutionMode: 'standard'
     }
   };
 }
@@ -1537,16 +1370,15 @@ export function applyReplaceRoleIdentity({ session, action, actor, targets, cont
 // Resuelve una seleccion pura.
 //
 // La action select cuenta selecciones y decide chosen/empate/nulo. No aplica efectos.
-// Si un stage quiere hacer algo con el chosen, stageModel aplicara despues la
-// receta normal configurada en ese stage.
-export function applySelection({ session, action, input = {} }) {
+// Si el chosen debe producir otro cambio, una recipe posterior usara ese valor.
+function buildSelectActionResolution({ session, action, input = {} }) {
   const visibility = action?.visibility ?? VISIBILITY.ALL;
-  const selectionResolution = resolveSelectionRound({
+  const selectionResolution = resolveSelectRound({
     session,
     selectorIds: input.selectorIds ?? input.actorIds ?? [],
     selections: input.selections ?? [],
     selectionRules: input.selectionRules ?? action?.selectionRules ?? {},
-    roundType: input.roundType ?? SELECTION_ROUND_TYPES.INITIAL,
+    roundType: input.roundType ?? SELECT_ROUND_TYPES.INITIAL,
     roundIndex: input.roundIndex ?? 0
   });
 
@@ -1559,7 +1391,7 @@ export function applySelection({ session, action, input = {} }) {
     };
   }
 
-  if (selectionResolution.result.type !== SELECTION_OUTCOME_TYPES.CHOSEN) {
+  if (selectionResolution.result.type !== SELECT_OUTCOME_TYPES.CHOSEN) {
     return {
       ok: true,
       errors: [],
@@ -1592,31 +1424,38 @@ export function applySelection({ session, action, input = {} }) {
   };
 }
 
-// Prepara un nuevo ciclo.
+// Prepara el efecto que concluye la parte jugable.
 //
-// En esta version todavia no tenemos una cola real de efectos pendientes. Las
-// acciones actuales resuelven y aplican sus efectos inmediatamente. Aun asi,
-// mantenemos esta accion de sistema para limpiar bloqueos temporales y avanzar
-// cycle.id antes del siguiente poolConcealed.
-//
-// Limpia flags temporales para empezar el siguiente ciclo sin basura:
-// - preventedPropertyChanges.
-// Ejecuta conclude_play.
-//
-// Esta accion la dispara una operacion de pool.onExit cuando el playOutcome es
-// estable. No se encola en interPoolQueue.
-export function applyConcludePlayAction({ session, action, input = {} }) {
+// Esta action la dispara una operacion de cycle cuando el playOutcome es estable.
+// No decide objetivos ni cierra administrativamente la session.
+function buildConcludePlayActionResolution({ session, action, input = {} }) {
   const visibility = action?.visibility ?? VISIBILITY.ALL;
-  return applyConcludePlayFromModel({
-    session,
-    visibility,
-    playOutcome:
+  const playOutcome =
       input.playOutcome ??
       action?.effect?.playOutcome ??
       session?.playOutcome ??
       session?.metadata?.pendingPlayOutcome ??
-      null
-  });
+      null;
+  const proposedEffects = [
+    {
+      ...action.effect,
+      visibility,
+      playOutcome
+    }
+  ];
+
+  return {
+    session,
+    result: {
+      type: EFFECT_TYPES.CONCLUDE_PLAY,
+      visibility,
+      actionId: action?.id ?? ACTION_IDS.CONCLUDE_PLAY,
+      proposedEffects,
+      finalEffects: [],
+      blockedEffects: [],
+      playOutcome
+    }
+  };
 }
 
 // Ejecuta inspect_role.
@@ -1625,31 +1464,17 @@ export function applyConcludePlayAction({ session, action, input = {} }) {
 // 1. Busca al actor.
 // 2. Busca los objetivos.
 // 3. Valida que los objetivos cumplen count + filtros.
-// 4. Devuelve un resultado reveal_property.
+// 4. Devuelve una resolucion reveal_property.
 //
 // No modifica la sesion porque inspeccionar solo revela informacion.
-export function resolveInspectRole(session, action, input = {}) {
-  const actors = getActionActors(session, input.actorIds ?? []);
-  const actor = actors[0] ?? null;
-  const targets = (input.targetIds ?? []).map((id) => findRole(session, id));
-  const validation = validateActionResolution({ session, action, actor, targets });
-
-  if (!validation.ok) {
-    return {
-      ok: false,
-      actionId: action?.id ?? ACTION_IDS.INSPECT_ROLE,
-      errors: validation.errors,
-      session,
-      result: null
-    };
-  }
-
+function evaluateInspectRoleAction(actionState) {
+  const { session, action, actor, targets } = actionState;
   return {
     ok: true,
     actionId: action.id,
     errors: [],
     session,
-    result: applyRevealPropertyEffect({ action, actor, targets })
+    result: buildRevealPropertyActionResolution({ action, actor, targets })
   };
 }
 
@@ -1659,32 +1484,12 @@ export function resolveInspectRole(session, action, input = {}) {
 // 1. Busca al actor.
 // 2. Busca el objetivo.
 // 3. Valida count + filtros, por ejemplo in_play y not_same_alignment.
-// 4. Ejecuta el intento de cambiar inPlay.
+// 4. Propone el intento de cambiar inPlay.
 // 5. Si el objetivo tenia bloqueada esa accion, no genera efecto final.
-// 6. Si no estaba bloqueada, aplica set_property inPlay=value.
-export function resolveSetInPlay(session, action, input = {}, context = {}) {
-  const actors = getActionActors(session, input.actorIds ?? []);
-  const actor = actors[0] ?? null;
-  const targets = (input.targetIds ?? []).map((id) => findRole(session, id));
-  const validation = validateActionResolution({
-    session,
-    action,
-    actor,
-    targets
-  });
-
-  if (!validation.ok) {
-    return {
-      ok: false,
-      actionId: action?.id ?? ACTION_IDS.SET_IN_PLAY,
-      errors: validation.errors,
-      session,
-      result: null
-    };
-  }
-
-  const applied = resolveSetInPlayEffect({
-    session,
+// 6. Si no estaba bloqueada, effectModel aplica set_property inPlay=value.
+function evaluateSetInPlayAction(actionState) {
+  const { session, action, actor, targets, context } = actionState;
+  const evaluation = evaluateRolePropertyChangeAction({
     action,
     actor,
     targets,
@@ -1695,34 +1500,14 @@ export function resolveSetInPlay(session, action, input = {}, context = {}) {
     ok: true,
     actionId: action.id,
     errors: [],
-    session: applied.session,
-    result: applied.result
+    session,
+    result: evaluation.result
   };
 }
 
-export function resolveSetProperty(session, action, input = {}, context = {}) {
-  const actors = getActionActors(session, input.actorIds ?? []);
-  const actor = actors[0] ?? null;
-  const targets = (input.targetIds ?? []).map((id) => findRole(session, id));
-  const validation = validateActionResolution({
-    session,
-    action,
-    actor,
-    targets
-  });
-
-  if (!validation.ok) {
-    return {
-      ok: false,
-      actionId: action?.id ?? ACTION_IDS.SET_PROPERTY,
-      errors: validation.errors,
-      session,
-      result: null
-    };
-  }
-
-  const applied = resolveSetInPlayEffect({
-    session,
+function evaluateSetPropertyAction(actionState) {
+  const { session, action, actor, targets, context } = actionState;
+  const evaluation = evaluateRolePropertyChangeAction({
     action,
     actor,
     targets,
@@ -1733,8 +1518,8 @@ export function resolveSetProperty(session, action, input = {}, context = {}) {
     ok: true,
     actionId: action.id,
     errors: [],
-    session: applied.session,
-    result: applied.result
+    session,
+    result: evaluation.result
   };
 }
 
@@ -1743,26 +1528,12 @@ export function resolveSetProperty(session, action, input = {}, context = {}) {
 // Flujo:
 // 1. Busca al actor.
 // 2. Busca el objetivo.
-// 3. Valida count y filtros. Las restricciones ya las valido recipeModel.
-// 4. Marca al objetivo como prevenido contra la accion indicada.
-// 5. Registra el bloqueo aplicado en session.history.recipeHistory.
-export function resolveBlockPropertyChange(session, action, input = {}, context = {}) {
-  const actors = getActionActors(session, input.actorIds ?? []);
-  const actor = actors[0] ?? null;
-  const targets = (input.targetIds ?? []).map((id) => findRole(session, id));
-  const validation = validateActionResolution({ session, action, actor, targets });
-
-  if (!validation.ok) {
-    return {
-      ok: false,
-      actionId: action?.id ?? ACTION_IDS.BLOCK_PROPERTY_CHANGE,
-      errors: validation.errors,
-      session,
-      result: null
-    };
-  }
-
-  const applied = applyPropertyBlock({
+// 3. Valida count y filtros sobre la action materializada.
+// 4. Propone bloquear el cambio indicado contra el objetivo.
+// 5. effectModel aplica el bloqueo; el runtime superior registra history.
+function evaluateBlockPropertyChangeAction(actionState) {
+  const { session, action, actor, targets, context } = actionState;
+  const resolved = buildPropertyBlockActionResolution({
     session,
     action,
     actor,
@@ -1774,8 +1545,8 @@ export function resolveBlockPropertyChange(session, action, input = {}, context 
     ok: true,
     actionId: action.id,
     errors: [],
-    session: applied.session,
-    result: applied.result
+    session: resolved.session,
+    result: resolved.result
   };
 }
 
@@ -1784,60 +1555,30 @@ export function resolveBlockPropertyChange(session, action, input = {}, context 
 // Esta accion no decide que significa narrativamente el vinculo. Solo crea un
 // grupo mecanico en session.groups. Por ejemplo, una skin podria llamarlo
 // enamorar, sincronizar, esposar, conectar destinos o cualquier otra fantasia.
-export function resolveLinkTargets(session, action, input = {}) {
-  const actors = getActionActors(session, input.actorIds ?? []);
-  const actor = actors[0] ?? null;
-  const targets = (input.targetIds ?? []).map((id) => findRole(session, id));
-  const validation = validateActionResolution({ session, action, actor, targets });
-
-  if (!validation.ok) {
-    return {
-      ok: false,
-      actionId: action?.id ?? ACTION_IDS.LINK_TARGETS,
-      errors: validation.errors,
-      session,
-      result: null
-    };
-  }
-
-  const applied = applyLinkTargets({ session, action, actor, targets });
+function evaluateLinkTargetsAction(actionState) {
+  const { session, action, actor, targets } = actionState;
+  const resolved = buildLinkTargetsActionResolution({ session, action, actor, targets });
 
   return {
     ok: true,
     actionId: action.id,
     errors: [],
-    session: applied.session,
-    result: applied.result
+    session: resolved.session,
+    result: resolved.result
   };
 }
 
-export function resolveReplaceRoleIdentity(session, action, input = {}, context = {}) {
-  const actors = getActionActors(session, input.actorIds ?? []);
-  const actor = actors[0] ?? null;
-  const targetSelection = getReplaceRoleIdentityTargetIds(session, action, input);
-  const targetIds = targetSelection.targetIds;
-  const targets = targetIds.map((id) => findRole(session, id));
-  const validation = validateActionResolution({ session, action, actor, targets });
-
-  if (!validation.ok) {
-    return {
-      ok: false,
-      actionId: action?.id ?? ACTION_IDS.REPLACE_ROLE_IDENTITY,
-      errors: validation.errors,
-      session,
-      result: null
-    };
-  }
-
-  const applied = applyReplaceRoleIdentity({ session, action, actor, targets, context });
+function evaluateReplaceRoleIdentityAction(actionState) {
+  const { session, action, actor, targets, context, targetSelection } = actionState;
+  const resolved = buildReplaceRoleIdentityActionResolution({ session, action, actor, targets, context });
 
   return {
     ok: true,
     actionId: action.id,
     errors: [],
-    session: applied.session,
+    session: resolved.session,
     result: {
-      ...applied.result,
+      ...resolved.result,
       forced: targetSelection.forced
     }
   };
@@ -1847,101 +1588,249 @@ export function resolveReplaceRoleIdentity(session, action, input = {}, context 
 //
 // La accion no recibe un actor unico porque representa una ronda de seleccion.
 // Cada seleccion individual ya trae su selectorId.
-export function resolveSelection(session, action, input = {}) {
-  const definitionValidation = validateActionDefinition(action);
-
-  if (!definitionValidation.ok) {
-    return {
-      ok: false,
-      actionId: action?.id ?? ACTION_IDS.SELECT,
-      errors: definitionValidation.errors,
-      session,
-      result: null
-    };
-  }
-
-  const applied = applySelection({ session, action, input });
+function evaluateSelectAction(actionState) {
+  const { session, action, input } = actionState;
+  const resolved = buildSelectActionResolution({ session, action, input });
 
   return {
-    ok: applied.ok,
+    ok: resolved.ok,
     actionId: action.id,
-    errors: applied.errors,
-    session: applied.session,
-    result: applied.result
+    errors: resolved.errors,
+    session: resolved.session,
+    result: resolved.result
   };
 }
 
-export function resolveConcludePlay(session, action, input = {}) {
-  const definitionValidation = validateActionDefinition(action);
-
-  if (!definitionValidation.ok) {
-    return {
-      ok: false,
-      actionId: action?.id ?? ACTION_IDS.CONCLUDE_PLAY,
-      errors: definitionValidation.errors,
-      session,
-      result: null
-    };
-  }
-
-  const applied = applyConcludePlayAction({ session, action, input });
+function evaluateConcludePlayAction(actionState) {
+  const { session, action, input } = actionState;
+  const resolved = buildConcludePlayActionResolution({ session, action, input });
 
   return {
     ok: true,
     actionId: action?.id ?? ACTION_IDS.CONCLUDE_PLAY,
     errors: [],
-    session: applied.session,
-    result: applied.result
+    session: resolved.session,
+    result: resolved.result
+  };
+}
+
+const ACTION_RESOLVERS = Object.freeze({
+  [ACTION_IDS.INSPECT_ROLE]: evaluateInspectRoleAction,
+  [ACTION_IDS.SET_PROPERTY]: evaluateSetPropertyAction,
+  [ACTION_IDS.SET_IN_PLAY]: evaluateSetInPlayAction,
+  [ACTION_IDS.BLOCK_PROPERTY_CHANGE]: evaluateBlockPropertyChangeAction,
+  [ACTION_IDS.LINK_TARGETS]: evaluateLinkTargetsAction,
+  [ACTION_IDS.REPLACE_ROLE_IDENTITY]: evaluateReplaceRoleIdentityAction,
+  [ACTION_IDS.SELECT]: evaluateSelectAction,
+  [ACTION_IDS.CONCLUDE_PLAY]: evaluateConcludePlayAction
+});
+
+function startAction({ session, action, input = {}, context = {} } = {}) {
+  return {
+    session,
+    action,
+    input,
+    context,
+    actionId: action?.id ?? null,
+    actors: [],
+    actor: null,
+    targets: [],
+    targetSelection: null,
+    errors: [],
+    result: null
+  };
+}
+
+const ACTIONS_WITHOUT_TARGET_VALIDATION = Object.freeze([
+  ACTION_IDS.SELECT,
+  ACTION_IDS.CONCLUDE_PLAY
+]);
+
+function collectActionContext(actionState) {
+  const { session, action, actionId, input } = actionState;
+  const actors = getActionActors(session, input.actorIds ?? []);
+  const targetSelection =
+    actionId === ACTION_IDS.REPLACE_ROLE_IDENTITY
+      ? getReplaceRoleIdentityTargetIds(session, action, input)
+      : {
+          targetIds: input.targetIds ?? [],
+          forced: false
+        };
+  const targets = (targetSelection.targetIds ?? []).map((id) => findRole(session, id));
+
+  return {
+    ...actionState,
+    actors,
+    actor: actors[0] ?? null,
+    targets,
+    targetSelection
+  };
+}
+
+function validateAction(actionState) {
+  const actionValidation = validateActionShape(actionState.action);
+  const shouldValidateTargets =
+    actionValidation.ok &&
+    ACTION_RESOLVERS[actionState.actionId] &&
+    !ACTIONS_WITHOUT_TARGET_VALIDATION.includes(actionState.actionId);
+  const targetValidation = shouldValidateTargets
+    ? validateActionTargets({
+        session: actionState.session,
+        action: actionState.action,
+        actor: actionState.actor,
+        targets: actionState.targets
+      })
+    : { errors: [] };
+
+  return {
+    ...actionState,
+    errors: [
+      ...actionState.errors,
+      ...actionValidation.errors,
+      ...targetValidation.errors
+    ]
+  };
+}
+
+function evaluateAction(actionState) {
+  if (actionState.errors.length > 0) return actionState;
+
+  const resolver = ACTION_RESOLVERS[actionState.actionId];
+  if (!resolver) {
+    return {
+      ...actionState,
+      errors: [
+        ...actionState.errors,
+        {
+          code: 'action/unsupported',
+          message: `unsupported action "${actionState.actionId ?? 'unknown'}"`
+        }
+      ]
+    };
+  }
+
+  const resolution = resolver(actionState);
+
+  return {
+    ...actionState,
+    session: resolution.session,
+    errors: [...actionState.errors, ...(resolution.errors ?? [])],
+    result: resolution.result,
+    ok: resolution.ok === true
+  };
+}
+
+function resolveActionEffects(actionState) {
+  const proposedEffects = actionState.result?.proposedEffects ?? [];
+  if (proposedEffects.length === 0) return actionState;
+
+  const effectResolution = resolveEffects({
+    session: actionState.session,
+    proposedEffects
+  });
+  const sessionAfterEffects = applyEffects({
+    session: actionState.session,
+    effects: effectResolution.finalEffects
+  });
+
+  if (actionState.result?.effectResolutionMode === 'role_property_change') {
+    const preventedPropertyChanges = effectResolution.blockedEffects
+      .filter((effect) => effect.type === EFFECT_TYPES.SET_PROPERTY)
+      .map((effect) => ({
+        property: effect.property,
+        value: effect.value,
+        reason: effect.reason,
+        targetId: effect.targetId,
+        causedBy: effect.causedBy ?? null
+      }));
+    const blockedTargetIds = new Set(
+      preventedPropertyChanges.map((change) => change.targetId)
+    );
+
+    return {
+      ...actionState,
+      session: sessionAfterEffects,
+      result: {
+        ...actionState.result,
+        proposedEffects: effectResolution.proposedEffects,
+        finalEffects: effectResolution.finalEffects,
+        blockedEffects: effectResolution.blockedEffects,
+        linkedPropagatedEffects: effectResolution.linkedPropagatedEffects,
+        preventedPropertyChanges,
+        targets: (actionState.result.targets ?? []).map((target) => ({
+          ...target,
+          propertyChangePrevented: blockedTargetIds.has(target.targetId),
+          failureReason: blockedTargetIds.has(target.targetId)
+            ? 'blocked_property_change'
+            : null
+        }))
+      }
+    };
+  }
+
+  return {
+    ...actionState,
+    session: sessionAfterEffects,
+    result: {
+      ...actionState.result,
+      proposedEffects: effectResolution.proposedEffects,
+      finalEffects: effectResolution.finalEffects,
+      blockedEffects: effectResolution.blockedEffects,
+      linkedPropagatedEffects: effectResolution.linkedPropagatedEffects
+    }
+  };
+}
+
+function validateActionOutput(actionState) {
+  if (actionState.errors.length > 0) return actionState;
+
+  const errors = [];
+  if (!actionState.result) {
+    errors.push({
+      code: 'action/missing-result',
+      message: `action "${actionState.actionId ?? 'unknown'}" finished without result`
+    });
+  }
+
+  [
+    ...(actionState.result?.proposedEffects ?? []),
+    ...(actionState.result?.finalEffects ?? [])
+  ].forEach((effect, index) => {
+    const validation = validateEffect(effect);
+    validation.errors.forEach((error) => {
+      errors.push({
+        ...error,
+        code: `action/output/${error.code}`,
+        index,
+        actionId: actionState.actionId
+      });
+    });
+  });
+
+  return {
+    ...actionState,
+    errors: [...actionState.errors, ...errors]
+  };
+}
+
+function finishAction(actionState) {
+  return {
+    ok: actionState.errors.length === 0 && actionState.ok !== false,
+    actionId: actionState.actionId,
+    errors: actionState.errors,
+    session: actionState.session,
+    result: actionState.result
   };
 }
 
 // Punto de entrada generico para resolver acciones.
-//
-// Por ahora entiende:
-// - inspect_role
-// - set_in_play
-// - block_property_change
-// - block_out_of_play
-// - link_targets
-// - select
-//
-// Las proximas acciones genericas se conectaran aqui.
 export function resolveAction(session, action, input = {}, context = {}) {
-  if (action?.id === ACTION_IDS.INSPECT_ROLE) {
-    return resolveInspectRole(session, action, input);
-  }
-  if (action?.id === ACTION_IDS.SET_PROPERTY) {
-    return resolveSetProperty(session, action, input, context);
-  }
-  if (action?.id === ACTION_IDS.SET_IN_PLAY) {
-    return resolveSetInPlay(session, action, input, context);
-  }
-  if (action?.id === ACTION_IDS.BLOCK_PROPERTY_CHANGE) {
-    return resolveBlockPropertyChange(session, action, input, context);
-  }
-  if (action?.id === ACTION_IDS.LINK_TARGETS) {
-    return resolveLinkTargets(session, action, { ...input, context });
-  }
-  if (action?.id === ACTION_IDS.REPLACE_ROLE_IDENTITY) {
-    return resolveReplaceRoleIdentity(session, action, input, context);
-  }
-  if (action?.id === ACTION_IDS.SELECT) {
-    return resolveSelection(session, action, input);
-  }
-  if (action?.id === ACTION_IDS.CONCLUDE_PLAY) {
-    return resolveConcludePlay(session, action, input);
-  }
+  const actionState = startAction({ session, action, input, context });
+  const contextState = collectActionContext(actionState);
+  const validationState = validateAction(contextState);
+  const evaluatedState = evaluateAction(validationState);
+  const effectsState = resolveActionEffects(evaluatedState);
+  const outputState = validateActionOutput(effectsState);
 
-  return {
-    ok: false,
-    actionId: action?.id ?? null,
-    errors: [
-      {
-        code: 'action/unsupported',
-        message: `unsupported action "${action?.id ?? 'unknown'}"`
-      }
-    ],
-    session,
-    result: null
-  };
+  return finishAction(outputState);
 }

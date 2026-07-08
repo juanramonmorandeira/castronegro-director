@@ -91,3 +91,9 @@ export function normalizeId(value = '') {
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '');
 }
+
+export function getCurrentCycleId(session) {
+  const rawCycleId = session?.cycle?.id ?? 0;
+  const numericCycleId = Number(rawCycleId);
+  return Number.isFinite(numericCycleId) && numericCycleId >= 0 ? numericCycleId : 0;
+}

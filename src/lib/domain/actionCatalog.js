@@ -7,10 +7,10 @@
 // -----------------------------------------------------------------------------
 
 import { MECHANICAL_ENTITY_TYPES } from './domainTypes.js';
-import { EFFECT_TYPES } from './effectModel.js';
+import { EFFECT_TYPES } from './effectDefinition.js';
+import { VISIBILITY } from './surfaceModel.js';
 import {
   ACTION_IDS,
-  VISIBILITY,
   createAction
 } from './actionDefinition.js';
 
@@ -94,60 +94,12 @@ function cloneCatalogValue(value) {
   return value;
 }
 
-const ALLOWED_ACTION_OVERRIDE_FIELDS = Object.freeze([
-  'target',
-  'effect',
-  'visibility',
-  'selectionRules',
-  'metadata'
-]);
-
-const BLOCKED_ACTION_OVERRIDE_FIELDS = Object.freeze(['id']);
-
-export function validateCatalogActionOverrides(actionId, overrides = {}) {
-  const errors = [];
-  const overrideKeys = Object.keys(overrides ?? {});
-
-  BLOCKED_ACTION_OVERRIDE_FIELDS
-    .filter((field) => overrideKeys.includes(field))
-    .forEach((field) => {
-      errors.push({
-        code: 'action/blocked-override',
-        message: `action "${actionId}" cannot override "${field}"`,
-        actionId,
-        field
-      });
-    });
-
-  overrideKeys
-    .filter(
-      (field) =>
-        !ALLOWED_ACTION_OVERRIDE_FIELDS.includes(field) &&
-        !BLOCKED_ACTION_OVERRIDE_FIELDS.includes(field)
-    )
-    .forEach((field) => {
-      errors.push({
-        code: 'action/unknown-override',
-        message: `action "${actionId}" received unknown override "${field}"`,
-        actionId,
-        field
-      });
-    });
-
-  return {
-    ok: errors.length === 0,
-    errors
-  };
-}
-
 export function getCatalogAction(actionId, overrides = {}) {
   const baseAction = ACTION_CATALOG[actionId];
   if (!baseAction) return null;
-  const overrideValidation = validateCatalogActionOverrides(actionId, overrides);
 
   return createAction({
     ...cloneCatalogValue(baseAction),
-    ...overrides,
     id: baseAction.id,
     target: overrides.target
       ? {
@@ -163,11 +115,7 @@ export function getCatalogAction(actionId, overrides = {}) {
       : cloneCatalogValue(baseAction.selectionRules),
     metadata: {
       ...(baseAction.metadata ?? {}),
-      ...(overrides.metadata ?? {}),
-      diagnostics: [
-        ...(baseAction.metadata?.diagnostics ?? []),
-        ...overrideValidation.errors
-      ]
+      ...(overrides.metadata ?? {})
     }
   });
 }

@@ -2,15 +2,17 @@
 
 Este documento fija la separacion vigente entre `action` y `recipe`.
 
-## Jerarquia
+## Jerarquia objetivo
 
 ```text
-actionDefinition
--> actionCatalog
--> recipeCatalog
--> stage
--> resolveRecipe
--> resolveAction
+Stage
+-> start/evaluate/resolve/validate/finish
+   -> Recipe
+      -> start/evaluate/resolve/validate/finish
+         -> Action
+            -> start/collectContext/validate/evaluate/resolveEffects/validateOutput/finish
+               -> Effect
+                  -> start/validate/resolve/apply/finish
 ```
 
 ## actionDefinition
@@ -18,9 +20,8 @@ actionDefinition
 `actionDefinition.js` contiene el vocabulario y constructor basico de actions:
 
 - `ACTION_IDS`;
-- `VISIBILITY`;
-- `defineAction`;
-- `createAction`.
+- `createAction`;
+- `validateAction`.
 
 Una action es una primitiva mecanica generica. No conoce el stage ni el role que
 la usa.
@@ -35,9 +36,37 @@ El catalogo no ejecuta nada. Solo devuelve actions normalizadas mediante:
 getCatalogAction(actionId, overrides)
 ```
 
-El `id` de una action catalogada no puede sobrescribirse. Sus parametros
+El `id` de una action catalogada lo fija siempre el catalogo. Sus parametros
 mecanicos, como `target`, `effect`, `visibility` o `selectionRules`, pueden
-adaptarse cuando una recipe necesita una variante concreta.
+adaptarse cuando una recipe necesita una variante concreta. Los campos ajenos a
+la materializacion de una action catalogada no forman parte del contrato publico
+de `getCatalogAction`.
+
+## effectDefinition
+
+`effectDefinition.js` contiene:
+
+- `EFFECT_TYPES`;
+- `createEffect`;
+- `validateEffect`.
+
+Un effect describe un cambio o salida mecanica propuesta por el runtime. La
+validacion de effect comprueba la forma minima por tipo.
+
+## effectModel
+
+`effectModel.js` ejecuta el runtime conceptual de effects:
+
+```text
+startEffect
+validateEffect
+resolveEffect(s)
+applyEffect(s)
+finishEffect
+```
+
+Las funciones publicas son `resolveEffects`, `applyEffect` y `applyEffects`.
+Los appliers concretos de cada tipo de effect son internos.
 
 ## recipeCatalog
 

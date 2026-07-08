@@ -6,7 +6,7 @@
 // cumplen el contrato de target declarado por una action/recipe.
 // -----------------------------------------------------------------------------
 
-import { getCurrentCycleId } from './effectModel.js';
+import { getCurrentCycleId } from './sessionModel.js';
 import {
   HISTORY_EVENTS,
   getRecipeHistory
@@ -47,7 +47,7 @@ function getRoleIdsByGroup(session = {}, groupId = null) {
 //
 // Un candidate es un target potencial de una action select, no el target final
 // de la recipe que consuma el resultado.
-export function getDefaultSelectionCandidateIds(session = {}) {
+export function getDefaultSelectCandidateIds(session = {}) {
   return (session?.roles ?? [])
     .filter((role) => role?.inPlay === true)
     .map((role) => role.id);
@@ -61,7 +61,7 @@ export function resolveCandidateIds({
 } = {}) {
   const baseCandidateIds = Array.isArray(candidateIds)
     ? [...candidateIds]
-    : getDefaultSelectionCandidateIds(session);
+    : getDefaultSelectCandidateIds(session);
   let resolvedCandidateIds = new Set(baseCandidateIds);
   const roleById = new Map((session.roles ?? []).map((role) => [role.id, role]));
 

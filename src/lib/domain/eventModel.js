@@ -12,7 +12,7 @@
 // -----------------------------------------------------------------------------
 
 import { createStage } from './stageDefinition.js';
-import { EFFECT_TYPES } from './effectModel.js';
+import { EFFECT_TYPES } from './effectDefinition.js';
 import { STAGE_STATUSES, normalizeId } from './sessionModel.js';
 import { MECHANICAL_ENTITY_TYPES } from './domainTypes.js';
 import { GROUP_TYPES } from './groupDefinition.js';

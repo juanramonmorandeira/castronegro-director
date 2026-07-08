@@ -40,11 +40,11 @@ import {
 } from './recipeModel.js';
 import {
   ACTION_IDS,
-  SELECTION_OUTCOME_TYPES,
-  VISIBILITY,
-  buildStageSelectionInput,
+  SELECT_OUTCOME_TYPES,
+  buildSelectActionInput,
   resolveAction
 } from './actionModel.js';
+import { VISIBILITY } from './surfaceModel.js';
 import { processActionResultEvents } from './eventModel.js';
 import { CURRENT_STAGE_SOURCES, normalizeId } from './sessionModel.js';
 import { RECIPE_ACTOR_TYPES } from './domainTypes.js';
@@ -621,9 +621,9 @@ function resolveSelectionStageRecipe(session, stage, recipe, input = {}, context
       id: ACTION_IDS.SELECT,
       visibility: recipe?.visibility ?? VISIBILITY.ALL
     },
-    buildStageSelectionInput({
+    buildSelectActionInput({
       session,
-      stage,
+      selectionSource: stage,
       recipeKey: context.recipeKey ?? getStageRecipeKey(recipe),
       input
     }),
@@ -643,7 +643,7 @@ function resolveSelectionStageRecipe(session, stage, recipe, input = {}, context
   });
   const targetId = peekOverride?.candidateRoleId ?? chosenId;
 
-  if (selectionResolution.result?.selection?.type !== SELECTION_OUTCOME_TYPES.CHOSEN || !chosenId) {
+  if (selectionResolution.result?.selection?.type !== SELECT_OUTCOME_TYPES.CHOSEN || !chosenId) {
     if (!peekOverride?.candidateRoleId) return selectionResolution;
   }
 

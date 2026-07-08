@@ -14,12 +14,12 @@ import {
 } from './stageTypes.js';
 import { getCatalogRecipe, RECIPE_KEYS } from './recipeCatalog.js';
 import {
-  SELECTION_ABSTAIN_RULES,
-  SELECTION_REQUIRED_RULES,
-  SELECTION_SELECTOR_SOURCES,
-  SELECTION_TIE_RULES,
-  SELECTION_UNANIMOUS_RULES,
-  createSelectionRules
+  SELECT_ABSTAIN_RULES,
+  SELECT_REQUIRED_RULES,
+  SELECT_SELECTOR_SOURCES,
+  SELECT_TIE_RULES,
+  SELECT_UNANIMOUS_RULES,
+  createSelectRules
 } from './actionModel.js';
 import {
   MECHANICAL_ENTITY_TYPES,
@@ -171,7 +171,7 @@ export const STAGE_CATALOG = Object.freeze({
     metadata: {
       catalogId: STAGE_CATALOG_IDS.DELIBERATION,
       interaction: {
-        participants: SELECTION_SELECTOR_SOURCES.IN_PLAY_ROLES,
+        participants: SELECT_SELECTOR_SOURCES.IN_PLAY_ROLES,
         mode: 'deliberation'
       }
     }
@@ -182,11 +182,11 @@ export const STAGE_CATALOG = Object.freeze({
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
-    selectionRules: createSelectionRules({
-      required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
-      abstain: SELECTION_ABSTAIN_RULES.NOT_ALLOWED,
-      unanimous: SELECTION_UNANIMOUS_RULES.REQUIRED,
-      tie: SELECTION_TIE_RULES.NULL_ON_TIE
+    selectionRules: createSelectRules({
+      required: SELECT_REQUIRED_RULES.ALL_SELECTORS,
+      abstain: SELECT_ABSTAIN_RULES.NOT_ALLOWED,
+      unanimous: SELECT_UNANIMOUS_RULES.REQUIRED,
+      tie: SELECT_TIE_RULES.NULL_ON_TIE
     }),
     recipes: [getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY)],
     metadata: {
@@ -199,12 +199,12 @@ export const STAGE_CATALOG = Object.freeze({
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
-    selectionRules: createSelectionRules({
-      selectorSource: SELECTION_SELECTOR_SOURCES.IN_PLAY_ROLES,
-      required: SELECTION_REQUIRED_RULES.ALL_SELECTORS,
-      abstain: SELECTION_ABSTAIN_RULES.NOT_ALLOWED,
-      unanimous: SELECTION_UNANIMOUS_RULES.NOT_REQUIRED,
-      tie: SELECTION_TIE_RULES.NULL_ON_TIE
+    selectionRules: createSelectRules({
+      selectorSource: SELECT_SELECTOR_SOURCES.IN_PLAY_ROLES,
+      required: SELECT_REQUIRED_RULES.ALL_SELECTORS,
+      abstain: SELECT_ABSTAIN_RULES.NOT_ALLOWED,
+      unanimous: SELECT_UNANIMOUS_RULES.NOT_REQUIRED,
+      tie: SELECT_TIE_RULES.NULL_ON_TIE
     }),
     recipes: [
       getCatalogRecipe(RECIPE_KEYS.SET_OUT_OF_PLAY, {
@@ -218,7 +218,7 @@ export const STAGE_CATALOG = Object.freeze({
     metadata: {
       catalogId: STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY,
       interaction: {
-        participants: SELECTION_SELECTOR_SOURCES.IN_PLAY_ROLES,
+        participants: SELECT_SELECTOR_SOURCES.IN_PLAY_ROLES,
         selectionMethod: 'vote'
       }
     }

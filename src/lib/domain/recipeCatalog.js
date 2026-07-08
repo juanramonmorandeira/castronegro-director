@@ -10,10 +10,11 @@
 // El constructor generico de receta vive en recipeModel.js: createRecipe.
 // -----------------------------------------------------------------------------
 
-import { ACTION_IDS, VISIBILITY } from './actionDefinition.js';
+import { ACTION_IDS } from './actionDefinition.js';
+import { VISIBILITY } from './surfaceModel.js';
 import { getCatalogAction } from './actionCatalog.js';
 import { CONSTRAINT_TYPES, CONSTRAINT_WINDOWS } from './constraintModel.js';
-import { EFFECT_TYPES } from './effectModel.js';
+import { EFFECT_TYPES } from './effectDefinition.js';
 import {
   GROUP_RULE_TARGETS,
   GROUP_RULE_TYPES,
@@ -359,68 +360,14 @@ function cloneCatalogValue(value) {
   return value;
 }
 
-const ALLOWED_RECIPE_OVERRIDE_FIELDS = Object.freeze([
-  'actor',
-  'target',
-  'usage',
-  'constraints',
-  'visibility',
-  'optional',
-  'metadata',
-  'influences'
-]);
-
-const BLOCKED_RECIPE_OVERRIDE_FIELDS = Object.freeze([
-  'id',
-  'effect',
-  'actions'
-]);
-
-export function validateCatalogRecipeOverrides(recipeKey, overrides = {}) {
-  const errors = [];
-  const overrideKeys = Object.keys(overrides ?? {});
-
-  BLOCKED_RECIPE_OVERRIDE_FIELDS
-    .filter((field) => overrideKeys.includes(field))
-    .forEach((field) => {
-      errors.push({
-        code: 'recipe/blocked-override',
-        message: `recipe "${recipeKey}" cannot override "${field}"`,
-        recipeKey,
-        field
-      });
-    });
-
-  overrideKeys
-    .filter(
-      (field) =>
-        !ALLOWED_RECIPE_OVERRIDE_FIELDS.includes(field) &&
-        !BLOCKED_RECIPE_OVERRIDE_FIELDS.includes(field)
-    )
-    .forEach((field) => {
-      errors.push({
-        code: 'recipe/unknown-override',
-        message: `recipe "${recipeKey}" received unknown override "${field}"`,
-        recipeKey,
-        field
-      });
-    });
-
-  return {
-    ok: errors.length === 0,
-    errors
-  };
-}
-
 export function getCatalogRecipe(recipeKey, overrides = {}) {
   const baseRecipe = RECIPE_CATALOG[recipeKey];
   if (!baseRecipe) return null;
-  const overrideValidation = validateCatalogRecipeOverrides(recipeKey, overrides);
 
   return createRecipe({
     ...cloneCatalogValue(baseRecipe),
-    ...overrides,
     id: baseRecipe.id,
+    key: baseRecipe.key,
     constraints: overrides.constraints
       ? [...overrides.constraints]
       : cloneCatalogValue(baseRecipe.constraints ?? []),
@@ -433,9 +380,15 @@ export function getCatalogRecipe(recipeKey, overrides = {}) {
     actor: overrides.actor ? { ...overrides.actor } : cloneCatalogValue(baseRecipe.actor),
     actions: cloneCatalogValue(baseRecipe.actions ?? []),
     usage: overrides.usage ? cloneCatalogValue(overrides.usage) : cloneCatalogValue(baseRecipe.usage),
-    diagnostics: [
-      ...(baseRecipe.diagnostics ?? []),
-      ...overrideValidation.errors
-    ]
+    visibility: overrides.visibility ?? baseRecipe.visibility,
+    optional: Object.hasOwn(overrides, 'optional') ? overrides.optional : baseRecipe.optional,
+    metadata: {
+      ...(baseRecipe.metadata ?? {}),
+      ...(overrides.metadata ?? {})
+    },
+    influences: overrides.influences
+      ? cloneCatalogValue(overrides.influences)
+      : cloneCatalogValue(baseRecipe.influences),
+    diagnostics: cloneCatalogValue(baseRecipe.diagnostics ?? [])
   });
 }
