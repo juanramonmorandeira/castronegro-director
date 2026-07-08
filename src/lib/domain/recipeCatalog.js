@@ -7,7 +7,7 @@
 //
 // getCatalogRecipe(RECIPE_KEYS.INSPECT_ROLE)
 //
-// El constructor generico de receta vive en recipeModel.js: createRecipe.
+// El constructor generico de receta vive en recipeDefinition.js: createRecipe.
 // -----------------------------------------------------------------------------
 
 import { ACTION_IDS } from './actionDefinition.js';
@@ -29,7 +29,7 @@ import {
   OBJECTIVE_CONDITIONS,
   OBJECTIVE_HOLDER_TYPES
 } from './objectiveModel.js';
-import { createRecipe } from './recipeModel.js';
+import { createRecipe } from './recipeDefinition.js';
 import {
   MECHANICAL_ENTITY_TYPES,
   RECIPE_ACTOR_TYPES,

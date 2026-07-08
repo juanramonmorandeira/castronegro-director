@@ -240,9 +240,12 @@ export {
   getRecipeKey,
   createRecipe,
   getActionFromRecipe,
-  getRecipeActorAndTargets,
   getRecipeConstraints,
-  validateRecipeContract,
+  validateRecipe,
+  validateRecipe as validateRecipeContract
+} from './recipeDefinition.js';
+export {
+  getRecipeActorAndTargets,
   validateRecipeConstraints,
   resolveRecipe
 } from './recipeModel.js';

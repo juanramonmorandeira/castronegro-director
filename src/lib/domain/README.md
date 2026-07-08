@@ -77,7 +77,8 @@ Ejemplos:
 
 - `poolCursorModel.js`: mueve el cursor entre stages.
 - `stageModel.js`: conecta el stage actual con recipe/action y cierre de stage.
-- `recipeModel.js`: valida restricciones y entrega actions de recipe a
+- `recipeDefinition.js`: constructor y validacion de forma de recipes.
+- `recipeModel.js`: ejecuta el ciclo runtime de recipe y entrega actions a
   `actionModel`.
 - `actionModel.js`: resuelve acciones puras.
 - `effectModel.js`: deriva o bloquea efectos propuestos.

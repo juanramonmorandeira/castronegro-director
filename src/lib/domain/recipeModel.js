@@ -13,79 +13,26 @@
 
 import { resolveAction } from './actionModel.js';
 import { createAction } from './actionDefinition.js';
+import {
+  getRecipeKey,
+  getPrimaryActionFromRecipe,
+  getActionFromRecipe,
+  getRecipeConstraints,
+  validateRecipe
+} from './recipeDefinition.js';
 import { resolveRecipeActor } from './actorModel.js';
 import { findRole } from './targetModel.js';
 import {
-  CONSTRAINT_TYPES,
-  CONSTRAINT_WINDOWS,
   evaluateRecipeConstraints
 } from './constraintModel.js';
-import { normalizeId } from './sessionModel.js';
 import { materializePropertyBlockExpiration } from './roleModel.js';
 import {
   HISTORY_RESULTS,
   appendRecipeHistory,
   getRecipeHistorySignature
 } from './historyModel.js';
-import {
-  MECHANICAL_ENTITY_TYPES,
-  RECIPE_ACTOR_TYPES,
-  isMechanicalEntityType,
-  isRecipeActorType,
-  isTargetFilterType
-} from './domainTypes.js';
 import { createMessagesFromEngineErrors } from '../messages/messageModel.js';
 import { routeMessages } from '../messages/messageLogModel.js';
-
-export function getRecipeKey(recipe = {}) {
-  return normalizeId(recipe.key ?? recipe.recipeKey);
-}
-
-// Constructor generico de receta.
-//
-// Las recetas concretas viven en recipeCatalog como datos predefinidos. Este
-// constructor solo normaliza la forma comun que recipeModel sabe resolver.
-export function createRecipe(recipe = {}) {
-  return {
-    ...recipe,
-    key: getRecipeKey(recipe),
-    actions: (recipe.actions ?? []).map(createAction),
-    optional: recipe.optional !== false,
-    usage: normalizeUsage(recipe.usage),
-    constraints: [...(recipe.constraints ?? [])]
-  };
-}
-
-function normalizeUsage(usage = {}) {
-  return {
-    limit: usage.limit === null
-      ? null
-      : Number.isInteger(usage.limit) && usage.limit > 0
-        ? usage.limit
-        : null,
-    window: usage.window ?? CONSTRAINT_WINDOWS.SESSION
-  };
-}
-
-export function getPrimaryActionFromRecipe(recipe = {}) {
-  return recipe.actions?.[0] ?? null;
-}
-
-// Prepara la action que actionModel puede resolver.
-//
-// La recipe conserva el contrato publico de actor/target/visibility; la action
-// conserva la primitiva mecanica y su effect.
-export function getActionFromRecipe(recipe = {}) {
-  const primaryAction = getPrimaryActionFromRecipe(recipe);
-  if (!primaryAction) return null;
-
-  return createAction({
-    ...primaryAction,
-    target: recipe.target ?? primaryAction.target ?? null,
-    visibility: recipe.visibility ?? primaryAction.visibility,
-    selectionRules: recipe.selectionRules ?? primaryAction.selectionRules ?? null
-  });
-}
 
 export function getRecipeActorAndTargets(session, input = {}, recipe = {}, stage = {}) {
   const actorContext = resolveRecipeActor({ session, recipe, input, stage });
@@ -96,130 +43,6 @@ export function getRecipeActorAndTargets(session, input = {}, recipe = {}, stage
     actors: actorContext.actors,
     actorContext,
     targets
-  };
-}
-
-export function getRecipeConstraints(recipe = {}) {
-  const explicitConstraints = recipe?.constraints ?? [];
-  const hasExplicitLimitedUses = explicitConstraints.some(
-    (constraint) => constraint?.type === CONSTRAINT_TYPES.LIMITED_USES
-  );
-  const usageConstraint =
-    !hasExplicitLimitedUses &&
-    Number.isInteger(recipe?.usage?.limit) && recipe.usage.limit > 0
-      ? [
-          {
-            type: CONSTRAINT_TYPES.LIMITED_USES,
-            limit: recipe.usage.limit,
-            window: recipe.usage.window
-          }
-        ]
-      : [];
-
-  return [...usageConstraint, ...explicitConstraints];
-}
-
-export function validateRecipeContract({ recipe = {}, input = {} } = {}) {
-  const errors = [...(recipe.diagnostics ?? [])];
-  const actorType = recipe.actor?.type ?? null;
-  const actorIds = input.actorIds ?? [];
-  const target = recipe.target ?? {};
-  const targetType = target.type ?? null;
-  const targetCount = target.count ?? 0;
-  const filters = target.filters ?? [];
-  const actions = Array.isArray(recipe.actions) ? recipe.actions : [];
-
-  if (!isRecipeActorType(actorType)) {
-    errors.push({
-      code: 'recipe/invalid-actor-type',
-      message: `recipe "${getRecipeKey(recipe)}" has invalid actor type "${actorType ?? 'missing'}"`,
-      actorType
-    });
-  }
-
-  if (actorType === RECIPE_ACTOR_TYPES.ROLE && actorIds.length > 1) {
-    errors.push({
-      code: 'recipe/invalid-role-actor-count',
-      message: `recipe "${getRecipeKey(recipe)}" role actor expects at most one actorId`,
-      actorType,
-      actorIds
-    });
-  }
-
-  if (
-    (actorType === RECIPE_ACTOR_TYPES.SYSTEM || actorType === RECIPE_ACTOR_TYPES.DIRECTOR) &&
-    actorIds.length > 0
-  ) {
-    errors.push({
-      code: 'recipe/actor-ids-not-allowed',
-      message: `recipe "${getRecipeKey(recipe)}" actor type "${actorType}" must not receive role actorIds`,
-      actorType,
-      actorIds
-    });
-  }
-
-  if (!isMechanicalEntityType(targetType)) {
-    errors.push({
-      code: 'recipe/invalid-target-type',
-      message: `recipe "${getRecipeKey(recipe)}" has invalid target type "${targetType ?? 'missing'}"`,
-      targetType
-    });
-  }
-
-  if (!Number.isInteger(targetCount) || targetCount < 0) {
-    errors.push({
-      code: 'recipe/invalid-target-count',
-      message: `recipe "${getRecipeKey(recipe)}" target.count must be a non-negative integer`,
-      targetCount
-    });
-  }
-
-  if (targetType === MECHANICAL_ENTITY_TYPES.SESSION && targetCount !== 0) {
-    errors.push({
-      code: 'recipe/invalid-session-target-count',
-      message: `recipe "${getRecipeKey(recipe)}" session target must use count 0`,
-      targetCount
-    });
-  }
-
-  if (!Array.isArray(filters)) {
-    errors.push({
-      code: 'recipe/invalid-target-filters',
-      message: `recipe "${getRecipeKey(recipe)}" target.filters must be an array`
-    });
-  } else {
-    filters
-      .filter((filter) => !isTargetFilterType(filter))
-      .forEach((filter) => {
-        errors.push({
-          code: 'recipe/unknown-target-filter',
-          message: `recipe "${getRecipeKey(recipe)}" has unknown target filter "${filter}"`,
-          filter
-        });
-      });
-  }
-
-  if (!Array.isArray(recipe.actions) || actions.length === 0) {
-    errors.push({
-      code: 'recipe/missing-actions',
-      message: `recipe "${getRecipeKey(recipe)}" must declare at least one action`
-    });
-  }
-
-  actions
-    .filter((action) => !action?.id)
-    .forEach((action, index) => {
-      errors.push({
-        code: 'recipe/invalid-action',
-        message: `recipe "${getRecipeKey(recipe)}" has invalid action at index ${index}`,
-        action,
-        index
-      });
-    });
-
-  return {
-    ok: errors.length === 0,
-    errors
   };
 }
 
@@ -383,98 +206,168 @@ export function appendRecipeNoEffectHistory(session, entry = {}) {
   });
 }
 
-// Resuelve una receta:
-// 1. Valida restricciones de receta.
-// 2. Convierte la receta en accion pura.
-// 3. Llama a actionModel.
-export function resolveRecipe(session, recipe, input = {}, context = {}) {
-  const recipeKey = context.recipeKey ?? getRecipeKey(recipe);
-  const contractValidation = validateRecipeContract({ recipe, input });
-
-  if (!contractValidation.ok) {
-    const action = getPrimaryActionFromRecipe(recipe);
-    const messageState = appendEngineErrorMessages(session, contractValidation.errors, {
-      ...context,
-      actionId: action?.id ?? null,
-      recipeKey
-    });
-
-    return {
-      ok: false,
-      actionId: action?.id ?? null,
-      recipeKey,
-      errors: contractValidation.errors,
-      session: messageState.session,
-      result: null,
-      messages: messageState.messages
-    };
-  }
-
-  const constraintValidation = validateRecipeConstraints({ session, recipe, input, context });
-
-  if (!constraintValidation.ok) {
-    const action = getPrimaryActionFromRecipe(recipe);
-    const messageState = appendEngineErrorMessages(session, constraintValidation.errors, {
-      ...context,
-      actionId: action?.id ?? null,
-      recipeKey
-    });
-
-    return {
-      ok: false,
-      actionId: action?.id ?? null,
-      recipeKey,
-      errors: constraintValidation.errors,
-      session: messageState.session,
-      result: null,
-      messages: messageState.messages
-    };
-  }
-
-  const materialization = materializeRecipeForSession(session, recipe, context);
-  if (!materialization.ok) {
-    const action = getPrimaryActionFromRecipe(recipe);
-    const messageState = appendEngineErrorMessages(session, materialization.errors, {
-      ...context,
-      actionId: action?.id ?? null,
-      recipeKey
-    });
-
-    return {
-      ok: false,
-      actionId: action?.id ?? null,
-      recipeKey,
-      errors: materialization.errors,
-      session: messageState.session,
-      result: null,
-      messages: messageState.messages
-    };
-  }
-
-  const action = getActionFromRecipe(materialization.recipe);
-  const actionResolution = resolveAction(session, action, input, {
-    ...context,
-    recipeKey,
-    actorContract: materialization.recipe.actor ?? null,
-    targetContract: materialization.recipe.target ?? null
+function createRecipeErrorResult(state, errors) {
+  const action = getPrimaryActionFromRecipe(state.recipe);
+  const messageState = appendEngineErrorMessages(state.session, errors, {
+    ...state.context,
+    actionId: action?.id ?? null,
+    recipeKey: state.recipeKey
   });
 
-  if (!actionResolution.ok) return actionResolution;
+  return {
+    ok: false,
+    actionId: action?.id ?? null,
+    recipeKey: state.recipeKey,
+    errors,
+    session: messageState.session,
+    result: null,
+    messages: messageState.messages
+  };
+}
+
+function startRecipe(session, recipe, input = {}, context = {}) {
+  const recipeKey = context.recipeKey ?? getRecipeKey(recipe);
 
   return {
-    ...actionResolution,
+    ok: true,
+    session,
+    recipe,
+    materializedRecipe: null,
+    input,
+    context,
+    recipeKey,
+    action: null,
+    actionResolution: null,
+    errors: [],
+    result: null
+  };
+}
+
+function evaluateRecipe(state) {
+  const contractValidation = validateRecipe({
+    recipe: state.recipe,
+    input: state.input
+  });
+  if (!contractValidation.ok) {
+    return {
+      ...state,
+      ok: false,
+      errors: contractValidation.errors,
+      result: createRecipeErrorResult(state, contractValidation.errors)
+    };
+  }
+
+  const constraintValidation = validateRecipeConstraints({
+    session: state.session,
+    recipe: state.recipe,
+    input: state.input,
+    context: state.context
+  });
+
+  if (!constraintValidation.ok) {
+    return {
+      ...state,
+      ok: false,
+      errors: constraintValidation.errors,
+      result: createRecipeErrorResult(state, constraintValidation.errors)
+    };
+  }
+
+  const materialization = materializeRecipeForSession(
+    state.session,
+    state.recipe,
+    state.context
+  );
+  if (!materialization.ok) {
+    return {
+      ...state,
+      ok: false,
+      errors: materialization.errors,
+      result: createRecipeErrorResult(state, materialization.errors)
+    };
+  }
+
+  return {
+    ...state,
+    materializedRecipe: materialization.recipe,
+    action: getActionFromRecipe(materialization.recipe)
+  };
+}
+
+function resolveRecipeAction(state) {
+  if (!state.ok) return state;
+
+  const actionResolution = resolveAction(state.session, state.action, state.input, {
+    ...state.context,
+    recipeKey: state.recipeKey,
+    actorContract: state.materializedRecipe.actor ?? null,
+    targetContract: state.materializedRecipe.target ?? null
+  });
+
+  return {
+    ...state,
+    ok: actionResolution.ok,
+    actionResolution,
+    session: actionResolution.session,
+    errors: actionResolution.errors ?? [],
+    result: actionResolution
+  };
+}
+
+function validateRecipeOutput(state) {
+  if (!state.ok) return state;
+  if (!state.actionResolution?.ok) return state;
+
+  if (!state.actionResolution.result) {
+    return {
+      ...state,
+      ok: false,
+      errors: [
+        {
+          code: 'recipe/missing-result',
+          message: `recipe "${state.recipeKey}" finished without result`,
+          recipeKey: state.recipeKey
+        }
+      ]
+    };
+  }
+
+  return state;
+}
+
+function finishRecipe(state) {
+  if (state.result && !state.actionResolution) return state.result;
+  if (state.actionResolution && !state.actionResolution.ok) return state.actionResolution;
+  if (!state.ok) return createRecipeErrorResult(state, state.errors);
+
+  return {
+    ...state.actionResolution,
     session: appendResolvedRecipeHistory({
-      session: actionResolution.session,
-      recipe: materialization.recipe,
-      action,
-      input,
+      session: state.actionResolution.session,
+      recipe: state.materializedRecipe,
+      action: state.action,
+      input: state.input,
       context: {
-        ...context,
-        recipeKey,
-        actorContract: materialization.recipe.actor ?? null,
-        targetContract: materialization.recipe.target ?? null
+        ...state.context,
+        recipeKey: state.recipeKey,
+        actorContract: state.materializedRecipe.actor ?? null,
+        targetContract: state.materializedRecipe.target ?? null
       },
-      actionResult: actionResolution.result ?? {}
+      actionResult: state.actionResolution.result ?? {}
     })
   };
+}
+
+// Resuelve una receta:
+// startRecipe -> evaluateRecipe -> resolveRecipeAction -> validateRecipeOutput -> finishRecipe.
+export function resolveRecipe(session, recipe, input = {}, context = {}) {
+  return finishRecipe(
+    validateRecipeOutput(
+      resolveRecipeAction(
+        evaluateRecipe(
+          startRecipe(session, recipe, input, context)
+        )
+      )
+    )
+  );
 }
