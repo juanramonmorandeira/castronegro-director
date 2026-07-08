@@ -18,6 +18,19 @@ import {
   isStageRunnable
 } from './poolCursorModel.js';
 import {
+  STAGE_ERRORS,
+  STAGE_RECIPE_KEYS,
+  STAGE_RULE_TYPES,
+  PEEK_RECIPE_KEYS,
+  PEEK_WARNING_TIMINGS,
+  PEEK_WARNING_CONFIRMATION_RULES,
+  getStageRecipeKey,
+  selectStageRecipe,
+  isValidStageCompletionRequester,
+  getStageCompletionDefinition,
+  canRequesterCompleteStage
+} from './stageDefinition.js';
+import {
   enterNextPool,
   continueAfterWindow,
   getCurrentCycleStage,
@@ -45,10 +58,12 @@ import {
   resolveAction
 } from './actionModel.js';
 import { VISIBILITY } from './surfaceModel.js';
-import { processActionResultEvents } from './eventModel.js';
+import {
+  processActionResultEvents,
+  resolveEventStageOnCompletion
+} from './eventModel.js';
 import { CURRENT_STAGE_SOURCES, normalizeId } from './sessionModel.js';
 import { RECIPE_ACTOR_TYPES } from './domainTypes.js';
-import { RECIPE_KEYS } from './recipeCatalog.js';
 import {
   completeInterPoolStage,
   getCurrentInterPoolStage
@@ -60,38 +75,6 @@ import {
 } from './stageTypes.js';
 import { createMessagesFromEngineErrors } from '../messages/messageModel.js';
 import { routeMessages } from '../messages/messageLogModel.js';
-
-export const STAGE_ERRORS = Object.freeze({
-  MISSING_SESSION: 'stage/missing-session',
-  MISSING_STAGE_POOLS: 'stage/missing-stage-pools',
-  MISSING_CURRENT_STAGE: 'stage/missing-current-stage',
-  STAGE_NOT_RUNNABLE: 'stage/not-runnable',
-  MISSING_RECIPE: 'stage/missing-recipe',
-  MISSING_RECIPE_KEY: 'stage/missing-recipe-key',
-  RECIPE_NOT_FOUND: 'stage/recipe-not-found',
-  COMPLETION_NOT_ALLOWED: 'stage/completion-not-allowed'
-});
-
-export const PEEK_RECIPE_KEYS = Object.freeze({
-  PEEK_ATTEMPT: 'peekAttempt',
-  PEEK_WARNING: 'peek_warning',
-  OVERRIDE_SELECTED_CANDIDATE: 'override_selected_candidate'
-});
-
-export const PEEK_WARNING_TIMINGS = Object.freeze({
-  BEFORE_SELECTION: 'before_selection',
-  AFTER_SELECTION: 'after_selection',
-  SELECTION_NULL: 'selection_null'
-});
-
-export const PEEK_WARNING_CONFIRMATION_RULES = Object.freeze({
-  UNANIMITY: 'unanimity',
-  SIMPLE_MAJORITY: 'simple_majority'
-});
-
-export const STAGE_RULE_TYPES = Object.freeze({
-  PEEK_WARNING_OVERRIDE: 'peek_warning_override'
-});
 
 export { STAGE_COMPLETION_MODES, STAGE_COMPLETION_REQUESTED_BY };
 
@@ -107,44 +90,6 @@ function appendEngineErrors(session, errors, context = {}) {
     messages
   };
 }
-
-// IDs anonimos recomendados para slots de ejecucion.
-//
-// El stage no describe que accion ejecuta. Describe donde ocurre dentro del
-// flujo. Las recipes concretas viven en stage.recipes.
-export const STAGE_KEYS = Object.freeze({
-  STAGE_01: 'stage_01',
-  STAGE_02: 'stage_02',
-  STAGE_03: 'stage_03',
-  STAGE_04: 'stage_04',
-  STAGE_05: 'stage_05',
-  DELIBERATION: 'stage_deliberation',
-  ROLE_STATE_REVEALED: 'stage_role_state_revealed',
-  ROLE_REACTIVE_RESPONSE: 'stage_role_reactive_response',
-  LINKED_PROPAGATED_EFFECT: 'stage_linked_propagated_effect',
-  LINKED_TARGET_RECOGNITION: 'stage_linked_target_recognition',
-  SELECT_DOUBLE_SELECTOR: 'select_double_selector',
-  PICK_NEXT_DOUBLE_SELECTOR: 'pick_next_double_selector',
-  STAGE_08: 'stage_08',
-  STAGE_09: 'stage_09'
-});
-
-// Claves de receta dentro de un stage.
-//
-// actionId puede ser generico, por ejemplo set_in_play. recipeKey permite
-// distinguir recetas que usan esa misma accion generica con parametros distintos.
-export const STAGE_RECIPE_KEYS = Object.freeze({
-  INSPECT_ROLE: 'inspect_role',
-  LINK_TARGETS: 'link_targets',
-  BLOCK_OUT_OF_PLAY: 'block_out_of_play',
-  SET_OUT_OF_PLAY: 'set_out_of_play',
-  ASSUME_ROLE: 'assume_role',
-  RESTORE_RECENT_OUT_OF_PLAY: 'restore_recent_out_of_play',
-  LINKED_PROPAGATED_EFFECT: 'linked_propagated_effect',
-  LINKED_TARGET_RECOGNITION: 'linked_target_recognition',
-  CHECK_OBJECTIVES: 'check_objectives',
-  CONCLUDE_PLAY: 'conclude_play'
-});
 
 // Devuelve el stage actual con su contexto de pool.
 //
@@ -164,72 +109,6 @@ export function getCurrentStage(session) {
     };
   }
   return getCurrentCycleStage(session?.cycle);
-}
-
-// Devuelve la clave mecanica de una recipe dentro del stage.
-export function getStageRecipeKey(recipe) {
-  return normalizeId(recipe?.key ?? recipe?.recipeKey ?? recipe?.id);
-}
-
-// Elige que recipe del stage se va a ejecutar.
-//
-// Si solo hay una recipe, no exigimos recipeKey. Si hay varias, el input debe
-// indicar recipeKey para evitar que el motor elija por posicion sin querer.
-export function selectStageRecipe(recipes = [], requestedRecipeKey = null) {
-  if (!recipes.length) {
-    return {
-      ok: false,
-      recipe: null,
-      recipeKey: null,
-      error: {
-        code: STAGE_ERRORS.MISSING_RECIPE,
-        message: 'current stage has no recipes'
-      }
-    };
-  }
-
-  const normalizedRequestedKey = requestedRecipeKey ? normalizeId(requestedRecipeKey) : null;
-
-  if (!normalizedRequestedKey && recipes.length > 1) {
-    return {
-      ok: false,
-      recipe: null,
-      recipeKey: null,
-      error: {
-        code: STAGE_ERRORS.MISSING_RECIPE_KEY,
-        message: 'current stage has multiple recipes and requires recipeKey'
-      }
-    };
-  }
-
-  const selectedRecipe = normalizedRequestedKey
-    ? recipes.find((recipe) => getStageRecipeKey(recipe) === normalizedRequestedKey)
-    : recipes[0];
-
-  if (!selectedRecipe) {
-    return {
-      ok: false,
-      recipe: null,
-      recipeKey: normalizedRequestedKey,
-      error: {
-        code: STAGE_ERRORS.RECIPE_NOT_FOUND,
-        message: `current stage has no recipe "${normalizedRequestedKey}"`,
-        recipeKey: normalizedRequestedKey
-      }
-    };
-  }
-
-  const recipeKey = getStageRecipeKey(selectedRecipe);
-
-  return {
-    ok: true,
-    recipe: {
-      ...selectedRecipe,
-      key: selectedRecipe.key ?? recipeKey
-    },
-    recipeKey,
-    error: null
-  };
 }
 
 // Valida que el stage actual pueda ejecutarse.
@@ -308,32 +187,6 @@ export function validateCurrentStage(session, { recipeKey = null } = {}) {
     recipeKey: selectedRecipe.recipeKey,
     errors
   };
-}
-
-// Devuelve true si un valor representa un origen valido de cierre de stage.
-export function isValidStageCompletionRequester(requestedBy) {
-  return Object.values(STAGE_COMPLETION_REQUESTED_BY).includes(requestedBy);
-}
-
-export function getStageCompletionDefinition(stage = {}) {
-  const completion = stage?.completion ?? {};
-  const mode = Object.values(STAGE_COMPLETION_MODES).includes(completion.mode)
-    ? completion.mode
-    : STAGE_COMPLETION_MODES.MANUAL;
-  const allowedRequesters = Array.isArray(completion.allowedRequesters)
-    ? completion.allowedRequesters.filter(isValidStageCompletionRequester)
-    : Object.values(STAGE_COMPLETION_REQUESTED_BY);
-
-  return {
-    mode,
-    allowedRequesters:
-      allowedRequesters.length > 0 ? allowedRequesters : Object.values(STAGE_COMPLETION_REQUESTED_BY)
-  };
-}
-
-export function canRequesterCompleteStage(stage, requestedBy) {
-  const completion = getStageCompletionDefinition(stage);
-  return completion.allowedRequesters.includes(requestedBy);
 }
 
 function getStageSelectionRules(stage = {}) {
@@ -555,16 +408,7 @@ function mergeSelectionAndRecipeResult({ selectionResult = null, recipeResult = 
   };
 }
 
-function getRoleProperty(session = {}, roleId = null, property = null) {
-  return (session.roles ?? []).find((role) => role.id === roleId)?.[property];
-}
-
-function causalConditionIsMet(session = {}, condition = {}) {
-  if (!condition?.targetId || !condition?.property) return false;
-  return getRoleProperty(session, condition.targetId, condition.property) === condition.value;
-}
-
-function resolveSelectionStageRecipe(session, stage, recipe, input = {}, context = {}) {
+function resolveStageRecipeWithSelectAction(session, stage, recipe, input = {}, context = {}) {
   const activePeekStageRules = collectActiveStageRules(
     session,
     stage,
@@ -689,84 +533,9 @@ function resolveSelectionStageRecipe(session, stage, recipe, input = {}, context
   };
 }
 
-function resolveLinkedPropagatedEffectStageOnCompletion(session = {}, currentStage = {}) {
-  const stage = currentStage.stage ?? {};
-  if (stage.metadata?.catalogId !== 'linked_propagated_effect') return session;
-
-  const effect = stage.metadata?.propagatedEffect ?? null;
-  const recipe = (stage.recipes ?? []).find(
-    (stageRecipe) => stageRecipe.key === RECIPE_KEYS.LINKED_PROPAGATED_EFFECT
-  );
-  const action = recipe?.actions?.[0] ?? null;
-  const actionId = action?.id ?? ACTION_IDS.SET_PROPERTY;
-  const cycleId = session.cycle?.id ?? 0;
-  const context = {
-    poolKey: null,
-    stageId: currentStage.stageId,
-    stageKey: currentStage.stageKey,
-    stageCatalogId: stage.metadata?.catalogId ?? null,
-    eventWindow: stage.metadata?.eventWindow ?? null,
-    recipeKey: RECIPE_KEYS.LINKED_PROPAGATED_EFFECT,
-    causedBy: effect?.causedBy ?? null
-  };
-
-  if (!effect || !recipe || !causalConditionIsMet(session, effect.causalCondition ?? null)) {
-    return appendRecipeNoEffectHistory(session, {
-      cycleId,
-      poolKey: null,
-      stageId: currentStage.stageId,
-      stageKey: currentStage.stageKey,
-      stageCatalogId: stage.metadata?.catalogId ?? null,
-      recipeKey: RECIPE_KEYS.LINKED_PROPAGATED_EFFECT,
-      actionId,
-      actionSignature: actionId,
-      actorIds: [],
-      targetIds: effect?.targetId ? [effect.targetId] : [],
-      proposedEffects: effect ? [effect] : [],
-      finalEffects: [],
-      blockedEffects: [],
-      metadata: {
-        reason: 'causal_condition_not_met',
-        causalCondition: effect?.causalCondition ?? null
-      }
-    });
-  }
-
-  const previousSession = session;
-  const recipeResolution = resolveRecipe(
-    session,
-    {
-      ...recipe,
-      actions: [
-        {
-          ...action,
-          effect: {
-            type: effect.type,
-            targetType: effect.targetType,
-            property: effect.property,
-            value: effect.value,
-            derivedFrom: effect.derivedFrom ?? null
-          }
-        }
-      ]
-    },
-    { targetIds: [effect.targetId] },
-    context
-  );
-
-  if (!recipeResolution.ok) return recipeResolution.session;
-
-  return processActionResultEvents({
-    previousSession,
-    session: recipeResolution.session,
-    actionResult: recipeResolution.result,
-    context
-  }).session;
-}
-
 function completeCurrentInterPoolStage(session, currentStage, input, requestedBy) {
   const completedEventWindow = currentStage.stage?.metadata?.eventWindow ?? null;
-  const sessionAfterInterPoolStageEffect = resolveLinkedPropagatedEffectStageOnCompletion(
+  const sessionAfterInterPoolStageEffect = resolveEventStageOnCompletion(
     session,
     currentStage
   );
@@ -968,123 +737,334 @@ function getPostActionEventState({
   };
 }
 
-// Cierra el stage actual y avanza el cursor.
-//
-// Esta es la puerta normal para pasar al siguiente stage. La puede invocar:
-// - el actor, cuando termina sus decisiones;
-// - el director/narrador, cuando decide que el ritmo debe avanzar;
-// - una receta, si en el futuro una regla concreta pide cierre automatico;
-// - el sistema, para automatizaciones controladas.
-export function completeCurrentStage(session, input = {}) {
-  const currentStage = getCurrentStage(session);
+function startStageResolution(session, input = {}) {
+  return {
+    ok: true,
+    session,
+    workingSession: session,
+    input,
+    currentStageBeforeReview: getCurrentStage(session),
+    stageValidation: null,
+    recipeInput: null,
+    resolutionContext: null,
+    actionResolution: null,
+    errors: [],
+    result: null
+  };
+}
 
-  if (!session) {
+function evaluateStageResolution(state) {
+  const workingSession =
+    state.currentStageBeforeReview &&
+    state.currentStageBeforeReview.source !== CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE
+      ? reviewPropertyBlocks(state.session, {
+          type: 'stage_boundary',
+          cycleId: state.session.cycle?.id ?? 0,
+          poolKey: state.currentStageBeforeReview.poolKey,
+          stageId: state.currentStageBeforeReview.stageId,
+          boundary: 'before'
+        }).session
+      : state.session;
+  const stageValidation = validateCurrentStage(workingSession, {
+    recipeKey: state.input.recipeKey ?? null
+  });
+
+  if (!stageValidation.ok) {
     return {
+      ...state,
+      ok: false,
+      workingSession,
+      stageValidation,
+      errors: stageValidation.errors
+    };
+  }
+
+  const recipeInput = {
+    ...state.input,
+    actorIds: state.input.actorIds ?? stageValidation.currentStage.stage?.actorIds ?? []
+  };
+  const resolutionContext = {
+    poolKey: stageValidation.currentStage.poolKey,
+    stageId: stageValidation.currentStage.stageId,
+    stageKey: stageValidation.currentStage.stageKey,
+    stageCatalogId: stageValidation.currentStage.stage?.metadata?.catalogId ?? null,
+    eventWindow: stageValidation.currentStage.stage?.metadata?.eventWindow ?? null,
+    causedBy: stageValidation.currentStage.stage?.metadata?.source?.id
+      ? {
+          type: stageValidation.currentStage.stage.metadata.source.type ?? 'role',
+          id: stageValidation.currentStage.stage.metadata.source.id
+        }
+      : null,
+    recipeKey: stageValidation.recipeKey
+  };
+
+  return {
+    ...state,
+    workingSession,
+    stageValidation,
+    recipeInput,
+    resolutionContext
+  };
+}
+
+function resolveStageRecipe(state) {
+  if (!state.ok) return state;
+
+  const stage = state.stageValidation.currentStage.stage;
+  const actionResolution = hasStageSelectionRules(stage)
+    ? resolveStageRecipeWithSelectAction(
+        state.workingSession,
+        stage,
+        state.stageValidation.recipe,
+        state.recipeInput,
+        state.resolutionContext
+      )
+    : resolveRecipe(
+        state.workingSession,
+        state.stageValidation.recipe,
+        state.recipeInput,
+        state.resolutionContext
+      );
+
+  return {
+    ...state,
+    ok: actionResolution.ok,
+    actionResolution,
+    errors: actionResolution.errors ?? []
+  };
+}
+
+function validateStageResolution(state) {
+  if (!state.ok) return state;
+  if (!state.actionResolution?.ok) return state;
+
+  if (!state.actionResolution.result) {
+    return {
+      ...state,
+      ok: false,
+      errors: [
+        {
+          code: 'stage/missing-result',
+          message: `stage "${state.stageValidation.currentStage.stageKey}" finished without result`,
+          stageId: state.stageValidation.currentStage.stageId,
+          stageKey: state.stageValidation.currentStage.stageKey
+        }
+      ]
+    };
+  }
+
+  return state;
+}
+
+function finishStageResolution(state) {
+  if (!state.stageValidation?.ok) {
+    const messageState = appendEngineErrors(state.workingSession, state.errors, {
+      cycleId: state.workingSession?.cycle?.id ?? null,
+      poolKey: state.stageValidation?.currentStage?.poolKey ?? state.workingSession?.cycle?.poolCurrent ?? null,
+      stageId: state.stageValidation?.currentStage?.stageId ?? null,
+      stageKey: state.stageValidation?.currentStage?.stageKey ?? null,
+      recipeKey: state.input.recipeKey ?? null
+    });
+
+    return {
+      ok: false,
+      actionId: state.stageValidation?.recipe?.id ?? null,
+      recipeKey: state.stageValidation?.recipeKey,
+      errors: state.errors,
+      messages: messageState.messages,
+      session: messageState.session,
+      result: null,
+      stage: state.stageValidation?.currentStage ?? null,
+      stageAdvance: null
+    };
+  }
+
+  if (!state.actionResolution?.ok) {
+    return {
+      ...state.actionResolution,
+      stage: state.stageValidation.currentStage,
+      stageAdvance: null
+    };
+  }
+
+  if (!state.ok) {
+    const messageState = appendEngineErrors(state.actionResolution.session, state.errors, {
+      ...state.resolutionContext
+    });
+
+    return {
+      ok: false,
+      actionId: state.actionResolution.result?.actionId ?? null,
+      recipeKey: state.stageValidation.recipeKey,
+      errors: state.errors,
+      messages: messageState.messages,
+      session: messageState.session,
+      result: null,
+      stage: state.stageValidation.currentStage,
+      stageAdvance: null
+    };
+  }
+
+  const postActionState = getPostActionEventState({
+    previousSession: state.workingSession,
+    actionResolution: state.actionResolution,
+    context: state.resolutionContext
+  });
+  const resolutionWithEvents = {
+    ...state.actionResolution,
+    session: postActionState.session,
+    result: {
+      ...(state.actionResolution.result ?? {}),
+      events: postActionState.events,
+      eventResponses: postActionState.eventResponses
+    }
+  };
+
+  return {
+    ...resolutionWithEvents,
+    stage: state.stageValidation.currentStage,
+    stageAdvance: null
+  };
+}
+
+function createStageCompletionErrorResult({ session, currentStage = null, errors = [] } = {}) {
+  return {
+    ok: false,
+    errors,
+    session,
+    stage: currentStage,
+    stageAdvance: null
+  };
+}
+
+function startStageCompletion(session, input = {}) {
+  return {
+    ok: true,
+    session,
+    input,
+    currentStage: getCurrentStage(session),
+    requestedBy: null,
+    errors: [],
+    result: null
+  };
+}
+
+function evaluateStageCompletion(state) {
+  if (!state.session) {
+    return {
+      ...state,
       ok: false,
       errors: [
         {
           code: STAGE_ERRORS.MISSING_SESSION,
           message: 'cannot complete a stage without session'
         }
-      ],
-      session,
-      stage: null,
-      stageAdvance: null
+      ]
     };
   }
 
-  if (!session.cycle && session.currentStageSource !== CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE) {
+  if (!state.session.cycle && state.session.currentStageSource !== CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE) {
     return {
+      ...state,
       ok: false,
       errors: [
         {
           code: STAGE_ERRORS.MISSING_STAGE_POOLS,
           message: 'session has no cycle'
         }
-      ],
-      session,
-      stage: null,
-      stageAdvance: null
+      ]
     };
   }
 
-  if (!currentStage) {
+  if (!state.currentStage) {
     return {
+      ...state,
       ok: false,
       errors: [
         {
           code: STAGE_ERRORS.MISSING_CURRENT_STAGE,
           message: 'session has no current stage'
         }
-      ],
-      session,
-      stage: null,
-      stageAdvance: null
+      ]
     };
   }
 
-  if (!isStageRunnable(currentStage.stage)) {
+  if (!isStageRunnable(state.currentStage.stage)) {
     return {
+      ...state,
       ok: false,
       errors: [
         {
           code: STAGE_ERRORS.STAGE_NOT_RUNNABLE,
-          message: `current stage "${currentStage.stageKey}" is not runnable`,
-          poolKey: currentStage.poolKey,
-          stageId: currentStage.stageId,
-          stageKey: currentStage.stageKey,
-          status: currentStage.status
+          message: `current stage "${state.currentStage.stageKey}" is not runnable`,
+          poolKey: state.currentStage.poolKey,
+          stageId: state.currentStage.stageId,
+          stageKey: state.currentStage.stageKey,
+          status: state.currentStage.status
         }
-      ],
-      session,
-      stage: currentStage,
-      stageAdvance: null
+      ]
     };
   }
 
-  const requestedBy = isValidStageCompletionRequester(input.requestedBy)
-    ? input.requestedBy
+  const requestedBy = isValidStageCompletionRequester(state.input.requestedBy)
+    ? state.input.requestedBy
     : STAGE_COMPLETION_REQUESTED_BY.DIRECTOR;
 
-  if (!canRequesterCompleteStage(currentStage.stage, requestedBy)) {
+  if (!canRequesterCompleteStage(state.currentStage.stage, requestedBy)) {
     return {
+      ...state,
+      requestedBy,
       ok: false,
       errors: [
         {
           code: STAGE_ERRORS.COMPLETION_NOT_ALLOWED,
-          message: `requester "${requestedBy}" cannot complete stage "${currentStage.stageKey}"`,
-          poolKey: currentStage.poolKey,
-          stageId: currentStage.stageId,
-          stageKey: currentStage.stageKey,
+          message: `requester "${requestedBy}" cannot complete stage "${state.currentStage.stageKey}"`,
+          poolKey: state.currentStage.poolKey,
+          stageId: state.currentStage.stageId,
+          stageKey: state.currentStage.stageKey,
           requestedBy,
-          allowedRequesters: getStageCompletionDefinition(currentStage.stage).allowedRequesters
+          allowedRequesters: getStageCompletionDefinition(state.currentStage.stage).allowedRequesters
         }
-      ],
-      session,
-      stage: currentStage,
-      stageAdvance: null
+      ]
     };
   }
 
-  if (currentStage.source === CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE) {
-    return completeCurrentInterPoolStage(session, currentStage, input, requestedBy);
+  return {
+    ...state,
+    requestedBy
+  };
+}
+
+function resolveStageCompletion(state) {
+  if (!state.ok) return state;
+
+  if (state.currentStage.source === CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE) {
+    return {
+      ...state,
+      result: completeCurrentInterPoolStage(
+        state.session,
+        state.currentStage,
+        state.input,
+        state.requestedBy
+      )
+    };
   }
 
-  const sessionWithCompletion = appendStageHistory(session, {
-    poolKey: currentStage.poolKey,
-    stageId: currentStage.stageId,
-    stageKey: currentStage.stageKey,
-    requestedBy,
-    actorIds: [...(input.actorIds ?? [])],
-    recipeKey: input.recipeKey ?? null,
-    reason: input.reason ?? 'manual_completion',
-    metadata: input.metadata ?? {}
+  const sessionWithCompletion = appendStageHistory(state.session, {
+    poolKey: state.currentStage.poolKey,
+    stageId: state.currentStage.stageId,
+    stageKey: state.currentStage.stageKey,
+    requestedBy: state.requestedBy,
+    actorIds: [...(state.input.actorIds ?? [])],
+    recipeKey: state.input.recipeKey ?? null,
+    reason: state.input.reason ?? 'manual_completion',
+    metadata: state.input.metadata ?? {}
   });
   const sessionAfterStageBoundary = reviewPropertyBlocks(sessionWithCompletion, {
     type: 'stage_boundary',
-    cycleId: session.cycle?.id ?? 0,
-    poolKey: currentStage.poolKey,
-    stageId: currentStage.stageId,
+    cycleId: state.session.cycle?.id ?? 0,
+    poolKey: state.currentStage.poolKey,
+    stageId: state.currentStage.stageId,
     boundary: 'after'
   }).session;
   const currentPool = getCurrentPool(sessionAfterStageBoundary.cycle);
@@ -1109,17 +1089,69 @@ export function completeCurrentStage(session, input = {}) {
   });
 
   return {
-    ok: objectiveState.stageAdvance?.ok !== false,
-    errors: objectiveState.stageAdvance?.errors ?? [],
-    session: objectiveState.session,
-    stage: currentStage,
-    stageAdvance: objectiveState.stageAdvance,
-    completion: getHistoryCollection(objectiveState.session, HISTORY_COLLECTIONS.STAGE).at(-1),
-    objectiveEvaluation: objectiveState.objectiveEvaluation,
-    playOutcome: objectiveState.playOutcome,
-    eventResponses: objectiveState.eventResponses,
-    lifecycleResults: objectiveState.lifecycleResults
+    ...state,
+    result: {
+      ok: objectiveState.stageAdvance?.ok !== false,
+      errors: objectiveState.stageAdvance?.errors ?? [],
+      session: objectiveState.session,
+      stage: state.currentStage,
+      stageAdvance: objectiveState.stageAdvance,
+      completion: getHistoryCollection(objectiveState.session, HISTORY_COLLECTIONS.STAGE).at(-1),
+      objectiveEvaluation: objectiveState.objectiveEvaluation,
+      playOutcome: objectiveState.playOutcome,
+      eventResponses: objectiveState.eventResponses,
+      lifecycleResults: objectiveState.lifecycleResults
+    }
   };
+}
+
+function validateStageCompletionResult(state) {
+  if (!state.ok) return state;
+  if (!state.result) {
+    return {
+      ...state,
+      ok: false,
+      errors: [
+        {
+          code: 'stage/completion-missing-result',
+          message: `stage "${state.currentStage?.stageKey ?? 'unknown'}" completion finished without result`
+        }
+      ]
+    };
+  }
+
+  return state;
+}
+
+function finishStageCompletion(state) {
+  if (!state.ok) {
+    return createStageCompletionErrorResult({
+      session: state.session,
+      currentStage: state.currentStage ?? null,
+      errors: state.errors
+    });
+  }
+
+  return state.result;
+}
+
+// Cierra el stage actual y avanza el cursor.
+//
+// Esta es la puerta normal para pasar al siguiente stage. La puede invocar:
+// - el actor, cuando termina sus decisiones;
+// - el director/narrador, cuando decide que el ritmo debe avanzar;
+// - una receta, si en el futuro una regla concreta pide cierre automatico;
+// - el sistema, para automatizaciones controladas.
+export function completeCurrentStage(session, input = {}) {
+  return finishStageCompletion(
+    validateStageCompletionResult(
+      resolveStageCompletion(
+        evaluateStageCompletion(
+          startStageCompletion(session, input)
+        )
+      )
+    )
+  );
 }
 
 // Ejecuta una receta del stage actual.
@@ -1132,96 +1164,13 @@ export function completeCurrentStage(session, input = {}) {
 //
 // Pasar al siguiente stage es responsabilidad de completeCurrentStage.
 export function resolveCurrentStage(session, input = {}) {
-  const currentStageBeforeReview = getCurrentStage(session);
-  const workingSession =
-    currentStageBeforeReview &&
-    currentStageBeforeReview.source !== CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE
-      ? reviewPropertyBlocks(session, {
-          type: 'stage_boundary',
-          cycleId: session.cycle?.id ?? 0,
-          poolKey: currentStageBeforeReview.poolKey,
-          stageId: currentStageBeforeReview.stageId,
-          boundary: 'before'
-        }).session
-      : session;
-  const stageValidation = validateCurrentStage(workingSession, {
-    recipeKey: input.recipeKey ?? null
-  });
-
-  if (!stageValidation.ok) {
-    const messageState = appendEngineErrors(workingSession, stageValidation.errors, {
-      cycleId: workingSession?.cycle?.id ?? null,
-      poolKey: stageValidation.currentStage?.poolKey ?? workingSession?.cycle?.poolCurrent ?? null,
-      stageId: stageValidation.currentStage?.stageId ?? null,
-      stageKey: stageValidation.currentStage?.stageKey ?? null,
-      recipeKey: input.recipeKey ?? null
-    });
-
-    return {
-      ok: false,
-      actionId: stageValidation.recipe?.id ?? null,
-      recipeKey: stageValidation.recipeKey,
-      errors: stageValidation.errors,
-      messages: messageState.messages,
-      session: messageState.session,
-      result: null,
-      stage: stageValidation.currentStage,
-      stageAdvance: null
-    };
-  }
-
-  const recipeInput = {
-    ...input,
-    actorIds: input.actorIds ?? stageValidation.currentStage.stage?.actorIds ?? []
-  };
-  const resolutionContext = {
-    poolKey: stageValidation.currentStage.poolKey,
-    stageId: stageValidation.currentStage.stageId,
-    stageKey: stageValidation.currentStage.stageKey,
-    stageCatalogId: stageValidation.currentStage.stage?.metadata?.catalogId ?? null,
-    eventWindow: stageValidation.currentStage.stage?.metadata?.eventWindow ?? null,
-    causedBy: stageValidation.currentStage.stage?.metadata?.source?.id
-      ? {
-          type: stageValidation.currentStage.stage.metadata.source.type ?? 'role',
-          id: stageValidation.currentStage.stage.metadata.source.id
-        }
-      : null,
-    recipeKey: stageValidation.recipeKey
-  };
-  const actionResolution = hasStageSelectionRules(stageValidation.currentStage.stage)
-    ? resolveSelectionStageRecipe(
-        workingSession,
-        stageValidation.currentStage.stage,
-        stageValidation.recipe,
-        recipeInput,
-        resolutionContext
+  return finishStageResolution(
+    validateStageResolution(
+      resolveStageRecipe(
+        evaluateStageResolution(
+          startStageResolution(session, input)
+        )
       )
-    : resolveRecipe(
-        workingSession,
-        stageValidation.recipe,
-        recipeInput,
-        resolutionContext
-      );
-  const postActionState = getPostActionEventState({
-    previousSession: workingSession,
-    actionResolution,
-    context: resolutionContext
-  });
-  const resolutionWithEvents = actionResolution.ok
-    ? {
-        ...actionResolution,
-        session: postActionState.session,
-        result: {
-          ...(actionResolution.result ?? {}),
-          events: postActionState.events,
-          eventResponses: postActionState.eventResponses
-        }
-      }
-    : actionResolution;
-
-  return {
-    ...resolutionWithEvents,
-    stage: stageValidation.currentStage,
-    stageAdvance: null
-  };
+    )
+  );
 }

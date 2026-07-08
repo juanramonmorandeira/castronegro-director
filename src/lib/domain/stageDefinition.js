@@ -33,6 +33,76 @@ export const STAGE_SOURCE_TYPES = Object.freeze({
   EVENT: 'event'
 });
 
+export const STAGE_ERRORS = Object.freeze({
+  MISSING_SESSION: 'stage/missing-session',
+  MISSING_STAGE_POOLS: 'stage/missing-stage-pools',
+  MISSING_CURRENT_STAGE: 'stage/missing-current-stage',
+  STAGE_NOT_RUNNABLE: 'stage/not-runnable',
+  MISSING_RECIPE: 'stage/missing-recipe',
+  MISSING_RECIPE_KEY: 'stage/missing-recipe-key',
+  RECIPE_NOT_FOUND: 'stage/recipe-not-found',
+  COMPLETION_NOT_ALLOWED: 'stage/completion-not-allowed'
+});
+
+// IDs anonimos recomendados para slots de ejecucion.
+//
+// El stage no describe que accion ejecuta. Describe donde ocurre dentro del
+// flujo. Las recipes concretas viven en stage.recipes.
+export const STAGE_KEYS = Object.freeze({
+  STAGE_01: 'stage_01',
+  STAGE_02: 'stage_02',
+  STAGE_03: 'stage_03',
+  STAGE_04: 'stage_04',
+  STAGE_05: 'stage_05',
+  DELIBERATION: 'stage_deliberation',
+  ROLE_STATE_REVEALED: 'stage_role_state_revealed',
+  ROLE_REACTIVE_RESPONSE: 'stage_role_reactive_response',
+  LINKED_PROPAGATED_EFFECT: 'stage_linked_propagated_effect',
+  LINKED_TARGET_RECOGNITION: 'stage_linked_target_recognition',
+  SELECT_DOUBLE_SELECTOR: 'select_double_selector',
+  PICK_NEXT_DOUBLE_SELECTOR: 'pick_next_double_selector',
+  STAGE_08: 'stage_08',
+  STAGE_09: 'stage_09'
+});
+
+// Claves de recipe dentro de un stage.
+//
+// actionId puede ser generico, por ejemplo set_in_play. recipeKey permite
+// distinguir recipes que usan esa misma action generica con parametros distintos.
+export const STAGE_RECIPE_KEYS = Object.freeze({
+  INSPECT_ROLE: 'inspect_role',
+  LINK_TARGETS: 'link_targets',
+  BLOCK_OUT_OF_PLAY: 'block_out_of_play',
+  SET_OUT_OF_PLAY: 'set_out_of_play',
+  ASSUME_ROLE: 'assume_role',
+  RESTORE_RECENT_OUT_OF_PLAY: 'restore_recent_out_of_play',
+  LINKED_PROPAGATED_EFFECT: 'linked_propagated_effect',
+  LINKED_TARGET_RECOGNITION: 'linked_target_recognition',
+  CHECK_OBJECTIVES: 'check_objectives',
+  CONCLUDE_PLAY: 'conclude_play'
+});
+
+export const PEEK_RECIPE_KEYS = Object.freeze({
+  PEEK_ATTEMPT: 'peekAttempt',
+  PEEK_WARNING: 'peek_warning',
+  OVERRIDE_SELECTED_CANDIDATE: 'override_selected_candidate'
+});
+
+export const PEEK_WARNING_TIMINGS = Object.freeze({
+  BEFORE_SELECTION: 'before_selection',
+  AFTER_SELECTION: 'after_selection',
+  SELECTION_NULL: 'selection_null'
+});
+
+export const PEEK_WARNING_CONFIRMATION_RULES = Object.freeze({
+  UNANIMITY: 'unanimity',
+  SIMPLE_MAJORITY: 'simple_majority'
+});
+
+export const STAGE_RULE_TYPES = Object.freeze({
+  PEEK_WARNING_OVERRIDE: 'peek_warning_override'
+});
+
 // Normaliza los actores concretos de un stage.
 //
 // Los ids de roles runtime se tratan como opacos. No se pasan por normalizeId
@@ -155,6 +225,92 @@ function validateStageCompletion({
       normalizedRequesters.length > 0
         ? [...new Set(normalizedRequesters)]
         : Object.values(STAGE_COMPLETION_REQUESTED_BY)
+  };
+}
+
+export function isValidStageCompletionRequester(requestedBy) {
+  return Object.values(STAGE_COMPLETION_REQUESTED_BY).includes(requestedBy);
+}
+
+export function getStageCompletionDefinition(stage = {}) {
+  const completion = stage?.completion ?? {};
+  const mode = Object.values(STAGE_COMPLETION_MODES).includes(completion.mode)
+    ? completion.mode
+    : STAGE_COMPLETION_MODES.MANUAL;
+  const allowedRequesters = Array.isArray(completion.allowedRequesters)
+    ? completion.allowedRequesters.filter(isValidStageCompletionRequester)
+    : Object.values(STAGE_COMPLETION_REQUESTED_BY);
+
+  return {
+    mode,
+    allowedRequesters:
+      allowedRequesters.length > 0 ? allowedRequesters : Object.values(STAGE_COMPLETION_REQUESTED_BY)
+  };
+}
+
+export function canRequesterCompleteStage(stage, requestedBy) {
+  const completion = getStageCompletionDefinition(stage);
+  return completion.allowedRequesters.includes(requestedBy);
+}
+
+export function getStageRecipeKey(recipe) {
+  return normalizeId(recipe?.key ?? recipe?.recipeKey ?? recipe?.id);
+}
+
+export function selectStageRecipe(recipes = [], requestedRecipeKey = null) {
+  if (!recipes.length) {
+    return {
+      ok: false,
+      recipe: null,
+      recipeKey: null,
+      error: {
+        code: STAGE_ERRORS.MISSING_RECIPE,
+        message: 'current stage has no recipes'
+      }
+    };
+  }
+
+  const normalizedRequestedKey = requestedRecipeKey ? normalizeId(requestedRecipeKey) : null;
+
+  if (!normalizedRequestedKey && recipes.length > 1) {
+    return {
+      ok: false,
+      recipe: null,
+      recipeKey: null,
+      error: {
+        code: STAGE_ERRORS.MISSING_RECIPE_KEY,
+        message: 'current stage has multiple recipes and requires recipeKey'
+      }
+    };
+  }
+
+  const selectedRecipe = normalizedRequestedKey
+    ? recipes.find((recipe) => getStageRecipeKey(recipe) === normalizedRequestedKey)
+    : recipes[0];
+
+  if (!selectedRecipe) {
+    return {
+      ok: false,
+      recipe: null,
+      recipeKey: normalizedRequestedKey,
+      error: {
+        code: STAGE_ERRORS.RECIPE_NOT_FOUND,
+        message: `current stage has no recipe "${normalizedRequestedKey}"`,
+        recipeKey: normalizedRequestedKey
+      }
+    };
+  }
+
+  const recipeKey = getStageRecipeKey(selectedRecipe);
+
+  return {
+    ok: true,
+    recipe: {
+      ...selectedRecipe,
+      key: selectedRecipe.key ?? recipeKey
+    },
+    recipeKey,
+    error: null
   };
 }
 

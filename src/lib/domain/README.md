@@ -76,7 +76,9 @@ Logica runtime del motor.
 Ejemplos:
 
 - `poolCursorModel.js`: mueve el cursor entre stages.
-- `stageModel.js`: conecta el stage actual con recipe/action y cierre de stage.
+- `stageDefinition.js`: constructor, vocabulario y validacion basica de stages.
+- `stageModel.js`: ejecuta el ciclo runtime de stage, resuelve recipes y cierra
+  stages.
 - `recipeDefinition.js`: constructor y validacion de forma de recipes.
 - `recipeModel.js`: ejecuta el ciclo runtime de recipe y entrega actions a
   `actionModel`.

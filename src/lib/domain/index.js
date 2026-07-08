@@ -116,6 +116,18 @@ export {
 export {
   AVAILABILITY_RULE_TYPES,
   STAGE_SOURCE_TYPES,
+  STAGE_ERRORS,
+  STAGE_KEYS,
+  STAGE_RECIPE_KEYS,
+  STAGE_RULE_TYPES,
+  PEEK_RECIPE_KEYS,
+  PEEK_WARNING_TIMINGS,
+  PEEK_WARNING_CONFIRMATION_RULES,
+  getStageRecipeKey,
+  selectStageRecipe,
+  isValidStageCompletionRequester,
+  getStageCompletionDefinition,
+  canRequesterCompleteStage,
   createStage,
   defineStage
 } from './stageDefinition.js';
@@ -159,22 +171,10 @@ export {
   validatePool
 } from './poolModel.js';
 export {
-  STAGE_ERRORS,
   STAGE_COMPLETION_MODES,
   STAGE_COMPLETION_REQUESTED_BY,
-  STAGE_KEYS,
-  STAGE_RECIPE_KEYS,
-  STAGE_RULE_TYPES,
-  PEEK_RECIPE_KEYS,
-  PEEK_WARNING_TIMINGS,
-  PEEK_WARNING_CONFIRMATION_RULES,
   getCurrentStage,
-  getStageRecipeKey,
-  selectStageRecipe,
   validateCurrentStage,
-  isValidStageCompletionRequester,
-  getStageCompletionDefinition,
-  canRequesterCompleteStage,
   completeCurrentStage,
   resolveCurrentStage
 } from './stageModel.js';

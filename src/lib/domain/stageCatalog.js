@@ -7,7 +7,10 @@
 
 import { STAGE_STATUSES } from './sessionModel.js';
 import { CONSTRAINT_TYPES, CONSTRAINT_WINDOWS } from './constraintModel.js';
-import { defineStage } from './stageDefinition.js';
+import {
+  STAGE_KEYS,
+  defineStage
+} from './stageDefinition.js';
 import {
   STAGE_COMPLETION_MODES,
   STAGE_COMPLETION_REQUESTED_BY
@@ -50,22 +53,6 @@ export const STAGE_VISIBILITY = Object.freeze({
   LINKED_MEMBERS: 'linked_members'
 });
 
-const CATALOG_STAGE_KEYS = Object.freeze({
-  STAGE_01: 'stage_01',
-  STAGE_02: 'stage_02',
-  STAGE_03: 'stage_03',
-  STAGE_04: 'stage_04',
-  STAGE_05: 'stage_05',
-  DELIBERATION: 'stage_deliberation',
-  ROLE_STATE_REVEALED: 'stage_role_state_revealed',
-  ROLE_REACTIVE_RESPONSE: 'stage_role_reactive_response',
-  LINKED_PROPAGATED_EFFECT: 'stage_linked_propagated_effect',
-  LINKED_TARGET_RECOGNITION: 'stage_linked_target_recognition',
-  SELECT_DOUBLE_SELECTOR: 'select_double_selector',
-  PICK_NEXT_DOUBLE_SELECTOR: 'pick_next_double_selector',
-  STAGE_09: 'stage_09'
-});
-
 export function getManualCompletion(allowedRequesters = Object.values(STAGE_COMPLETION_REQUESTED_BY)) {
   return {
     mode: STAGE_COMPLETION_MODES.MANUAL,
@@ -75,7 +62,7 @@ export function getManualCompletion(allowedRequesters = Object.values(STAGE_COMP
 
 export const STAGE_CATALOG = Object.freeze({
   [STAGE_CATALOG_IDS.ROLE_INSPECTS]: defineStage({
-    key: CATALOG_STAGE_KEYS.STAGE_01,
+    key: STAGE_KEYS.STAGE_01,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
@@ -86,7 +73,7 @@ export const STAGE_CATALOG = Object.freeze({
   }),
 
   [STAGE_CATALOG_IDS.ROLE_LINKS_TARGETS]: defineStage({
-    key: CATALOG_STAGE_KEYS.STAGE_02,
+    key: STAGE_KEYS.STAGE_02,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
@@ -97,7 +84,7 @@ export const STAGE_CATALOG = Object.freeze({
   }),
 
   [STAGE_CATALOG_IDS.ROLE_BLOCKS_OUT_OF_PLAY]: defineStage({
-    key: CATALOG_STAGE_KEYS.STAGE_02,
+    key: STAGE_KEYS.STAGE_02,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
@@ -108,7 +95,7 @@ export const STAGE_CATALOG = Object.freeze({
   }),
 
   [STAGE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY]: defineStage({
-    key: CATALOG_STAGE_KEYS.STAGE_03,
+    key: STAGE_KEYS.STAGE_03,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
@@ -152,7 +139,7 @@ export const STAGE_CATALOG = Object.freeze({
   }),
 
   [STAGE_CATALOG_IDS.ROLE_ASSUMES_ROLE]: defineStage({
-    key: CATALOG_STAGE_KEYS.STAGE_09,
+    key: STAGE_KEYS.STAGE_09,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
@@ -163,7 +150,7 @@ export const STAGE_CATALOG = Object.freeze({
   }),
 
   [STAGE_CATALOG_IDS.DELIBERATION]: defineStage({
-    key: CATALOG_STAGE_KEYS.DELIBERATION,
+    key: STAGE_KEYS.DELIBERATION,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion([STAGE_COMPLETION_REQUESTED_BY.DIRECTOR]),
@@ -178,7 +165,7 @@ export const STAGE_CATALOG = Object.freeze({
   }),
 
   [STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY]: defineStage({
-    key: CATALOG_STAGE_KEYS.STAGE_04,
+    key: STAGE_KEYS.STAGE_04,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
@@ -195,7 +182,7 @@ export const STAGE_CATALOG = Object.freeze({
   }),
 
   [STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY]: defineStage({
-    key: CATALOG_STAGE_KEYS.STAGE_05,
+    key: STAGE_KEYS.STAGE_05,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion(),
@@ -225,7 +212,7 @@ export const STAGE_CATALOG = Object.freeze({
   }),
 
   [STAGE_CATALOG_IDS.ROLE_STATE_REVEALED]: defineStage({
-    key: CATALOG_STAGE_KEYS.ROLE_STATE_REVEALED,
+    key: STAGE_KEYS.ROLE_STATE_REVEALED,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion([STAGE_COMPLETION_REQUESTED_BY.DIRECTOR]),
@@ -237,7 +224,7 @@ export const STAGE_CATALOG = Object.freeze({
   }),
 
   [STAGE_CATALOG_IDS.ROLE_REACTIVE_RESPONSE]: defineStage({
-    key: CATALOG_STAGE_KEYS.ROLE_REACTIVE_RESPONSE,
+    key: STAGE_KEYS.ROLE_REACTIVE_RESPONSE,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion([STAGE_COMPLETION_REQUESTED_BY.DIRECTOR]),
@@ -258,7 +245,7 @@ export const STAGE_CATALOG = Object.freeze({
   }),
 
   [STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT]: defineStage({
-    key: CATALOG_STAGE_KEYS.LINKED_PROPAGATED_EFFECT,
+    key: STAGE_KEYS.LINKED_PROPAGATED_EFFECT,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion([STAGE_COMPLETION_REQUESTED_BY.DIRECTOR]),
@@ -270,7 +257,7 @@ export const STAGE_CATALOG = Object.freeze({
   }),
 
   [STAGE_CATALOG_IDS.LINKED_TARGET_RECOGNITION]: defineStage({
-    key: CATALOG_STAGE_KEYS.LINKED_TARGET_RECOGNITION,
+    key: STAGE_KEYS.LINKED_TARGET_RECOGNITION,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion([STAGE_COMPLETION_REQUESTED_BY.DIRECTOR]),
@@ -284,7 +271,7 @@ export const STAGE_CATALOG = Object.freeze({
   }),
 
   [STAGE_CATALOG_IDS.SELECT_DOUBLE_SELECTOR]: defineStage({
-    key: CATALOG_STAGE_KEYS.SELECT_DOUBLE_SELECTOR,
+    key: STAGE_KEYS.SELECT_DOUBLE_SELECTOR,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion([
@@ -300,7 +287,7 @@ export const STAGE_CATALOG = Object.freeze({
   }),
 
   [STAGE_CATALOG_IDS.PICK_NEXT_DOUBLE_SELECTOR]: defineStage({
-    key: CATALOG_STAGE_KEYS.PICK_NEXT_DOUBLE_SELECTOR,
+    key: STAGE_KEYS.PICK_NEXT_DOUBLE_SELECTOR,
     status: STAGE_STATUSES.ENABLED,
     actorIds: [],
     completion: getManualCompletion([
