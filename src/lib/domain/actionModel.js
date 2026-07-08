@@ -32,11 +32,6 @@ import {
   addBlockedPropertyChange
 } from './roleModel.js';
 import {
-  HISTORY_RESULTS,
-  appendRecipeHistory,
-  getRecipeHistorySignature
-} from './historyModel.js';
-import {
   collectSelectionRules,
   getGroupMemberRoleIds
 } from './groupModel.js';
@@ -1312,23 +1307,6 @@ export function applyRevealPropertyEffect({ action, actor, targets }) {
   };
 }
 
-// Traduce efectos/bloqueos a un resultado resumido de historial.
-//
-// El detalle completo queda guardado en proposedEffects, finalEffects y
-// preventedPropertyChanges. Este campo sirve para consultas rapidas.
-export function getHistoryResultFromResolution({
-  finalEffects = [],
-  preventedPropertyChanges = []
-} = {}) {
-  const hasFinalEffects = (finalEffects ?? []).length > 0;
-  const hasPreventedChanges = (preventedPropertyChanges ?? []).length > 0;
-
-  if (hasFinalEffects && hasPreventedChanges) return HISTORY_RESULTS.PARTIAL;
-  if (hasFinalEffects) return HISTORY_RESULTS.APPLIED;
-  if (hasPreventedChanges) return HISTORY_RESULTS.BLOCKED;
-  return HISTORY_RESULTS.NO_EFFECT;
-}
-
 function getImmediateCause(actor = null, context = {}) {
   if (context.causedBy?.id) {
     return {
@@ -1345,13 +1323,6 @@ function getImmediateCause(actor = null, context = {}) {
     : null;
 }
 
-function getHistoryContracts(context = {}) {
-  return {
-    actorContract: context.actorContract ?? null,
-    targetContract: context.targetContract ?? null
-  };
-}
-
 // Resuelve la consecuencia principal de set_in_play.
 //
 // Distincion importante:
@@ -1362,7 +1333,6 @@ function getHistoryContracts(context = {}) {
 // - Si no estaba bloqueada, propone y aplica set_property inPlay=value.
 export function resolveSetInPlayEffect({ session, action, actor, targets, context = {} }) {
   const visibility = action?.visibility ?? VISIBILITY.STORYTELLER_ONLY;
-  const currentCycleId = getCurrentCycleId(session);
   const causedBy = getImmediateCause(actor, context);
   const proposedEffects = targets.map((target) => ({
     ...action.effect,
@@ -1384,35 +1354,15 @@ export function resolveSetInPlayEffect({ session, action, actor, targets, contex
     preventedPropertyChanges.map((change) => change.targetId)
   );
   const sessionAfterEffects = applyEffects({ session, effects: finalEffects });
-  const nextSession = appendRecipeHistory(sessionAfterEffects, {
-    cycleId: currentCycleId,
-    poolKey: context.poolKey ?? null,
-    stageId: context.stageId ?? null,
-    stageKey: context.stageKey ?? null,
-    stageCatalogId: context.stageCatalogId ?? null,
-    recipeKey: context.recipeKey ?? action.key ?? action.id,
-    actionId: action.id,
-    actionSignature: getRecipeHistorySignature(action),
-    actorIds: actor ? [actor.id] : [],
-    ...getHistoryContracts(context),
-    targetIds: targets.map((target) => target.id),
-    proposedEffects,
-    finalEffects,
-    preventedPropertyChanges,
-    blockedEffects,
-    result: getHistoryResultFromResolution({
-      finalEffects,
-      preventedPropertyChanges
-    })
-  });
 
   return {
-    session: nextSession,
+    session: sessionAfterEffects,
     result: {
       type: 'action_resolution',
       visibility,
       actionId: action.id,
       actorIds: actor ? [actor.id] : [],
+      targetIds: targets.map((target) => target.id),
       targets: targets.map((target) => ({
         targetId: target.id,
         actionAttempted: true,
@@ -1456,32 +1406,25 @@ export function applyPropertyBlock({ session, action, actor, targets, context = 
       });
     })
   };
-  const nextSession = appendRecipeHistory(sessionWithBlock, {
-    cycleId: currentCycleId,
-    poolKey: context.poolKey ?? null,
-    stageId: context.stageId ?? null,
-    stageKey: context.stageKey ?? null,
-    stageCatalogId: context.stageCatalogId ?? null,
-    recipeKey: context.recipeKey ?? action.key ?? action.id,
-    actionId: action?.id ?? ACTION_IDS.BLOCK_PROPERTY_CHANGE,
-    actionSignature: getRecipeHistorySignature(action),
-    actorIds: [actor.id],
-    ...getHistoryContracts(context),
-    targetIds: targets.map((target) => target.id),
-    result: HISTORY_RESULTS.APPLIED
-  });
 
   return {
-    session: nextSession,
+    session: sessionWithBlock,
     result: {
       type: EFFECT_TYPES.BLOCK_PROPERTY_CHANGE,
       visibility,
+      actionId: action?.id ?? ACTION_IDS.BLOCK_PROPERTY_CHANGE,
       actorIds: [actor.id],
+      targetIds: targets.map((target) => target.id),
       blockedPropertyChange,
       blockedFor,
       expiresAt,
       causedBy,
       cycleId: currentCycleId,
+      proposedEffects: [],
+      finalEffects: [],
+      blockedEffects: [],
+      preventedPropertyChanges: [],
+      mechanicalChangeApplied: true,
       targets: targets.map((target) => ({
         targetId: target.id,
         blockedPropertyChange
@@ -1496,7 +1439,7 @@ export function applyPropertyBlock({ session, action, actor, targets, context = 
 // - link_targets es la accion: alguien intenta enlazar objetivos.
 // - set_group es el efecto final: se escribe un grupo en la sesion.
 // - las groupRules materializadas deciden despues si un cambio se propaga.
-export function applyLinkTargets({ session, action, actor, targets, context = {} }) {
+export function applyLinkTargets({ session, action, actor, targets }) {
   const visibility = action?.visibility ?? VISIBILITY.STORYTELLER_ONLY;
   const currentCycleId = getCurrentCycleId(session);
   const proposedEffects = [
@@ -1509,36 +1452,14 @@ export function applyLinkTargets({ session, action, actor, targets, context = {}
   ];
   const effectResolution = resolveEffect({ session, proposedEffects });
   const sessionAfterEffects = applyEffects({ session, effects: effectResolution.finalEffects });
-  const nextSession = appendRecipeHistory(
-    sessionAfterEffects,
-    {
-      cycleId: currentCycleId,
-      poolKey: context.poolKey ?? null,
-      stageId: context.stageId ?? null,
-      stageKey: context.stageKey ?? null,
-      stageCatalogId: context.stageCatalogId ?? null,
-      recipeKey: context.recipeKey ?? action.key ?? action.id,
-      actionId: action.id,
-      actionSignature: getRecipeHistorySignature(action),
-      actorIds: actor ? [actor.id] : [],
-      ...getHistoryContracts(context),
-      targetIds: targets.map((target) => target.id),
-      proposedEffects: effectResolution.proposedEffects,
-      finalEffects: effectResolution.finalEffects,
-      blockedEffects: effectResolution.blockedEffects,
-      result: getHistoryResultFromResolution({
-        finalEffects: effectResolution.finalEffects,
-        preventedPropertyChanges: []
-      })
-    }
-  );
   return {
-    session: nextSession,
+    session: sessionAfterEffects,
     result: {
       type: 'action_resolution',
       visibility,
       actionId: action.id,
       actorIds: [actor.id],
+      targetIds: targets.map((target) => target.id),
       cycleId: currentCycleId,
       targets: targets.map((target) => ({
         targetId: target.id
@@ -1585,7 +1506,6 @@ function getReplaceRoleIdentityTargetIds(session = {}, action = {}, input = {}) 
 
 export function applyReplaceRoleIdentity({ session, action, actor, targets, context = {} }) {
   const visibility = action?.visibility ?? VISIBILITY.STORYTELLER_ONLY;
-  const currentCycleId = getCurrentCycleId(session);
   const target = targets[0] ?? null;
   const proposedEffects = [
     {
@@ -1597,29 +1517,10 @@ export function applyReplaceRoleIdentity({ session, action, actor, targets, cont
     }
   ];
   const finalEffects = proposedEffects;
-  const nextSession = appendRecipeHistory(
-    applyEffects({ session, effects: finalEffects }),
-    {
-      cycleId: currentCycleId,
-      poolKey: context.poolKey ?? null,
-      stageId: context.stageId ?? null,
-      stageKey: context.stageKey ?? null,
-      stageCatalogId: context.stageCatalogId ?? null,
-      recipeKey: context.recipeKey ?? action.key ?? action.id,
-      actionId: action.id,
-      actionSignature: getRecipeHistorySignature(action),
-      actorIds: [actor.id],
-      ...getHistoryContracts(context),
-      targetIds: [target.id],
-      proposedEffects,
-      finalEffects,
-      blockedEffects: [],
-      result: HISTORY_RESULTS.APPLIED
-    }
-  );
+  const sessionAfterEffects = applyEffects({ session, effects: finalEffects });
 
   return {
-    session: nextSession,
+    session: sessionAfterEffects,
     result: {
       type: 'action_resolution',
       visibility,
@@ -1899,7 +1800,7 @@ export function resolveLinkTargets(session, action, input = {}) {
     };
   }
 
-  const applied = applyLinkTargets({ session, action, actor, targets, context: input.context ?? {} });
+  const applied = applyLinkTargets({ session, action, actor, targets });
 
   return {
     ok: true,

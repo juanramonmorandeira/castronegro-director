@@ -23,6 +23,11 @@ import {
 import { normalizeId } from './sessionModel.js';
 import { materializePropertyBlockExpiration } from './roleModel.js';
 import {
+  HISTORY_RESULTS,
+  appendRecipeHistory,
+  getRecipeHistorySignature
+} from './historyModel.js';
+import {
   MECHANICAL_ENTITY_TYPES,
   RECIPE_ACTOR_TYPES,
   isMechanicalEntityType,
@@ -316,6 +321,68 @@ function appendEngineErrorMessages(session, errors, context = {}) {
   };
 }
 
+function getRecipeHistoryResultFromActionResult(actionResult = {}) {
+  const finalEffects = actionResult.finalEffects ?? [];
+  const preventedPropertyChanges = actionResult.preventedPropertyChanges ?? [];
+  const hasFinalEffects = finalEffects.length > 0;
+  const hasPreventedChanges = preventedPropertyChanges.length > 0;
+  const hasMechanicalChange = actionResult.mechanicalChangeApplied === true;
+
+  if (hasFinalEffects && hasPreventedChanges) return HISTORY_RESULTS.PARTIAL;
+  if (hasFinalEffects) return HISTORY_RESULTS.APPLIED;
+  if (hasMechanicalChange) return HISTORY_RESULTS.APPLIED;
+  if (hasPreventedChanges) return HISTORY_RESULTS.BLOCKED;
+  return HISTORY_RESULTS.NO_EFFECT;
+}
+
+function getRecipeHistoryTargetIds(actionResult = {}, input = {}) {
+  if ((actionResult.targetIds ?? []).length > 0) return actionResult.targetIds;
+  if ((actionResult.targets ?? []).length > 0) {
+    return actionResult.targets.map((target) => target.targetId).filter(Boolean);
+  }
+  if ((actionResult.reveals ?? []).length > 0) {
+    return actionResult.reveals.map((reveal) => reveal.targetId).filter(Boolean);
+  }
+  return [...(input.targetIds ?? [])];
+}
+
+function appendResolvedRecipeHistory({
+  session,
+  recipe,
+  action,
+  input = {},
+  context = {},
+  actionResult = {}
+} = {}) {
+  return appendRecipeHistory(session, {
+    cycleId: session?.cycle?.id ?? 0,
+    poolKey: context.poolKey ?? null,
+    stageId: context.stageId ?? null,
+    stageKey: context.stageKey ?? null,
+    stageCatalogId: context.stageCatalogId ?? null,
+    recipeKey: context.recipeKey ?? getRecipeKey(recipe),
+    actionId: action?.id ?? actionResult.actionId ?? null,
+    actionSignature: getRecipeHistorySignature(action),
+    actorIds: actionResult.actorIds ?? input.actorIds ?? [],
+    selectorIds: actionResult.selection?.selectorIds ?? input.selectorIds ?? [],
+    targetIds: getRecipeHistoryTargetIds(actionResult, input),
+    actorContract: context.actorContract ?? recipe?.actor ?? null,
+    targetContract: context.targetContract ?? recipe?.target ?? null,
+    proposedEffects: actionResult.proposedEffects ?? [],
+    finalEffects: actionResult.finalEffects ?? [],
+    preventedPropertyChanges: actionResult.preventedPropertyChanges ?? [],
+    blockedEffects: actionResult.blockedEffects ?? [],
+    result: getRecipeHistoryResultFromActionResult(actionResult)
+  });
+}
+
+export function appendRecipeNoEffectHistory(session, entry = {}) {
+  return appendRecipeHistory(session, {
+    ...entry,
+    result: HISTORY_RESULTS.NO_EFFECT
+  });
+}
+
 // Resuelve una receta:
 // 1. Valida restricciones de receta.
 // 2. Convierte la receta en accion pura.
@@ -384,10 +451,30 @@ export function resolveRecipe(session, recipe, input = {}, context = {}) {
     };
   }
 
-  return resolveAction(session, getActionFromRecipe(materialization.recipe), input, {
+  const action = getActionFromRecipe(materialization.recipe);
+  const actionResolution = resolveAction(session, action, input, {
     ...context,
     recipeKey,
     actorContract: materialization.recipe.actor ?? null,
     targetContract: materialization.recipe.target ?? null
   });
+
+  if (!actionResolution.ok) return actionResolution;
+
+  return {
+    ...actionResolution,
+    session: appendResolvedRecipeHistory({
+      session: actionResolution.session,
+      recipe: materialization.recipe,
+      action,
+      input,
+      context: {
+        ...context,
+        recipeKey,
+        actorContract: materialization.recipe.actor ?? null,
+        targetContract: materialization.recipe.target ?? null
+      },
+      actionResult: actionResolution.result ?? {}
+    })
+  };
 }

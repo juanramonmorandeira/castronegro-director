@@ -31,12 +31,13 @@ import {
 } from './cycleModel.js';
 import {
   HISTORY_COLLECTIONS,
-  HISTORY_RESULTS,
-  appendRecipeHistory,
   appendStageHistory,
   getHistoryCollection
 } from './historyModel.js';
-import { resolveRecipe } from './recipeModel.js';
+import {
+  appendRecipeNoEffectHistory,
+  resolveRecipe
+} from './recipeModel.js';
 import {
   ACTION_IDS,
   SELECTION_OUTCOME_TYPES,
@@ -402,7 +403,7 @@ function appendPeekAttemptHistoryIfNeeded({ session, input = {}, stage = {}, con
 
   if (!activeRule) return session;
 
-  return appendRecipeHistory(session, {
+  return appendRecipeNoEffectHistory(session, {
     cycleId: session?.cycle?.id ?? 0,
     poolKey: context.poolKey ?? stage.poolKey ?? null,
     stageId: context.stageId ?? stage.id ?? null,
@@ -413,7 +414,6 @@ function appendPeekAttemptHistoryIfNeeded({ session, input = {}, stage = {}, con
     actionSignature: PEEK_RECIPE_KEYS.PEEK_ATTEMPT,
     actorIds: [activeRule.role.id],
     targetIds: [],
-    result: HISTORY_RESULTS.NO_EFFECT,
     metadata: {
       visibility: 'private',
       stageRuleKey: activeRule.rule.key ?? null,
@@ -711,7 +711,7 @@ function resolveLinkedPropagatedEffectStageOnCompletion(session = {}, currentSta
   };
 
   if (!effect || !recipe || !causalConditionIsMet(session, effect.causalCondition ?? null)) {
-    return appendRecipeHistory(session, {
+    return appendRecipeNoEffectHistory(session, {
       cycleId,
       poolKey: null,
       stageId: currentStage.stageId,
@@ -725,7 +725,6 @@ function resolveLinkedPropagatedEffectStageOnCompletion(session = {}, currentSta
       proposedEffects: effect ? [effect] : [],
       finalEffects: [],
       blockedEffects: [],
-      result: HISTORY_RESULTS.NO_EFFECT,
       metadata: {
         reason: 'causal_condition_not_met',
         causalCondition: effect?.causalCondition ?? null
