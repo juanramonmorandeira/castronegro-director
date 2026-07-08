@@ -144,167 +144,123 @@ export function appendInterPoolStage(session, stage, metadata = {}) {
   });
 }
 
-export function startInterPoolQueue(session) {
-  if (!hasPendingInterPoolStages(session)) return session;
-  if (session?.currentStageSource === CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE) return session;
-  const nextSession = {
-    ...session,
-    currentStageSource: CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE
+const INTER_POOL_QUEUE_LIFECYCLE_OPERATIONS = Object.freeze({
+  START: 'start',
+  FINISH: 'finish'
+});
+
+function startQueue({
+  session = {},
+  operation,
+  eventWindow = null,
+  metadata = {},
+  requireEventWindow = false
+} = {}) {
+  return {
+    session,
+    operation,
+    eventWindow,
+    metadata,
+    requireEventWindow,
+    errors: [],
+    stage: null,
+    nextStage: null
   };
-  const stage = getCurrentInterPoolStage(nextSession);
-  return appendInterPoolQueueHistory(nextSession, {
-    stageId: stage?.id ?? null,
-    stageKey: stage?.key ?? null,
-    operation: INTER_POOL_QUEUE_HISTORY_OPERATIONS.STARTED
-  });
 }
 
-export function startInterPoolQueueForWindow(session = {}, eventWindow = null) {
+function getInterPoolQueueWindowErrors({ session = {}, eventWindow = null, operation }) {
+  const messagePrefix = operation === INTER_POOL_QUEUE_LIFECYCLE_OPERATIONS.FINISH
+    ? 'cannot complete interPoolStage'
+    : 'cannot start interPoolQueue';
   const eventWindowError = isValidInterPoolQueueEventWindow(eventWindow)
     ? null
     : {
         code: INTER_POOL_QUEUE_ERRORS.INVALID_EVENT_WINDOW,
-        message: 'cannot start interPoolQueue for an invalid eventWindow',
+        message: `${messagePrefix} for an invalid eventWindow`,
         eventWindow
       };
-  const windowErrors = eventWindowError ? [eventWindowError] : getInvalidWindowErrors(session);
 
-  if (windowErrors.length > 0) {
-    return {
-      ok: false,
-      errors: windowErrors,
-      session: appendWindowValidationFailures(session, windowErrors),
-      stage: null
-    };
+  return eventWindowError ? [eventWindowError] : getInvalidWindowErrors(session);
+}
+
+function evaluateQueue(state = {}) {
+  if (state.requireEventWindow) {
+    const errors = getInterPoolQueueWindowErrors(state);
+    if (errors.length > 0) {
+      return {
+        ...state,
+        errors
+      };
+    }
   }
 
-  const stage = getCurrentInterPoolStageForWindow(session, eventWindow);
-  if (!stage) {
-    return {
-      ok: true,
-      errors: [],
-      session,
-      stage: null
-    };
-  }
-
-  if (
-    session?.currentStageSource === CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE &&
-    session?.currentInterPoolWindow === eventWindow
-  ) {
-    return {
-      ok: true,
-      errors: [],
-      session,
-      stage
-    };
-  }
-
-  const nextSession = {
-    ...session,
-    currentStageSource: CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE,
-    currentInterPoolWindow: eventWindow
-  };
+  const stage = state.requireEventWindow
+    ? getCurrentInterPoolStageForWindow(state.session, state.eventWindow)
+    : getCurrentInterPoolStage(state.session);
 
   return {
-    ok: true,
-    errors: [],
-    session: appendInterPoolQueueHistory(nextSession, {
-      stageId: stage?.id ?? null,
-      stageKey: stage?.key ?? null,
-      operation: INTER_POOL_QUEUE_HISTORY_OPERATIONS.STARTED,
-      metadata: { eventWindow }
-    }),
+    ...state,
     stage
   };
 }
 
-export function completeInterPoolStage(session, metadata = {}) {
-  if (session?.currentInterPoolWindow) {
-    return completeInterPoolStageForWindow(session, session.currentInterPoolWindow, metadata).session;
+function resolveQueueStart(state = {}) {
+  if (!state.stage) return state;
+  if (
+    state.session?.currentStageSource === CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE &&
+    (!state.requireEventWindow || state.session?.currentInterPoolWindow === state.eventWindow)
+  ) {
+    return state;
   }
 
-  const currentStage = getCurrentInterPoolStage(session);
-  if (!currentStage) return session;
-
   const nextSession = {
-    ...session,
-    interPoolQueue: getInterPoolQueue(session).slice(1),
-    currentStageSource:
-      getInterPoolQueue(session).length > 1
-        ? CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE
-        : CURRENT_STAGE_SOURCES.POOL
+    ...state.session,
+    currentStageSource: CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE,
+    currentInterPoolWindow: state.requireEventWindow ? state.eventWindow : null
   };
 
-  const completedSession = appendInterPoolQueueHistory(nextSession, {
-    stageId: currentStage.id,
-    stageKey: currentStage.key,
-    operation: INTER_POOL_QUEUE_HISTORY_OPERATIONS.COMPLETED,
-    metadata
-  });
-  const nextStage = getCurrentInterPoolStage(completedSession);
-
-  return nextStage
-    ? appendInterPoolQueueHistory(completedSession, {
-        stageId: nextStage.id,
-        stageKey: nextStage.key,
-        operation: INTER_POOL_QUEUE_HISTORY_OPERATIONS.STARTED
-      })
-    : completedSession;
+  return {
+    ...state,
+    session: appendInterPoolQueueHistory(nextSession, {
+      stageId: state.stage?.id ?? null,
+      stageKey: state.stage?.key ?? null,
+      operation: INTER_POOL_QUEUE_HISTORY_OPERATIONS.STARTED,
+      metadata: state.requireEventWindow ? { eventWindow: state.eventWindow } : {}
+    })
+  };
 }
 
-export function completeInterPoolStageForWindow(session = {}, eventWindow = null, metadata = {}) {
-  const eventWindowError = isValidInterPoolQueueEventWindow(eventWindow)
-    ? null
-    : {
-        code: INTER_POOL_QUEUE_ERRORS.INVALID_EVENT_WINDOW,
-        message: 'cannot complete interPoolStage for an invalid eventWindow',
-        eventWindow
-      };
-  const windowErrors = eventWindowError ? [eventWindowError] : getInvalidWindowErrors(session);
-
-  if (windowErrors.length > 0) {
+function resolveQueueFinish(state = {}) {
+  if (!state.stage) {
     return {
-      ok: false,
-      errors: windowErrors,
-      session: appendWindowValidationFailures(session, windowErrors),
-      stage: null,
-      nextStage: null
-    };
-  }
-
-  const currentStage = getCurrentInterPoolStageForWindow(session, eventWindow);
-  if (!currentStage) {
-    return {
-      ok: true,
-      errors: [],
+      ...state,
       session: {
-        ...session,
+        ...state.session,
         currentStageSource: CURRENT_STAGE_SOURCES.POOL,
         currentInterPoolWindow: null
-      },
-      stage: null,
-      nextStage: null
+      }
     };
   }
 
-  const remainingStages = getInterPoolQueue(session).filter((stage) => stage.id !== currentStage.id);
-  const nextStage = remainingStages.find((stage) => stage.metadata?.eventWindow === eventWindow) ?? null;
+  const remainingStages = getInterPoolQueue(state.session).filter((stage) => stage.id !== state.stage.id);
+  const nextStage = state.requireEventWindow
+    ? remainingStages.find((stage) => stage.metadata?.eventWindow === state.eventWindow) ?? null
+    : remainingStages[0] ?? null;
   const nextSession = {
-    ...session,
+    ...state.session,
     interPoolQueue: remainingStages,
     currentStageSource: nextStage
       ? CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE
       : CURRENT_STAGE_SOURCES.POOL,
-    currentInterPoolWindow: nextStage ? eventWindow : null
+    currentInterPoolWindow: nextStage && state.requireEventWindow ? state.eventWindow : null
   };
   const completedSession = appendInterPoolQueueHistory(nextSession, {
-    stageId: currentStage.id,
-    stageKey: currentStage.key,
+    stageId: state.stage.id,
+    stageKey: state.stage.key,
     operation: INTER_POOL_QUEUE_HISTORY_OPERATIONS.COMPLETED,
     metadata: {
-      ...metadata,
-      eventWindow
+      ...state.metadata,
+      ...(state.requireEventWindow ? { eventWindow: state.eventWindow } : {})
     }
   });
   const sessionWithNextStarted = nextStage
@@ -312,17 +268,103 @@ export function completeInterPoolStageForWindow(session = {}, eventWindow = null
         stageId: nextStage.id,
         stageKey: nextStage.key,
         operation: INTER_POOL_QUEUE_HISTORY_OPERATIONS.STARTED,
-        metadata: { eventWindow }
+        metadata: state.requireEventWindow ? { eventWindow: state.eventWindow } : {}
       })
     : completedSession;
 
   return {
-    ok: true,
-    errors: [],
     session: sessionWithNextStarted,
-    stage: currentStage,
+    stage: state.stage,
     nextStage
   };
+}
+
+function resolveQueue(state = {}) {
+  if ((state.errors ?? []).length > 0) return state;
+  if (state.operation === INTER_POOL_QUEUE_LIFECYCLE_OPERATIONS.START) {
+    return resolveQueueStart(state);
+  }
+  if (state.operation === INTER_POOL_QUEUE_LIFECYCLE_OPERATIONS.FINISH) {
+    return resolveQueueFinish(state);
+  }
+  return state;
+}
+
+function validateQueueOutcome(state = {}) {
+  const errors = state.errors ?? [];
+  return {
+    ...state,
+    ok: errors.length === 0,
+    session: errors.length > 0
+      ? appendWindowValidationFailures(state.session, errors)
+      : state.session
+  };
+}
+
+function finishQueue(state = {}) {
+  return {
+    ok: state.ok ?? false,
+    errors: state.errors ?? [],
+    session: state.session,
+    stage: state.stage ?? null,
+    nextStage: state.nextStage ?? null
+  };
+}
+
+function runQueueLifecycle(options = {}) {
+  return finishQueue(
+    validateQueueOutcome(
+      resolveQueue(
+        evaluateQueue(
+          startQueue(options)
+        )
+      )
+    )
+  );
+}
+
+export function startInterPoolQueue(session) {
+  if (!hasPendingInterPoolStages(session)) return session;
+  return runQueueLifecycle({
+    session,
+    operation: INTER_POOL_QUEUE_LIFECYCLE_OPERATIONS.START
+  }).session;
+}
+
+export function startInterPoolQueueForWindow(session = {}, eventWindow = null) {
+  const result = runQueueLifecycle({
+    session,
+    operation: INTER_POOL_QUEUE_LIFECYCLE_OPERATIONS.START,
+    eventWindow,
+    requireEventWindow: true
+  });
+
+  return {
+    ok: result.ok,
+    errors: result.errors,
+    session: result.session,
+    stage: result.stage
+  };
+}
+
+export function completeInterPoolStage(session, metadata = {}) {
+  return runQueueLifecycle({
+    session,
+    operation: INTER_POOL_QUEUE_LIFECYCLE_OPERATIONS.FINISH,
+    eventWindow: session?.currentInterPoolWindow ?? null,
+    metadata,
+    requireEventWindow: Boolean(session?.currentInterPoolWindow)
+  }).session;
+}
+
+export function completeInterPoolStageForWindow(session = {}, eventWindow = null, metadata = {}) {
+  return runQueueLifecycle({
+    session,
+    operation: INTER_POOL_QUEUE_LIFECYCLE_OPERATIONS.FINISH,
+    eventWindow,
+    metadata,
+    requireEventWindow: true
+  });
 }
 
 export function removeInterPoolStages(session = {}, predicate = () => false, metadata = {}) {

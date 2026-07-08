@@ -152,27 +152,58 @@ function hasExpiredExecutionWindow(stage = {}, context = {}) {
   });
 }
 
-export function preparePool(pool = {}, context = {}) {
-  const changes = [];
-  const errors = [];
-  const stages = (pool.stages ?? []).map((stage) => {
-    if (stage.status === STAGE_STATUSES.FINISHED) return stage;
+export function startPool(pool = {}, context = {}) {
+  return {
+    pool,
+    context,
+    evaluations: [],
+    changes: [],
+    errors: []
+  };
+}
+
+export function evaluatePool(state = {}) {
+  const pool = state.pool ?? {};
+  const context = state.context ?? {};
+  const evaluations = (pool.stages ?? []).map((stage) => {
+    if (stage.status === STAGE_STATUSES.FINISHED) {
+      return {
+        stage,
+        nextStatus: STAGE_STATUSES.FINISHED,
+        errors: []
+      };
+    }
 
     if (hasExpiredExecutionWindow(stage, context)) {
-      if (stage.status !== STAGE_STATUSES.FINISHED) {
-        changes.push({
-          stageId: stage.id,
-          stageKey: stage.key,
-          from: stage.status,
-          to: STAGE_STATUSES.FINISHED
-        });
-      }
-      return { ...stage, status: STAGE_STATUSES.FINISHED };
+      return {
+        stage,
+        nextStatus: STAGE_STATUSES.FINISHED,
+        errors: []
+      };
     }
 
     const evaluation = evaluateAvailabilityGroup(stage, stage.availabilityRules ?? {}, context);
-    errors.push(...(evaluation.errors ?? []));
-    const nextStatus = evaluation.value ? STAGE_STATUSES.ENABLED : STAGE_STATUSES.DISABLED;
+
+    return {
+      stage,
+      nextStatus: evaluation.value ? STAGE_STATUSES.ENABLED : STAGE_STATUSES.DISABLED,
+      errors: evaluation.errors ?? []
+    };
+  });
+
+  return {
+    ...state,
+    evaluations,
+    errors: evaluations.flatMap((evaluation) => evaluation.errors ?? [])
+  };
+}
+
+export function resolvePool(state = {}) {
+  const changes = [];
+  const stages = (state.evaluations ?? []).map((evaluation) => {
+    const stage = evaluation.stage ?? evaluation;
+    const nextStatus = evaluation.nextStatus ?? stage.status;
+
     if (stage.status !== nextStatus) {
       changes.push({ stageId: stage.id, stageKey: stage.key, from: stage.status, to: nextStatus });
     }
@@ -180,15 +211,34 @@ export function preparePool(pool = {}, context = {}) {
   });
 
   return {
-    ok: errors.length === 0,
+    ...state,
     pool: {
-      ...pool,
+      ...(state.pool ?? {}),
       stages,
       currentStageIndex: Math.max(0, stages.findIndex((stage) => stage.status === STAGE_STATUSES.ENABLED))
     },
-    changes,
-    errors
+    changes
   };
+}
+
+export function validatePoolOutcome(state = {}) {
+  return {
+    ...state,
+    ok: (state.errors ?? []).length === 0
+  };
+}
+
+export function finishPool(state = {}) {
+  return {
+    ok: state.ok ?? (state.errors ?? []).length === 0,
+    pool: state.pool,
+    changes: state.changes ?? [],
+    errors: state.errors ?? []
+  };
+}
+
+export function preparePool(pool = {}, context = {}) {
+  return finishPool(validatePoolOutcome(resolvePool(evaluatePool(startPool(pool, context)))));
 }
 
 export function validatePool(pool = {}, knownLifecycleOperationTypes = []) {

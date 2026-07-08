@@ -800,7 +800,7 @@ test('resolveCurrentStage ejecuta receta y completeCurrentStage avanza el cursor
     inspected.session.interPoolQueue[0].key,
     STAGE_KEYS.STAGE_02
   );
-  assert.equal(inspected.stageAdvance.reason, 'next-special-stage');
+  assert.equal(inspected.stageAdvance.reason, 'next-inter-pool-stage');
   assert.equal(inspected.stageAdvance.next.stageKey, STAGE_KEYS.STAGE_02);
   assert.equal(linkedAction.ok, true);
   assert.equal(linkedAction.session.groups[0].type, GROUP_TYPES.LINKED);
@@ -2016,9 +2016,9 @@ test('role reactive crea un stage de interPoolQueue al recibir inPlay=false desd
     firstResolution.session.interPoolQueue[1].metadata.eventWindow,
     INTER_POOL_QUEUE_EVENT_WINDOWS.BEFORE_EXPOSED
   );
-  assert.equal(completed.stageAdvance.reason, 'special-stages-before-next-pool');
+  assert.equal(completed.stageAdvance.reason, 'inter-pool-queue-before-next-pool');
   assert.equal(completed.stageAdvance.next.source, CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE);
-  assert.equal(reactiveRevealCompleted.stageAdvance.reason, 'next-special-stage');
+  assert.equal(reactiveRevealCompleted.stageAdvance.reason, 'next-inter-pool-stage');
   assert.equal(specialResolution.ok, true);
   assert.equal(roleById(specialResolution.session, `${ROLE_CATALOG_IDS.ROLE_INSPECTS}-0`).inPlay, false);
   assert.equal(specialResolution.session.interPoolQueue.at(-1).metadata.catalogId, STAGE_CATALOG_IDS.ROLE_STATE_REVEALED);
@@ -2728,7 +2728,7 @@ test('resolveCurrentStage ejecuta stage_05 con seleccion y receta set_out_of_pla
     completed.session.cycle.pools.poolExposed.stages[0].status,
     STAGE_STATUSES.DONE
   );
-  assert.equal(completed.stageAdvance.reason, 'special-stages-before-next-pool');
+  assert.equal(completed.stageAdvance.reason, 'inter-pool-queue-before-next-pool');
   assert.equal(completed.stageAdvance.next.source, CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE);
   assert.equal(
     completed.stageAdvance.next.stage.metadata.catalogId,
@@ -3073,7 +3073,7 @@ test('un stage con recetas opcionales permanece abierto hasta cierre explicito',
   assert.equal(roleById(setOut.session, 'alignment_b_target-0').inPlay, false);
   assert.equal(setOut.stageAdvance, null);
   assert.equal(completed.ok, true);
-  assert.equal(completed.stageAdvance.reason, 'special-stages-before-next-pool');
+  assert.equal(completed.stageAdvance.reason, 'inter-pool-queue-before-next-pool');
   assert.equal(completed.stageAdvance.next.source, CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE);
   assert.equal(
     completed.stageAdvance.next.stage.metadata.catalogId,
@@ -3132,7 +3132,7 @@ test('completeCurrentStage al terminar poolExposed arranca solo after_exposed', 
   });
 
   assert.equal(completed.ok, true);
-  assert.equal(completed.stageAdvance.reason, 'special-stages-before-next-pool');
+  assert.equal(completed.stageAdvance.reason, 'inter-pool-queue-before-next-pool');
   assert.equal(completed.stageAdvance.next.source, CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE);
   assert.equal(completed.stageAdvance.next.stage.key, 'stage_after_exposed_test');
   assert.equal(completed.session.currentInterPoolWindow, INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_EXPOSED);
@@ -3146,7 +3146,7 @@ test('completeCurrentStage al terminar poolExposed arranca solo after_exposed', 
   });
 
   assert.equal(afterExposedCompleted.ok, true);
-  assert.equal(afterExposedCompleted.stageAdvance.reason, 'special-stages-before-next-pool');
+  assert.equal(afterExposedCompleted.stageAdvance.reason, 'inter-pool-queue-before-next-pool');
   assert.equal(afterExposedCompleted.stageAdvance.next.stage.key, 'stage_before_concealed_test');
   assert.equal(
     afterExposedCompleted.session.currentInterPoolWindow,
@@ -3217,7 +3217,7 @@ test('completeCurrentStage al terminar poolConcealed encadena after_concealed pu
   });
 
   assert.equal(completed.ok, true);
-  assert.equal(completed.stageAdvance.reason, 'special-stages-before-next-pool');
+  assert.equal(completed.stageAdvance.reason, 'inter-pool-queue-before-next-pool');
   assert.equal(completed.stageAdvance.next.stage.key, 'stage_after_concealed_test');
   assert.equal(completed.session.currentInterPoolWindow, INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_CONCEALED);
   assert.deepEqual(
@@ -3230,7 +3230,7 @@ test('completeCurrentStage al terminar poolConcealed encadena after_concealed pu
   });
 
   assert.equal(afterConcealedCompleted.ok, true);
-  assert.equal(afterConcealedCompleted.stageAdvance.reason, 'special-stages-before-next-pool');
+  assert.equal(afterConcealedCompleted.stageAdvance.reason, 'inter-pool-queue-before-next-pool');
   assert.equal(afterConcealedCompleted.stageAdvance.next.stage.key, 'stage_before_exposed_test');
   assert.equal(
     afterConcealedCompleted.session.currentInterPoolWindow,
@@ -4113,7 +4113,7 @@ test('linked encola interPoolStage para propagar inPlay=false hacia roles enlaza
     INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_CONCEALED
   );
   assert.equal(propagated.ok, true);
-  assert.equal(propagated.stageAdvance.reason, 'special-stages-before-next-pool');
+  assert.equal(propagated.stageAdvance.reason, 'inter-pool-queue-before-next-pool');
   assert.equal(
     propagated.session.interPoolQueue.some(
       (stage) =>

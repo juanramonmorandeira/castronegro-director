@@ -659,7 +659,7 @@ export function getPostStageFinishLifecycleState({ session, stageAdvance }) {
       ? {
           ok: true,
           errors: [],
-          reason: 'special-stages-before-next-pool',
+          reason: 'inter-pool-queue-before-next-pool',
           cycle: sessionBeforePoolEntry.cycle,
           next: {
             poolKey: null,

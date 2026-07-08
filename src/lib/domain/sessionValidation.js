@@ -224,7 +224,7 @@ export function validateSession(session = {}, options = {}) {
     (session.interPoolQueue ?? []).length === 0
   ) {
     errors.push({
-      code: 'session/missing-current-special-stage',
+      code: 'session/missing-current-inter-pool-stage',
       message: 'session points to interPoolQueue but the queue is empty'
     });
   }

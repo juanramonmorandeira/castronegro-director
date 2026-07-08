@@ -167,7 +167,12 @@ export {
   POOL_ERRORS,
   POOL_HISTORY_OPERATIONS,
   createPoolHistoryEntry,
+  evaluatePool,
+  finishPool,
   preparePool,
+  resolvePool,
+  startPool,
+  validatePoolOutcome,
   validatePool
 } from './poolModel.js';
 export {

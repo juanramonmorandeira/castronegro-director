@@ -565,7 +565,7 @@ function completeCurrentInterPoolStage(session, currentStage, input, requestedBy
       stageAdvance: {
         ok: true,
         errors: [],
-        reason: 'next-special-stage',
+        reason: 'next-inter-pool-stage',
         next: {
           poolKey: null,
           stageId: nextInterPoolStage.id,
@@ -586,7 +586,7 @@ function completeCurrentInterPoolStage(session, currentStage, input, requestedBy
 
   const objectiveState = runCheckObjectivesLifecycleOperation(sessionWithStageHistory, {
     key: STAGE_RECIPE_KEYS.CHECK_OBJECTIVES,
-    metadata: { reason: 'special_stages_empty' }
+    metadata: { reason: 'inter_pool_queue_empty' }
   });
   const nextWindowStart = !objectiveState.session.playOutcome
     ? continueAfterWindow({
@@ -626,7 +626,7 @@ function completeCurrentInterPoolStage(session, currentStage, input, requestedBy
       stageAdvance: {
         ok: true,
         errors: [],
-        reason: 'special-stages-before-next-pool',
+        reason: 'inter-pool-queue-before-next-pool',
         cycle: nextWindowStart.session.cycle,
         next: {
           poolKey: null,
