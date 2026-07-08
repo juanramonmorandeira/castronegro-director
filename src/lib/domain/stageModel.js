@@ -28,14 +28,13 @@ import {
   canRequesterCompleteStage
 } from './stageDefinition.js';
 import {
+  createInterPoolStageAdvance,
   enterNextPool,
   continueAfterWindow,
   getCurrentCycleStage,
-  prepareAndValidatePoolEntry,
   resolveCycleAfterStageFinished,
+  resolvePoolEntry,
   runCheckObjectivesLifecycleOperation,
-  runLifecycleOperationsOnEnter,
-  startCycleBeforePoolEntry,
 } from './cycleModel.js';
 import {
   HISTORY_COLLECTIONS,
@@ -618,26 +617,18 @@ function completeCurrentInterPoolStage(session, currentStage, input, requestedBy
     };
   }
   if (nextWindowStart.stage) {
+    const stageAdvance = createInterPoolStageAdvance({
+      session: nextWindowStart.session,
+      stage: nextWindowStart.stage,
+      reason: 'inter-pool-queue-before-next-pool'
+    });
+
     return {
       ok: true,
       errors: [],
       session: nextWindowStart.session,
       stage: currentStage,
-      stageAdvance: {
-        ok: true,
-        errors: [],
-        reason: 'inter-pool-queue-before-next-pool',
-        cycle: nextWindowStart.session.cycle,
-        next: {
-          poolKey: null,
-          stageId: nextWindowStart.stage.id,
-          stageKey: nextWindowStart.stage.key,
-          status: nextWindowStart.stage.status,
-          index: 0,
-          source: CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE,
-          stage: nextWindowStart.stage
-        }
-      },
+      stageAdvance,
       completion: getHistoryCollection(nextWindowStart.session, HISTORY_COLLECTIONS.STAGE).at(-1),
       objectiveEvaluation: objectiveState.objectiveEvaluation,
       playOutcome: objectiveState.playOutcome,
@@ -664,35 +655,18 @@ function completeCurrentInterPoolStage(session, currentStage, input, requestedBy
     ...nextWindowStart.session,
     cycle: poolEntry.cycle
   };
-  const startedSession =
-    poolEntry.ok && poolEntry.reason === 'next-pool' && poolEntry.next?.poolKey
-      ? startCycleBeforePoolEntry(sessionAfterPoolEntry, poolEntry.next.poolKey)
-      : sessionAfterPoolEntry;
-  const preparedEntry =
-    poolEntry.ok && poolEntry.reason === 'next-pool' && poolEntry.next?.poolKey
-      ? prepareAndValidatePoolEntry(startedSession, poolEntry.next.poolKey)
-      : { ok: true, errors: [], session: startedSession };
-  const enterState =
-    preparedEntry.ok &&
-    poolEntry.ok &&
-    poolEntry.reason === 'next-pool' &&
-    poolEntry.next?.poolKey
-      ? runLifecycleOperationsOnEnter({
-          session: preparedEntry.session,
-          poolKey: poolEntry.next.poolKey
-        })
-      : {
-          session: preparedEntry.session,
-          lifecycleResults: []
-        };
-  const nextSession = enterState.session;
+  const poolEntryState = resolvePoolEntry({
+    session: sessionAfterPoolEntry,
+    poolEntry
+  });
+  const nextSession = poolEntryState.session;
 
   return {
-    ok: poolEntry.ok && preparedEntry.ok,
-    errors: [...(poolEntry.errors ?? []), ...(preparedEntry.errors ?? [])],
+    ok: poolEntryState.ok,
+    errors: poolEntryState.errors,
     session: nextSession,
     stage: currentStage,
-    stageAdvance: poolEntry,
+    stageAdvance: poolEntryState.poolEntry,
     completion: getHistoryCollection(nextSession, HISTORY_COLLECTIONS.STAGE).at(-1),
     objectiveEvaluation: objectiveState.objectiveEvaluation,
     playOutcome: objectiveState.playOutcome,
@@ -700,7 +674,7 @@ function completeCurrentInterPoolStage(session, currentStage, input, requestedBy
     lifecycleResults: [
       ...objectiveState.lifecycleResults,
       ...(nextWindowStart.lifecycleResults ?? []),
-      ...(enterState.lifecycleResults ?? [])
+      ...(poolEntryState.lifecycleResults ?? [])
     ]
   };
 }

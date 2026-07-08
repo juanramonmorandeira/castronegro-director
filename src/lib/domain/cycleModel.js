@@ -6,7 +6,7 @@
 // flujo corresponde ejecutar despues.
 // -----------------------------------------------------------------------------
 
-import { DEFAULT_POOL_ORDER, CURRENT_STAGE_SOURCES, normalizeId } from './sessionModel.js';
+import { DEFAULT_POOL_ORDER, CURRENT_STAGE_SOURCES, POOL_KEYS, normalizeId } from './sessionModel.js';
 import { createPool, POOL_LIFECYCLE_OPERATION_TYPES } from './poolDefinition.js';
 import {
   advanceStageCursor,
@@ -50,7 +50,7 @@ export const CYCLE_ERRORS = Object.freeze({
   NO_RUNNABLE_STAGES: 'cycle/no-runnable-stages'
 });
 
-const CYCLE_RECIPE_KEYS = Object.freeze({
+const CYCLE_LIFECYCLE_KEYS = Object.freeze({
   CHECK_OBJECTIVES: 'check_objectives',
   CONCLUDE_PLAY: 'conclude_play'
 });
@@ -151,6 +151,36 @@ function getCurrentSessionStage(session = {}) {
         source: CURRENT_STAGE_SOURCES.POOL
       }
     : null;
+}
+
+export function createInterPoolStageAdvance({
+  session = {},
+  stage = null,
+  reason = 'inter-pool-queue-before-next-pool'
+} = {}) {
+  return stage
+    ? {
+        ok: true,
+        errors: [],
+        reason,
+        cycle: session.cycle,
+        next: {
+          poolKey: null,
+          stageId: stage.id,
+          stageKey: stage.key,
+          status: stage.status,
+          index: 0,
+          source: CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE,
+          stage
+        }
+      }
+    : {
+        ok: true,
+        errors: [],
+        reason,
+        cycle: session.cycle,
+        next: null
+      };
 }
 
 export function updateCyclePool(cycle = {}, pool = null) {
@@ -305,7 +335,7 @@ function applyConcludePlayLifecycleOperationIfNeeded({ session, objectiveEvaluat
       session,
       lifecycleResults: [
         {
-          key: CYCLE_RECIPE_KEYS.CONCLUDE_PLAY,
+          key: CYCLE_LIFECYCLE_KEYS.CONCLUDE_PLAY,
           ok: false,
           errors: concluded.errors
         }
@@ -318,7 +348,7 @@ function applyConcludePlayLifecycleOperationIfNeeded({ session, objectiveEvaluat
     session: concluded.session,
     lifecycleResults: [
       {
-        key: CYCLE_RECIPE_KEYS.CONCLUDE_PLAY,
+        key: CYCLE_LIFECYCLE_KEYS.CONCLUDE_PLAY,
         ok: true,
         result: concluded.result
       }
@@ -343,7 +373,7 @@ export function runCheckObjectivesLifecycleOperation(session = {}, lifecycleOper
     playOutcome: concludePlayState.objectiveEvaluation?.playOutcome ?? null,
     lifecycleResults: [
       createLifecycleOperationResult({
-        key: CYCLE_RECIPE_KEYS.CHECK_OBJECTIVES,
+        key: CYCLE_LIFECYCLE_KEYS.CHECK_OBJECTIVES,
         result: concludePlayState.objectiveEvaluation,
         metadata: lifecycleOperation.metadata
       }),
@@ -381,7 +411,7 @@ function runLifecycleOperation(session = {}, lifecycleOperation = {}) {
     return runReviewPropertyBlocksLifecycleOperation(session, lifecycleOperation);
   }
 
-  if (key === CYCLE_RECIPE_KEYS.CHECK_OBJECTIVES) {
+  if (key === CYCLE_LIFECYCLE_KEYS.CHECK_OBJECTIVES) {
     return runCheckObjectivesLifecycleOperation(session, lifecycleOperation);
   }
 
@@ -446,7 +476,7 @@ export function runLifecycleOperationsOnEnter({ session = {}, poolKey = null } =
 }
 
 export function startCycleBeforePoolEntry(session = {}, poolKey = null) {
-  if (poolKey !== 'poolConcealed') return session;
+  if (poolKey !== POOL_KEYS.POOL_CONCEALED) return session;
   const currentCycleId = session.cycle?.id ?? 0;
   const afterCurrentCycle = reviewPropertyBlocks(session, {
     type: 'cycle_boundary',
@@ -567,11 +597,71 @@ export function prepareAndValidatePoolEntry(session = {}, poolKey = null) {
   };
 }
 
+export function resolvePoolEntry({ session = {}, poolEntry = {} } = {}) {
+  const shouldEnterPool =
+    poolEntry.ok &&
+    poolEntry.reason === 'next-pool' &&
+    poolEntry.next?.poolKey;
+  const startedSession = shouldEnterPool
+    ? startCycleBeforePoolEntry(session, poolEntry.next.poolKey)
+    : session;
+  const preparedEntry = shouldEnterPool
+    ? prepareAndValidatePoolEntry(startedSession, poolEntry.next.poolKey)
+    : { ok: true, errors: [], session: startedSession };
+
+  if (!preparedEntry.ok) {
+    return {
+      ok: false,
+      errors: preparedEntry.errors,
+      session: preparedEntry.session,
+      poolEntry: {
+        ...poolEntry,
+        ok: false,
+        errors: preparedEntry.errors,
+        reason: 'pool-entry-failed',
+        cycle: preparedEntry.session.cycle,
+        next: null
+      },
+      objectiveEvaluation: null,
+      playOutcome: null,
+      lifecycleResults: []
+    };
+  }
+
+  const enterState = shouldEnterPool
+    ? runLifecycleOperationsOnEnter({
+        session: preparedEntry.session,
+        poolKey: poolEntry.next.poolKey
+      })
+    : {
+        session: preparedEntry.session,
+        objectiveEvaluation: null,
+        playOutcome: null,
+        lifecycleResults: []
+      };
+
+  return {
+    ok: poolEntry.ok && preparedEntry.ok,
+    errors: [...(poolEntry.errors ?? []), ...(preparedEntry.errors ?? [])],
+    session: enterState.session,
+    poolEntry: {
+      ...poolEntry,
+      cycle: enterState.session.cycle,
+      next: enterState.session.playOutcome
+        ? null
+        : getCurrentSessionStage(enterState.session)
+    },
+    objectiveEvaluation: enterState.objectiveEvaluation,
+    playOutcome: enterState.playOutcome,
+    lifecycleResults: enterState.lifecycleResults ?? []
+  };
+}
+
 export function startInterPoolQueueAfterPoolExit({ session = {}, poolKey = null } = {}) {
   const eventWindow =
-    poolKey === 'poolConcealed'
+    poolKey === POOL_KEYS.POOL_CONCEALED
       ? INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_CONCEALED
-      : poolKey === 'poolExposed'
+      : poolKey === POOL_KEYS.POOL_EXPOSED
         ? INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_EXPOSED
         : null;
 
@@ -656,21 +746,11 @@ export function getPostStageFinishLifecycleState({ session, stageAdvance }) {
         next: null
       }
     : interPoolStage
-      ? {
-          ok: true,
-          errors: [],
+      ? createInterPoolStageAdvance({
+          session: sessionBeforePoolEntry,
+          stage: interPoolStage,
           reason: 'inter-pool-queue-before-next-pool',
-          cycle: sessionBeforePoolEntry.cycle,
-          next: {
-            poolKey: null,
-            stageId: interPoolStage.id,
-            stageKey: interPoolStage.key,
-            status: interPoolStage.status,
-            index: 0,
-            source: CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE,
-            stage: interPoolStage
-          }
-        }
+        })
       : enterNextPool(
           sessionBeforePoolEntry.cycle,
           stageAdvance.cycle.poolNext
@@ -689,28 +769,14 @@ export function getPostStageFinishLifecycleState({ session, stageAdvance }) {
       ? null
       : poolEntry.next
   };
-  const shouldRunOnEnter =
-    !exitState.session.playOutcome &&
-    poolEntry.ok &&
-    poolEntry.reason === 'next-pool' &&
-    stageAdvanceAfterExit.next?.poolKey;
-  const startedSession = shouldRunOnEnter
-    ? startCycleBeforePoolEntry(sessionAfterPoolEntry, stageAdvanceAfterExit.next.poolKey)
-    : sessionAfterPoolEntry;
-  const preparedEntry = shouldRunOnEnter
-    ? prepareAndValidatePoolEntry(startedSession, stageAdvanceAfterExit.next.poolKey)
-    : { ok: true, errors: [], session: startedSession };
-  if (!preparedEntry.ok) {
+  const poolEntryState = resolvePoolEntry({
+    session: sessionAfterPoolEntry,
+    poolEntry: stageAdvanceAfterExit
+  });
+  if (!poolEntryState.ok) {
     return {
-      session: preparedEntry.session,
-      stageAdvance: {
-        ...stageAdvanceAfterExit,
-        ok: false,
-        errors: preparedEntry.errors,
-        reason: 'pool-entry-failed',
-        cycle: preparedEntry.session.cycle,
-        next: null
-      },
+      session: poolEntryState.session,
+      stageAdvance: poolEntryState.poolEntry,
       objectiveEvaluation: exitState.objectiveEvaluation,
       playOutcome: exitState.playOutcome,
       eventResponses: [],
@@ -720,66 +786,109 @@ export function getPostStageFinishLifecycleState({ session, stageAdvance }) {
       ]
     };
   }
-  const enterState = shouldRunOnEnter
-    ? runLifecycleOperationsOnEnter({
-        session: preparedEntry.session,
-        poolKey: stageAdvanceAfterExit.next.poolKey
-      })
-    : {
-        session: preparedEntry.session,
-        objectiveEvaluation: null,
-        playOutcome: null,
-        lifecycleResults: []
-      };
   const finalStageAdvance = {
-    ...stageAdvanceAfterExit,
-    cycle: enterState.session.cycle,
-    next: enterState.session.playOutcome
-      ? null
-      : getCurrentSessionStage(enterState.session)
+    ...poolEntryState.poolEntry
   };
 
   return {
-    session: enterState.session,
+    session: poolEntryState.session,
     stageAdvance: finalStageAdvance,
-    objectiveEvaluation: enterState.objectiveEvaluation ?? exitState.objectiveEvaluation,
-    playOutcome: enterState.playOutcome ?? exitState.playOutcome,
+    objectiveEvaluation: poolEntryState.objectiveEvaluation ?? exitState.objectiveEvaluation,
+    playOutcome: poolEntryState.playOutcome ?? exitState.playOutcome,
     eventResponses: [],
     lifecycleResults: [
       ...exitState.lifecycleResults,
       ...(afterPoolInterPoolStageStart.lifecycleResults ?? []),
-      ...enterState.lifecycleResults
+      ...poolEntryState.lifecycleResults
     ]
   };
 }
 
 export function resolveCycleAfterStageFinished({ session = {}, currentStage = {} } = {}) {
-  const sessionAfterStageBoundary = reviewPropertyBlocks(session, {
+  return finishTransition(
+    validateTransitionOutcome(
+      resolveTransition(
+        evaluateTransition(
+          startTransition({ session, currentStage })
+        )
+      )
+    )
+  );
+}
+
+function startTransition({ session = {}, currentStage = {} } = {}) {
+  return {
+    session,
+    currentStage,
+    errors: []
+  };
+}
+
+function evaluateTransition(state = {}) {
+  const sessionAfterStageBoundary = reviewPropertyBlocks(state.session, {
     type: 'stage_boundary',
-    cycleId: session.cycle?.id ?? 0,
-    poolKey: currentStage.poolKey,
-    stageId: currentStage.stageId,
+    cycleId: state.session.cycle?.id ?? 0,
+    poolKey: state.currentStage.poolKey,
+    stageId: state.currentStage.stageId,
     boundary: 'after'
   }).session;
-  const currentPool = getCurrentPool(sessionAfterStageBoundary.cycle);
-  const poolAdvance = advanceStageCursor(currentPool);
-  const nextCycle = updateCyclePool(sessionAfterStageBoundary.cycle, poolAdvance.pool);
+
+  return {
+    ...state,
+    session: sessionAfterStageBoundary,
+    currentPool: getCurrentPool(sessionAfterStageBoundary.cycle)
+  };
+}
+
+function resolveTransition(state = {}) {
+  const poolAdvance = advanceStageCursor(state.currentPool);
+  const nextCycle = updateCyclePool(state.session.cycle, poolAdvance.pool);
   const stageAdvance = {
     ...poolAdvance,
     cycle: nextCycle,
     current: poolAdvance.current
-      ? { ...poolAdvance.current, poolKey: sessionAfterStageBoundary.cycle.poolCurrent }
+      ? { ...poolAdvance.current, poolKey: state.session.cycle.poolCurrent }
       : null,
     next: poolAdvance.next
-      ? { ...poolAdvance.next, poolKey: sessionAfterStageBoundary.cycle.poolCurrent }
+      ? { ...poolAdvance.next, poolKey: state.session.cycle.poolCurrent }
       : null
   };
 
-  return getPostStageFinishLifecycleState({
+  return {
+    ...state,
     session: {
-      ...sessionAfterStageBoundary,
+      ...state.session,
       cycle: stageAdvance.cycle
     },
     stageAdvance
+  };
+}
+
+function validateTransitionOutcome(state = {}) {
+  return {
+    ...state,
+    ok: (state.errors ?? []).length === 0
+  };
+}
+
+function finishTransition(state = {}) {
+  if (!state.ok) {
+    return {
+      session: state.session,
+      stageAdvance: {
+        ...(state.stageAdvance ?? {}),
+        ok: false,
+        errors: state.errors ?? []
+      },
+      objectiveEvaluation: null,
+      playOutcome: null,
+      eventResponses: [],
+      lifecycleResults: []
+    };
+  }
+
+  return getPostStageFinishLifecycleState({
+    session: state.session,
+    stageAdvance: state.stageAdvance
   });
 }

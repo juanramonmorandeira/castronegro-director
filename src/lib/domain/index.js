@@ -155,6 +155,7 @@ export {
 } from './poolCursorModel.js';
 export {
   CYCLE_ERRORS,
+  createInterPoolStageAdvance,
   createCycle,
   enterNextPool,
   getCurrentCycleStage,
