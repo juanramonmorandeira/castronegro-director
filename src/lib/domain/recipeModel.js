@@ -294,7 +294,7 @@ function evaluateRecipe(state) {
   };
 }
 
-function resolveRecipeAction(state) {
+function resolveRecipeActions(state) {
   if (!state.ok) return state;
 
   const actionResolution = resolveAction(state.session, state.action, state.input, {
@@ -314,7 +314,7 @@ function resolveRecipeAction(state) {
   };
 }
 
-function validateRecipeOutput(state) {
+function validateRecipeResolution(state) {
   if (!state.ok) return state;
   if (!state.actionResolution?.ok) return state;
 
@@ -359,11 +359,11 @@ function finishRecipe(state) {
 }
 
 // Resuelve una receta:
-// startRecipe -> evaluateRecipe -> resolveRecipeAction -> validateRecipeOutput -> finishRecipe.
+// startRecipe -> evaluateRecipe -> resolveRecipeActions -> validateRecipeResolution -> finishRecipe.
 export function resolveRecipe(session, recipe, input = {}, context = {}) {
   return finishRecipe(
-    validateRecipeOutput(
-      resolveRecipeAction(
+    validateRecipeResolution(
+      resolveRecipeActions(
         evaluateRecipe(
           startRecipe(session, recipe, input, context)
         )

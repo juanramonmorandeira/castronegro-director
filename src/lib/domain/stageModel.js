@@ -13,10 +13,7 @@
 // convirtiendo en una segunda actionModel. Su trabajo es coordinar, no resolver.
 // -----------------------------------------------------------------------------
 
-import {
-  advanceStageCursor,
-  isStageRunnable
-} from './poolCursorModel.js';
+import { isStageRunnable } from './poolCursorModel.js';
 import {
   STAGE_ERRORS,
   STAGE_RECIPE_KEYS,
@@ -34,13 +31,11 @@ import {
   enterNextPool,
   continueAfterWindow,
   getCurrentCycleStage,
-  getCurrentPool,
-  getPostCompletionLifecycleOperationState,
   prepareAndValidatePoolEntry,
+  resolveCycleAfterStageFinished,
   runCheckObjectivesLifecycleOperation,
   runLifecycleOperationsOnEnter,
   startCycleBeforePoolEntry,
-  updateCyclePool
 } from './cycleModel.js';
 import {
   HISTORY_COLLECTIONS,
@@ -408,7 +403,7 @@ function mergeSelectionAndRecipeResult({ selectionResult = null, recipeResult = 
   };
 }
 
-function resolveStageRecipeWithSelectAction(session, stage, recipe, input = {}, context = {}) {
+function resolveStageSelectActionAndRecipe(session, stage, recipe, input = {}, context = {}) {
   const activePeekStageRules = collectActiveStageRules(
     session,
     stage,
@@ -543,7 +538,7 @@ function completeCurrentInterPoolStage(session, currentStage, input, requestedBy
     requestedBy,
     reason: input.reason ?? 'manual_completion'
   });
-  const sessionWithCompletion = appendStageHistory(sessionWithoutStage, {
+  const sessionWithStageHistory = appendStageHistory(sessionWithoutStage, {
     poolKey: null,
     stageId: currentStage.stageId,
     stageKey: currentStage.stageKey,
@@ -557,15 +552,15 @@ function completeCurrentInterPoolStage(session, currentStage, input, requestedBy
     }
   });
   const nextInterPoolStage =
-    sessionWithCompletion.currentStageSource === CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE
-      ? getCurrentInterPoolStage(sessionWithCompletion)
+    sessionWithStageHistory.currentStageSource === CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE
+      ? getCurrentInterPoolStage(sessionWithStageHistory)
       : null;
 
   if (nextInterPoolStage) {
     return {
       ok: true,
       errors: [],
-      session: sessionWithCompletion,
+      session: sessionWithStageHistory,
       stage: currentStage,
       stageAdvance: {
         ok: true,
@@ -581,7 +576,7 @@ function completeCurrentInterPoolStage(session, currentStage, input, requestedBy
           stage: nextInterPoolStage
         }
       },
-      completion: getHistoryCollection(sessionWithCompletion, HISTORY_COLLECTIONS.STAGE).at(-1),
+      completion: getHistoryCollection(sessionWithStageHistory, HISTORY_COLLECTIONS.STAGE).at(-1),
       objectiveEvaluation: null,
       playOutcome: null,
       eventResponses: [],
@@ -589,7 +584,7 @@ function completeCurrentInterPoolStage(session, currentStage, input, requestedBy
     };
   }
 
-  const objectiveState = runCheckObjectivesLifecycleOperation(sessionWithCompletion, {
+  const objectiveState = runCheckObjectivesLifecycleOperation(sessionWithStageHistory, {
     key: STAGE_RECIPE_KEYS.CHECK_OBJECTIVES,
     metadata: { reason: 'special_stages_empty' }
   });
@@ -737,31 +732,38 @@ function getPostActionEventState({
   };
 }
 
-function startStageResolution(session, input = {}) {
+const STAGE_RUNTIME_OPERATIONS = Object.freeze({
+  RESOLVE: 'resolve',
+  FINISH: 'finish'
+});
+
+function startStage({ session, input = {}, operation } = {}) {
   return {
     ok: true,
     session,
     workingSession: session,
     input,
-    currentStageBeforeReview: getCurrentStage(session),
+    operation,
+    currentStage: getCurrentStage(session),
     stageValidation: null,
     recipeInput: null,
     resolutionContext: null,
+    requestedBy: null,
     actionResolution: null,
     errors: [],
     result: null
   };
 }
 
-function evaluateStageResolution(state) {
+function evaluateStageActionContext(state) {
   const workingSession =
-    state.currentStageBeforeReview &&
-    state.currentStageBeforeReview.source !== CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE
+    state.currentStage &&
+    state.currentStage.source !== CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE
       ? reviewPropertyBlocks(state.session, {
           type: 'stage_boundary',
           cycleId: state.session.cycle?.id ?? 0,
-          poolKey: state.currentStageBeforeReview.poolKey,
-          stageId: state.currentStageBeforeReview.stageId,
+          poolKey: state.currentStage.poolKey,
+          stageId: state.currentStage.stageId,
           boundary: 'before'
         }).session
       : state.session;
@@ -807,149 +809,7 @@ function evaluateStageResolution(state) {
   };
 }
 
-function resolveStageRecipe(state) {
-  if (!state.ok) return state;
-
-  const stage = state.stageValidation.currentStage.stage;
-  const actionResolution = hasStageSelectionRules(stage)
-    ? resolveStageRecipeWithSelectAction(
-        state.workingSession,
-        stage,
-        state.stageValidation.recipe,
-        state.recipeInput,
-        state.resolutionContext
-      )
-    : resolveRecipe(
-        state.workingSession,
-        state.stageValidation.recipe,
-        state.recipeInput,
-        state.resolutionContext
-      );
-
-  return {
-    ...state,
-    ok: actionResolution.ok,
-    actionResolution,
-    errors: actionResolution.errors ?? []
-  };
-}
-
-function validateStageResolution(state) {
-  if (!state.ok) return state;
-  if (!state.actionResolution?.ok) return state;
-
-  if (!state.actionResolution.result) {
-    return {
-      ...state,
-      ok: false,
-      errors: [
-        {
-          code: 'stage/missing-result',
-          message: `stage "${state.stageValidation.currentStage.stageKey}" finished without result`,
-          stageId: state.stageValidation.currentStage.stageId,
-          stageKey: state.stageValidation.currentStage.stageKey
-        }
-      ]
-    };
-  }
-
-  return state;
-}
-
-function finishStageResolution(state) {
-  if (!state.stageValidation?.ok) {
-    const messageState = appendEngineErrors(state.workingSession, state.errors, {
-      cycleId: state.workingSession?.cycle?.id ?? null,
-      poolKey: state.stageValidation?.currentStage?.poolKey ?? state.workingSession?.cycle?.poolCurrent ?? null,
-      stageId: state.stageValidation?.currentStage?.stageId ?? null,
-      stageKey: state.stageValidation?.currentStage?.stageKey ?? null,
-      recipeKey: state.input.recipeKey ?? null
-    });
-
-    return {
-      ok: false,
-      actionId: state.stageValidation?.recipe?.id ?? null,
-      recipeKey: state.stageValidation?.recipeKey,
-      errors: state.errors,
-      messages: messageState.messages,
-      session: messageState.session,
-      result: null,
-      stage: state.stageValidation?.currentStage ?? null,
-      stageAdvance: null
-    };
-  }
-
-  if (!state.actionResolution?.ok) {
-    return {
-      ...state.actionResolution,
-      stage: state.stageValidation.currentStage,
-      stageAdvance: null
-    };
-  }
-
-  if (!state.ok) {
-    const messageState = appendEngineErrors(state.actionResolution.session, state.errors, {
-      ...state.resolutionContext
-    });
-
-    return {
-      ok: false,
-      actionId: state.actionResolution.result?.actionId ?? null,
-      recipeKey: state.stageValidation.recipeKey,
-      errors: state.errors,
-      messages: messageState.messages,
-      session: messageState.session,
-      result: null,
-      stage: state.stageValidation.currentStage,
-      stageAdvance: null
-    };
-  }
-
-  const postActionState = getPostActionEventState({
-    previousSession: state.workingSession,
-    actionResolution: state.actionResolution,
-    context: state.resolutionContext
-  });
-  const resolutionWithEvents = {
-    ...state.actionResolution,
-    session: postActionState.session,
-    result: {
-      ...(state.actionResolution.result ?? {}),
-      events: postActionState.events,
-      eventResponses: postActionState.eventResponses
-    }
-  };
-
-  return {
-    ...resolutionWithEvents,
-    stage: state.stageValidation.currentStage,
-    stageAdvance: null
-  };
-}
-
-function createStageCompletionErrorResult({ session, currentStage = null, errors = [] } = {}) {
-  return {
-    ok: false,
-    errors,
-    session,
-    stage: currentStage,
-    stageAdvance: null
-  };
-}
-
-function startStageCompletion(session, input = {}) {
-  return {
-    ok: true,
-    session,
-    input,
-    currentStage: getCurrentStage(session),
-    requestedBy: null,
-    errors: [],
-    result: null
-  };
-}
-
-function evaluateStageCompletion(state) {
+function evaluateStageFinishRequest(state) {
   if (!state.session) {
     return {
       ...state,
@@ -1035,7 +895,42 @@ function evaluateStageCompletion(state) {
   };
 }
 
-function resolveStageCompletion(state) {
+function evaluateStage(state) {
+  if (state.operation === STAGE_RUNTIME_OPERATIONS.FINISH) {
+    return evaluateStageFinishRequest(state);
+  }
+
+  return evaluateStageActionContext(state);
+}
+
+function resolveStageAction(state) {
+  if (!state.ok) return state;
+
+  const stage = state.stageValidation.currentStage.stage;
+  const actionResolution = hasStageSelectionRules(stage)
+    ? resolveStageSelectActionAndRecipe(
+        state.workingSession,
+        stage,
+        state.stageValidation.recipe,
+        state.recipeInput,
+        state.resolutionContext
+      )
+    : resolveRecipe(
+        state.workingSession,
+        state.stageValidation.recipe,
+        state.recipeInput,
+        state.resolutionContext
+      );
+
+  return {
+    ...state,
+    ok: actionResolution.ok,
+    actionResolution,
+    errors: actionResolution.errors ?? []
+  };
+}
+
+function resolveStageFinishOperation(state) {
   if (!state.ok) return state;
 
   if (state.currentStage.source === CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE) {
@@ -1050,7 +945,7 @@ function resolveStageCompletion(state) {
     };
   }
 
-  const sessionWithCompletion = appendStageHistory(state.session, {
+  const sessionWithStageHistory = appendStageHistory(state.session, {
     poolKey: state.currentStage.poolKey,
     stageId: state.currentStage.stageId,
     stageKey: state.currentStage.stageKey,
@@ -1060,61 +955,50 @@ function resolveStageCompletion(state) {
     reason: state.input.reason ?? 'manual_completion',
     metadata: state.input.metadata ?? {}
   });
-  const sessionAfterStageBoundary = reviewPropertyBlocks(sessionWithCompletion, {
-    type: 'stage_boundary',
-    cycleId: state.session.cycle?.id ?? 0,
-    poolKey: state.currentStage.poolKey,
-    stageId: state.currentStage.stageId,
-    boundary: 'after'
-  }).session;
-  const currentPool = getCurrentPool(sessionAfterStageBoundary.cycle);
-  const poolAdvance = advanceStageCursor(currentPool);
-  const nextCycle = updateCyclePool(sessionAfterStageBoundary.cycle, poolAdvance.pool);
-  const stageAdvance = {
-    ...poolAdvance,
-    cycle: nextCycle,
-    current: poolAdvance.current
-      ? { ...poolAdvance.current, poolKey: sessionAfterStageBoundary.cycle.poolCurrent }
-      : null,
-    next: poolAdvance.next
-      ? { ...poolAdvance.next, poolKey: sessionAfterStageBoundary.cycle.poolCurrent }
-      : null
-  };
-  const objectiveState = getPostCompletionLifecycleOperationState({
-    session: {
-      ...sessionAfterStageBoundary,
-      cycle: stageAdvance.cycle
-    },
-    stageAdvance
+  const cycleState = resolveCycleAfterStageFinished({
+    session: sessionWithStageHistory,
+    currentStage: state.currentStage
   });
 
   return {
     ...state,
     result: {
-      ok: objectiveState.stageAdvance?.ok !== false,
-      errors: objectiveState.stageAdvance?.errors ?? [],
-      session: objectiveState.session,
+      ok: cycleState.stageAdvance?.ok !== false,
+      errors: cycleState.stageAdvance?.errors ?? [],
+      session: cycleState.session,
       stage: state.currentStage,
-      stageAdvance: objectiveState.stageAdvance,
-      completion: getHistoryCollection(objectiveState.session, HISTORY_COLLECTIONS.STAGE).at(-1),
-      objectiveEvaluation: objectiveState.objectiveEvaluation,
-      playOutcome: objectiveState.playOutcome,
-      eventResponses: objectiveState.eventResponses,
-      lifecycleResults: objectiveState.lifecycleResults
+      stageAdvance: cycleState.stageAdvance,
+      completion: getHistoryCollection(cycleState.session, HISTORY_COLLECTIONS.STAGE).at(-1),
+      objectiveEvaluation: cycleState.objectiveEvaluation,
+      playOutcome: cycleState.playOutcome,
+      eventResponses: cycleState.eventResponses,
+      lifecycleResults: cycleState.lifecycleResults
     }
   };
 }
 
-function validateStageCompletionResult(state) {
+function resolveStage(state) {
+  if (state.operation === STAGE_RUNTIME_OPERATIONS.FINISH) {
+    return resolveStageFinishOperation(state);
+  }
+
+  return resolveStageAction(state);
+}
+
+function validateStageActionOutcome(state) {
   if (!state.ok) return state;
-  if (!state.result) {
+  if (!state.actionResolution?.ok) return state;
+
+  if (!state.actionResolution.result) {
     return {
       ...state,
       ok: false,
       errors: [
         {
-          code: 'stage/completion-missing-result',
-          message: `stage "${state.currentStage?.stageKey ?? 'unknown'}" completion finished without result`
+          code: 'stage/missing-result',
+          message: `stage "${state.stageValidation.currentStage.stageKey}" finished without result`,
+          stageId: state.stageValidation.currentStage.stageId,
+          stageKey: state.stageValidation.currentStage.stageKey
         }
       ]
     };
@@ -1123,16 +1007,131 @@ function validateStageCompletionResult(state) {
   return state;
 }
 
-function finishStageCompletion(state) {
-  if (!state.ok) {
-    return createStageCompletionErrorResult({
-      session: state.session,
-      currentStage: state.currentStage ?? null,
-      errors: state.errors
+function validateStageFinishOutcome(state) {
+  if (!state.ok) return state;
+  if (!state.result) {
+    return {
+      ...state,
+      ok: false,
+      errors: [
+        {
+          code: 'stage/finish-missing-result',
+          message: `stage "${state.currentStage?.stageKey ?? 'unknown'}" finish ended without result`
+        }
+      ]
+    };
+  }
+
+  return state;
+}
+
+function validateStageOutcome(state) {
+  if (state.operation === STAGE_RUNTIME_OPERATIONS.FINISH) {
+    return validateStageFinishOutcome(state);
+  }
+
+  return validateStageActionOutcome(state);
+}
+
+function finishStageActionResult(state) {
+  if (!state.stageValidation?.ok) {
+    const messageState = appendEngineErrors(state.workingSession, state.errors, {
+      cycleId: state.workingSession?.cycle?.id ?? null,
+      poolKey: state.stageValidation?.currentStage?.poolKey ?? state.workingSession?.cycle?.poolCurrent ?? null,
+      stageId: state.stageValidation?.currentStage?.stageId ?? null,
+      stageKey: state.stageValidation?.currentStage?.stageKey ?? null,
+      recipeKey: state.input.recipeKey ?? null
     });
+
+    return {
+      ok: false,
+      actionId: state.stageValidation?.recipe?.id ?? null,
+      recipeKey: state.stageValidation?.recipeKey,
+      errors: state.errors,
+      messages: messageState.messages,
+      session: messageState.session,
+      result: null,
+      stage: state.stageValidation?.currentStage ?? null,
+      stageAdvance: null
+    };
+  }
+
+  if (!state.actionResolution?.ok) {
+    return {
+      ...state.actionResolution,
+      stage: state.stageValidation.currentStage,
+      stageAdvance: null
+    };
+  }
+
+  if (!state.ok) {
+    const messageState = appendEngineErrors(state.actionResolution.session, state.errors, {
+      ...state.resolutionContext
+    });
+
+    return {
+      ok: false,
+      actionId: state.actionResolution.result?.actionId ?? null,
+      recipeKey: state.stageValidation.recipeKey,
+      errors: state.errors,
+      messages: messageState.messages,
+      session: messageState.session,
+      result: null,
+      stage: state.stageValidation.currentStage,
+      stageAdvance: null
+    };
+  }
+
+  const postActionState = getPostActionEventState({
+    previousSession: state.workingSession,
+    actionResolution: state.actionResolution,
+    context: state.resolutionContext
+  });
+  const resolutionWithEvents = {
+    ...state.actionResolution,
+    session: postActionState.session,
+    result: {
+      ...(state.actionResolution.result ?? {}),
+      events: postActionState.events,
+      eventResponses: postActionState.eventResponses
+    }
+  };
+
+  return {
+    ...resolutionWithEvents,
+    stage: state.stageValidation.currentStage,
+    stageAdvance: null
+  };
+}
+
+function finishStage(state) {
+  if (state.operation === STAGE_RUNTIME_OPERATIONS.RESOLVE) {
+    return finishStageActionResult(state);
+  }
+
+  if (!state.ok) {
+    return {
+      ok: false,
+      errors: state.errors,
+      session: state.session,
+      stage: state.currentStage ?? null,
+      stageAdvance: null
+    };
   }
 
   return state.result;
+}
+
+function runStageLifecycle({ session, input = {}, operation } = {}) {
+  return finishStage(
+    validateStageOutcome(
+      resolveStage(
+        evaluateStage(
+          startStage({ session, input, operation })
+        )
+      )
+    )
+  );
 }
 
 // Cierra el stage actual y avanza el cursor.
@@ -1143,15 +1142,11 @@ function finishStageCompletion(state) {
 // - una receta, si en el futuro una regla concreta pide cierre automatico;
 // - el sistema, para automatizaciones controladas.
 export function completeCurrentStage(session, input = {}) {
-  return finishStageCompletion(
-    validateStageCompletionResult(
-      resolveStageCompletion(
-        evaluateStageCompletion(
-          startStageCompletion(session, input)
-        )
-      )
-    )
-  );
+  return runStageLifecycle({
+    session,
+    input,
+    operation: STAGE_RUNTIME_OPERATIONS.FINISH
+  });
 }
 
 // Ejecuta una receta del stage actual.
@@ -1164,13 +1159,9 @@ export function completeCurrentStage(session, input = {}) {
 //
 // Pasar al siguiente stage es responsabilidad de completeCurrentStage.
 export function resolveCurrentStage(session, input = {}) {
-  return finishStageResolution(
-    validateStageResolution(
-      resolveStageRecipe(
-        evaluateStageResolution(
-          startStageResolution(session, input)
-        )
-      )
-    )
-  );
+  return runStageLifecycle({
+    session,
+    input,
+    operation: STAGE_RUNTIME_OPERATIONS.RESOLVE
+  });
 }

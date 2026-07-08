@@ -1720,7 +1720,7 @@ function evaluateAction(actionState) {
   };
 }
 
-function resolveActionEffects(actionState) {
+function resolveActionResolution(actionState) {
   const proposedEffects = actionState.result?.proposedEffects ?? [];
   if (proposedEffects.length === 0) return actionState;
 
@@ -1781,7 +1781,7 @@ function resolveActionEffects(actionState) {
   };
 }
 
-function validateActionOutput(actionState) {
+function validateActionResolution(actionState) {
   if (actionState.errors.length > 0) return actionState;
 
   const errors = [];
@@ -1829,8 +1829,8 @@ export function resolveAction(session, action, input = {}, context = {}) {
   const contextState = collectActionContext(actionState);
   const validationState = validateAction(contextState);
   const evaluatedState = evaluateAction(validationState);
-  const effectsState = resolveActionEffects(evaluatedState);
-  const outputState = validateActionOutput(effectsState);
+  const resolvedState = resolveActionResolution(evaluatedState);
+  const outputState = validateActionResolution(resolvedState);
 
   return finishAction(outputState);
 }

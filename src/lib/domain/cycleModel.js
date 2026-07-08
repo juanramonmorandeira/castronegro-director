@@ -8,7 +8,12 @@
 
 import { DEFAULT_POOL_ORDER, CURRENT_STAGE_SOURCES, normalizeId } from './sessionModel.js';
 import { createPool, POOL_LIFECYCLE_OPERATION_TYPES } from './poolDefinition.js';
-import { findNextRunnableIndex, getCurrentStageCursor, hasRunnableStage } from './poolCursorModel.js';
+import {
+  advanceStageCursor,
+  findNextRunnableIndex,
+  getCurrentStageCursor,
+  hasRunnableStage
+} from './poolCursorModel.js';
 import {
   HISTORY_COLLECTIONS,
   appendEntry
@@ -594,12 +599,12 @@ export function startInterPoolQueueAfterPoolExit({ session = {}, poolKey = null 
   };
 }
 
-function shouldRunLifecycleOperationsAfterStageCompletion(stageAdvance) {
+function shouldRunLifecycleOperationsAfterStageFinish(stageAdvance) {
   return ['pool-completed', 'no-runnable-stage'].includes(stageAdvance?.reason);
 }
 
-export function getPostCompletionLifecycleOperationState({ session, stageAdvance }) {
-  if (!shouldRunLifecycleOperationsAfterStageCompletion(stageAdvance)) {
+export function getPostStageFinishLifecycleState({ session, stageAdvance }) {
+  if (!shouldRunLifecycleOperationsAfterStageFinish(stageAdvance)) {
     return {
       session,
       stageAdvance,
@@ -746,4 +751,35 @@ export function getPostCompletionLifecycleOperationState({ session, stageAdvance
       ...enterState.lifecycleResults
     ]
   };
+}
+
+export function resolveCycleAfterStageFinished({ session = {}, currentStage = {} } = {}) {
+  const sessionAfterStageBoundary = reviewPropertyBlocks(session, {
+    type: 'stage_boundary',
+    cycleId: session.cycle?.id ?? 0,
+    poolKey: currentStage.poolKey,
+    stageId: currentStage.stageId,
+    boundary: 'after'
+  }).session;
+  const currentPool = getCurrentPool(sessionAfterStageBoundary.cycle);
+  const poolAdvance = advanceStageCursor(currentPool);
+  const nextCycle = updateCyclePool(sessionAfterStageBoundary.cycle, poolAdvance.pool);
+  const stageAdvance = {
+    ...poolAdvance,
+    cycle: nextCycle,
+    current: poolAdvance.current
+      ? { ...poolAdvance.current, poolKey: sessionAfterStageBoundary.cycle.poolCurrent }
+      : null,
+    next: poolAdvance.next
+      ? { ...poolAdvance.next, poolKey: sessionAfterStageBoundary.cycle.poolCurrent }
+      : null
+  };
+
+  return getPostStageFinishLifecycleState({
+    session: {
+      ...sessionAfterStageBoundary,
+      cycle: stageAdvance.cycle
+    },
+    stageAdvance
+  });
 }
