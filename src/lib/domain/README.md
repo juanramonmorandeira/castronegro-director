@@ -80,7 +80,7 @@ Ejemplos:
 - `recipeModel.js`: valida restricciones y entrega actions de recipe a
   `actionModel`.
 - `actionModel.js`: resuelve acciones puras.
-- `effectResolver.js`: deriva o bloquea efectos propuestos.
+- `effectModel.js`: deriva o bloquea efectos propuestos.
 - `effectModel.js`: aplica efectos finales a la sesion.
 - `eventModel.js`: convierte efectos finales en eventos y crea respuestas
   pendientes.

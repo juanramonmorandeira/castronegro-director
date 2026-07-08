@@ -30,7 +30,7 @@ flowchart TD
   Recipe[Recipe]
   Constraint[constraintModel]
   Action[actionModel]
-  Resolver[effectResolver]
+  Resolver[effectModel]
   Effect[effectModel]
   Session[Session]
   Objectives[objectiveModel]
@@ -99,7 +99,7 @@ skin/setup -> buildSession -> roles + groups + cycle.pools -> stage actual -> re
 | Recetas | `recipeModel.js` | Validar restricciones y convertir receta en accion pura | Aplicar efectos o avanzar stages |
 | Restricciones | `constraintModel.js` | Validar restricciones propias de una receta | Cambiar estado directamente |
 | Acciones | `actionModel.js` | Validar y resolver acciones puras | Evaluar restricciones de receta |
-| Resolver | `effectResolver.js` | Procesar efectos, bloqueos, deduplicacion y consecuencias solicitadas por groupRules | Conocer tipos narrativos de group |
+| Resolver | `effectModel.js` | Procesar efectos, bloqueos, deduplicacion y consecuencias solicitadas por groupRules | Conocer tipos narrativos de group |
 | Efectos | `effectModel.js` | Escribir efectos finales sobre la sesion | Decidir si un efecto debe existir |
 | Eventos | `eventModel.js` | Convertir efectos finales en eventos y activar reacciones declaradas por roles | Ejecutar la receta del stage de interPoolQueue |
 | Objectives | `objectiveModel.js` | Evaluar objetivos y playOutcome | Cerrar administrativamente la session |
@@ -386,7 +386,7 @@ aplicador:
 | Los objetivos existen y cumplen filtros? | `actionModel.js` | `in_play`, `not_in_play`, `not_self`, `same_alignment`, `not_same_alignment`, `recently_out_of_play`, `assumable`, `distinct` |
 | Esta receta tiene una restriccion propia? | `constraintModel.js` | no repetir mismo objetivo en ciclos consecutivos |
 | Un cambio de propiedad queda bloqueado? | `roleModel.js` | `block_property_change` bloquea `inPlay=false` frente a actores concretos |
-| Un efecto genera consecuencias de group? | `groupModel.js` + `effectResolver.js` | `propagate_property_change` genera efectos derivados |
+| Un efecto genera consecuencias de group? | `groupModel.js` + `effectModel.js` | `propagate_property_change` genera efectos derivados |
 | Como se escribe un cambio final? | `effectModel.js` | `set_property`, `set_group` |
 | La parte jugable ha concluido? | `objectiveModel.js` | `holder_reaches_in_play_parity`, `holder_reaches_stable_in_play_parity`, `only_holder_group_remains_in_play`, `no_roles_in_play` |
 
@@ -437,7 +437,7 @@ evaluar objetivos.
 
 Estas dos capas pueden parecer parecidas, pero su pregunta central es distinta.
 
-### `effectResolver.js`
+### `effectModel.js`
 
 Pregunta:
 
@@ -479,7 +479,7 @@ correcto. Si recibe un efecto final valido, lo escribe.
 Resumen:
 
 ```text
-effectResolver decide consecuencias.
+effectModel decide consecuencias.
 effectModel aplica cambios.
 ```
 
@@ -493,7 +493,7 @@ graph TD
   C --> D{Grupo activo}
   D -->|No| E[No ocurre nada mas]
   D -->|Si| F[groupModel interpreta groupRules]
-  F --> G[effectResolver procesa efectos derivados]
+  F --> G[effectModel procesa efectos derivados]
   G --> H[effectModel aplica cambios]
 ```
 
@@ -591,7 +591,7 @@ Cuando aparezca una mecanica nueva, seguir este orden:
 | Un role bloquea un cambio de estado antes de otra accion | accion `block_property_change` | `actionModel.js` + `roleModel.js` |
 | No puede bloquear al mismo objetivo dos ciclos seguidos | restriccion `no_repeat_target` | `constraintModel.js` |
 | Un role enlaza dos targets | accion `link_targets` + group con reglas | `groupModel.js` |
-| Si un miembro sale de juego, el otro tambien | `propagate_property_change` | `groupModel.js` + `effectResolver.js` |
+| Si un miembro sale de juego, el otro tambien | `propagate_property_change` | `groupModel.js` + `effectModel.js` |
 | Si solo quedan linked de alignments distintos, cumplen objective especial | objectiveRule sobre group linked | `session.objectiveRules` |
 | Un group de alignment alcanza al resto | `holder_reaches_in_play_parity` | `session.objectiveRules` |
 | `alignment_b` alcanza paridad estable en `basic_ruleset` | `holder_reaches_stable_in_play_parity` | `session.objectiveRules` |
@@ -615,7 +615,7 @@ flowchart TD
   C -->|chosen| D[target chosen]
   C -->|tie/null| E[sin accion posterior]
   D --> F[Ejecutar accion configurada]
-  F --> G[effectResolver]
+  F --> G[effectModel]
   G --> H[effectModel]
 ```
 
@@ -807,7 +807,7 @@ flowchart TD
   R --> S[Stage sigue abierto para otra ronda]
   E --> F[recipe set_out_of_play]
   F --> G[actionModel resuelve accion pura]
-  G --> H[effectResolver deriva consecuencias]
+  G --> H[effectModel deriva consecuencias]
   H --> I[effectModel aplica cambios]
 ```
 
@@ -891,7 +891,7 @@ Si responde a:
 que consecuencias tiene este efecto aceptado?
 ```
 
-probablemente pertenece a `effectResolver.js`.
+probablemente pertenece a `effectModel.js`.
 
 Si responde a:
 

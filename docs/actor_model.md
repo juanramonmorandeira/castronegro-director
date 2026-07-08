@@ -21,8 +21,7 @@ flowchart TD
   actorModel["actorModel.js<br/>Resuelve autoridad/actor mecanico"]
   targetModel["targetModel.js<br/>Resuelve y valida targets"]
   actionModel["actionModel.js<br/>Ejecuta action concreta"]
-  effectResolver["effectResolver.js<br/>Resuelve efectos propuestos"]
-  effectModel["effectModel.js<br/>Aplica efectos finales"]
+  effectModel["effectModel.js<br/>resolveEffect + applyEffect(s)"]
   historyModel["historyModel.js<br/>Registra histories"]
   eventModel["eventModel.js<br/>Crea/resuelve eventos derivados"]
   roleModel["roleModel.js<br/>Estado runtime de roles"]
@@ -36,10 +35,9 @@ flowchart TD
   actorModel --> groupModel
   actionModel --> actorModel
   actionModel --> targetModel
-  actionModel --> effectResolver
-  effectResolver --> groupModel
-  effectResolver --> roleModel
   actionModel --> effectModel
+  effectModel --> groupModel
+  effectModel --> roleModel
   actionModel --> historyModel
   actionModel --> eventModel
 ```
@@ -53,7 +51,6 @@ sequenceDiagram
   participant Actor as actorModel
   participant Target as targetModel
   participant Action as actionModel
-  participant Resolver as effectResolver
   participant Effect as effectModel
   participant History as historyModel
   participant Event as eventModel
@@ -64,9 +61,9 @@ sequenceDiagram
   Recipe->>Action: resolveAction(session, action, input, context)
   Action->>Actor: getActionActors(session, actorIds)
   Action->>Target: validateActionTargets(...)
-  Action->>Resolver: resolveProposedEffects(...)
-  Resolver-->>Action: finalEffects, blockedEffects, derivedEffects
-  Action->>Effect: applyFinalEffects(finalEffects)
+  Action->>Effect: resolveEffect(...)
+  Effect-->>Action: finalEffects, blockedEffects, derivedEffects
+  Action->>Effect: applyEffects(finalEffects)
   Action->>History: appendRecipeHistory(...)
   Action-->>Recipe: action result
   Recipe-->>Stage: recipe result

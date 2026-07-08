@@ -13,6 +13,8 @@
 import { createGroup } from './groupDefinition.js';
 import { normalizeId } from './sessionModel.js';
 import { MECHANICAL_ENTITY_TYPES } from './domainTypes.js';
+import { getGroupRuleEffects, getLinkedPropagatedEffects } from './groupModel.js';
+import { isPropertyChangeBlocked } from './roleModel.js';
 
 export const EFFECT_TYPES = Object.freeze({
   REVEAL_PROPERTY: 'reveal_property',
@@ -22,6 +24,99 @@ export const EFFECT_TYPES = Object.freeze({
   REPLACE_ROLE_IDENTITY: 'replace_role_identity',
   CONCLUDE_PLAY: 'conclude_play'
 });
+
+// Resuelve los efectos propuestos por una action.
+//
+// Esta funcion pertenece al rol de Effect Resolver:
+// - acepta efectos propuestos como finales si no estan bloqueados;
+// - deduplica intentos y estados finales;
+// - calcula efectos derivados por groupRules;
+// - separa propagaciones linked que deben encolarse en interPoolQueue.
+//
+// No aplica cambios en la sesion. La escritura final vive en applyEffect(s).
+export function resolveEffect({ session, proposedEffects = [] } = {}) {
+  const finalEffects = [];
+  const blockedEffects = [];
+  const linkedPropagatedEffects = [];
+  const queuedEffects = [...(proposedEffects ?? [])];
+  const seenAttemptKeys = new Set();
+  const acceptedEffectKeys = new Set();
+
+  while (queuedEffects.length > 0) {
+    const effect = queuedEffects.shift();
+    const attemptKey = getEffectKey(effect);
+    if (seenAttemptKeys.has(attemptKey)) continue;
+    seenAttemptKeys.add(attemptKey);
+
+    const target = findEffectTarget(session, effect);
+    const responsibleActorId = effect.causedBy?.id ?? null;
+    if (
+      effect.type === EFFECT_TYPES.SET_PROPERTY &&
+      target &&
+      isPropertyChangeBlocked(target, {
+        property: effect.property,
+        value: effect.value,
+        actorIds: responsibleActorId ? [responsibleActorId] : []
+      })
+    ) {
+      blockedEffects.push({
+        ...effect,
+        reason: 'blocked_property_change'
+      });
+      continue;
+    }
+
+    const acceptedEffectKey = getEffectStateKey(effect);
+    if (acceptedEffectKeys.has(acceptedEffectKey)) continue;
+    acceptedEffectKeys.add(acceptedEffectKey);
+    finalEffects.push(effect);
+    linkedPropagatedEffects.push(...getLinkedPropagatedEffects({ session, effect }));
+
+    getGroupRuleEffects({ session, effect }).forEach((derivedEffect) => {
+      if (!seenAttemptKeys.has(getEffectKey(derivedEffect))) {
+        queuedEffects.push(derivedEffect);
+      }
+    });
+  }
+
+  return {
+    proposedEffects: [...(proposedEffects ?? [])],
+    finalEffects,
+    blockedEffects,
+    linkedPropagatedEffects
+  };
+}
+
+export function findEffectTarget(session, effect) {
+  if (effect?.targetType !== MECHANICAL_ENTITY_TYPES.ROLE) return null;
+  return (session?.roles ?? []).find((role) => role.id === effect.targetId) ?? null;
+}
+
+export function getEffectKey(effect = {}) {
+  return [
+    effect.type ?? '',
+    effect.targetType ?? '',
+    effect.targetId ?? '',
+    effect.property ?? '',
+    String(effect.value),
+    effect.causedBy?.type ?? '',
+    effect.causedBy?.id ?? '',
+    effect.groupType ?? '',
+    (effect.roleIds ?? []).slice().sort().join(',')
+  ].join(':');
+}
+
+export function getEffectStateKey(effect = {}) {
+  return [
+    effect.type ?? '',
+    effect.targetType ?? '',
+    effect.targetId ?? '',
+    effect.property ?? '',
+    String(effect.value),
+    effect.groupType ?? '',
+    (effect.roleIds ?? []).slice().sort().join(',')
+  ].join(':');
+}
 
 // Devuelve el ciclo actual de la sesion.
 //
@@ -51,6 +146,26 @@ export function applySetPropertyEffect({ session, effect }) {
         : role
     )
   };
+}
+
+export function applyEffect({ session, effect }) {
+  if (effect?.type === EFFECT_TYPES.SET_PROPERTY) {
+    return applySetPropertyEffect({ session, effect });
+  }
+  if (effect?.type === EFFECT_TYPES.SET_GROUP) {
+    return applySetGroupEffect({ session, effect });
+  }
+  if (effect?.type === EFFECT_TYPES.REPLACE_ROLE_IDENTITY) {
+    return applyReplaceRoleIdentityEffect({ session, effect });
+  }
+  return session;
+}
+
+export function applyEffects({ session, effects = [] } = {}) {
+  return (effects ?? []).reduce(
+    (currentSession, effect) => applyEffect({ session: currentSession, effect }),
+    session
+  );
 }
 
 // Crea o actualiza un grupo de sesion.

@@ -22,11 +22,10 @@
 
 import {
   EFFECT_TYPES,
+  applyEffects,
   applyConcludePlay as applyConcludePlayFromModel,
-  applyReplaceRoleIdentityEffect,
-  applySetGroupEffect,
-  applySetPropertyEffect,
-  getCurrentCycleId
+  getCurrentCycleId,
+  resolveEffect
 } from './effectModel.js';
 import {
   PROPERTY_BLOCK_EXPIRATION_TYPES,
@@ -37,7 +36,6 @@ import {
   appendRecipeHistory,
   getRecipeHistorySignature
 } from './historyModel.js';
-import { resolveProposedEffects } from './effectResolver.js';
 import {
   SELECTION_OUTCOME_TYPES,
   SELECTION_ROUND_TYPES,
@@ -239,25 +237,6 @@ export function getHistoryResultFromResolution({
   return HISTORY_RESULTS.NO_EFFECT;
 }
 
-// Aplica efectos finales ya aceptados por effectResolver.
-//
-// actionModel no decide aqui si un efecto debe existir. Eso ya lo hizo el
-// resolver. Esta funcion solo evita duplicar el mismo reduce en cada accion.
-export function applyFinalEffects({ session, finalEffects = [] }) {
-  return (finalEffects ?? []).reduce((currentSession, effect) => {
-    if (effect?.type === EFFECT_TYPES.SET_PROPERTY) {
-      return applySetPropertyEffect({ session: currentSession, effect });
-    }
-    if (effect?.type === EFFECT_TYPES.SET_GROUP) {
-      return applySetGroupEffect({ session: currentSession, effect });
-    }
-    if (effect?.type === EFFECT_TYPES.REPLACE_ROLE_IDENTITY) {
-      return applyReplaceRoleIdentityEffect({ session: currentSession, effect });
-    }
-    return currentSession;
-  }, session);
-}
-
 function getImmediateCause(actor = null, context = {}) {
   if (context.causedBy?.id) {
     return {
@@ -298,7 +277,7 @@ export function resolveSetInPlayEffect({ session, action, actor, targets, contex
     causedBy,
     targetId: target.id
   }));
-  const effectResolution = resolveProposedEffects({ session, proposedEffects });
+  const effectResolution = resolveEffect({ session, proposedEffects });
   const { finalEffects, blockedEffects, linkedPropagatedEffects } = effectResolution;
   const preventedPropertyChanges = blockedEffects
     .filter((effect) => effect.type === EFFECT_TYPES.SET_PROPERTY)
@@ -312,7 +291,7 @@ export function resolveSetInPlayEffect({ session, action, actor, targets, contex
   const blockedTargetIds = new Set(
     preventedPropertyChanges.map((change) => change.targetId)
   );
-  const sessionAfterEffects = applyFinalEffects({ session, finalEffects });
+  const sessionAfterEffects = applyEffects({ session, effects: finalEffects });
   const nextSession = appendRecipeHistory(sessionAfterEffects, {
     cycleId: currentCycleId,
     poolKey: context.poolKey ?? null,
@@ -436,8 +415,8 @@ export function applyLinkTargets({ session, action, actor, targets, context = {}
       sourceActionId: action.id
     }
   ];
-  const effectResolution = resolveProposedEffects({ session, proposedEffects });
-  const sessionAfterEffects = applyFinalEffects({ session, finalEffects: effectResolution.finalEffects });
+  const effectResolution = resolveEffect({ session, proposedEffects });
+  const sessionAfterEffects = applyEffects({ session, effects: effectResolution.finalEffects });
   const nextSession = appendRecipeHistory(
     sessionAfterEffects,
     {
@@ -527,7 +506,7 @@ export function applyReplaceRoleIdentity({ session, action, actor, targets, cont
   ];
   const finalEffects = proposedEffects;
   const nextSession = appendRecipeHistory(
-    applyFinalEffects({ session, finalEffects }),
+    applyEffects({ session, effects: finalEffects }),
     {
       cycleId: currentCycleId,
       poolKey: context.poolKey ?? null,

@@ -68,7 +68,7 @@ digraph DomainArchitecture {
   ];
 
   stagePipeline [
-    label="PIPELINE DE UN STAGE\n\nstageModel\nselectionModel\nrecipeModel\nconstraintModel\nactionModel\neffectResolver\neffectModel",
+    label="PIPELINE DE UN STAGE\n\nstageModel\nselectionModel\nrecipeModel\nconstraintModel\nactionModel\neffectModel",
     fillcolor="#dff2e3"
   ];
 

@@ -256,6 +256,9 @@ export {
 export {
   EFFECT_TYPES,
   getCurrentCycleId,
+  resolveEffect,
+  applyEffect,
+  applyEffects,
   applySetPropertyEffect,
   applySetGroupEffect,
   applyReplaceRoleIdentityEffect,
@@ -296,7 +299,6 @@ export {
   applyEventResponses,
   processActionResultEvents
 } from './eventModel.js';
-export { resolveProposedEffects } from './effectResolver.js';
 export {
   DOUBLE_SELECTOR_ERRORS,
   DOUBLE_SELECTOR_RULE_KEY,
