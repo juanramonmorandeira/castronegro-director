@@ -17,12 +17,99 @@ import {
   isTargetFilterType
 } from './domainTypes.js';
 
+export const CANDIDATE_RULE_TYPES = Object.freeze({
+  HAS_PROPERTY: 'has_property',
+  NOT_HAS_PROPERTY: 'not_has_property',
+  NOT_SELECTOR: 'not_selector',
+  SAME_GROUP: 'same_group',
+  NOT_SAME_GROUP: 'not_same_group',
+  EXPLICIT_INCLUDE: 'explicit_include',
+  EXPLICIT_EXCLUDE: 'explicit_exclude'
+});
+
 // Busca un rol de sesion por id.
 //
 // Un rol de sesion es una carta/personaje concreto en la partida:
 // role_inspector-0, hidden_role-0, enemy-0, etc.
 export function findRole(session, roleId) {
   return (session?.roles ?? []).find((role) => role.id === roleId) ?? null;
+}
+
+export function hasRolePropertyValue(role, property, value) {
+  return role?.[property] === value || role?.properties?.[property]?.value === value;
+}
+
+function getRoleIdsByGroup(session = {}, groupId = null) {
+  return (session.groups ?? []).find((group) => group.id === groupId || group.key === groupId)?.roleIds ?? [];
+}
+
+// Devuelve candidatos por defecto para una seleccion.
+//
+// Un candidate es un target potencial de una action select, no el target final
+// de la recipe que consuma el resultado.
+export function getDefaultSelectionCandidateIds(session = {}) {
+  return (session?.roles ?? [])
+    .filter((role) => role?.inPlay === true)
+    .map((role) => role.id);
+}
+
+export function resolveCandidateIds({
+  session = {},
+  selectorIds = [],
+  candidateIds = null,
+  candidateRules = []
+} = {}) {
+  const baseCandidateIds = Array.isArray(candidateIds)
+    ? [...candidateIds]
+    : getDefaultSelectionCandidateIds(session);
+  let resolvedCandidateIds = new Set(baseCandidateIds);
+  const roleById = new Map((session.roles ?? []).map((role) => [role.id, role]));
+
+  (candidateRules ?? []).forEach((rule) => {
+    if (rule?.type === CANDIDATE_RULE_TYPES.HAS_PROPERTY) {
+      resolvedCandidateIds = new Set(
+        [...resolvedCandidateIds].filter((roleId) =>
+          hasRolePropertyValue(roleById.get(roleId), rule.property, rule.value)
+        )
+      );
+    }
+
+    if (rule?.type === CANDIDATE_RULE_TYPES.NOT_HAS_PROPERTY) {
+      resolvedCandidateIds = new Set(
+        [...resolvedCandidateIds].filter((roleId) =>
+          !hasRolePropertyValue(roleById.get(roleId), rule.property, rule.value)
+        )
+      );
+    }
+
+    if (rule?.type === CANDIDATE_RULE_TYPES.NOT_SELECTOR) {
+      selectorIds.forEach((selectorId) => resolvedCandidateIds.delete(selectorId));
+    }
+
+    if (rule?.type === CANDIDATE_RULE_TYPES.SAME_GROUP) {
+      const groupRoleIds = new Set(getRoleIdsByGroup(session, rule.groupId));
+      resolvedCandidateIds = new Set(
+        [...resolvedCandidateIds].filter((roleId) => groupRoleIds.has(roleId))
+      );
+    }
+
+    if (rule?.type === CANDIDATE_RULE_TYPES.NOT_SAME_GROUP) {
+      const groupRoleIds = new Set(getRoleIdsByGroup(session, rule.groupId));
+      resolvedCandidateIds = new Set(
+        [...resolvedCandidateIds].filter((roleId) => !groupRoleIds.has(roleId))
+      );
+    }
+
+    if (rule?.type === CANDIDATE_RULE_TYPES.EXPLICIT_INCLUDE) {
+      (rule.roleIds ?? []).forEach((roleId) => resolvedCandidateIds.add(roleId));
+    }
+
+    if (rule?.type === CANDIDATE_RULE_TYPES.EXPLICIT_EXCLUDE) {
+      (rule.roleIds ?? []).forEach((roleId) => resolvedCandidateIds.delete(roleId));
+    }
+  });
+
+  return [...resolvedCandidateIds];
 }
 
 // Devuelve true si una accion puede resolverse sin actor individual.

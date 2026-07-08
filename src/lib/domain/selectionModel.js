@@ -19,6 +19,30 @@ import {
   getGroupMemberRoleIds
 } from './groupModel.js';
 import { normalizeId } from './sessionModel.js';
+import {
+  SELECTION_SELECTOR_SOURCES,
+  getRequiredSelectorIds,
+  getSelectionRuleSelectorIds,
+  getSelectionSelectorIds
+} from './actorModel.js';
+import {
+  findRole,
+  getDefaultSelectionCandidateIds,
+  hasRolePropertyValue,
+  resolveCandidateIds
+} from './targetModel.js';
+
+export {
+  SELECTION_SELECTOR_SOURCES,
+  getRequiredSelectorIds,
+  getSelectionSelectorIds
+} from './actorModel.js';
+
+export {
+  CANDIDATE_RULE_TYPES,
+  getDefaultSelectionCandidateIds,
+  resolveCandidateIds
+} from './targetModel.js';
 
 export const SELECTION_OUTCOME_TYPES = Object.freeze({
   CHOSEN: 'chosen',
@@ -68,11 +92,6 @@ export const SELECTION_REQUIRED_RULES = Object.freeze({
   ALL_SELECTORS: 'all_selectors'
 });
 
-export const SELECTION_SELECTOR_SOURCES = Object.freeze({
-  STAGE_ACTORS: 'stage_actors',
-  IN_PLAY_ROLES: 'in_play_roles'
-});
-
 export const SELECTION_ABSTAIN_RULES = Object.freeze({
   NOT_ALLOWED: 'not_allowed',
   ALLOWED: 'allowed'
@@ -94,16 +113,6 @@ export const SELECTION_RESTRICTION_TYPES = Object.freeze({
 
 export const SELECTION_VALUE_RULE_TYPES = Object.freeze({
   SELECTOR_PROPERTY: 'selector_property'
-});
-
-export const CANDIDATE_RULE_TYPES = Object.freeze({
-  HAS_PROPERTY: 'has_property',
-  NOT_HAS_PROPERTY: 'not_has_property',
-  NOT_SELECTOR: 'not_selector',
-  SAME_GROUP: 'same_group',
-  NOT_SAME_GROUP: 'not_same_group',
-  EXPLICIT_INCLUDE: 'explicit_include',
-  EXPLICIT_EXCLUDE: 'explicit_exclude'
 });
 
 export function createSelectionRules({
@@ -262,7 +271,7 @@ function getSelectionWeightForSelector(selectorId = null, selectionWeights = [])
 
 function selectorMatchesValueRule(selector = null, rule = {}) {
   if (rule.type !== SELECTION_VALUE_RULE_TYPES.SELECTOR_PROPERTY) return false;
-  return hasPropertyValue(selector, rule.property, rule.value);
+  return hasRolePropertyValue(selector, rule.property, rule.value);
 }
 
 function getSelectionValueRuleForSelector(session = {}, selectorId = null, selectionValueRules = []) {
@@ -305,38 +314,6 @@ function applySelectionRuleWeights(session = {}, selections = [], rules = {}) {
       }
     };
   });
-}
-
-// Busca un rol de sesion por id.
-function findRole(session, roleId) {
-  return (session?.roles ?? []).find((role) => role.id === roleId) ?? null;
-}
-
-// Devuelve los ids de roles activos por defecto.
-export function getInPlaySelectorIds(session = {}) {
-  return (session?.roles ?? [])
-    .filter((role) => role?.inPlay === true)
-    .map((role) => role.id);
-}
-
-export function getSelectionSelectorIds(session = {}, stage = {}, input = {}, selectionRules = {}) {
-  if ((input.selectorIds ?? []).length > 0) return input.selectorIds;
-  if (selectionRules.selectorSource === SELECTION_SELECTOR_SOURCES.IN_PLAY_ROLES) {
-    return getInPlaySelectorIds(session);
-  }
-  if ((input.actorIds ?? []).length > 0) return input.actorIds;
-  if ((stage.actorIds ?? []).length > 0) return stage.actorIds;
-
-  return [];
-}
-
-function getSelectionRuleSelectorIds(session = {}, stage = {}, input = {}, selectionRules = {}) {
-  const selectorIds = getSelectionSelectorIds(session, stage, input, selectionRules);
-  if (selectorIds.length > 0) return selectorIds;
-
-  return [
-    ...new Set((input.selections ?? []).map((selection) => selection.selectorId).filter(Boolean))
-  ];
 }
 
 function ruleScopeMatchesContext(scope = {}, context = {}) {
@@ -443,21 +420,6 @@ export function buildStageSelectionInput({
   };
 }
 
-// Devuelve los candidatos por defecto de una seleccion.
-//
-// candidateIds no significa "objetivos narrativos"; significa roles que pueden
-// recibir selecciones en esta ronda. Si una regla no acota candidatos, todos los roles
-// inPlay son candidatos.
-export function getDefaultSelectionCandidateIds(session = {}) {
-  return getInPlaySelectorIds(session);
-}
-
-export function getRequiredSelectorIds(session = {}, selectorIds = []) {
-  return Array.isArray(selectorIds) && selectorIds.length > 0
-    ? [...selectorIds]
-    : getInPlaySelectorIds(session);
-}
-
 // Crea errores de selecciones obligatorias faltantes.
 export function getRequiredSelectionErrors({ session, selectorIds = [], seenSelectors, selectionRules = {} }) {
   if (selectionRules.required !== SELECTION_REQUIRED_RULES.ALL_SELECTORS) return [];
@@ -472,73 +434,6 @@ export function getRequiredSelectionErrors({ session, selectorIds = [], seenSele
       missingSelectorIds
     }
   ];
-}
-
-function hasPropertyValue(role, property, value) {
-  return role?.[property] === value || role?.properties?.[property]?.value === value;
-}
-
-function getRoleIdsByGroup(session = {}, groupId = null) {
-  return (session.groups ?? []).find((group) => group.id === groupId || group.key === groupId)?.roleIds ?? [];
-}
-
-export function resolveCandidateIds({
-  session = {},
-  selectorIds = [],
-  candidateIds = null,
-  candidateRules = []
-} = {}) {
-  const baseCandidateIds = Array.isArray(candidateIds)
-    ? [...candidateIds]
-    : getDefaultSelectionCandidateIds(session);
-  let resolvedCandidateIds = new Set(baseCandidateIds);
-  const roleById = new Map((session.roles ?? []).map((role) => [role.id, role]));
-
-  (candidateRules ?? []).forEach((rule) => {
-    if (rule?.type === CANDIDATE_RULE_TYPES.HAS_PROPERTY) {
-      resolvedCandidateIds = new Set(
-        [...resolvedCandidateIds].filter((roleId) =>
-          hasPropertyValue(roleById.get(roleId), rule.property, rule.value)
-        )
-      );
-    }
-
-    if (rule?.type === CANDIDATE_RULE_TYPES.NOT_HAS_PROPERTY) {
-      resolvedCandidateIds = new Set(
-        [...resolvedCandidateIds].filter((roleId) =>
-          !hasPropertyValue(roleById.get(roleId), rule.property, rule.value)
-        )
-      );
-    }
-
-    if (rule?.type === CANDIDATE_RULE_TYPES.NOT_SELECTOR) {
-      selectorIds.forEach((selectorId) => resolvedCandidateIds.delete(selectorId));
-    }
-
-    if (rule?.type === CANDIDATE_RULE_TYPES.SAME_GROUP) {
-      const groupRoleIds = new Set(getRoleIdsByGroup(session, rule.groupId));
-      resolvedCandidateIds = new Set(
-        [...resolvedCandidateIds].filter((roleId) => groupRoleIds.has(roleId))
-      );
-    }
-
-    if (rule?.type === CANDIDATE_RULE_TYPES.NOT_SAME_GROUP) {
-      const groupRoleIds = new Set(getRoleIdsByGroup(session, rule.groupId));
-      resolvedCandidateIds = new Set(
-        [...resolvedCandidateIds].filter((roleId) => !groupRoleIds.has(roleId))
-      );
-    }
-
-    if (rule?.type === CANDIDATE_RULE_TYPES.EXPLICIT_INCLUDE) {
-      (rule.roleIds ?? []).forEach((roleId) => resolvedCandidateIds.add(roleId));
-    }
-
-    if (rule?.type === CANDIDATE_RULE_TYPES.EXPLICIT_EXCLUDE) {
-      (rule.roleIds ?? []).forEach((roleId) => resolvedCandidateIds.delete(roleId));
-    }
-  });
-
-  return [...resolvedCandidateIds];
 }
 
 // Valida selecciones antes del recuento.
@@ -952,7 +847,7 @@ function resolveTieBySelectorProperty({ session = {}, decisions = [], tiedCandid
       return (
         !decision.abstain &&
         tiedCandidateIds.has(decision.candidateId) &&
-        hasPropertyValue(selector, rule.property, rule.value)
+        hasRolePropertyValue(selector, rule.property, rule.value)
       );
     });
 

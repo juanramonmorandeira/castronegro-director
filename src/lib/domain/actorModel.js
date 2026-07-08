@@ -13,6 +13,11 @@ export const ACTOR_MODEL_ERRORS = Object.freeze({
   INVALID_ACTOR_TYPE: 'actor/invalid-actor-type'
 });
 
+export const SELECTION_SELECTOR_SOURCES = Object.freeze({
+  STAGE_ACTORS: 'stage_actors',
+  IN_PLAY_ROLES: 'in_play_roles'
+});
+
 function uniqueIds(ids = []) {
   return [...new Set((ids ?? []).filter(Boolean).map(String))];
 }
@@ -27,6 +32,42 @@ export function getActorIdsFromInputOrStage({ input = {}, stage = {} } = {}) {
       ? input.actorIds
       : stage?.actorIds ?? []
   );
+}
+
+// Devuelve los roleIds que pueden actuar como selectors por defecto.
+//
+// Un selector no es necesariamente el actor de una recipe. Es quien emite una
+// decision dentro de la action select.
+export function getInPlaySelectorIds(session = {}) {
+  return (session?.roles ?? [])
+    .filter((role) => role?.inPlay === true)
+    .map((role) => role.id);
+}
+
+export function getSelectionSelectorIds(session = {}, stage = {}, input = {}, selectionRules = {}) {
+  if ((input.selectorIds ?? []).length > 0) return input.selectorIds;
+  if (selectionRules.selectorSource === SELECTION_SELECTOR_SOURCES.IN_PLAY_ROLES) {
+    return getInPlaySelectorIds(session);
+  }
+  if ((input.actorIds ?? []).length > 0) return input.actorIds;
+  if ((stage.actorIds ?? []).length > 0) return stage.actorIds;
+
+  return [];
+}
+
+export function getSelectionRuleSelectorIds(session = {}, stage = {}, input = {}, selectionRules = {}) {
+  const selectorIds = getSelectionSelectorIds(session, stage, input, selectionRules);
+  if (selectorIds.length > 0) return selectorIds;
+
+  return [
+    ...new Set((input.selections ?? []).map((selection) => selection.selectorId).filter(Boolean))
+  ];
+}
+
+export function getRequiredSelectorIds(session = {}, selectorIds = []) {
+  return Array.isArray(selectorIds) && selectorIds.length > 0
+    ? [...selectorIds]
+    : getInPlaySelectorIds(session);
 }
 
 export function createActorContext({
