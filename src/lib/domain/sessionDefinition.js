@@ -14,7 +14,7 @@ import { buildGroups } from './groupModel.js';
 import { buildRoles, createRole } from './roleDefinition.js';
 import { assignUniqueStageIds, createStage } from './stageDefinition.js';
 import { CURRENT_STAGE_SOURCES, SESSION_STATUSES, normalizeId } from './sessionModel.js';
-import { DEFAULT_QUEUE_ORDER } from './queueCatalog.js';
+import { createQueueOrder } from './queueCatalog.js';
 import { validateSession } from './sessionValidation.js';
 import {
   HISTORY_COLLECTIONS,
@@ -49,8 +49,8 @@ function createSessionGroup(groupInput = {}) {
   };
 }
 
-function createQueues(stages = [], queues = {}) {
-  const initialQueues = DEFAULT_QUEUE_ORDER.reduce((acc, queueKey) => {
+function createQueues(stages = [], queues = {}, queueOrder = []) {
+  const initialQueues = queueOrder.reduce((acc, queueKey) => {
     acc[queueKey] = [];
     return acc;
   }, {});
@@ -86,6 +86,10 @@ function getAllQueueStages(queues = {}) {
   return Object.values(queues ?? {}).flatMap((stages) => stages ?? []);
 }
 
+function hasDeclaredQueues(queues = {}) {
+  return Object.values(queues ?? {}).some((stages) => Array.isArray(stages) && stages.length > 0);
+}
+
 export function createSession({
   id,
   definitionId = null,
@@ -108,7 +112,13 @@ export function createSession({
   log = [],
   metadata = {}
 } = {}) {
-  const normalizedQueues = createQueues([], queues);
+  const normalizedCycleInput = createCycle(cycle);
+  const normalizedQueueOrder = normalizedCycleInput.queueOrder ?? createQueueOrder(normalizedCycleInput.poolOrder);
+  const normalizedQueues = createQueues(
+    [],
+    hasDeclaredQueues(queues) ? queues : cycle?.queues ?? {},
+    normalizedQueueOrder
+  );
   const allQueueStages = getAllQueueStages(normalizedQueues);
   const normalizedCurrentStageSource = currentStageSource
     ?? (allQueueStages.length > 0 ? CURRENT_STAGE_SOURCES.QUEUE : CURRENT_STAGE_SOURCES.POOL);
@@ -130,7 +140,7 @@ export function createSession({
             metadata: {
               initial: true,
               context: {
-                cycleId: cycle?.id ?? 0,
+                cycleId: normalizedCycleInput?.id ?? 0,
                 poolKey: null,
                 stageId: stage.id,
                 stageKey: stage.key ?? null,
@@ -154,7 +164,7 @@ export function createSession({
                   metadata: {
                     initial: true,
                     context: {
-                      cycleId: cycle?.id ?? 0,
+                      cycleId: normalizedCycleInput?.id ?? 0,
                       poolKey: null,
                       stageId: stage.id,
                       stageKey: stage.key ?? null,
@@ -181,8 +191,11 @@ export function createSession({
     players: players.map(createPlayer),
     roles: normalizedRoles,
     groups: groups.map(createSessionGroup),
-    cycle: createCycle(cycle),
-    queues: normalizedQueues,
+    cycle: createCycle({
+      ...cycle,
+      queues: normalizedQueues,
+      queueOrder: normalizedQueueOrder
+    }),
     currentStageSource: normalizedCurrentStageSource,
     objectiveRules: [...objectiveRules],
     selectionRules: [...selectionRules],
@@ -378,7 +391,7 @@ export function buildSession({
     groups
   };
   const poolBuild = cycle?.pools
-    ? { ok: true, errors: [], pools: cycle.pools, queues: sessionInput.queues ?? {} }
+    ? { ok: true, errors: [], pools: cycle.pools, queues: cycle.queues ?? sessionInput.queues ?? {} }
     : buildPools({
         session: sessionWithGroups,
         roleDefinitions: Object.values(roleDefinitionMap),
@@ -401,9 +414,9 @@ export function buildSession({
         cycle?.poolOrder ??
         ruleSet?.poolOrder ??
         sessionWithGroups.cycle?.poolOrder,
-      pools: poolBuild.pools
+      pools: poolBuild.pools,
+      queues: poolBuild.queues
     }),
-    queues: poolBuild.queues ?? {},
     currentStageSource: getAllQueueStages(poolBuild.queues ?? {}).length > 0
       ? CURRENT_STAGE_SOURCES.QUEUE
       : CURRENT_STAGE_SOURCES.POOL

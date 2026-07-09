@@ -146,9 +146,10 @@ obligatorias y configurables que deben ejecutarse tras sus stages.
 pool dentro del ciclo, por ejemplo `poolConcealed` o `poolExposed`. No existe
 `poolId`: una ejecucion queda identificada por `cycleId + poolKey`.
 
-`cycle` = entidad runtime superior a los pools. Conoce el orden de los pools,
-la iteracion actual y cuando debe resolver `queue` antes de continuar
-con `poolConcealed` o `poolExposed`.
+`cycle` = entidad runtime superior a pools y queues. Se construye desde el
+`ruleSet`: por cada pool declarado crea `queueBeforePoolN`, `poolN` y
+`queueAfterPoolN`. Conoce el cursor generico `entries` y decide que bloque debe
+ejecutarse a continuacion.
 
 `cycleId` = numero de la iteracion actual del ciclo. En codigo vive como
 `session.cycle.id`. El ciclo inicial previo al primer ciclo normal usa `0`.
@@ -156,16 +157,20 @@ con `poolConcealed` o `poolExposed`.
 `cycleKey` = concepto no implementado. No se necesita mientras la session solo
 tenga una unica definicion de ciclo repetitivo.
 
-`queue` = cola FIFO runtime de stages dinamicos que se resuelven entre
-pools. No es un pool, no se prepara y cada stage se elimina al completarse.
-Cada elemento tiene `stageId`, `stageKey` y metadatos de origen. Los stages
-generados durante un pool se resuelven despues de completar ese pool y antes
-del siguiente, conservando su relacion causal con el ciclo actual.
+`queue` = cola FIFO runtime de stages dinamicos asociada a un pool y a un
+timing `before` o `after`. No es un pool, no se prepara y cada stage se elimina
+al completarse. Cada elemento tiene `stageId`, `stageKey` y metadatos de origen.
+Los stages generados durante un pool se resuelven en la queue correspondiente,
+conservando su relacion causal con el ciclo actual.
 
-`queueKey` = metadata opcional de una queueStage que indica en que ventana
-de superficie debe proyectarse: `before_concealed`, `after_concealed`,
-`before_exposed` o `after_exposed`. No convierte `queue` en varios
-pools ni en varias colas.
+`queueKey` = key runtime de una queue concreta, por ejemplo
+`queueBeforePoolConcealed`, `queueAfterPoolConcealed`,
+`queueBeforePoolExposed` o `queueAfterPoolExposed`. No es una ventana textual:
+se deriva de `poolKey` y de `before/after`.
+
+`surfacePhase` = fase de superficie declarada por un pool. En basic_ruleset,
+`poolConcealed` es `private` y `poolExposed` es `public`. Las queues asociadas
+a cada pool heredan esta fase en `cycle.entries`.
 
 `publicReveal` = transicion de superficie entre `after_concealed` y
 `before_exposed`. Proyecta la mesa publica por `seat`, estados publicos como
@@ -176,10 +181,10 @@ resueltos.
 la pantalla de roles al modo oculto antes del siguiente tramo privado.
 
 `queueStageDefinitions` = stages iniciales que una definicion aporta
-directamente a `session.queues`. No usan una bandera dentro del stage.
+directamente a `session.cycle.queues`. No usan una bandera dentro del stage.
 
 `currentStageSource` = indica si el cursor ejecuta actualmente un stage de
-`cycle.pools` o de `session.queues`. Sus valores son `pool` y
+`cycle.pools` o de `cycle.queues`. Sus valores son `pool` y
 `queue`.
 
 `queueHistory` = historial propio de altas, inicios, cierres y fallos de

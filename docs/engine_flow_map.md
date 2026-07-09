@@ -122,7 +122,7 @@ flowchart TD
   L[session.roles]
   M[session.groups]
   N[session.cycle.pools]
-  P[session.queues inicial]
+  P[session.cycle.queues inicial]
   O[Session lista para ejecucion]
 
   A --> E
@@ -241,7 +241,7 @@ poolOrder -> orden entre pools
 pools[poolKey] -> orden de stages dentro de ese pool
 ```
 
-`session.queues` es una cola FIFO independiente de `pools`. Antes de
+`session.cycle.queues` es una cola FIFO independiente de `pools`. Antes de
 entrar en cualquier pool normal, el ciclo comprueba si contiene stages
 pendientes y, si los tiene, los resuelve primero. Cada stage dinamico puede
 declarar `metadata.queueKey` (`before_concealed`, `after_concealed`,
@@ -290,7 +290,7 @@ createCycle({
   }
 })
 
-session.queues = [
+session.cycle.queues = [
   { id: 'stage-queue-stage_01-role-0', key: 'stage_01' },
   { id: 'stage-queue-stage_02-role-1', key: 'stage_02' }
 ]

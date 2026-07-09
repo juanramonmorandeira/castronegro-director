@@ -222,7 +222,8 @@ export function validateSession(session = {}, options = {}) {
 
   if (
     session.currentStageSource === CURRENT_STAGE_SOURCES.QUEUE &&
-    DEFAULT_QUEUE_ORDER.every((queueKey) => (session.queues?.[queueKey] ?? []).length === 0)
+    (session.cycle?.queueOrder ?? DEFAULT_QUEUE_ORDER)
+      .every((queueKey) => (session.cycle?.queues?.[queueKey] ?? []).length === 0)
   ) {
     errors.push({
       code: 'session/missing-current-queue-stage',

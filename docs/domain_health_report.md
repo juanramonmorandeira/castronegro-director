@@ -62,7 +62,7 @@ mensajes antiguos ni implementacion previa.
 | `surfaceModel.js` | Proyeccion estructurada para pantalla/surface. | Bueno | Contrato claro entre dominio y UI. |
 | `targetModel.js` | Validacion y materializacion de targets/candidates. | Bueno | Buen paralelo de `actorModel`. |
 | `README.md` | Resumen operativo del dominio. | Bueno | Actualizado a pools/queues. |
-| `README_RULES.md` | Lenguaje de reglas mecanicas. | Bueno | Actualizado a `queueStageDefinitions` y `session.queues`. |
+| `README_RULES.md` | Lenguaje de reglas mecanicas. | Bueno | Actualizado a `queueStageDefinitions` y `session.cycle.queues`. |
 
 ## Riesgos Vivos
 

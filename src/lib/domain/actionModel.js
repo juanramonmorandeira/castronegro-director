@@ -36,6 +36,7 @@ import {
   ACTION_IDS,
   validateAction as validateActionShape
 } from './actionDefinition.js';
+import { HISTORY_RESULTS, appendActionHistory } from './historyModel.js';
 import { VISIBILITY } from './surfaceModel.js';
 import {
   SELECT_SELECTOR_SOURCES,
@@ -1814,12 +1815,40 @@ function validateActionResolution(actionState) {
 }
 
 function finishAction(actionState) {
+  const ok = actionState.errors.length === 0 && actionState.ok !== false;
+  const result = actionState.result ?? null;
+  const shouldRecordHistory =
+    actionState.context?.recordHistory === true ||
+    Boolean(actionState.context?.recipeKey || actionState.context?.stageId);
+  const nextSession = shouldRecordHistory
+    ? appendActionHistory(actionState.session, {
+        cycleId: actionState.context?.cycleId ?? getCurrentCycleId(actionState.session),
+        poolKey: actionState.context?.poolKey ?? null,
+        stageId: actionState.context?.stageId ?? null,
+        stageKey: actionState.context?.stageKey ?? null,
+        stageCatalogId: actionState.context?.stageCatalogId ?? null,
+        recipeKey: actionState.context?.recipeKey ?? null,
+        actionId: actionState.actionId,
+        actorIds: actionState.actors.map((actor) => actor.id).filter(Boolean),
+        targetIds: actionState.targets.map((target) => target?.id).filter(Boolean),
+        result: ok ? HISTORY_RESULTS.APPLIED : HISTORY_RESULTS.FAILED,
+        proposedEffects: result?.proposedEffects ?? [],
+        finalEffects: result?.finalEffects ?? [],
+        blockedEffects: result?.blockedEffects ?? [],
+        preventedPropertyChanges: result?.preventedPropertyChanges ?? [],
+        metadata: {
+          actionOk: ok,
+          errorCodes: actionState.errors.map((error) => error.code).filter(Boolean)
+        }
+      })
+    : actionState.session;
+
   return {
-    ok: actionState.errors.length === 0 && actionState.ok !== false,
+    ok,
     actionId: actionState.actionId,
     errors: actionState.errors,
-    session: actionState.session,
-    result: actionState.result
+    session: nextSession,
+    result
   };
 }
 

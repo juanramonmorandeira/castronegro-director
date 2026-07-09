@@ -7,8 +7,14 @@
 // -----------------------------------------------------------------------------
 
 import { CURRENT_STAGE_SOURCES, normalizeId } from './sessionModel.js';
-import { DEFAULT_POOL_ORDER, POOL_KEYS } from './poolCatalog.js';
+import { DEFAULT_POOL_ORDER, POOL_KEYS, getCatalogPool } from './poolCatalog.js';
 import { createPool, POOL_LIFECYCLE_OPERATION_TYPES } from './poolDefinition.js';
+import {
+  createQueueOrder,
+  getAfterQueueKey,
+  getBeforeQueueKey,
+  isValidQueueKey
+} from './queueCatalog.js';
 import {
   advanceStageCursor,
   findNextRunnableIndex,
@@ -33,7 +39,6 @@ import {
   validatePool
 } from './poolModel.js';
 import { reviewPropertyBlocks } from './roleModel.js';
-import { QUEUE_KEYS } from './queueCatalog.js';
 import {
   startQueue,
   startQueueByKey,
@@ -69,15 +74,67 @@ function appendEngineErrors(session, errors, context = {}) {
   };
 }
 
+function getEntryId(entry = {}) {
+  return entry?.type && entry?.key ? `${entry.type}:${entry.key}` : null;
+}
+
+function getEntryByTypeAndKey(entries = [], type = null, key = null) {
+  return (entries ?? []).find((entry) => entry.type === type && entry.key === key) ?? null;
+}
+
+function getNextEntry(entries = [], currentEntry = null) {
+  if (!entries.length) return null;
+  const currentId = getEntryId(currentEntry);
+  const currentIndex = entries.findIndex((entry) => getEntryId(entry) === currentId);
+  if (currentIndex < 0) return entries[0] ?? null;
+  return entries[(currentIndex + 1) % entries.length] ?? null;
+}
+
+function getPoolSurfacePhase(pool = {}, poolKey = null) {
+  return pool?.surfacePhase ?? getCatalogPool(poolKey)?.surfacePhase ?? null;
+}
+
+function createCycleEntries({ poolOrder = [], pools = {} } = {}) {
+  return (poolOrder ?? []).flatMap((poolKey) => {
+    const surfacePhase = getPoolSurfacePhase(pools?.[poolKey], poolKey);
+    return [
+      {
+        type: CURRENT_STAGE_SOURCES.QUEUE,
+        key: getBeforeQueueKey(poolKey),
+        poolKey,
+        timing: 'before',
+        surfacePhase
+      },
+      {
+        type: CURRENT_STAGE_SOURCES.POOL,
+        key: poolKey,
+        poolKey,
+        timing: 'during',
+        surfacePhase
+      },
+      {
+        type: CURRENT_STAGE_SOURCES.QUEUE,
+        key: getAfterQueueKey(poolKey),
+        poolKey,
+        timing: 'after',
+        surfacePhase
+      }
+    ];
+  });
+}
+
 export function createCycle({
   id = 0,
   pools = {},
+  queues = {},
   poolOrder = DEFAULT_POOL_ORDER,
+  queueOrder = null,
   poolCurrent = poolOrder[0] ?? null,
   poolPrevious = null,
   poolNext = poolOrder[1] ?? poolOrder[0] ?? null
 } = {}) {
   const normalizedOrder = (poolOrder ?? []).map(String);
+  const normalizedQueueOrder = queueOrder ?? createQueueOrder(normalizedOrder);
   const current = normalizedOrder.includes(poolCurrent) ? poolCurrent : normalizedOrder[0] ?? null;
   const normalizedPools = normalizedOrder.reduce((result, poolKey) => {
     const pool = pools?.[poolKey];
@@ -86,11 +143,27 @@ export function createCycle({
       : createPool({ key: poolKey, ...(pool ?? {}) });
     return result;
   }, {});
+  const normalizedQueues = normalizedQueueOrder.reduce((result, queueKey) => {
+    result[queueKey] = Array.isArray(queues?.[queueKey]) ? [...queues[queueKey]] : [];
+    return result;
+  }, {});
+  const entries = createCycleEntries({ poolOrder: normalizedOrder, pools: normalizedPools });
+  const entryCurrent =
+    getEntryByTypeAndKey(entries, CURRENT_STAGE_SOURCES.QUEUE, getBeforeQueueKey(current)) ??
+    getEntryByTypeAndKey(entries, CURRENT_STAGE_SOURCES.POOL, current) ??
+    entries[0] ??
+    null;
 
   return {
     id: Number.isInteger(id) && id >= 0 ? id : 0,
     pools: normalizedPools,
+    queues: normalizedQueues,
     poolOrder: normalizedOrder,
+    queueOrder: normalizedQueueOrder,
+    entries,
+    entryPrevious: null,
+    entryCurrent,
+    entryNext: getNextEntry(entries, entryCurrent),
     poolCurrent: current,
     poolPrevious,
     poolNext: poolNext ?? normalizedOrder[1] ?? normalizedOrder[0] ?? null
@@ -218,12 +291,18 @@ export function enterNextPool(cycle = {}, nextPoolKey = cycle.poolNext) {
     ...pool,
     currentStageIndex: findNextRunnableIndex(pool.stages, 0) ?? 0
   };
+  const entryCurrent =
+    getEntryByTypeAndKey(cycle.entries ?? [], CURRENT_STAGE_SOURCES.POOL, nextPoolKey) ??
+    getEntryByTypeAndKey(cycle.entries ?? [], CURRENT_STAGE_SOURCES.POOL, enteredPool.key);
   const nextCycle = {
     ...cycle,
     pools: {
       ...cycle.pools,
       [nextPoolKey]: enteredPool
     },
+    entryPrevious: cycle.entryCurrent ?? null,
+    entryCurrent,
+    entryNext: getNextEntry(cycle.entries ?? [], entryCurrent),
     poolPrevious: cycle.poolCurrent,
     poolCurrent: nextPoolKey,
     poolNext: getNextPoolKey(cycle, nextPoolKey)
@@ -273,6 +352,16 @@ export function continueAfterQueue({ session = {}, queueKey = null } = {}) {
   }
 
   const transitionResult = createSurfaceTransitionResult(transition);
+  if (!isValidQueueKey(transition.to, session?.cycle?.queueOrder)) {
+    return {
+      ok: true,
+      errors: [],
+      session,
+      stage: null,
+      lifecycleResults: [transitionResult]
+    };
+  }
+
   const nextQueueStart = startQueueByKey(session, transition.to);
 
   return {
@@ -659,12 +748,7 @@ export function resolvePoolEntry({ session = {}, poolEntry = {} } = {}) {
 }
 
 export function startQueueAfterPoolExit({ session = {}, poolKey = null } = {}) {
-  const queueKey =
-    poolKey === POOL_KEYS.POOL_CONCEALED
-      ? QUEUE_KEYS.QUEUE_AFTER_CONCEALED
-      : poolKey === POOL_KEYS.POOL_EXPOSED
-        ? QUEUE_KEYS.QUEUE_AFTER_EXPOSED
-        : null;
+  const queueKey = poolKey ? getAfterQueueKey(poolKey) : null;
 
   if (queueKey) {
     const queueStart = startQueueByKey(session, queueKey);

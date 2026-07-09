@@ -10,7 +10,7 @@
 import { assignUniqueStageIds, createStage, STAGE_SOURCE_TYPES } from './stageDefinition.js';
 import { getGroupRoleIds } from './groupModel.js';
 import { STAGE_STATUSES, normalizeId } from './sessionModel.js';
-import { DEFAULT_POOL_ORDER, POOL_KEYS } from './poolCatalog.js';
+import { DEFAULT_POOL_ORDER, POOL_KEYS, getCatalogPool } from './poolCatalog.js';
 import { DEFAULT_QUEUE_ORDER } from './queueCatalog.js';
 
 // Pools cuyo orden interno puede ser configurable por ruleSet.
@@ -76,13 +76,16 @@ export function createPool({
   key,
   stages = [],
   onEnter = null,
-  onExit = null
+  onExit = null,
+  surfacePhase = null
 } = {}) {
   const normalizedKey = String(key ?? '');
+  const catalogPool = getCatalogPool(normalizedKey);
 
   const lifecycle = normalizeLifecycleOperations({ onEnter, onExit });
   return {
     key: normalizedKey,
+    surfacePhase: surfacePhase ?? catalogPool?.surfacePhase ?? null,
     stages: assignUniqueStageIds(
       (stages ?? []).map((stage) =>
         createStage({

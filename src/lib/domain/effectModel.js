@@ -361,12 +361,15 @@ function applyReplaceRoleIdentityEffect({ session, effect }) {
 function applyConcludePlayEffect({ session, effect }) {
   return {
     ...session,
+    cycle: {
+      ...(session.cycle ?? {}),
+      queues: {}
+    },
     metadata: {
       ...(session?.metadata ?? {}),
       playOutcome: effect.playOutcome ?? null
     },
     playOutcome: effect.playOutcome ?? null,
-    queues: {}
   };
 }
 

@@ -48,9 +48,9 @@ flowchart TD
   MATCH --> BUILD
   BUILD --> SESSION
   SESSION --> CYCLE
-  SESSION --> QUEUES
   CYCLE --> CONCEALED
   CYCLE --> EXPOSED
+  CYCLE --> QUEUES
   CONCEALED --> PREPARE
   EXPOSED --> PREPARE
   PREPARE --> VALIDATE
@@ -75,31 +75,36 @@ flowchart TD
 
 ```text
 session
-├── queues
-│   ├── queueBeforeConcealed
-│   ├── queueAfterConcealed
-│   ├── queueBeforeExposed
-│   └── queueAfterExposed
 └── cycle
-    ├── poolConcealed
-    │   ├── pool.onEnter
-    │   ├── stages
-    │   └── pool.onExit
-    └── poolExposed
-        ├── pool.onEnter
-        ├── stages
-        └── pool.onExit
+    ├── entries
+    ├── queues
+    │   ├── queueBeforePoolConcealed
+    │   ├── queueAfterPoolConcealed
+    │   ├── queueBeforePoolExposed
+    │   └── queueAfterPoolExposed
+    └── pools
+        ├── poolConcealed
+        │   ├── pool.onEnter
+        │   ├── stages
+        │   └── pool.onExit
+        └── poolExposed
+            ├── pool.onEnter
+            ├── stages
+            └── pool.onExit
 ```
 
-`cycle` entiende la relacion entre pools y sus iteraciones. Un pool entiende
-solo de sus propios stages. Un stage coordina selection y recipes, pero no mueve
-otros pools.
+`cycle` entiende la relacion entre pools, queues e iteraciones. `entries` es el
+cursor generico sobre `queueBeforePoolN -> poolN -> queueAfterPoolN`. Un pool
+entiende solo de sus propios stages. Un stage coordina recipes, pero no mueve
+otros pools ni queues.
 
 ## Estado materializado
 
-- `session.cycle` administra la navegacion entre pools.
-- `session.queues` contiene colas FIFO independientes que `cycleModel`
+- `session.cycle` administra la navegacion entre pools y queues.
+- `session.cycle.queues` contiene colas FIFO independientes que `cycleModel`
   consulta por `queueKey`; no pasan por `preparePool` ni `validatePool`.
+- Cada pool declara `surfacePhase` y sus queues asociadas heredan esa fase en
+  `cycle.entries`.
 - `session.currentStageSource` distingue si el cursor ejecuta un stage de pool
   o de la cola sin usar una bandera dentro del stage.
 - `preparePool` y `validatePool` preparan exclusivamente pools normales.

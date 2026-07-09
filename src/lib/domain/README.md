@@ -108,13 +108,13 @@ Resolver una receta no cierra el stage. El cierre se hace explicitamente con
 Flujo de ciclo aceptado:
 
 ```text
-queueBeforeConcealed si hay stages pendientes
+queueBeforePoolConcealed si hay stages pendientes
 -> poolConcealed
--> queueAfterConcealed si hay stages pendientes
+-> queueAfterPoolConcealed si hay stages pendientes
 -> publicReveal
--> queueBeforeExposed si hay stages pendientes
+-> queueBeforePoolExposed si hay stages pendientes
 -> poolExposed
--> queueAfterExposed si hay stages pendientes
+-> queueAfterPoolExposed si hay stages pendientes
 -> privateHide
 -> poolConcealed
 ```
@@ -148,7 +148,7 @@ Un rol no ejecuta recetas directamente. Un rol define que stages puede aportar
 al flujo. Las recetas ejecutables viven dentro de `stage.recipes`.
 
 Los stages iniciales que no pertenecen a pools se declaran por separado en
-`queueStageDefinitions` y se materializan en `session.queues`.
+`queueStageDefinitions` y se materializan en `session.cycle.queues`.
 
 Los stages de catalogo son abstractos. Los stages de sesion deben tener actores
 reales en `actorIds`. Si un grupo esta vacio, no puede crear un stage enabled
@@ -182,7 +182,7 @@ La sesion guarda:
 - `roles`
 - `groups`
 - `session.cycle.pools` contiene el mapa de pools runtime.
-- `session.queues` contiene las colas FIFO runtime entre pools.
+- `session.cycle.queues` contiene las colas FIFO runtime entre pools.
 - `session.history.recipeHistory`
 - `session.history.cycleHistory`
 - `session.history.poolHistory`

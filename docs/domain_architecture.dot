@@ -41,19 +41,19 @@ digraph DomainArchitecture {
   ];
 
   session [
-    label="SESSION\n\nplayers\nroles\ngroups\ncycle\nqueues\nobjectiveRules\nselectionRules\nhistory\nlogs",
+    label="SESSION\n\nplayers\nroles\ngroups\ncycle\nobjectiveRules\nselectionRules\nhistory\nlogs",
     fillcolor="#dcecf5",
     penwidth=1.5
   ];
 
   cycle [
-    label="CYCLE\n\ncycleModel\nstartCycle\ntransiciones de superficie\nelige siguiente queue o pool",
+    label="CYCLE\n\ncycleModel\nstartCycle\npools\nqueues\nentries\ncursor generico",
     fillcolor="#dff2e3",
     penwidth=1.5
   ];
 
   queue [
-    label="QUEUE\n\nqueueModel\nqueueBeforeConcealed\nqueueAfterConcealed\nqueueBeforeExposed\nqueueAfterExposed\nFIFO por queueKey",
+    label="QUEUE\n\nqueueModel\nqueueBeforePoolN\nqueueAfterPoolN\nFIFO por queueKey\nhereda surfacePhase del pool",
     fillcolor="#dff2e3"
   ];
 

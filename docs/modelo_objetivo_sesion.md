@@ -21,9 +21,9 @@ El analisis original establecio decisiones que siguen vigentes:
 | pools de ciclo | `session.cycle.pools` |
 | stage runtime | `stage` |
 | cursor de stage | `pool.currentStageIndex` |
-| cola FIFO excepcional | `session.queues` |
+| queues FIFO entre pools | `session.cycle.queues` |
 | preparacion de pool | `preparePool` |
-| navegacion entre pools | `cycleModel` |
+| navegacion entre pools y queues | `cycleModel` |
 | bloqueo mecanico | `blockedPropertyChanges` |
 | objetivos y cierre jugable | `objectiveRules`, `playOutcome`, `conclude_play` |
 
@@ -32,11 +32,13 @@ El analisis original establecio decisiones que siguen vigentes:
 ```text
 session
   -> cycle
+      -> entries
+      -> queueBeforePoolN
       -> pool
           -> pool.onEnter
           -> stages
           -> pool.onExit
-  -> queue entre pools cuando la cola no esta vacia
+      -> queueAfterPoolN
 ```
 
 Consultar:

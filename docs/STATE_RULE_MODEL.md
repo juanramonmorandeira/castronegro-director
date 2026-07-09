@@ -300,7 +300,7 @@ finished
 
 ## Special stages
 
-`session.queues` contiene colas FIFO independientes. No son pools, no se
+`session.cycle.queues` contiene colas FIFO independientes. No son pools, no se
 prepara y no forma parte de `cycle.poolOrder`.
 
 El cursor usa `session.currentStageSource` para distinguir si esta ejecutando

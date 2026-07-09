@@ -28,7 +28,8 @@ export const HISTORY_COLLECTIONS = Object.freeze({
   POOL: 'poolHistory',
   STAGE: 'stageHistory',
   QUEUE: 'queueHistory',
-  RECIPE: 'recipeHistory'
+  RECIPE: 'recipeHistory',
+  ACTION: 'actionHistory'
 });
 
 const HISTORY_COLLECTION_NAMES = Object.freeze(Object.values(HISTORY_COLLECTIONS));
@@ -269,6 +270,65 @@ export function appendRecipeHistory(session, entry = {}) {
     {
       getId: (item, currentHistory) =>
         `${item.payload.recipeKey ?? 'recipe'}-finished-${item.metadata.context.cycleId}-${currentHistory.length}`
+    }
+  );
+}
+
+export function appendActionHistory(session, entry = {}) {
+  const actorIds = [...(entry.actorIds ?? [])];
+  const targetIds = [...(entry.targetIds ?? [])];
+  const baseEntry = {
+    id: entry.id ?? null,
+    cycleId: entry.cycleId ?? 0,
+    poolKey: entry.poolKey ?? null,
+    stageId: entry.stageId ?? null,
+    stageKey: entry.stageKey ?? null,
+    stageCatalogId: entry.stageCatalogId ?? null,
+    recipeKey: entry.recipeKey ?? null,
+    actionId: entry.actionId ?? null,
+    actor: entry.actor ? { ...entry.actor } : null,
+    metadata: { ...(entry.metadata ?? {}) }
+  };
+  const sessionWithStarted = appendEntry(
+    session,
+    HISTORY_COLLECTIONS.ACTION,
+    {
+      ...baseEntry,
+      event: HISTORY_EVENTS.STARTED,
+      payload: {
+        actionId: entry.actionId ?? null,
+        recipeKey: entry.recipeKey ?? null,
+        actorIds,
+        targetIds
+      }
+    },
+    {
+      getId: (item, history) =>
+        `${item.payload.actionId ?? 'action'}-${item.metadata.context.cycleId}-started-${history.length}`
+    }
+  );
+
+  return appendEntry(
+    sessionWithStarted,
+    HISTORY_COLLECTIONS.ACTION,
+    {
+      ...baseEntry,
+      event: HISTORY_EVENTS.FINISHED,
+      payload: {
+        actionId: entry.actionId ?? null,
+        recipeKey: entry.recipeKey ?? null,
+        result: entry.result ?? HISTORY_RESULTS.NO_EFFECT,
+        actorIds,
+        targetIds,
+        proposedEffects: [...(entry.proposedEffects ?? [])],
+        finalEffects: [...(entry.finalEffects ?? [])],
+        blockedEffects: [...(entry.blockedEffects ?? [])],
+        preventedPropertyChanges: [...(entry.preventedPropertyChanges ?? [])]
+      }
+    },
+    {
+      getId: (item, history) =>
+        `${item.payload.actionId ?? 'action'}-${item.metadata.context.cycleId}-finished-${history.length}`
     }
   );
 }

@@ -29,7 +29,7 @@ defineRole({
 Un `Role` no es una carta en partida. Es una plantilla mecanica. Puede definir
 alignment por defecto y los `stageDefinitions` que ese tipo de rol aporta al
 flujo. `queueStageDefinitions` contiene los stages iniciales que aporta a las
-colas `session.queues`.
+colas `session.cycle.queues`.
 
 ### Session role
 
@@ -103,7 +103,7 @@ El orden vive en arrays, no en nombres narrativos.
 dinamicos administrada por `queueModel.js`.
 
 Un stage no lleva una propiedad de clasificacion especial. Su ubicacion depende
-de si fue materializado en `cycle.pools` o en `session.queues`.
+de si fue materializado en `cycle.pools` o en `session.cycle.queues`.
 
 Identidad:
 

@@ -1417,7 +1417,7 @@ Durante `poolExposed`:
 ## Special Stages
 
 La superficie trata `queue` como interrupciones causales entre pools. La
-cola runtime sigue siendo `session.queues`, y cada queueStage puede
+cola runtime sigue siendo `session.cycle.queues`, y cada queueStage puede
 declarar `metadata.queueKey` para proyectarse en el momento de superficie
 correcto:
 

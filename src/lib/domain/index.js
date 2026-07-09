@@ -57,6 +57,7 @@ export {
   getSessionHistory,
   getRecipeHistorySignature,
   appendEntry,
+  appendActionHistory,
   appendRecipeHistory,
   appendStageHistory,
   findAppliedSetPropertyHistory

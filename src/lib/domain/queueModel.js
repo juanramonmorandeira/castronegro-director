@@ -29,9 +29,10 @@ export {
 export { QUEUE_KEYS, isValidQueueKey } from './queueCatalog.js';
 
 export function getQueues(session = {}) {
-  const sourceQueues = session?.queues ?? {};
+  const sourceQueues = session?.cycle?.queues ?? session?.queues ?? {};
+  const queueOrder = session?.cycle?.queueOrder ?? DEFAULT_QUEUE_ORDER;
 
-  return [...new Set([...DEFAULT_QUEUE_ORDER, ...Object.keys(sourceQueues)])].reduce((queues, queueKey) => {
+  return [...new Set([...queueOrder, ...Object.keys(sourceQueues)])].reduce((queues, queueKey) => {
     queues[queueKey] = Array.isArray(sourceQueues?.[queueKey])
       ? [...sourceQueues[queueKey]]
       : [];
@@ -50,7 +51,7 @@ export function hasPendingQueueStages(session = {}) {
 }
 
 export function getQueueStages(session = {}, queueKey = null) {
-  if (!isValidQueueKey(queueKey)) return [];
+  if (!isValidQueueKey(queueKey, session?.cycle?.queueOrder)) return [];
   return getQueue(session, queueKey);
 }
 
@@ -81,7 +82,7 @@ function getInvalidQueueErrors(session = {}) {
       ];
     }
 
-    if (!isValidQueueKey(queueKey)) {
+    if (!isValidQueueKey(queueKey, session?.cycle?.queueOrder)) {
       return [
         {
           code: QUEUE_ERRORS.INVALID_QUEUE_KEY,
@@ -153,9 +154,15 @@ export function appendQueueStage(session, stage, metadata = {}) {
   const queues = getQueues(session);
   const nextSession = {
     ...session,
-    queues: {
-      ...queues,
-      [queueKey]: [...(queues[queueKey] ?? []), normalizedStage]
+    cycle: {
+      ...(session.cycle ?? {}),
+      queueOrder: (session.cycle?.queueOrder ?? []).includes(queueKey)
+        ? session.cycle.queueOrder
+        : [...(session.cycle?.queueOrder ?? []), queueKey],
+      queues: {
+        ...queues,
+        [queueKey]: [...(queues[queueKey] ?? []), normalizedStage]
+      }
     }
   };
 
@@ -171,6 +178,24 @@ const QUEUE_LIFECYCLE_OPERATIONS = Object.freeze({
   START: 'start',
   FINISH: 'finish'
 });
+
+function getEntryId(entry = {}) {
+  return entry?.type && entry?.key ? `${entry.type}:${entry.key}` : null;
+}
+
+function getEntryByQueueKey(entries = [], queueKey = null) {
+  return (entries ?? []).find(
+    (entry) => entry.type === CURRENT_STAGE_SOURCES.QUEUE && entry.key === queueKey
+  ) ?? null;
+}
+
+function getNextEntry(entries = [], currentEntry = null) {
+  if (!entries.length) return null;
+  const currentId = getEntryId(currentEntry);
+  const currentIndex = entries.findIndex((entry) => getEntryId(entry) === currentId);
+  if (currentIndex < 0) return entries[0] ?? null;
+  return entries[(currentIndex + 1) % entries.length] ?? null;
+}
 
 function createQueueState({
   session = {},
@@ -195,7 +220,7 @@ function getQueueKeyErrors({ session = {}, queueKey = null, operation }) {
   const messagePrefix = operation === QUEUE_LIFECYCLE_OPERATIONS.FINISH
     ? 'cannot complete queueStage'
     : 'cannot start queue';
-  const queueKeyError = isValidQueueKey(queueKey)
+  const queueKeyError = isValidQueueKey(queueKey, session?.cycle?.queueOrder)
     ? null
     : {
         code: QUEUE_ERRORS.INVALID_QUEUE_KEY,
@@ -236,10 +261,22 @@ function resolveQueueStart(state = {}) {
     return state;
   }
 
+  const activeQueueKey = state.requireQueueKey
+    ? state.queueKey
+    : state.stage.metadata?.queueKey ?? null;
+  const entryCurrent = getEntryByQueueKey(state.session?.cycle?.entries ?? [], activeQueueKey);
   const nextSession = {
     ...state.session,
+    cycle: {
+      ...(state.session.cycle ?? {}),
+      entryPrevious: entryCurrent ? state.session.cycle?.entryCurrent ?? null : state.session.cycle?.entryPrevious ?? null,
+      entryCurrent: entryCurrent ?? state.session.cycle?.entryCurrent ?? null,
+      entryNext: entryCurrent
+        ? getNextEntry(state.session.cycle?.entries ?? [], entryCurrent)
+        : state.session.cycle?.entryNext ?? null
+    },
     currentStageSource: CURRENT_STAGE_SOURCES.QUEUE,
-    currentQueueKey: state.requireQueueKey ? state.queueKey : null
+    currentQueueKey: state.requireQueueKey ? state.queueKey : activeQueueKey
   };
 
   return {
@@ -279,7 +316,10 @@ function resolveQueueFinish(state = {}) {
     : DEFAULT_QUEUE_ORDER.flatMap((queueKey) => nextQueues[queueKey] ?? [])[0] ?? null;
   const nextSession = {
     ...state.session,
-    queues: nextQueues,
+    cycle: {
+      ...(state.session.cycle ?? {}),
+      queues: nextQueues
+    },
     currentStageSource: nextStage
       ? CURRENT_STAGE_SOURCES.QUEUE
       : CURRENT_STAGE_SOURCES.POOL,
@@ -416,9 +456,13 @@ export function removeQueueStages(session = {}, predicate = () => false, metadat
   );
   const nextSession = {
     ...session,
-    queues: nextQueues,
+    cycle: {
+      ...(session.cycle ?? {}),
+      queues: nextQueues
+    },
     currentStageSource:
-      session.currentStageSource === CURRENT_STAGE_SOURCES.QUEUE && getQueue({ queues: nextQueues }).length === 0
+      session.currentStageSource === CURRENT_STAGE_SOURCES.QUEUE &&
+        getQueue({ cycle: { ...(session.cycle ?? {}), queues: nextQueues } }).length === 0
         ? CURRENT_STAGE_SOURCES.POOL
         : session.currentStageSource
   };

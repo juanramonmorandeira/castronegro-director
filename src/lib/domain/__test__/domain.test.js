@@ -180,8 +180,12 @@ function queueHistory(session) {
   return history(session, HISTORY_COLLECTIONS.QUEUE);
 }
 
+function actionHistory(session) {
+  return history(session, HISTORY_COLLECTIONS.ACTION);
+}
+
 function queueStages(entity = {}) {
-  return Object.values(entity?.queues ?? {}).flatMap((stages) => stages ?? []);
+  return Object.values(entity?.cycle?.queues ?? entity?.queues ?? {}).flatMap((stages) => stages ?? []);
 }
 
 function cycleHistory(session) {
@@ -1353,6 +1357,22 @@ test('queue tiene prioridad inicial sin formar parte de pools', () => {
     POOL_KEYS.POOL_CONCEALED,
     POOL_KEYS.POOL_EXPOSED
   ]);
+  assert.equal(session.queues, undefined);
+  assert.equal(session.cycle.pools[POOL_KEYS.POOL_CONCEALED].surfacePhase, 'private');
+  assert.equal(session.cycle.pools[POOL_KEYS.POOL_EXPOSED].surfacePhase, 'public');
+  assert.equal(session.cycle.queues[QUEUE_KEYS.QUEUE_BEFORE_CONCEALED][0].key, STAGE_KEYS.STAGE_01);
+  assert.deepEqual(
+    session.cycle.entries.map((entry) => `${entry.type}:${entry.key}:${entry.surfacePhase}`),
+    [
+      `${CURRENT_STAGE_SOURCES.QUEUE}:${QUEUE_KEYS.QUEUE_BEFORE_CONCEALED}:private`,
+      `${CURRENT_STAGE_SOURCES.POOL}:${POOL_KEYS.POOL_CONCEALED}:private`,
+      `${CURRENT_STAGE_SOURCES.QUEUE}:${QUEUE_KEYS.QUEUE_AFTER_CONCEALED}:private`,
+      `${CURRENT_STAGE_SOURCES.QUEUE}:${QUEUE_KEYS.QUEUE_BEFORE_EXPOSED}:public`,
+      `${CURRENT_STAGE_SOURCES.POOL}:${POOL_KEYS.POOL_EXPOSED}:public`,
+      `${CURRENT_STAGE_SOURCES.QUEUE}:${QUEUE_KEYS.QUEUE_AFTER_EXPOSED}:public`
+    ]
+  );
+  assert.equal(session.cycle.entryCurrent.key, QUEUE_KEYS.QUEUE_BEFORE_CONCEALED);
   assert.equal(session.currentStageSource, CURRENT_STAGE_SOURCES.QUEUE);
   assert.equal(getCurrentStage(session).stageKey, STAGE_KEYS.STAGE_01);
 });
@@ -1376,6 +1396,7 @@ test('queue pendientes no interrumpen el pool hasta cambiar currentStageSource',
     createStage({
       key: STAGE_KEYS.ROLE_STATE_REVEALED,
       status: STAGE_STATUSES.ENABLED,
+      metadata: { queueKey: QUEUE_KEYS.QUEUE_BEFORE_CONCEALED },
       recipes: [actionRecipe(inspectRoleAction, STAGE_RECIPE_KEYS.INSPECT_ROLE)]
     })
   );
@@ -1386,6 +1407,7 @@ test('queue pendientes no interrumpen el pool hasta cambiar currentStageSource',
   const started = startQueue(queued);
 
   assert.equal(started.currentStageSource, CURRENT_STAGE_SOURCES.QUEUE);
+  assert.equal(started.cycle.entryCurrent.key, QUEUE_KEYS.QUEUE_BEFORE_CONCEALED);
   assert.equal(getCurrentStage(started).stageKey, STAGE_KEYS.ROLE_STATE_REVEALED);
 });
 
@@ -2947,6 +2969,18 @@ test('recipeHistory registra stage, efectos finales y cambios impedidos', () => 
   assert.equal(historyEntry.payload.finalEffects[0].property, 'inPlay');
   assert.equal(historyEntry.payload.finalEffects[0].value, false);
   assert.equal(appliedEntries.length, 1);
+  assert.deepEqual(
+    actionHistory(resolved.session).map((entry) => entry.event),
+    [
+      HISTORY_EVENTS.STARTED,
+      HISTORY_EVENTS.FINISHED,
+      HISTORY_EVENTS.STARTED,
+      HISTORY_EVENTS.FINISHED
+    ]
+  );
+  assert.equal(actionHistory(resolved.session)[0].payload.actionId, ACTION_IDS.SELECT);
+  assert.equal(actionHistory(resolved.session).at(-1).payload.actionId, ACTION_IDS.SET_IN_PLAY);
+  assert.equal(actionHistory(resolved.session).at(-1).payload.finalEffects[0].targetId, 'alignment_a_target-0');
 });
 
 test('restore_recent_out_of_play ejecuta set_in_play(true) solo sobre un set_out_of_play previo', () => {
@@ -3149,7 +3183,7 @@ test('completeCurrentStage al terminar poolExposed arranca solo after_exposed', 
   assert.equal(completed.session.currentQueueKey, QUEUE_KEYS.QUEUE_AFTER_EXPOSED);
   assert.deepEqual(
     queueStages(completed.session).map((stage) => stage.key),
-    ['stage_before_concealed_test', 'stage_after_exposed_test']
+    ['stage_after_exposed_test', 'stage_before_concealed_test']
   );
 
   const afterExposedCompleted = completeCurrentStage(completed.session, {
