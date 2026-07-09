@@ -5,7 +5,7 @@
 // El catalogo usa defineRole porque guarda definiciones previas a session.
 // -----------------------------------------------------------------------------
 
-import { POOL_KEYS } from './sessionModel.js';
+import { POOL_KEYS } from './poolCatalog.js';
 import { getCatalogStage, STAGE_CATALOG_IDS } from './stageCatalog.js';
 import { RECIPE_KEYS } from './recipeCatalog.js';
 import { AVAILABILITY_RULE_TYPES } from './stageDefinition.js';
@@ -29,7 +29,7 @@ function getRoleReactiveReaction() {
 
   return {
     ...eventRule,
-    key: 'self_out_of_play_creates_special_stage',
+    key: 'self_out_of_play_creates_queue_stage',
     response: {
       ...(eventRule?.response ?? {}),
       stage: getCatalogStage(STAGE_CATALOG_IDS.ROLE_REACTIVE_RESPONSE, {
@@ -263,9 +263,9 @@ export function getCatalogRole(roleCatalogId, overrides = {}) {
     stageDefinitions: overrides.stageDefinitions
       ? cloneCatalogValue(overrides.stageDefinitions)
       : cloneCatalogValue(baseRole.stageDefinitions),
-    interPoolStageDefinitions: overrides.interPoolStageDefinitions
-      ? cloneCatalogValue(overrides.interPoolStageDefinitions)
-      : cloneCatalogValue(baseRole.interPoolStageDefinitions ?? []),
+    queueStageDefinitions: overrides.queueStageDefinitions
+      ? cloneCatalogValue(overrides.queueStageDefinitions)
+      : cloneCatalogValue(baseRole.queueStageDefinitions ?? []),
     stageRules: overrides.stageRules
       ? cloneCatalogValue(overrides.stageRules)
       : cloneCatalogValue(baseRole.stageRules ?? []),

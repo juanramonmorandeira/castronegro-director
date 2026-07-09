@@ -14,7 +14,7 @@ session.history = {
   cycleHistory: [],
   poolHistory: [],
   stageHistory: [],
-  interPoolQueueHistory: [],
+  queueHistory: [],
   recipeHistory: []
 }
 ```
@@ -41,7 +41,7 @@ Toda entrada de history debe seguir esta forma:
       stageId,
       stageKey,
       stageCatalogId,
-      eventWindow
+      queueKey
     }
   }
 }
@@ -98,7 +98,7 @@ stageCatalogId       -> stage catalogado, si existe
 recipeKey            -> recipe mecanica ejecutada
 actionId             -> action pura ejecutada por actionModel
 recipeHistoryId      -> entrada concreta de recipeHistory
-eventWindow          -> ventana concreta de interPoolQueue
+queueKey          -> ventana concreta de queue
 ```
 
 ## cycleHistory
@@ -112,8 +112,8 @@ Eventos:
 started
 finished
 running_pool
-running_special_stage_window
-skipped_special_stage_window
+running_queue
+skipped_queue
 surface_transition_public
 surface_transition_private
 conclude_play
@@ -123,8 +123,8 @@ Payloads:
 
 ```js
 { event: 'running_pool', payload: { poolKey } }
-{ event: 'running_special_stage_window', payload: { eventWindow } }
-{ event: 'skipped_special_stage_window', payload: { eventWindow, reason } }
+{ event: 'running_queue', payload: { queueKey } }
+{ event: 'skipped_queue', payload: { queueKey, reason } }
 { event: 'surface_transition_public', payload: { from, to, step } }
 { event: 'surface_transition_private', payload: { from, to, step } }
 ```
@@ -220,10 +220,10 @@ Payloads:
 }
 ```
 
-## interPoolQueueHistory
+## queueHistory
 
-`interPoolQueueHistory` usa el mismo contrato que `stageHistory`, pero
-`metadata.context.eventWindow` es obligatorio.
+`queueHistory` usa el mismo contrato que `stageHistory`, pero
+`metadata.context.queueKey` es obligatorio.
 
 Eventos:
 

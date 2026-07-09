@@ -300,7 +300,7 @@ linked_target_recognition
 
 Si `link_targets` crea el group linked, el motor registra en `recipeHistory` que
 los miembros del group conocen al resto de miembros. La entrada usa
-`result: no_effect`, no crea `interPoolStage` y no modifica estado mecanico.
+`result: no_effect`, no crea `queueStage` y no modifica estado mecanico.
 
 Restricciones:
 

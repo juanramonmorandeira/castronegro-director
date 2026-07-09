@@ -131,7 +131,7 @@ Cobertura inicial:
 | --- | --- | --- |
 | `role_set_out_of_play` | ready | Actua mediante `group_concealed_set_out_of_play`. |
 | `role_inspects` | ready | Inspeccion privada. |
-| `role_reactive` | ready | Crea una interPoolStage si cambia a `inPlay=false` desde `concealed_set_out_of_play` o `exposed_set_out_of_play`. |
+| `role_reactive` | ready | Crea una queueStage si cambia a `inPlay=false` desde `concealed_set_out_of_play` o `exposed_set_out_of_play`. |
 | `role_in_out_of_play` | ready | Dos acciones limitadas durante la session. |
 | `role_plain` | ready | Sin stage personal. |
 | `role_links_targets` | ready | Crea un group, aporta selectionRules y objectiveRules propias. |
@@ -164,7 +164,7 @@ Reglas disponibles iniciales:
 
 | Regla mecanica | Tipo | Estado | Observacion |
 | --- | --- | --- | --- |
-| `selection_counts_double` | `selectionRule` | ready | Regla opcional: setea `role.doubleSelector=true`, hace que ese selector cuente doble en vote expuesta de `set_out_of_play`, puede desempatar si eligio un candidate empatado, y encola sucesion por interPoolStage si el holder queda `inPlay=false`. |
+| `selection_counts_double` | `selectionRule` | ready | Regla opcional: setea `role.doubleSelector=true`, hace que ese selector cuente doble en vote expuesta de `set_out_of_play`, puede desempatar si eligio un candidate empatado, y encola sucesion por queueStage si el holder queda `inPlay=false`. |
 
 Los nombres anteriores son exclusivamente mecanicos. Ninguno es texto visible
 de una skin.

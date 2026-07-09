@@ -34,7 +34,7 @@ textos ES/EN pertenecen a una skin.
 | `director_stage_ready_to_finish` | gameplay | director | planned | La stage ya no tiene inputs ni acknowledgements requeridos pendientes. |
 | `director_selection_round_started` | gameplay | director | planned | Ha empezado una ronda de seleccion dentro de la stage. |
 | `director_selection_result_ready` | gameplay | director | planned | Hay un resultado de seleccion listo para revisar o registrar. |
-| `director_special_stage_started` | gameplay | director | planned | Ha empezado una interPoolStage. |
+| `director_queue_stage_started` | gameplay | director | planned | Ha empezado una queueStage. |
 | `director_informational_item_ready` | gameplay | director | planned | Hay informacion no accionable que el director debe mostrar o verificar. |
 | `player_action_required` | gameplay | role | planned | El player/role debe realizar una accion en la stage actual. |
 | `player_acknowledgement_required` | gameplay | role | planned | El player/role debe confirmar informacion recibida. |

@@ -366,7 +366,7 @@ function applyConcludePlayEffect({ session, effect }) {
       playOutcome: effect.playOutcome ?? null
     },
     playOutcome: effect.playOutcome ?? null,
-    interPoolQueue: []
+    queues: {}
   };
 }
 

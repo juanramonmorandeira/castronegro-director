@@ -13,7 +13,7 @@ Un roleDefinition puede definir:
 - `alignmentId` inicial;
 - `instanceRule`;
 - `stageDefinitions` que aporta a pools;
-- `interPoolStageDefinitions` iniciales que aporta a `interPoolQueue`;
+- `queueStageDefinitions` iniciales que aporta a `queue`;
 - `stageRules` contextuales que aporta a otras stages;
 - `reactions`;
 - `assumableRoles` si necesita asumir roles no asignados;
@@ -126,4 +126,4 @@ Al crear session:
 - cada reaction queda disponible para `eventModel`;
 - cada `stageDefinition` aplicable puede aportar stages a los pools;
 - cada `stageRule` queda disponible para `stageModel`;
-- cada `interPoolStageDefinition` aplicable se añade a la cola inicial.
+- cada `queueStageDefinition` aplicable se añade a la cola inicial.

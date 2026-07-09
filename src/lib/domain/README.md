@@ -105,23 +105,25 @@ ruleSet + runMode + match
 Resolver una receta no cierra el stage. El cierre se hace explicitamente con
 `completeCurrentStage`.
 
-Flujo de pools aceptado:
+Flujo de ciclo aceptado:
 
 ```text
-interPoolQueue inicial si hay stages pendientes
+queueBeforeConcealed si hay stages pendientes
 -> poolConcealed
--> interPoolQueue si hay interrupciones
+-> queueAfterConcealed si hay stages pendientes
+-> publicReveal
+-> queueBeforeExposed si hay stages pendientes
 -> poolExposed
--> interPoolQueue si hay interrupciones
+-> queueAfterExposed si hay stages pendientes
+-> privateHide
 -> poolConcealed
 ```
 
-`interPoolQueue` no es un pool. Es una cola FIFO independiente que el ciclo
-comprueba después de terminar completamente el pool actual y antes de entrar en
-el siguiente pool normal.
+`queue` no es un pool. Cada queue es una cola FIFO catalogada que el ciclo
+comprueba en su punto declarado del flujo.
 
 `session.currentStageSource` indica si el cursor esta ejecutando un stage de
-pool o de `interPoolQueue`. Una cola pendiente no interrumpe el pool actual.
+pool o de queue. Una queue pendiente no interrumpe el pool actual.
 
 `startCycle` pertenece a `cycleModel` y se ejecuta antes de preparar
 `poolConcealed`. `check_objectives` forma parte de `pool.onExit`.
@@ -146,7 +148,7 @@ Un rol no ejecuta recetas directamente. Un rol define que stages puede aportar
 al flujo. Las recetas ejecutables viven dentro de `stage.recipes`.
 
 Los stages iniciales que no pertenecen a pools se declaran por separado en
-`interPoolStageDefinitions` y se materializan en `session.interPoolQueue`.
+`queueStageDefinitions` y se materializan en `session.queues`.
 
 Los stages de catalogo son abstractos. Los stages de sesion deben tener actores
 reales en `actorIds`. Si un grupo esta vacio, no puede crear un stage enabled
@@ -156,12 +158,12 @@ Un rol tambien puede declarar `reactions`. Una reaccion no se ejecuta por si
 misma: `eventModel.js` la evalua cuando un efecto final produce un evento. El
 primer caso implementado es `role_reactive`: cuando ese rol recibe un cambio
 real a `inPlay=false` desde `concealed_set_out_of_play` o
-`exposed_set_out_of_play`, se crea un stage en `interPoolQueue` para que pueda
+`exposed_set_out_of_play`, se crea un stage en queue para que pueda
 ejecutar una respuesta.
 
 El motor debe ejecutar `check_objectives` al final de cada pool. Si se emite un
 `playOutcome` concluyente, primero se comprueba que no haya stages pendientes en
-`interPoolQueue` capaces de modificarlo. Solo entonces se ejecuta
+queue capaces de modificarlo. Solo entonces se ejecuta
 `conclude_play`.
 `conclude_play` concluye la parte jugable, pero no cierra administrativamente la
 session.
@@ -180,11 +182,12 @@ La sesion guarda:
 - `roles`
 - `groups`
 - `session.cycle.pools` contiene el mapa de pools runtime.
+- `session.queues` contiene las colas FIFO runtime entre pools.
 - `session.history.recipeHistory`
 - `session.history.cycleHistory`
 - `session.history.poolHistory`
 - `session.history.stageHistory`
-- `session.history.interPoolQueueHistory`
+- `session.history.queueHistory`
 - `sessionMessageLog`
 - `errorLog`
 - `settings`

@@ -4,11 +4,11 @@ digraph DomainArchitecture {
     bgcolor="#ffffff",
     fontname="Arial",
     fontsize=20,
-    label="Cyclic Social Engine - Arquitectura del nuevo dominio",
+    label="Cyclic Social Engine - Estructura del dominio",
     labelloc=t,
     pad=0.3,
-    nodesep=0.35,
-    ranksep=0.7,
+    nodesep=0.45,
+    ranksep=0.85,
     splines=polyline,
     compound=true
   ];
@@ -19,7 +19,7 @@ digraph DomainArchitecture {
     fontname="Arial",
     fontsize=10,
     margin="0.14,0.10",
-    color="#46606f",
+    color="#496573",
     fillcolor="#dff2e3"
   ];
 
@@ -30,81 +30,103 @@ digraph DomainArchitecture {
     fontsize=9
   ];
 
-  inputs [
-    label="ENTRADAS\n\nCatalogs\nruleSet\nrunMode\nmatch\n\nskin se valida fuera del motor",
+  catalog [
+    label="CATALOGOS Y DEFINICIONES\n\nruleSetCatalog\nroleCatalog\ngroupCatalog\nstageCatalog\nrecipeCatalog\nactionCatalog\neventCatalog\npoolCatalog\nqueueCatalog",
     fillcolor="#e8f2f7"
   ];
 
-  assembly [
-    label="CONSTRUCCION\n\nbuildSession\ncreateSession\nsessionValidation\n\nDefinitions:\nrole - group - stage - pool",
+  build [
+    label="CONSTRUCCION DE SESSION\n\nbuildRuleSet\nbuildSession\ncreateSession\nvalidateSession",
     fillcolor="#e8f2f7"
   ];
 
   session [
-    label="SESSION VIVA\n\nroles\ngroups\ncycle\ninterPoolQueue\ncurrentStageSource\nobjectiveRules\nhistoriales\nachievedObjectives\nplayOutcome",
+    label="SESSION\n\nplayers\nroles\ngroups\ncycle\nqueues\nobjectiveRules\nselectionRules\nhistory\nlogs",
     fillcolor="#dcecf5",
     penwidth=1.5
   ];
 
   cycle [
-    label="CYCLE\n\nsession.cycle\nid\npoolOrder\npoolPrevious\npoolCurrent\npoolNext\n\ncycleModel\nstartCycle\nenterNextPool",
+    label="CYCLE\n\ncycleModel\nstartCycle\ntransiciones de superficie\nelige siguiente queue o pool",
     fillcolor="#dff2e3",
     penwidth=1.5
   ];
 
-  pools [
-    label="POOLS DEL CICLO\n\npoolConcealed\npoolExposed",
+  queue [
+    label="QUEUE\n\nqueueModel\nqueueBeforeConcealed\nqueueAfterConcealed\nqueueBeforeExposed\nqueueAfterExposed\nFIFO por queueKey",
     fillcolor="#dff2e3"
   ];
 
-  interPoolQueue [
-    label="SPECIAL STAGES\n\nsession.interPoolQueue\ncola FIFO dinamica\ninterPoolQueueHistory",
+  pool [
+    label="POOL\n\npoolModel\npoolConcealed\npoolExposed\nonEnter/onExit\ncursor de stages",
     fillcolor="#dff2e3"
   ];
 
-  poolRuntime [
-    label="EJECUCION DE UN POOL\n\npool.onEnter\npreparePool\nvalidatePool\nstages normales\npool.onExit",
+  stage [
+    label="STAGE\n\nstageModel\nstageCatalog\nactorIds\naudienceRoleIds\nrecipes\ncompletion",
     fillcolor="#dff2e3"
   ];
 
-  stagePipeline [
-    label="PIPELINE DE UN STAGE\n\nstageModel\nactionModel\nrecipeModel\nconstraintModel\nactionModel\neffectModel",
+  recipe [
+    label="RECIPE\n\nrecipeModel\nrecipeCatalog\nactorContract\ntargetContract\nconstraints\nusage",
     fillcolor="#dff2e3"
   ];
 
-  reactions [
-    label="REACCIONES Y OBJETIVOS\n\neventModel\ncrea interPoolQueue\n\nobjectiveModel\ncheck_objectives\nconclude_play",
+  action [
+    label="ACTION\n\nactionModel\nactionCatalog\nactorModel\ntargetModel\nselect / inspect / link / set_property / conclude",
     fillcolor="#dff2e3"
   ];
 
-  services [
-    label="SERVICIOS TRANSVERSALES\n\nhistoryModel\ngroupModel\n\nblockedPropertyChanges:\nproperty + value\nblockedFor.actorIds\nexpiresAt\n\nreview_property_blocks",
+  effect [
+    label="EFFECT\n\neffectModel\neffectDefinition\nresolveEffects\napplyEffects\nset_property / set_group / reveal / conclude",
     fillcolor="#dff2e3"
   ];
 
-  messages [
-    label="MENSAJES Y PRESENTACION\n\ngameplayMessage -> sessionMessageLog\ndiagnosticMessage -> errorLog\napplicationMessage -> applicationLog\n\nmessagePresenter\nskin + language -> UI",
+  event [
+    label="EVENT\n\neventModel\neventCatalog\nlee efectos finales\ncrea queueStages\ncancela queueStages",
+    fillcolor="#dff2e3"
+  ];
+
+  objective [
+    label="OBJECTIVES\n\nobjectiveModel\ncheck_objectives\nstable parity\nconclude_play",
+    fillcolor="#dff2e3"
+  ];
+
+  history [
+    label="HISTORY\n\nhistoryModel\ncycleHistory\npoolHistory\nqueueHistory\nstageHistory\nrecipeHistory\nactionHistory",
+    fillcolor="#fff0c7",
+    color="#c89223"
+  ];
+
+  surface [
+    label="SURFACE\n\nsurfaceModel\nscreenHidden\nscreenReadonly\nscreenInteractive\nsurfaceMessages\nsurfaceItems",
     fillcolor="#e8f2f7"
   ];
 
-  inputs -> assembly -> session -> cycle -> pools -> poolRuntime -> stagePipeline -> reactions;
-  session -> interPoolQueue [label="cola FIFO"];
-  cycle -> interPoolQueue [label="consulta entre pools"];
-  interPoolQueue -> stagePipeline [label="ejecuta stage"];
-  reactions -> session [label="actualiza estado", constraint=false];
-  reactions -> interPoolQueue [label="encola stage de interPoolQueue", constraint=false];
-  reactions -> messages [label="emite mensajes", constraint=false];
-  session -> messages [label="guarda logs", constraint=false];
-  inputs -> messages [label="skin", style=dashed, constraint=false];
-  services -> stagePipeline [label="consulta y registra", style=dashed];
-  services -> poolRuntime [label="fronteras revisan bloqueos", style=dashed];
+  skin [
+    label="SKIN Y UI\n\nskin filtra texto/assets\nUI pinta plano, stages y controles",
+    fillcolor="#f3f3f3",
+    color="#7a7a7a"
+  ];
 
-  subgraph cluster_legend {
-    label="Leyenda";
-    color="#d5dde2";
-    style="rounded";
-    implemented [label="Implementado", fillcolor="#dff2e3"];
-    agreed [label="Acordado, pendiente de migracion", fillcolor="#fff0c7", style="rounded,filled,dashed", color="#c89223"];
-    implemented -> agreed [style=invis];
-  }
+  catalog -> build -> session;
+  session -> cycle;
+  cycle -> queue [label="ejecuta por queueKey"];
+  cycle -> pool [label="entra en pool"];
+  queue -> stage [label="contiene stages"];
+  pool -> stage [label="contiene stages"];
+  stage -> recipe;
+  recipe -> action;
+  action -> effect;
+  effect -> event [label="eventos derivados"];
+  event -> queue [label="encola/remueve stages"];
+  pool -> objective [label="onExit"];
+  objective -> action [label="conclude_play"];
+  session -> history [label="registra"];
+  stage -> history [style=dashed];
+  recipe -> history [style=dashed];
+  action -> history [style=dashed];
+  cycle -> surface [label="publicReveal/privateHide"];
+  stage -> surface [label="proyeccion"];
+  surface -> skin -> session [style=dashed, label="inputs"];
 }

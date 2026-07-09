@@ -6,7 +6,7 @@
 // constructores de datos que la capa de superficie puede consumir.
 // -----------------------------------------------------------------------------
 
-import { INTER_POOL_QUEUE_EVENT_WINDOWS } from './interPoolQueueDefinition.js';
+import { QUEUE_KEYS } from './queueCatalog.js';
 
 export const SURFACE_SCREEN_MODES = Object.freeze({
   HIDDEN: 'screenHidden',
@@ -22,24 +22,24 @@ export const VISIBILITY = Object.freeze({
 });
 
 export const SURFACE_FLOW_STEPS = Object.freeze({
-  BEFORE_CONCEALED: 'before_concealed',
+  QUEUE_BEFORE_CONCEALED: 'before_concealed',
   POOL_CONCEALED: 'poolConcealed',
-  AFTER_CONCEALED: 'after_concealed',
+  QUEUE_AFTER_CONCEALED: 'after_concealed',
   PUBLIC_REVEAL: 'publicReveal',
-  BEFORE_EXPOSED: 'before_exposed',
+  QUEUE_BEFORE_EXPOSED: 'before_exposed',
   POOL_EXPOSED: 'poolExposed',
-  AFTER_EXPOSED: 'after_exposed',
+  QUEUE_AFTER_EXPOSED: 'after_exposed',
   PRIVATE_HIDE: 'privateHide'
 });
 
 export const SURFACE_FLOW_ORDER = Object.freeze([
-  SURFACE_FLOW_STEPS.BEFORE_CONCEALED,
+  SURFACE_FLOW_STEPS.QUEUE_BEFORE_CONCEALED,
   SURFACE_FLOW_STEPS.POOL_CONCEALED,
-  SURFACE_FLOW_STEPS.AFTER_CONCEALED,
+  SURFACE_FLOW_STEPS.QUEUE_AFTER_CONCEALED,
   SURFACE_FLOW_STEPS.PUBLIC_REVEAL,
-  SURFACE_FLOW_STEPS.BEFORE_EXPOSED,
+  SURFACE_FLOW_STEPS.QUEUE_BEFORE_EXPOSED,
   SURFACE_FLOW_STEPS.POOL_EXPOSED,
-  SURFACE_FLOW_STEPS.AFTER_EXPOSED,
+  SURFACE_FLOW_STEPS.QUEUE_AFTER_EXPOSED,
   SURFACE_FLOW_STEPS.PRIVATE_HIDE
 ]);
 
@@ -79,20 +79,20 @@ export function getSurfaceFlowOrder() {
   return [...SURFACE_FLOW_ORDER];
 }
 
-export function getSurfaceTransitionAfterWindow(eventWindow = null) {
-  if (eventWindow === INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_CONCEALED) {
+export function getSurfaceTransitionAfterQueue(queueKey = null) {
+  if (queueKey === QUEUE_KEYS.QUEUE_AFTER_CONCEALED) {
     return {
       step: SURFACE_FLOW_STEPS.PUBLIC_REVEAL,
-      from: INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_CONCEALED,
-      to: INTER_POOL_QUEUE_EVENT_WINDOWS.BEFORE_EXPOSED
+      from: QUEUE_KEYS.QUEUE_AFTER_CONCEALED,
+      to: QUEUE_KEYS.QUEUE_BEFORE_EXPOSED
     };
   }
 
-  if (eventWindow === INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_EXPOSED) {
+  if (queueKey === QUEUE_KEYS.QUEUE_AFTER_EXPOSED) {
     return {
       step: SURFACE_FLOW_STEPS.PRIVATE_HIDE,
-      from: INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_EXPOSED,
-      to: INTER_POOL_QUEUE_EVENT_WINDOWS.BEFORE_CONCEALED
+      from: QUEUE_KEYS.QUEUE_AFTER_EXPOSED,
+      to: QUEUE_KEYS.QUEUE_BEFORE_CONCEALED
     };
   }
 

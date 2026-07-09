@@ -7,7 +7,8 @@
 // esa responsabilidad sigue perteneciendo a buildSession.
 // -----------------------------------------------------------------------------
 
-import { DEFAULT_POOL_ORDER, normalizeId } from './sessionModel.js';
+import { normalizeId } from './sessionModel.js';
+import { DEFAULT_POOL_ORDER } from './poolCatalog.js';
 
 export const RULE_SET_SUPPORT_STATUSES = Object.freeze({
   READY: 'ready',

@@ -89,12 +89,12 @@ Define el universo mecanico:
 - que objectiveRules existen;
 - que orden de pools y stages se propone;
 - que eventos, triggers o reacciones existen;
-- que reglas pueden generar stages dinamicos en `interPoolQueue`.
+- que reglas pueden generar stages dinamicos en `queue`.
 
 Un `ruleSet` no entiende de skins. No decide si un rol se llama Operador de
 Retaliacion, Testigo Final o cualquier otro nombre visible. Solo define que ese
 rol tiene una reaccion, que esa reaccion escucha un evento y que genera un
-stage de interPoolQueue.
+stage de queue.
 
 El motor no limita cuantos alignments puede declarar un ruleSet. Para ruleSets
 basicos recomendamos esta convencion:

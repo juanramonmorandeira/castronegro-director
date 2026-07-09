@@ -18,7 +18,7 @@ import {
   SELECT_TIE_BREAKER_TYPES,
   SELECT_VALUE_RULE_TYPES
 } from './actionModel.js';
-import { POOL_KEYS } from './sessionModel.js';
+import { POOL_KEYS } from './poolCatalog.js';
 import { MESSAGE_KEYS } from '../messages/messageCatalog.js';
 import {
   ALIGNMENT_IDS,

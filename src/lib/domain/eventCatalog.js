@@ -14,7 +14,7 @@ import {
   defineEventRule
 } from './eventDefinition.js';
 import { MECHANICAL_ENTITY_TYPES } from './domainTypes.js';
-import { INTER_POOL_QUEUE_EVENT_WINDOWS } from './interPoolQueueDefinition.js';
+import { QUEUE_KEYS } from './queueCatalog.js';
 import {
   STAGE_COMPLETION_REQUESTED_BY
 } from './stageTypes.js';
@@ -55,38 +55,38 @@ export const EVENT_SOURCE_STAGE_CATALOG_IDS = Object.freeze({
   LINKED_PROPAGATED_EFFECT: EVENT_STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT
 });
 
-export const EVENT_WINDOW_BY_SOURCE_STAGE_CATALOG_ID = Object.freeze({
-  [EVENT_SOURCE_STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY]: INTER_POOL_QUEUE_EVENT_WINDOWS.BEFORE_EXPOSED,
-  [EVENT_SOURCE_STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY]: INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_EXPOSED,
-  [EVENT_SOURCE_STAGE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY]: INTER_POOL_QUEUE_EVENT_WINDOWS.BEFORE_EXPOSED,
+export const EVENT_QUEUE_BY_SOURCE_STAGE_CATALOG_ID = Object.freeze({
+  [EVENT_SOURCE_STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY]: QUEUE_KEYS.QUEUE_BEFORE_EXPOSED,
+  [EVENT_SOURCE_STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY]: QUEUE_KEYS.QUEUE_AFTER_EXPOSED,
+  [EVENT_SOURCE_STAGE_CATALOG_IDS.ROLE_IN_OUT_OF_PLAY]: QUEUE_KEYS.QUEUE_BEFORE_EXPOSED,
   [EVENT_SOURCE_STAGE_CATALOG_IDS.ROLE_REACTIVE_RESPONSE]: Object.freeze({
-    fallback: INTER_POOL_QUEUE_EVENT_WINDOWS.BEFORE_EXPOSED,
+    fallback: QUEUE_KEYS.QUEUE_BEFORE_EXPOSED,
     preserveAfterExposed: true
   }),
   [EVENT_SOURCE_STAGE_CATALOG_IDS.LINKED_PROPAGATED_EFFECT]: Object.freeze({
-    fallback: INTER_POOL_QUEUE_EVENT_WINDOWS.BEFORE_EXPOSED,
+    fallback: QUEUE_KEYS.QUEUE_BEFORE_EXPOSED,
     preserveAfterExposed: true
   })
 });
 
-export function getEventResponseWindow(event = {}) {
+export function getEventResponseQueueKey(event = {}) {
   const sourceStageCatalogId = event.source?.stageCatalogId ?? null;
-  const sourceEventWindow = event.source?.eventWindow ?? null;
-  const configuredWindow = EVENT_WINDOW_BY_SOURCE_STAGE_CATALOG_ID[sourceStageCatalogId] ?? null;
+  const sourceQueueKey = event.source?.queueKey ?? null;
+  const configuredWindow = EVENT_QUEUE_BY_SOURCE_STAGE_CATALOG_ID[sourceStageCatalogId] ?? null;
 
   if (typeof configuredWindow === 'string') return configuredWindow;
 
   if (configuredWindow?.preserveAfterExposed) {
-    return sourceEventWindow === INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_EXPOSED
-      ? INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_EXPOSED
+    return sourceQueueKey === QUEUE_KEYS.QUEUE_AFTER_EXPOSED
+      ? QUEUE_KEYS.QUEUE_AFTER_EXPOSED
       : configuredWindow.fallback;
   }
 
   if (event.source?.poolKey === 'poolConcealed') {
-    return INTER_POOL_QUEUE_EVENT_WINDOWS.BEFORE_EXPOSED;
+    return QUEUE_KEYS.QUEUE_BEFORE_EXPOSED;
   }
   if (event.source?.poolKey === 'poolExposed') {
-    return INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_EXPOSED;
+    return QUEUE_KEYS.QUEUE_AFTER_EXPOSED;
   }
 
   return configuredWindow?.fallback ?? null;
@@ -113,7 +113,7 @@ export const EVENT_CATALOG = Object.freeze({
         catalogId: EVENT_STAGE_CATALOG_IDS.ROLE_STATE_REVEALED
       },
       payloadSource: 'property_changed_event',
-      eventWindowStrategy: 'event_response_window'
+      queueKeyStrategy: 'event_response_queue'
     }
   }),
 
@@ -144,11 +144,11 @@ export const EVENT_CATALOG = Object.freeze({
         catalogId: EVENT_STAGE_CATALOG_IDS.ROLE_REACTIVE_RESPONSE
       },
       payloadSource: 'triggered_reaction',
-      eventWindowBySourceStageCatalogId: {
+      queueKeyBySourceStageCatalogId: {
         [EVENT_SOURCE_STAGE_CATALOG_IDS.CONCEALED_SET_OUT_OF_PLAY]:
-          INTER_POOL_QUEUE_EVENT_WINDOWS.BEFORE_EXPOSED,
+          QUEUE_KEYS.QUEUE_BEFORE_EXPOSED,
         [EVENT_SOURCE_STAGE_CATALOG_IDS.EXPOSED_SET_OUT_OF_PLAY]:
-          INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_EXPOSED
+          QUEUE_KEYS.QUEUE_AFTER_EXPOSED
       }
     }
   }),

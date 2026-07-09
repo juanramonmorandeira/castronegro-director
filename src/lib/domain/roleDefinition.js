@@ -4,7 +4,7 @@
 //
 // defineRole describe un tipo mecanico de rol:
 // - a que alignment mecanico pertenece por defecto;
-// - que stages de pool y stages iniciales especiales puede proponer;
+// - que stages de pool y stages iniciales de queue puede proponer;
 // - que reglas contextuales y reactions aporta;
 //
 // createRole materializa su estado dentro de una sesion concreta.
@@ -41,7 +41,7 @@ export function defineRole({
   type = ROLE_DEFINITION_TYPES.ROLE,
   alignmentId = null,
   stageDefinitions = [],
-  interPoolStageDefinitions = [],
+  queueStageDefinitions = [],
   stageRules = [],
   reactions = [],
   metadata = {}
@@ -53,7 +53,7 @@ export function defineRole({
     type: normalizeId(type),
     alignmentId: alignmentId ? normalizeId(alignmentId) : null,
     stageDefinitions: (stageDefinitions ?? []).map(defineStage),
-    interPoolStageDefinitions: (interPoolStageDefinitions ?? []).map(defineStage),
+    queueStageDefinitions: (queueStageDefinitions ?? []).map(defineStage),
     // stageRules no crean stages propias: declaran oportunidades contextuales
     // dentro de una stage ajena ya existente.
     stageRules: (stageRules ?? []).map((rule) => ({

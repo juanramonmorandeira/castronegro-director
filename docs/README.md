@@ -42,7 +42,7 @@ Catalog
                       -> actions
                           -> resolver
                               -> effects
-      -> interPoolQueue
+      -> queue
       -> sessionMessageLog
       -> errorLog
 ```
@@ -53,7 +53,7 @@ Conceptos actuales:
 - `actionModel`.
 - `group`.
 - `objectiveRules`.
-- `interPoolQueue` es una cola FIFO, no un pool.
+- `queue` es una cola FIFO, no un pool.
 - `pool.onEnter/onExit`.
 - `blockedPropertyChanges`.
 - las propagaciones viven en `groupRules`.

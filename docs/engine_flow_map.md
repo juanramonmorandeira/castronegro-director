@@ -36,7 +36,7 @@ flowchart TD
   Objectives[objectiveModel]
   PlayOutcome{playOutcome}
   Event[eventModel]
-  InterPoolStage[interPoolQueue stage]
+  QueueStage[queue stage]
   Result[Result]
 
   Skin --> RoleCatalog
@@ -62,18 +62,18 @@ flowchart TD
   Resolver --> Effect
   Effect --> Session
   Session --> Event
-  Event -->|reaccion crea stage| InterPoolStage
-  InterPoolStage --> CurrentStage
+  Event -->|reaccion crea stage| QueueStage
+  QueueStage --> CurrentStage
   Event --> Objectives
   Objectives --> PlayOutcome
   PlayOutcome -->|No concluyente| CurrentStage
-  PlayOutcome -->|Concluyente| InterPoolStage
+  PlayOutcome -->|Concluyente| QueueStage
 ```
 
 Lectura corta:
 
 ```text
-skin/setup -> buildSession -> roles + groups + cycle.pools -> stage actual -> receta -> restricciones -> accion pura -> resolver -> aplicar efectos -> eventos/reacciones -> pool.onExit -> check_objectives -> interPoolQueue
+skin/setup -> buildSession -> roles + groups + cycle.pools -> stage actual -> receta -> restricciones -> accion pura -> resolver -> aplicar efectos -> eventos/reacciones -> pool.onExit -> check_objectives -> queue
 ```
 
 ## Capas del motor
@@ -101,7 +101,7 @@ skin/setup -> buildSession -> roles + groups + cycle.pools -> stage actual -> re
 | Acciones | `actionModel.js` | Validar y resolver acciones puras | Evaluar restricciones de receta |
 | Resolver | `effectModel.js` | Procesar efectos, bloqueos, deduplicacion y consecuencias solicitadas por groupRules | Conocer tipos narrativos de group |
 | Efectos | `effectModel.js` | Escribir efectos finales sobre la sesion | Decidir si un efecto debe existir |
-| Eventos | `eventModel.js` | Convertir efectos finales en eventos y activar reacciones declaradas por roles | Ejecutar la receta del stage de interPoolQueue |
+| Eventos | `eventModel.js` | Convertir efectos finales en eventos y activar reacciones declaradas por roles | Ejecutar la receta del stage de queue |
 | Objectives | `objectiveModel.js` | Evaluar objetivos y playOutcome | Cerrar administrativamente la session |
 | Seleccion | `actionModel.js` | Contar elecciones y resolver chosen/empate | Aplicar el efecto de la seleccion |
 
@@ -122,7 +122,7 @@ flowchart TD
   L[session.roles]
   M[session.groups]
   N[session.cycle.pools]
-  P[session.interPoolQueue inicial]
+  P[session.queues inicial]
   O[Session lista para ejecucion]
 
   A --> E
@@ -241,10 +241,10 @@ poolOrder -> orden entre pools
 pools[poolKey] -> orden de stages dentro de ese pool
 ```
 
-`session.interPoolQueue` es una cola FIFO independiente de `pools`. Antes de
+`session.queues` es una cola FIFO independiente de `pools`. Antes de
 entrar en cualquier pool normal, el ciclo comprueba si contiene stages
 pendientes y, si los tiene, los resuelve primero. Cada stage dinamico puede
-declarar `metadata.eventWindow` (`before_concealed`, `after_concealed`,
+declarar `metadata.queueKey` (`before_concealed`, `after_concealed`,
 `before_exposed`, `after_exposed`) para que la superficie lo proyecte en la
 ventana correcta sin convertir la FIFO en cuatro colas fisicas.
 
@@ -290,9 +290,9 @@ createCycle({
   }
 })
 
-session.interPoolQueue = [
-  { id: 'stage-special-stage_01-role-0', key: 'stage_01' },
-  { id: 'stage-special-stage_02-role-1', key: 'stage_02' }
+session.queues = [
+  { id: 'stage-queue-stage_01-role-0', key: 'stage_01' },
+  { id: 'stage-queue-stage_02-role-1', key: 'stage_02' }
 ]
 ```
 
@@ -330,7 +330,7 @@ para distinguir cierres pedidos por player, director o system.
 seleccionadas. Los pools configurables aceptan `order`; `poolCursorModel.js`
 ejecuta los arrays ya materializados.
 
-`interPoolQueue` conserva siempre el orden FIFO de insercion.
+`queue` conserva siempre el orden FIFO de insercion.
 
 ## Flujo de una accion
 
@@ -401,7 +401,7 @@ graph LR
   E --> F[Sesion actualizada]
   F --> G[eventModel crea eventos]
   G --> H{Hay reacciones}
-  H -->|Si| I[Crear stages de interPoolQueue FIFO]
+  H -->|Si| I[Crear stages de queue FIFO]
   H -->|No| J[check_objectives]
   I --> J
   J --> K{playOutcome concluyente}
@@ -409,7 +409,7 @@ graph LR
   O -->|Si| L[Ejecutar conclude_play]
   O -->|No| N
   K -->|No| M[Continuar]
-  L --> N[interPoolQueue]
+  L --> N[queue]
   I --> N
 ```
 
@@ -420,10 +420,10 @@ Una accion no deberia escribir directamente cualquier cosa en la sesion.
 Debe proponer efectos, resolverlos y aplicar solo efectos finales.
 ```
 
-Regla de `interPoolQueue`:
+Regla de `queue`:
 
 ```text
-Los eventos especiales se registran como stages pendientes en interPoolQueue. Si
+Los eventos especiales se registran como stages pendientes en queue. Si
 check_objectives emite un playOutcome concluyente, primero se comprueba si algun
 stage pendiente puede alterar ese outcome. conclude_play se ejecuta como
 operacion final cuando el outcome es estable.
@@ -504,7 +504,7 @@ link_targets no elimina a nadie.
 link_targets solo crea un grupo.
 Si el grupo se crea, `linked_target_recognition` registra en `recipeHistory`
 que los miembros del group linked conocen al resto de miembros. No es una
-`interPoolStage` y no cambia estado mecanico.
+`queueStage` y no cambia estado mecanico.
 El group linked declara `propagate_property_change`. Su `type` no activa
 ninguna logica especial por si solo.
 ```
@@ -520,8 +520,8 @@ graph TD
   D -->|Si| F[objectiveResolution]
   F --> G{playOutcome concluyente}
   G -->|No| H[Registrar achievedObjectives]
-  G -->|Si| I{InterPoolStages puede alterar outcome}
-  I -->|Si| J[Resolver interPoolQueue antes]
+  G -->|Si| I{QueueStages puede alterar outcome}
+  I -->|Si| J[Resolver queue antes]
   I -->|No| K[Ejecutar conclude_play]
 ```
 
@@ -532,7 +532,7 @@ Orden objetivo:
 3. Resolver conflictos entre objectives concluyentes.
 4. Emitir `playOutcome` si la parte jugable queda concluida.
 5. Cruzar `objectiveRule.dependencies` con `stage.influences` de stages
-   pendientes en `interPoolQueue`.
+   pendientes en `queue`.
 6. Ejecutar `conclude_play` como operacion final si hay `playOutcome`
    concluyente y estable.
 
@@ -780,7 +780,7 @@ Interacciones relevantes:
   `linked_propagated_effect`.
 - `role_reactive`: si el target final es ese role y queda `inPlay=false` desde
   `concealed_set_out_of_play` o `exposed_set_out_of_play`, `eventModel` puede
-  encolar su interPoolStage de respuesta.
+  encolar su queueStage de respuesta.
 - `role_in_out_of_play`: su ventana especial de self-restore pertenece al
   concealed set_out_of_play. En exposed, si queda `inPlay=false`, no abre esa
   excepcion.

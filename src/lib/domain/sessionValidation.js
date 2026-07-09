@@ -15,6 +15,7 @@
 // -----------------------------------------------------------------------------
 
 import { CURRENT_STAGE_SOURCES } from './sessionModel.js';
+import { DEFAULT_QUEUE_ORDER } from './queueCatalog.js';
 
 // Comprueba si el Match esta completo.
 //
@@ -220,12 +221,12 @@ export function validateSession(session = {}, options = {}) {
   }
 
   if (
-    session.currentStageSource === CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE &&
-    (session.interPoolQueue ?? []).length === 0
+    session.currentStageSource === CURRENT_STAGE_SOURCES.QUEUE &&
+    DEFAULT_QUEUE_ORDER.every((queueKey) => (session.queues?.[queueKey] ?? []).length === 0)
   ) {
     errors.push({
-      code: 'session/missing-current-inter-pool-stage',
-      message: 'session points to interPoolQueue but the queue is empty'
+      code: 'session/missing-current-queue-stage',
+      message: 'session points to queue but all queues are empty'
     });
   }
 

@@ -14,6 +14,7 @@ import { buildGroups } from './groupModel.js';
 import { buildRoles, createRole } from './roleDefinition.js';
 import { assignUniqueStageIds, createStage } from './stageDefinition.js';
 import { CURRENT_STAGE_SOURCES, SESSION_STATUSES, normalizeId } from './sessionModel.js';
+import { DEFAULT_QUEUE_ORDER } from './queueCatalog.js';
 import { validateSession } from './sessionValidation.js';
 import {
   HISTORY_COLLECTIONS,
@@ -48,6 +49,43 @@ function createSessionGroup(groupInput = {}) {
   };
 }
 
+function createQueues(stages = [], queues = {}) {
+  const initialQueues = DEFAULT_QUEUE_ORDER.reduce((acc, queueKey) => {
+    acc[queueKey] = [];
+    return acc;
+  }, {});
+  const queueEntries = [
+    ...Object.entries(queues ?? {}).flatMap(([queueKey, queueStages]) =>
+      Array.isArray(queueStages)
+        ? queueStages.map((stage) => ({
+            queueKey,
+            stage: createStage({
+              ...stage,
+              metadata: {
+                ...(stage?.metadata ?? {}),
+                queueKey: stage?.metadata?.queueKey ?? queueKey
+              }
+            })
+          }))
+        : []
+    ),
+    ...stages.map((stage) => ({
+      queueKey: stage.metadata?.queueKey ?? null,
+      stage
+    }))
+  ];
+  const uniqueStages = assignUniqueStageIds(queueEntries.map((entry) => entry.stage));
+
+  return queueEntries.reduce((acc, entry, index) => {
+    acc[entry.queueKey] = [...(acc[entry.queueKey] ?? []), uniqueStages[index]];
+    return acc;
+  }, initialQueues);
+}
+
+function getAllQueueStages(queues = {}) {
+  return Object.values(queues ?? {}).flatMap((stages) => stages ?? []);
+}
+
 export function createSession({
   id,
   definitionId = null,
@@ -57,10 +95,8 @@ export function createSession({
   roles = [],
   groups = [],
   cycle = createCycle(),
-  interPoolQueue = [],
-  currentStageSource = interPoolQueue.length > 0
-    ? CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE
-    : CURRENT_STAGE_SOURCES.POOL,
+  queues = {},
+  currentStageSource = null,
   objectiveRules = [],
   selectionRules = [],
   assumableRoles = null,
@@ -72,16 +108,17 @@ export function createSession({
   log = [],
   metadata = {}
 } = {}) {
-  const normalizedInterPoolStages = assignUniqueStageIds(
-    interPoolQueue.map((stage) => createStage(stage))
-  );
+  const normalizedQueues = createQueues([], queues);
+  const allQueueStages = getAllQueueStages(normalizedQueues);
+  const normalizedCurrentStageSource = currentStageSource
+    ?? (allQueueStages.length > 0 ? CURRENT_STAGE_SOURCES.QUEUE : CURRENT_STAGE_SOURCES.POOL);
   const normalizedHistory = createSessionHistory(history);
-  const normalizedInterPoolStageHistory =
-    normalizedHistory[HISTORY_COLLECTIONS.INTER_POOL_QUEUE].length > 0
-      ? normalizedHistory[HISTORY_COLLECTIONS.INTER_POOL_QUEUE]
-      : normalizedInterPoolStages.flatMap((stage, index) => [
+  const normalizedQueueStageHistory =
+    normalizedHistory[HISTORY_COLLECTIONS.QUEUE].length > 0
+      ? normalizedHistory[HISTORY_COLLECTIONS.QUEUE]
+      : allQueueStages.flatMap((stage, index) => [
           {
-            id: `inter-pool-queue-${stage.key ?? 'stage'}-queued-${index}`,
+            id: `queue-${stage.key ?? 'stage'}-queued-${index}`,
             sequence: index,
             timestamp: new Date().toISOString(),
             event: 'queued',
@@ -98,15 +135,15 @@ export function createSession({
                 stageId: stage.id,
                 stageKey: stage.key ?? null,
                 stageCatalogId: stage.metadata?.catalogId ?? null,
-                eventWindow: stage.metadata?.eventWindow ?? null
+                queueKey: stage.metadata?.queueKey ?? null
               }
             }
           },
-          ...(currentStageSource === CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE && index === 0
+          ...(normalizedCurrentStageSource === CURRENT_STAGE_SOURCES.QUEUE && index === 0
             ? [
                 {
-                  id: `inter-pool-queue-${stage.key ?? 'stage'}-started-${index}`,
-                  sequence: index + normalizedInterPoolStages.length,
+                  id: `queue-${stage.key ?? 'stage'}-started-${index}`,
+                  sequence: index + allQueueStages.length,
                   timestamp: new Date().toISOString(),
                   event: 'started',
                   actor: { authority: 'system' },
@@ -122,7 +159,7 @@ export function createSession({
                       stageId: stage.id,
                       stageKey: stage.key ?? null,
                       stageCatalogId: stage.metadata?.catalogId ?? null,
-                      eventWindow: stage.metadata?.eventWindow ?? null
+                      queueKey: stage.metadata?.queueKey ?? null
                     }
                   }
                 }
@@ -131,7 +168,7 @@ export function createSession({
         ]);
   const sessionHistory = {
     ...normalizedHistory,
-    [HISTORY_COLLECTIONS.INTER_POOL_QUEUE]: normalizedInterPoolStageHistory
+    [HISTORY_COLLECTIONS.QUEUE]: normalizedQueueStageHistory
   };
 
   const normalizedRoles = roles.map(createRole);
@@ -145,8 +182,8 @@ export function createSession({
     roles: normalizedRoles,
     groups: groups.map(createSessionGroup),
     cycle: createCycle(cycle),
-    interPoolQueue: normalizedInterPoolStages,
-    currentStageSource,
+    queues: normalizedQueues,
+    currentStageSource: normalizedCurrentStageSource,
     objectiveRules: [...objectiveRules],
     selectionRules: [...selectionRules],
     assumableRoles: assumableRoles ? [...assumableRoles] : getAssumableRoleIds(normalizedRoles),
@@ -341,7 +378,7 @@ export function buildSession({
     groups
   };
   const poolBuild = cycle?.pools
-    ? { ok: true, errors: [], pools: cycle.pools, interPoolQueue: sessionInput.interPoolQueue ?? [] }
+    ? { ok: true, errors: [], pools: cycle.pools, queues: sessionInput.queues ?? {} }
     : buildPools({
         session: sessionWithGroups,
         roleDefinitions: Object.values(roleDefinitionMap),
@@ -366,9 +403,9 @@ export function buildSession({
         sessionWithGroups.cycle?.poolOrder,
       pools: poolBuild.pools
     }),
-    interPoolQueue: [...(poolBuild.interPoolQueue ?? [])],
-    currentStageSource: (poolBuild.interPoolQueue ?? []).length > 0
-      ? CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE
+    queues: poolBuild.queues ?? {},
+    currentStageSource: getAllQueueStages(poolBuild.queues ?? {}).length > 0
+      ? CURRENT_STAGE_SOURCES.QUEUE
       : CURRENT_STAGE_SOURCES.POOL
   };
   const validation = validate

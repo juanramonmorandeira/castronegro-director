@@ -3,7 +3,7 @@
 // Regla opcional selection_counts_double.
 //
 // No es un role ni un group: es una selectionRule del ruleSet que puede encolar
-// interPoolQueue y setear role.doubleSelector=true.
+// queue y setear role.doubleSelector=true.
 // -----------------------------------------------------------------------------
 
 import { getCatalogRecipe, RECIPE_KEYS } from './recipeCatalog.js';
@@ -23,9 +23,10 @@ import {
   getCatalogStage
 } from './stageCatalog.js';
 import {
-  appendInterPoolStage,
-  removeInterPoolStages
-} from './interPoolQueueModel.js';
+  appendQueueStage,
+  getQueue,
+  removeQueueStages
+} from './queueModel.js';
 import {
   HISTORY_COLLECTIONS,
   getHistoryCollection
@@ -37,7 +38,7 @@ import {
 import {
   EVENT_RULE_KEYS,
   getCatalogEventRule,
-  getEventResponseWindow
+  getEventResponseQueueKey
 } from './eventCatalog.js';
 import { findRole } from './targetModel.js';
 
@@ -61,7 +62,7 @@ function isSelectionCountsDoubleEnabled(session = {}) {
 }
 
 function hasInitialDoubleSelectorRequest(session = {}) {
-  return getHistoryCollection(session, HISTORY_COLLECTIONS.INTER_POOL_QUEUE).some(
+  return getHistoryCollection(session, HISTORY_COLLECTIONS.QUEUE).some(
     (entry) =>
       entry.metadata?.ruleKey === DOUBLE_SELECTOR_RULE_KEY &&
       entry.metadata?.requestKey === DOUBLE_SELECTOR_STAGE_KEYS.SELECT_DOUBLE_SELECTOR
@@ -99,13 +100,13 @@ export function createSelectDoubleSelectorStage(overrides = {}) {
 export function createPickNextDoubleSelectorStage({
   holderRoleId,
   candidateIds = [],
-  eventWindow = null
+  queueKey = null
 } = {}) {
   const catalogStage = getCatalogStage(STAGE_CATALOG_IDS.PICK_NEXT_DOUBLE_SELECTOR, {
     actorIds: holderRoleId ? [holderRoleId] : [],
     metadata: {
       holderRoleId,
-      ...(eventWindow ? { eventWindow } : {})
+      ...(queueKey ? { queueKey } : {})
     }
   });
 
@@ -174,7 +175,7 @@ export function requestSelectDoubleSelectorStage(
   return {
     ok: true,
     errors: [],
-    session: appendInterPoolStage(
+    session: appendQueueStage(
       session,
       createSelectDoubleSelectorStage(),
       {
@@ -224,7 +225,7 @@ export function queuePickNextDoubleSelectorStage(session = {}, { holderRoleId = 
   return {
     ok: true,
     errors: [],
-    session: appendInterPoolStage(
+    session: appendQueueStage(
       session,
       createPickNextDoubleSelectorStage({ holderRoleId, candidateIds }),
       {
@@ -239,7 +240,7 @@ export function queuePickNextDoubleSelectorStage(session = {}, { holderRoleId = 
 }
 
 export function cancelPendingPickNextDoubleSelectorStage(session = {}, { holderRoleId = null } = {}) {
-  return removeInterPoolStages(
+  return removeQueueStages(
     session,
     (stage) =>
       stage.metadata?.ruleKey === DOUBLE_SELECTOR_RULE_KEY &&
@@ -256,7 +257,7 @@ export function cancelPendingPickNextDoubleSelectorStage(session = {}, { holderR
 }
 
 function hasPendingPickNextDoubleSelectorStage(session = {}, holderRoleId = null) {
-  return (session.interPoolQueue ?? []).some(
+  return getQueue(session).some(
     (stage) =>
       stage.metadata?.ruleKey === DOUBLE_SELECTOR_RULE_KEY &&
       stage.metadata?.requestKey === DOUBLE_SELECTOR_STAGE_KEYS.PICK_NEXT_DOUBLE_SELECTOR &&
@@ -285,7 +286,7 @@ export function getDoubleSelectorEventResponses({ session = {}, events = [] } = 
 
       const candidateIds = getInPlayRoleIds(session, [event.roleId]);
       if (candidateIds.length === 0) return [];
-      const eventWindow = getEventResponseWindow(event);
+      const queueKey = getEventResponseQueueKey(event);
 
       return [
         {
@@ -293,14 +294,14 @@ export function getDoubleSelectorEventResponses({ session = {}, events = [] } = 
           stage: createPickNextDoubleSelectorStage({
             holderRoleId: event.roleId,
             candidateIds,
-            eventWindow
+            queueKey
           }),
           metadata: {
             catalogId: rule?.response?.stageCatalogId ?? null,
             ruleKey: rule?.metadata?.ruleKey ?? DOUBLE_SELECTOR_RULE_KEY,
             requestKey: rule?.key ?? DOUBLE_SELECTOR_STAGE_KEYS.PICK_NEXT_DOUBLE_SELECTOR,
             holderRoleId: event.roleId,
-            ...(eventWindow ? { eventWindow } : {})
+            ...(queueKey ? { queueKey } : {})
           }
         }
       ];

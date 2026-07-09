@@ -18,11 +18,16 @@ export {
   PLAYER_TYPES,
   STAGE_STATUSES,
   CURRENT_STAGE_SOURCES,
-  POOL_KEYS,
-  DEFAULT_POOL_ORDER,
   normalizeId,
   getCurrentCycleId
 } from './sessionModel.js';
+
+export {
+  DEFAULT_POOL_ORDER,
+  POOL_CATALOG,
+  POOL_KEYS,
+  getCatalogPool
+} from './poolCatalog.js';
 
 export { createPlayer } from './playerDefinition.js';
 export {
@@ -139,11 +144,16 @@ export {
   getCatalogStage
 } from './stageCatalog.js';
 export {
-  INTER_POOL_QUEUE_ERRORS,
-  INTER_POOL_QUEUE_EVENT_WINDOWS,
-  INTER_POOL_QUEUE_HISTORY_OPERATIONS,
-  isValidInterPoolQueueEventWindow
-} from './interPoolQueueDefinition.js';
+  QUEUE_ERRORS,
+  QUEUE_HISTORY_OPERATIONS
+} from './queueDefinition.js';
+export {
+  DEFAULT_QUEUE_ORDER,
+  QUEUE_CATALOG,
+  QUEUE_KEYS,
+  getCatalogQueue,
+  isValidQueueKey
+} from './queueCatalog.js';
 export {
   getPoolStages,
   getCurrentStageCursor,
@@ -155,7 +165,7 @@ export {
 } from './poolCursorModel.js';
 export {
   CYCLE_ERRORS,
-  createInterPoolStageAdvance,
+  createQueueStageAdvance,
   createCycle,
   enterNextPool,
   getCurrentCycleStage,
@@ -185,19 +195,19 @@ export {
   resolveCurrentStage
 } from './stageModel.js';
 export {
-  getInterPoolQueue,
-  getInterPoolStagesForWindow,
-  hasPendingInterPoolStages,
-  getCurrentInterPoolStage,
-  getCurrentInterPoolStageForWindow,
-  appendInterPoolQueueHistory,
-  appendInterPoolStage,
-  removeInterPoolStages,
-  startInterPoolQueue,
-  startInterPoolQueueForWindow,
-  completeInterPoolStageForWindow,
-  completeInterPoolStage
-} from './interPoolQueueModel.js';
+  getQueue,
+  getQueueStages,
+  hasPendingQueueStages,
+  getCurrentQueueStage,
+  getCurrentQueueStageByKey,
+  appendQueueHistory,
+  appendQueueStage,
+  removeQueueStages,
+  startQueue,
+  startQueueByKey,
+  completeQueueStageByKey,
+  completeQueueStage
+} from './queueModel.js';
 
 export {
   VISIBILITY,
@@ -209,7 +219,7 @@ export {
   SURFACE_EFFECT_REASONS,
   SURFACE_LIFECYCLE_KEYS,
   getSurfaceFlowOrder,
-  getSurfaceTransitionAfterWindow,
+  getSurfaceTransitionAfterQueue,
   createSurfaceTransitionResult,
   createSurfaceMessage,
   createSurfaceItem,
@@ -293,8 +303,8 @@ export {
   EVENT_RULE_KEYS,
   EVENT_RULE_KEYS_BY_FEATURE,
   EVENT_SOURCE_STAGE_CATALOG_IDS,
-  EVENT_WINDOW_BY_SOURCE_STAGE_CATALOG_ID,
-  getEventResponseWindow,
+  EVENT_QUEUE_BY_SOURCE_STAGE_CATALOG_ID,
+  getEventResponseQueueKey,
   getCatalogEventRule
 } from './eventCatalog.js';
 export {

@@ -56,24 +56,8 @@ export const STAGE_STATUSES = Object.freeze({
 
 export const CURRENT_STAGE_SOURCES = Object.freeze({
   POOL: 'pool',
-  INTER_POOL_QUEUE: 'interPoolQueue'
+  QUEUE: 'queue'
 });
-
-// Pools mecanicos del flujo.
-//
-// CONCEALED: acciones de informacion privada u oculta.
-// EXPOSED: acciones publicas o visibles para el grupo.
-export const POOL_KEYS = Object.freeze({
-  POOL_CONCEALED: 'poolConcealed',
-  POOL_EXPOSED: 'poolExposed'
-});
-
-// Orden por defecto de los grupos de stages.
-// Un "pool" es un bloque de stages relacionados.
-export const DEFAULT_POOL_ORDER = Object.freeze([
-  POOL_KEYS.POOL_CONCEALED,
-  POOL_KEYS.POOL_EXPOSED
-]);
 
 // Convierte cualquier texto en un identificador estable.
 //

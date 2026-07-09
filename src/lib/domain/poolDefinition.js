@@ -9,7 +9,9 @@
 
 import { assignUniqueStageIds, createStage, STAGE_SOURCE_TYPES } from './stageDefinition.js';
 import { getGroupRoleIds } from './groupModel.js';
-import { DEFAULT_POOL_ORDER, STAGE_STATUSES, POOL_KEYS, normalizeId } from './sessionModel.js';
+import { STAGE_STATUSES, normalizeId } from './sessionModel.js';
+import { DEFAULT_POOL_ORDER, POOL_KEYS } from './poolCatalog.js';
+import { DEFAULT_QUEUE_ORDER } from './queueCatalog.js';
 
 // Pools cuyo orden interno puede ser configurable por ruleSet.
 export const CONFIGURABLE_STAGE_ORDER_POOLS = Object.freeze([
@@ -104,8 +106,8 @@ function getStageDefinitionsFromSources(sources = []) {
   return sources.flatMap((source = {}) => source.stageDefinitions ?? []);
 }
 
-function getInterPoolStageDefinitionsFromSources(sources = []) {
-  return sources.flatMap((source = {}) => source.interPoolStageDefinitions ?? []);
+function getQueueStageDefinitionsFromSources(sources = []) {
+  return sources.flatMap((source = {}) => source.queueStageDefinitions ?? []);
 }
 
 function createStageWithActors(stageDefinition = {}, actorIds = [], source = {}) {
@@ -137,14 +139,14 @@ function getRoleDefinitionStages(session = {}, roleDefinitions = []) {
   });
 }
 
-function getRoleDefinitionInterPoolStages(session = {}, roleDefinitions = []) {
+function getRoleDefinitionQueueStages(session = {}, roleDefinitions = []) {
   const roles = session.roles ?? [];
 
   return getDefinitionList(roleDefinitions).flatMap((roleDefinition = {}) => {
     const matchingRoles = roles.filter((role) => role.roleKey === roleDefinition.key);
 
     return matchingRoles.flatMap((role) =>
-      (roleDefinition.interPoolStageDefinitions ?? []).map((stageDefinition) =>
+      (roleDefinition.queueStageDefinitions ?? []).map((stageDefinition) =>
         createStageWithActors(stageDefinition, [role.id], {
           type: STAGE_SOURCE_TYPES.ROLE,
           id: role.id,
@@ -174,8 +176,8 @@ function getAbstractSourceStages(sources = []) {
   return getStageDefinitionsFromSources(getDefinitionList(sources)).map(createStage);
 }
 
-function getAbstractSourceInterPoolStages(sources = []) {
-  return getInterPoolStageDefinitionsFromSources(getDefinitionList(sources)).map(createStage);
+function getAbstractSourceQueueStages(sources = []) {
+  return getQueueStageDefinitionsFromSources(getDefinitionList(sources)).map(createStage);
 }
 
 function getStageDefinitionErrors(stages = [], { requirePoolKey = true } = {}) {
@@ -208,7 +210,20 @@ function getStageDefinitionErrors(stages = [], { requirePoolKey = true } = {}) {
   });
 }
 
-// Ensambla el mapa de pools y la cola inicial desde roles y grupos.
+function organizeQueueStages(stages = []) {
+  const initialQueues = DEFAULT_QUEUE_ORDER.reduce((queues, queueKey) => {
+    queues[queueKey] = [];
+    return queues;
+  }, {});
+
+  return assignUniqueStageIds((stages ?? []).map((stage) => createStage(stage))).reduce((queues, stage) => {
+    const queueKey = stage.metadata?.queueKey ?? null;
+    queues[queueKey] = [...(queues[queueKey] ?? []), stage];
+    return queues;
+  }, initialQueues);
+}
+
+// Ensambla el mapa de pools y las queues iniciales desde roles y grupos.
 //
 // La construccion de cada stage sigue perteneciendo a createStage. buildPools solo
 // junta contribuciones, exige poolKey y delega validacion/orden en
@@ -227,12 +242,12 @@ export function buildPools({
       ? getGroupDefinitionStages(session, groupDefinitions)
       : getAbstractSourceStages(groupDefinitions))
   ];
-  const interPoolQueue = session
-    ? getRoleDefinitionInterPoolStages(session, roleDefinitions)
-    : getAbstractSourceInterPoolStages(roleDefinitions);
+  const queueStages = session
+    ? getRoleDefinitionQueueStages(session, roleDefinitions)
+    : getAbstractSourceQueueStages(roleDefinitions);
   const errors = [
     ...getStageDefinitionErrors(poolStages),
-    ...getStageDefinitionErrors(interPoolQueue, { requirePoolKey: false })
+    ...getStageDefinitionErrors(queueStages, { requirePoolKey: false })
   ];
 
   if (errors.length > 0) {
@@ -251,7 +266,7 @@ export function buildPools({
   return organizePoolStages({
     poolOrder,
     pools,
-    interPoolQueue
+    queueStages
   });
 }
 
@@ -370,8 +385,6 @@ export function organizePoolStages(definition = {}) {
         createPool({ key: poolKey, stages })
       ])
     ),
-    interPoolQueue: assignUniqueStageIds(
-      (definition.interPoolQueue ?? []).map((stage) => createStage(stage))
-    )
+    queues: organizeQueueStages(definition.queueStages ?? [])
   };
 }

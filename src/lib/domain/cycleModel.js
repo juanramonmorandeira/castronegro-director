@@ -1,12 +1,13 @@
 // cycleModel.js
 // -----------------------------------------------------------------------------
 // Administra el ciclo runtime, la navegacion entre pools y las transiciones
-// entre ventanas de interPoolQueue.
+// entre queues.
 // Cada pool conserva su propio cursor de stages; cycle decide que bloque del
 // flujo corresponde ejecutar despues.
 // -----------------------------------------------------------------------------
 
-import { DEFAULT_POOL_ORDER, CURRENT_STAGE_SOURCES, POOL_KEYS, normalizeId } from './sessionModel.js';
+import { CURRENT_STAGE_SOURCES, normalizeId } from './sessionModel.js';
+import { DEFAULT_POOL_ORDER, POOL_KEYS } from './poolCatalog.js';
 import { createPool, POOL_LIFECYCLE_OPERATION_TYPES } from './poolDefinition.js';
 import {
   advanceStageCursor,
@@ -32,16 +33,16 @@ import {
   validatePool
 } from './poolModel.js';
 import { reviewPropertyBlocks } from './roleModel.js';
-import { INTER_POOL_QUEUE_EVENT_WINDOWS } from './interPoolQueueDefinition.js';
+import { QUEUE_KEYS } from './queueCatalog.js';
 import {
-  startInterPoolQueue,
-  startInterPoolQueueForWindow,
-  getCurrentInterPoolStage,
-  hasPendingInterPoolStages
-} from './interPoolQueueModel.js';
+  startQueue,
+  startQueueByKey,
+  getCurrentQueueStage,
+  hasPendingQueueStages
+} from './queueModel.js';
 import {
   createSurfaceTransitionResult,
-  getSurfaceTransitionAfterWindow
+  getSurfaceTransitionAfterQueue
 } from './surfaceModel.js';
 import { createMessagesFromEngineErrors } from '../messages/messageModel.js';
 import { routeMessages } from '../messages/messageLogModel.js';
@@ -130,8 +131,8 @@ export function getCurrentCycleStage(cycle = {}) {
 }
 
 function getCurrentSessionStage(session = {}) {
-  if (session.currentStageSource === CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE) {
-    const stage = getCurrentInterPoolStage(session);
+  if (session.currentStageSource === CURRENT_STAGE_SOURCES.QUEUE) {
+    const stage = getCurrentQueueStage(session);
     if (!stage) return null;
     return {
       poolKey: null,
@@ -139,7 +140,7 @@ function getCurrentSessionStage(session = {}) {
       stageKey: stage.key,
       status: stage.status,
       index: 0,
-      source: CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE,
+      source: CURRENT_STAGE_SOURCES.QUEUE,
       stage
     };
   }
@@ -153,10 +154,10 @@ function getCurrentSessionStage(session = {}) {
     : null;
 }
 
-export function createInterPoolStageAdvance({
+export function createQueueStageAdvance({
   session = {},
   stage = null,
-  reason = 'inter-pool-queue-before-next-pool'
+  reason = 'queue-before-next-pool'
 } = {}) {
   return stage
     ? {
@@ -170,7 +171,7 @@ export function createInterPoolStageAdvance({
           stageKey: stage.key,
           status: stage.status,
           index: 0,
-          source: CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE,
+          source: CURRENT_STAGE_SOURCES.QUEUE,
           stage
         }
       }
@@ -258,8 +259,8 @@ export function createLifecycleOperationResult({
   };
 }
 
-export function continueAfterWindow({ session = {}, eventWindow = null } = {}) {
-  const transition = getSurfaceTransitionAfterWindow(eventWindow);
+export function continueAfterQueue({ session = {}, queueKey = null } = {}) {
+  const transition = getSurfaceTransitionAfterQueue(queueKey);
 
   if (!transition) {
     return {
@@ -272,10 +273,10 @@ export function continueAfterWindow({ session = {}, eventWindow = null } = {}) {
   }
 
   const transitionResult = createSurfaceTransitionResult(transition);
-  const nextWindowStart = startInterPoolQueueForWindow(session, transition.to);
+  const nextQueueStart = startQueueByKey(session, transition.to);
 
   return {
-    ...nextWindowStart,
+    ...nextQueueStart,
     lifecycleResults: [transitionResult]
   };
 }
@@ -657,33 +658,33 @@ export function resolvePoolEntry({ session = {}, poolEntry = {} } = {}) {
   };
 }
 
-export function startInterPoolQueueAfterPoolExit({ session = {}, poolKey = null } = {}) {
-  const eventWindow =
+export function startQueueAfterPoolExit({ session = {}, poolKey = null } = {}) {
+  const queueKey =
     poolKey === POOL_KEYS.POOL_CONCEALED
-      ? INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_CONCEALED
+      ? QUEUE_KEYS.QUEUE_AFTER_CONCEALED
       : poolKey === POOL_KEYS.POOL_EXPOSED
-        ? INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_EXPOSED
+        ? QUEUE_KEYS.QUEUE_AFTER_EXPOSED
         : null;
 
-  if (eventWindow) {
-    const windowStart = startInterPoolQueueForWindow(session, eventWindow);
-    if (!windowStart.ok || windowStart.stage) {
+  if (queueKey) {
+    const queueStart = startQueueByKey(session, queueKey);
+    if (!queueStart.ok || queueStart.stage) {
       return {
-        ...windowStart,
+        ...queueStart,
         lifecycleResults: []
       };
     }
 
-    return continueAfterWindow({
-      session: windowStart.session,
-      eventWindow
+    return continueAfterQueue({
+      session: queueStart.session,
+      queueKey
     });
   }
 
   return {
     ok: true,
     errors: [],
-    session: hasPendingInterPoolStages(session) ? startInterPoolQueue(session) : session,
+    session: hasPendingQueueStages(session) ? startQueue(session) : session,
     stage: null,
     lifecycleResults: []
   };
@@ -709,21 +710,21 @@ export function getPostStageFinishLifecycleState({ session, stageAdvance }) {
     session,
     poolKey: stageAdvance.current?.poolKey
   });
-  const afterPoolInterPoolStageStart = exitState.session.playOutcome
+  const afterPoolQueueStageStart = exitState.session.playOutcome
     ? { ok: true, errors: [], session: exitState.session, stage: null, lifecycleResults: [] }
-    : startInterPoolQueueAfterPoolExit({
+    : startQueueAfterPoolExit({
         session: exitState.session,
         poolKey: stageAdvance.current?.poolKey
       });
-  if (!afterPoolInterPoolStageStart.ok) {
+  if (!afterPoolQueueStageStart.ok) {
     return {
-      session: afterPoolInterPoolStageStart.session,
+      session: afterPoolQueueStageStart.session,
       stageAdvance: {
         ...stageAdvance,
         ok: false,
-        errors: afterPoolInterPoolStageStart.errors,
-        reason: 'inter-pool-queue-window-failed',
-        cycle: afterPoolInterPoolStageStart.session.cycle,
+        errors: afterPoolQueueStageStart.errors,
+        reason: 'queue-key-failed',
+        cycle: afterPoolQueueStageStart.session.cycle,
         next: null
       },
       objectiveEvaluation: exitState.objectiveEvaluation,
@@ -731,12 +732,12 @@ export function getPostStageFinishLifecycleState({ session, stageAdvance }) {
       eventResponses: [],
       lifecycleResults: [
         ...exitState.lifecycleResults,
-        ...(afterPoolInterPoolStageStart.lifecycleResults ?? [])
+        ...(afterPoolQueueStageStart.lifecycleResults ?? [])
       ]
     };
   }
-  const sessionBeforePoolEntry = afterPoolInterPoolStageStart.session;
-  const interPoolStage = getCurrentInterPoolStage(sessionBeforePoolEntry);
+  const sessionBeforePoolEntry = afterPoolQueueStageStart.session;
+  const queueStage = getCurrentQueueStage(sessionBeforePoolEntry);
   const poolEntry = exitState.session.playOutcome
     ? {
         ok: true,
@@ -745,11 +746,11 @@ export function getPostStageFinishLifecycleState({ session, stageAdvance }) {
         cycle: exitState.session.cycle,
         next: null
       }
-    : interPoolStage
-      ? createInterPoolStageAdvance({
+    : queueStage
+      ? createQueueStageAdvance({
           session: sessionBeforePoolEntry,
-          stage: interPoolStage,
-          reason: 'inter-pool-queue-before-next-pool',
+          stage: queueStage,
+          reason: 'queue-before-next-pool',
         })
       : enterNextPool(
           sessionBeforePoolEntry.cycle,
@@ -782,7 +783,7 @@ export function getPostStageFinishLifecycleState({ session, stageAdvance }) {
       eventResponses: [],
       lifecycleResults: [
         ...exitState.lifecycleResults,
-        ...(afterPoolInterPoolStageStart.lifecycleResults ?? [])
+        ...(afterPoolQueueStageStart.lifecycleResults ?? [])
       ]
     };
   }
@@ -798,7 +799,7 @@ export function getPostStageFinishLifecycleState({ session, stageAdvance }) {
     eventResponses: [],
     lifecycleResults: [
       ...exitState.lifecycleResults,
-      ...(afterPoolInterPoolStageStart.lifecycleResults ?? []),
+      ...(afterPoolQueueStageStart.lifecycleResults ?? []),
       ...poolEntryState.lifecycleResults
     ]
   };

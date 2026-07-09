@@ -14,14 +14,12 @@ Prioridad alta antes de seguir dividiendo modelos:
     `selectorDefinition/catalog/model` antes de seguir ampliando selection;
   - decidir donde viven las reglas que modifican el resultado de una selection:
     `actionModel`, `effectModel`, `effectRules` u otra pieza.
-- Definir jerarquia mecanica estable:
-  `Session -> Cycle -> Pool/interPoolQueue -> Stage -> Recipe -> Action -> Effect`.
-  Confirmar si existe alguna entidad mecanica menor que `Effect`; si existe,
+- Confirmar si existe alguna entidad mecanica menor que `Effect`; si existe,
   documentarla antes de implementarla.
 - Diseñar la comunicacion entre entidades del dominio:
   - decidir si basta con llamadas directas entre modelos;
   - o si hace falta un canal formal de comunicacion/commands/events entre
-    `Session`, `Cycle`, `Pool`, queue inter-pools, `Stage`, `Recipe`, `Action`
+    `Session`, `Cycle`, `Pool`, `Queue`, `Stage`, `Recipe`, `Action`
     y `Effect`;
   - evitar crear un `communicatorModel` generico hasta tener casos concretos y
     contratos claros.
@@ -54,7 +52,7 @@ Prioridad alta antes de seguir dividiendo modelos:
 - Revisar y depurar todos los logs/histories antes de persistir mensajes
   tecnicos de director/player:
   - `stageHistory`;
-  - `interPoolQueueHistory`;
+  - `queueHistory`;
   - `poolHistory`;
   - `cycleHistory`;
   - `recipeHistory`;
@@ -76,8 +74,6 @@ Prioridad alta antes de seguir dividiendo modelos:
 
 ## ruleSet
 
-- Consolidar la primera implementacion de `ruleSetDefinition` y
-  `basic_ruleset`.
 - Decidir estructura final de `catalogRefs`.
 - Ampliar `skinRequirements` cuando exista la primera skin real.
 - Definir reglas de seleccion que una configuration debe respetar.
@@ -105,10 +101,11 @@ Prioridad alta antes de seguir dividiendo modelos:
   - el director cierra manualmente las stages;
   - los players ejecutan accion o acknowledgement durante su stage;
   - documentar excepciones de cierre automatico si alguna mecanica futura lo exige.
-- Redisenar efectos propagados:
-  - todo efecto derivado de otro efecto debe pasar por una interPoolStage;
-  - la interPoolStage debe estar condicionada al estado que la causo;
-  - si el estado causal cambia antes de resolverla, no produce efecto.
+- Extender efectos propagados futuros siguiendo el patron de queueStage ya
+  implementado para linked:
+  - declarar queueStage y `queueKey` por regla productora;
+  - condicionar el efecto al estado que lo causo cuando corresponda;
+  - si el estado causal cambia antes de resolverla, no producir efecto.
 - Revisar configuracion avanzada de `selection_counts_double`:
   - abstencion configurable para vote expuesta;
   - parametros configurables de eleccion inicial;
@@ -199,7 +196,7 @@ Prioridad alta antes de seguir dividiendo modelos:
 
 - Mantener sin offsets negativos hasta que exista una mecanica real que los
   justifique.
-- No aplicar duraciones de stage a `interPoolQueue` hasta que exista un caso
+- No aplicar duraciones de stage a `queue` hasta que exista un caso
   real.
 - Anadir nuevas `groupRules` solo cuando aparezcan mecanicas reales; la primera
   implementada es `propagate_property_change`.
@@ -211,8 +208,8 @@ Prioridad alta antes de seguir dividiendo modelos:
 - Completar `poolHistory` segun `docs/history_contract.md` durante la ejecucion
   incremental.
 - Aplicar pausa administrativa en session cuando un error ascienda desde pool.
-- No crear `cycleInterPoolStages` hasta que exista una mecanica real ejecutada
-  entre ciclos. Mantener mientras tanto una unica cola `session.interPoolQueue`.
+- No crear queues adicionales entre ciclos hasta que exista una mecanica real
+  ejecutada en ese punto del flujo.
 
 ## Futuro editor de catalog
 

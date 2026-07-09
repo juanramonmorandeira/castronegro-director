@@ -5,7 +5,7 @@
 // El catalogo usa defineGroup porque guarda definiciones previas a session.
 // -----------------------------------------------------------------------------
 
-import { POOL_KEYS } from './sessionModel.js';
+import { POOL_KEYS } from './poolCatalog.js';
 import { getCatalogStage, STAGE_CATALOG_IDS } from './stageCatalog.js';
 import { defineGroup, GROUP_MEMBERSHIP_RULE_TYPES } from './groupDefinition.js';
 

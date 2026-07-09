@@ -170,7 +170,7 @@ Responsabilidades:
 2. registrar objetivos cumplidos no concluyentes en `achievedObjectives`;
 3. resolver conflictos si varias condiciones concluyentes se cumplen a la vez;
 4. emitir `playOutcome` si la parte jugable queda concluida;
-5. comprobar si hay stages pendientes en `interPoolQueue` que pueden alterar el
+5. comprobar si hay stages pendientes en `queue` que pueden alterar el
    outcome;
 6. ejecutar `conclude_play` como operacion final solo si existe un
    `playOutcome` concluyente y estable.
@@ -183,8 +183,8 @@ jugable.
 No cierra la session. Cerrar la session es responsabilidad exclusiva del creador
 o del flujo de administracion de la aplicacion.
 
-`conclude_play` no se encola en `interPoolQueue`. Si hay stages pendientes que
-puedan alterar el outcome, se resuelve primero `interPoolQueue`. Si no los hay,
+`conclude_play` no se encola en `queue`. Si hay stages pendientes que
+puedan alterar el outcome, se resuelve primero `queue`. Si no los hay,
 `conclude_play` se ejecuta como operacion final y el flujo de pools deja de
 avanzar.
 

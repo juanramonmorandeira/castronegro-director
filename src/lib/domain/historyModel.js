@@ -27,7 +27,7 @@ export const HISTORY_COLLECTIONS = Object.freeze({
   CYCLE: 'cycleHistory',
   POOL: 'poolHistory',
   STAGE: 'stageHistory',
-  INTER_POOL_QUEUE: 'interPoolQueueHistory',
+  QUEUE: 'queueHistory',
   RECIPE: 'recipeHistory'
 });
 
@@ -82,7 +82,7 @@ function createHistoryContext(entry = {}) {
     stageId: entry.stageId ?? entry.metadata?.context?.stageId ?? null,
     stageKey: entry.stageKey ?? entry.metadata?.context?.stageKey ?? null,
     stageCatalogId: entry.stageCatalogId ?? entry.metadata?.context?.stageCatalogId ?? null,
-    eventWindow: entry.eventWindow ?? entry.metadata?.context?.eventWindow ?? null
+    queueKey: entry.queueKey ?? entry.metadata?.context?.queueKey ?? null
   };
 }
 

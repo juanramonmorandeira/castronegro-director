@@ -28,9 +28,9 @@ import {
   canRequesterCompleteStage
 } from './stageDefinition.js';
 import {
-  createInterPoolStageAdvance,
+  createQueueStageAdvance,
   enterNextPool,
-  continueAfterWindow,
+  continueAfterQueue,
   getCurrentCycleStage,
   resolveCycleAfterStageFinished,
   resolvePoolEntry,
@@ -59,9 +59,9 @@ import {
 import { CURRENT_STAGE_SOURCES, normalizeId } from './sessionModel.js';
 import { RECIPE_ACTOR_TYPES } from './domainTypes.js';
 import {
-  completeInterPoolStage,
-  getCurrentInterPoolStage
-} from './interPoolQueueModel.js';
+  completeQueueStage,
+  getCurrentQueueStage
+} from './queueModel.js';
 import { reviewPropertyBlocks } from './roleModel.js';
 import {
   STAGE_COMPLETION_MODES,
@@ -89,8 +89,8 @@ function appendEngineErrors(session, errors, context = {}) {
 //
 // Devuelve el stage apuntado por el cursor de pools.
 export function getCurrentStage(session) {
-  if (session?.currentStageSource === CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE) {
-    const stage = getCurrentInterPoolStage(session);
+  if (session?.currentStageSource === CURRENT_STAGE_SOURCES.QUEUE) {
+    const stage = getCurrentQueueStage(session);
     if (!stage) return null;
     return {
       poolKey: null,
@@ -98,7 +98,7 @@ export function getCurrentStage(session) {
       stageKey: stage.key,
       status: stage.status,
       index: 0,
-      source: CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE,
+      source: CURRENT_STAGE_SOURCES.QUEUE,
       stage
     };
   }
@@ -127,7 +127,7 @@ export function validateCurrentStage(session, { recipeKey = null } = {}) {
     };
   }
 
-  if (!session.cycle && session.currentStageSource !== CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE) {
+  if (!session.cycle && session.currentStageSource !== CURRENT_STAGE_SOURCES.QUEUE) {
     errors.push({
       code: STAGE_ERRORS.MISSING_STAGE_POOLS,
       message: 'session has no cycle'
@@ -527,13 +527,13 @@ function resolveStageSelectActionAndRecipe(session, stage, recipe, input = {}, c
   };
 }
 
-function completeCurrentInterPoolStage(session, currentStage, input, requestedBy) {
-  const completedEventWindow = currentStage.stage?.metadata?.eventWindow ?? null;
-  const sessionAfterInterPoolStageEffect = resolveEventStageOnCompletion(
+function completeCurrentQueueStage(session, currentStage, input, requestedBy) {
+  const completedQueueKey = currentStage.stage?.metadata?.queueKey ?? null;
+  const sessionAfterQueueStageEffect = resolveEventStageOnCompletion(
     session,
     currentStage
   );
-  const sessionWithoutStage = completeInterPoolStage(sessionAfterInterPoolStageEffect, {
+  const sessionWithoutStage = completeQueueStage(sessionAfterQueueStageEffect, {
     requestedBy,
     reason: input.reason ?? 'manual_completion'
   });
@@ -547,15 +547,15 @@ function completeCurrentInterPoolStage(session, currentStage, input, requestedBy
     reason: input.reason ?? 'manual_completion',
     metadata: {
       ...(input.metadata ?? {}),
-      source: CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE
+      source: CURRENT_STAGE_SOURCES.QUEUE
     }
   });
-  const nextInterPoolStage =
-    sessionWithStageHistory.currentStageSource === CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE
-      ? getCurrentInterPoolStage(sessionWithStageHistory)
+  const nextQueueStage =
+    sessionWithStageHistory.currentStageSource === CURRENT_STAGE_SOURCES.QUEUE
+      ? getCurrentQueueStage(sessionWithStageHistory)
       : null;
 
-  if (nextInterPoolStage) {
+  if (nextQueueStage) {
     return {
       ok: true,
       errors: [],
@@ -564,15 +564,15 @@ function completeCurrentInterPoolStage(session, currentStage, input, requestedBy
       stageAdvance: {
         ok: true,
         errors: [],
-        reason: 'next-inter-pool-stage',
+        reason: 'next-queue-stage',
         next: {
           poolKey: null,
-          stageId: nextInterPoolStage.id,
-          stageKey: nextInterPoolStage.key,
-          status: nextInterPoolStage.status,
+          stageId: nextQueueStage.id,
+          stageKey: nextQueueStage.key,
+          status: nextQueueStage.status,
           index: 0,
-          source: CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE,
-          stage: nextInterPoolStage
+          source: CURRENT_STAGE_SOURCES.QUEUE,
+          stage: nextQueueStage
         }
       },
       completion: getHistoryCollection(sessionWithStageHistory, HISTORY_COLLECTIONS.STAGE).at(-1),
@@ -587,72 +587,72 @@ function completeCurrentInterPoolStage(session, currentStage, input, requestedBy
     key: STAGE_RECIPE_KEYS.CHECK_OBJECTIVES,
     metadata: { reason: 'inter_pool_queue_empty' }
   });
-  const nextWindowStart = !objectiveState.session.playOutcome
-    ? continueAfterWindow({
+  const nextQueueStart = !objectiveState.session.playOutcome
+    ? continueAfterQueue({
         session: objectiveState.session,
-        eventWindow: completedEventWindow
+        queueKey: completedQueueKey
       })
     : { ok: true, errors: [], session: objectiveState.session, stage: null, lifecycleResults: [] };
-  if (!nextWindowStart.ok) {
+  if (!nextQueueStart.ok) {
     return {
       ok: false,
-      errors: nextWindowStart.errors,
-      session: nextWindowStart.session,
+      errors: nextQueueStart.errors,
+      session: nextQueueStart.session,
       stage: currentStage,
       stageAdvance: {
         ok: false,
-        errors: nextWindowStart.errors,
-        reason: 'inter-pool-queue-window-failed',
-        cycle: nextWindowStart.session.cycle,
+        errors: nextQueueStart.errors,
+        reason: 'queue-key-failed',
+        cycle: nextQueueStart.session.cycle,
         next: null
       },
-      completion: getHistoryCollection(nextWindowStart.session, HISTORY_COLLECTIONS.STAGE).at(-1),
+      completion: getHistoryCollection(nextQueueStart.session, HISTORY_COLLECTIONS.STAGE).at(-1),
       objectiveEvaluation: objectiveState.objectiveEvaluation,
       playOutcome: objectiveState.playOutcome,
       eventResponses: [],
       lifecycleResults: [
         ...objectiveState.lifecycleResults,
-        ...(nextWindowStart.lifecycleResults ?? [])
+        ...(nextQueueStart.lifecycleResults ?? [])
       ]
     };
   }
-  if (nextWindowStart.stage) {
-    const stageAdvance = createInterPoolStageAdvance({
-      session: nextWindowStart.session,
-      stage: nextWindowStart.stage,
-      reason: 'inter-pool-queue-before-next-pool'
+  if (nextQueueStart.stage) {
+    const stageAdvance = createQueueStageAdvance({
+      session: nextQueueStart.session,
+      stage: nextQueueStart.stage,
+      reason: 'queue-before-next-pool'
     });
 
     return {
       ok: true,
       errors: [],
-      session: nextWindowStart.session,
+      session: nextQueueStart.session,
       stage: currentStage,
       stageAdvance,
-      completion: getHistoryCollection(nextWindowStart.session, HISTORY_COLLECTIONS.STAGE).at(-1),
+      completion: getHistoryCollection(nextQueueStart.session, HISTORY_COLLECTIONS.STAGE).at(-1),
       objectiveEvaluation: objectiveState.objectiveEvaluation,
       playOutcome: objectiveState.playOutcome,
       eventResponses: [],
       lifecycleResults: [
         ...objectiveState.lifecycleResults,
-        ...(nextWindowStart.lifecycleResults ?? [])
+        ...(nextQueueStart.lifecycleResults ?? [])
       ]
     };
   }
-  const poolEntry = nextWindowStart.session.playOutcome
+  const poolEntry = nextQueueStart.session.playOutcome
     ? {
         ok: true,
         errors: [],
         reason: 'play-concluded',
-        cycle: nextWindowStart.session.cycle,
+        cycle: nextQueueStart.session.cycle,
         next: null
       }
     : enterNextPool(
-        nextWindowStart.session.cycle,
-        nextWindowStart.session.cycle?.poolNext
+        nextQueueStart.session.cycle,
+        nextQueueStart.session.cycle?.poolNext
       );
   const sessionAfterPoolEntry = {
-    ...nextWindowStart.session,
+    ...nextQueueStart.session,
     cycle: poolEntry.cycle
   };
   const poolEntryState = resolvePoolEntry({
@@ -673,7 +673,7 @@ function completeCurrentInterPoolStage(session, currentStage, input, requestedBy
     eventResponses: [],
     lifecycleResults: [
       ...objectiveState.lifecycleResults,
-      ...(nextWindowStart.lifecycleResults ?? []),
+      ...(nextQueueStart.lifecycleResults ?? []),
       ...(poolEntryState.lifecycleResults ?? [])
     ]
   };
@@ -732,7 +732,7 @@ function startStage({ session, input = {}, operation } = {}) {
 function evaluateStageActionContext(state) {
   const workingSession =
     state.currentStage &&
-    state.currentStage.source !== CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE
+    state.currentStage.source !== CURRENT_STAGE_SOURCES.QUEUE
       ? reviewPropertyBlocks(state.session, {
           type: 'stage_boundary',
           cycleId: state.session.cycle?.id ?? 0,
@@ -764,7 +764,7 @@ function evaluateStageActionContext(state) {
     stageId: stageValidation.currentStage.stageId,
     stageKey: stageValidation.currentStage.stageKey,
     stageCatalogId: stageValidation.currentStage.stage?.metadata?.catalogId ?? null,
-    eventWindow: stageValidation.currentStage.stage?.metadata?.eventWindow ?? null,
+    queueKey: stageValidation.currentStage.stage?.metadata?.queueKey ?? null,
     causedBy: stageValidation.currentStage.stage?.metadata?.source?.id
       ? {
           type: stageValidation.currentStage.stage.metadata.source.type ?? 'role',
@@ -797,7 +797,7 @@ function evaluateStageFinishRequest(state) {
     };
   }
 
-  if (!state.session.cycle && state.session.currentStageSource !== CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE) {
+  if (!state.session.cycle && state.session.currentStageSource !== CURRENT_STAGE_SOURCES.QUEUE) {
     return {
       ...state,
       ok: false,
@@ -907,10 +907,10 @@ function resolveStageAction(state) {
 function resolveStageFinishOperation(state) {
   if (!state.ok) return state;
 
-  if (state.currentStage.source === CURRENT_STAGE_SOURCES.INTER_POOL_QUEUE) {
+  if (state.currentStage.source === CURRENT_STAGE_SOURCES.QUEUE) {
     return {
       ...state,
-      result: completeCurrentInterPoolStage(
+      result: completeCurrentQueueStage(
         state.session,
         state.currentStage,
         state.input,

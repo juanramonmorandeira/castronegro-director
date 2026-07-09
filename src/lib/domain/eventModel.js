@@ -7,7 +7,7 @@
 // - trigger: condicion declarada por un rol para escuchar ese evento.
 // - reaction: respuesta definida por ese rol cuando el trigger encaja.
 //
-// Este archivo crea stages de interPoolQueue derivados y resuelve los stages de interPoolQueue
+// Este archivo crea stages de queue derivados y resuelve los stages de queue
 // cuyo comportamiento pertenece al evento que los genero.
 // -----------------------------------------------------------------------------
 
@@ -24,15 +24,15 @@ import {
 } from './eventDefinition.js';
 import {
   EVENT_RULE_KEYS,
-  EVENT_WINDOW_BY_SOURCE_STAGE_CATALOG_ID,
+  EVENT_QUEUE_BY_SOURCE_STAGE_CATALOG_ID,
   getCatalogEventRule,
-  getEventResponseWindow
+  getEventResponseQueueKey
 } from './eventCatalog.js';
 import {
-  appendInterPoolStage,
-  removeInterPoolStages
-} from './interPoolQueueModel.js';
-import { INTER_POOL_QUEUE_EVENT_WINDOWS } from './interPoolQueueDefinition.js';
+  appendQueueStage,
+  removeQueueStages
+} from './queueModel.js';
+import { QUEUE_KEYS } from './queueCatalog.js';
 import {
   STAGE_CATALOG_IDS,
   getCatalogStage
@@ -80,24 +80,24 @@ function getPropertyChangeEvent({ previousSession, effect, source = {} }) {
       stageId: source.stageId ?? null,
       stageKey: source.stageKey ?? null,
       stageCatalogId: source.stageCatalogId ?? null,
-      eventWindow: source.eventWindow ?? null,
+      queueKey: source.queueKey ?? null,
       effect
     }
   };
 }
 
-function getEventWindowForSourceStage(stageCatalogId = null) {
-  return EVENT_WINDOW_BY_SOURCE_STAGE_CATALOG_ID[stageCatalogId] ?? null;
+function getQueueKeyForSourceStage(stageCatalogId = null) {
+  return EVENT_QUEUE_BY_SOURCE_STAGE_CATALOG_ID[stageCatalogId] ?? null;
 }
 
-function getRevealEventWindow(event = {}) {
-  return getEventResponseWindow(event);
+function getRevealQueueKey(event = {}) {
+  return getEventResponseQueueKey(event);
 }
 
-function getLinkedEventWindow(context = {}) {
-  if (context.eventWindow) return context.eventWindow;
-  if (context.poolKey === 'poolConcealed') return INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_CONCEALED;
-  if (context.poolKey === 'poolExposed') return INTER_POOL_QUEUE_EVENT_WINDOWS.AFTER_EXPOSED;
+function getLinkedQueueKey(context = {}) {
+  if (context.queueKey) return context.queueKey;
+  if (context.poolKey === 'poolConcealed') return QUEUE_KEYS.QUEUE_AFTER_CONCEALED;
+  if (context.poolKey === 'poolExposed') return QUEUE_KEYS.QUEUE_AFTER_EXPOSED;
   return null;
 }
 
@@ -128,10 +128,10 @@ function getResponseStageCatalogId(rule = {}, metadata = {}) {
 export function createStageResponseFromRule(rule = {}, payload = {}) {
   const response = rule.response ?? {};
   const metadataTemplate = response.metadataTemplate ?? {};
-  const eventWindow = payload.eventWindow ?? payload.metadata?.eventWindow ?? null;
+  const queueKey = payload.queueKey ?? payload.metadata?.queueKey ?? null;
   const metadata = {
     ...metadataTemplate,
-    ...(eventWindow ? { eventWindow } : {}),
+    ...(queueKey ? { queueKey } : {}),
     ...(payload.metadata ?? {})
   };
   const stageCatalogId = getResponseStageCatalogId(rule, metadata);
@@ -152,7 +152,7 @@ export function createStageResponseFromRule(rule = {}, payload = {}) {
     stage,
     metadata: {
       ...(stageCatalogId ? { catalogId: stageCatalogId } : {}),
-      ...(eventWindow ? { eventWindow } : {}),
+      ...(queueKey ? { queueKey } : {}),
       ...(payload.responseMetadata ?? {})
     }
   };
@@ -182,7 +182,7 @@ export function createCancelStageResponseFromRule(rule = {}, payload = {}) {
 export function applyCatalogEventResponses(session = {}, responses = [], { metadata = {} } = {}) {
   return (responses ?? []).reduce((currentSession, response) => {
     if (response.type === EVENT_RESPONSE_TYPES.CREATE_STAGE) {
-      return appendInterPoolStage(currentSession, response.stage, {
+      return appendQueueStage(currentSession, response.stage, {
         source: 'event_response',
         ...metadata,
         ...(response.metadata ?? {})
@@ -196,7 +196,7 @@ export function applyCatalogEventResponses(session = {}, responses = [], { metad
           !!response.metadata?.catalogId &&
           stage.metadata?.catalogId === response.metadata.catalogId);
 
-      return removeInterPoolStages(currentSession, cancelPredicate, {
+      return removeQueueStages(currentSession, cancelPredicate, {
         source: 'event_response',
         ...metadata,
         ...(response.metadata ?? {})
@@ -240,7 +240,7 @@ export function getEventsFromActionResult({
     stageId: context.stageId ?? null,
     stageKey: context.stageKey ?? null,
     stageCatalogId: context.stageCatalogId ?? null,
-    eventWindow: context.eventWindow ?? null
+    queueKey: context.queueKey ?? null
   };
 
   return (actionResult?.finalEffects ?? [])
@@ -255,9 +255,9 @@ export function getEventsFromActionResult({
 function createRoleStateRevealedStage({ session = {}, event = {} } = {}) {
   const rule = getCatalogEventRule(EVENT_RULE_KEYS.ROLE_STATE_REVEALED);
   const role = findRole(session, event.roleId);
-  const eventWindow = getRevealEventWindow(event);
+  const queueKey = getRevealQueueKey(event);
 
-  if (!role || !eventWindow) return null;
+  if (!role || !queueKey) return null;
 
   return createStage({
     ...getCatalogStage(STAGE_CATALOG_IDS.ROLE_STATE_REVEALED),
@@ -265,7 +265,7 @@ function createRoleStateRevealedStage({ session = {}, event = {} } = {}) {
     status: STAGE_STATUSES.ENABLED,
     metadata: {
       ...(rule?.response?.metadataTemplate ?? {}),
-      eventWindow,
+      queueKey,
       reveal: {
         playerId: role.playerId ?? null,
         roleId: role.id,
@@ -319,7 +319,7 @@ function getRoleStateRevealEventResponses({ session = {}, events = [] } = {}) {
     return [
       createStageResponseFromRule(rule, {
         stage,
-        eventWindow: stage.metadata.eventWindow,
+        queueKey: stage.metadata.queueKey,
         responseMetadata: {
           roleId: event.roleId
         }
@@ -362,7 +362,7 @@ export function getTriggeredReactions({ session = {}, events = [] } = {}) {
 
 function createStageFromReactionResponse({ triggeredReaction }) {
   const response = triggeredReaction.reaction.response ?? {};
-  const eventWindow = getEventWindowForSourceStage(
+  const queueKey = getQueueKeyForSourceStage(
     triggeredReaction.event.source?.stageCatalogId
   );
   const stage = createStage({
@@ -373,7 +373,7 @@ function createStageFromReactionResponse({ triggeredReaction }) {
     actorIds: [triggeredReaction.role.id],
     metadata: {
       ...(response.stage?.metadata ?? {}),
-      ...(eventWindow ? { eventWindow } : {}),
+      ...(queueKey ? { queueKey } : {}),
       source: {
         type: 'event',
         id: triggeredReaction.event.type,
@@ -388,7 +388,7 @@ function createStageFromReactionResponse({ triggeredReaction }) {
 
   return createStageResponseFromRule(triggeredReaction.reaction, {
     stage,
-    eventWindow
+    queueKey
   });
 }
 
@@ -416,8 +416,8 @@ function getLinkedPropagatedEffectResponses({
   context = {}
 } = {}) {
   const rule = getCatalogEventRule(EVENT_RULE_KEYS.LINKED_PROPAGATED_EFFECT);
-  const eventWindow = getLinkedEventWindow(context);
-  if (!eventWindow) return [];
+  const queueKey = getLinkedQueueKey(context);
+  if (!queueKey) return [];
 
   return (linkedPropagatedEffects ?? []).map((effect, index) =>
     createStageResponseFromRule(rule, {
@@ -426,7 +426,7 @@ function getLinkedPropagatedEffectResponses({
         status: STAGE_STATUSES.ENABLED,
         metadata: {
           ...(rule?.response?.metadataTemplate ?? {}),
-          eventWindow,
+          queueKey,
           propagatedEffect: effect,
           sourceContext: {
             cycleId: context.cycleId ?? session.cycle?.id ?? 0,
@@ -438,7 +438,7 @@ function getLinkedPropagatedEffectResponses({
           }
         }
       }),
-      eventWindow,
+      queueKey,
       responseMetadata: {
         reason: RECIPE_KEYS.LINKED_PROPAGATED_EFFECT,
         index,
@@ -457,8 +457,8 @@ function getLinkedTargetRecognitionResponses({
   context = {}
 } = {}) {
   const rule = getCatalogEventRule(EVENT_RULE_KEYS.LINKED_TARGET_RECOGNITION);
-  const eventWindow = getLinkedEventWindow(context);
-  if (!eventWindow) return [];
+  const queueKey = getLinkedQueueKey(context);
+  if (!queueKey) return [];
 
   return (actionResult.finalEffects ?? [])
     .filter((effect) => effect?.type === EFFECT_TYPES.SET_GROUP && effect.groupType === GROUP_TYPES.LINKED)
@@ -475,7 +475,7 @@ function getLinkedTargetRecognitionResponses({
           status: STAGE_STATUSES.ENABLED,
           metadata: {
             ...(rule?.response?.metadataTemplate ?? {}),
-            eventWindow,
+            queueKey,
             audienceRoleIds: memberRoleIds,
             causedBy: {
               recipeKey: context.recipeKey ?? null,
@@ -495,9 +495,9 @@ function getLinkedTargetRecognitionResponses({
             }
           }
         }),
-        eventWindow,
+        queueKey,
         responseMetadata: {
-          eventWindow,
+          queueKey,
           groupId: group.id,
           audienceRoleIds: memberRoleIds
         }
@@ -534,7 +534,7 @@ function resolveLinkedPropagatedEffectStageOnCompletion(session = {}, currentSta
     stageId: currentStage.stageId,
     stageKey: currentStage.stageKey,
     stageCatalogId: stage.metadata?.catalogId ?? null,
-    eventWindow: stage.metadata?.eventWindow ?? null,
+    queueKey: stage.metadata?.queueKey ?? null,
     recipeKey: RECIPE_KEYS.LINKED_PROPAGATED_EFFECT,
     causedBy: effect?.causedBy ?? null
   };
@@ -605,7 +605,7 @@ export function resolveEventStageOnCompletion(session = {}, currentStage = {}) {
 //
 // Recibe el resultado de una accion/receta ya resuelta, crea eventos desde sus
 // efectos finales, activa reacciones compatibles y devuelve la sesion con los
-// stages de interPoolQueue anadidos.
+// stages de queue anadidos.
 export function processActionResultEvents({
   previousSession,
   session,
